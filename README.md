@@ -6,7 +6,7 @@ macOS용 앨범·송폼 궤도 편집기. **앨범 → 곡·악장 → 섹션 �
 
 연결 UI의 다음 설계는 [서클 둘레 8방향 IN/OUT과 다중 입출력](docs/22-eight-direction-ports.md)이다. 포트의 신호 의미와 연결점 배치를 분리한다. 현재 앱의 좌우 포트 방식은 아래 사용법에 해당하며 8방향 조작은 아직 구현 전이다.
 
-현재 로컬 앱은 **0.13.0**이다. [써클러 앱](dist/써클러.app)을 열어 사용한다. 기존 실행 중인 앱은 저장하고 **⌘Q로 종료한 뒤 다시 열어야** 새 버전이 실행된다. 이전 앱은 `dist/archive/`에 보관한다. [0.13 검증·제한](qa/0.13-review.md) · [향후 상세 개발 계획](docs/25-development-roadmap.md).
+현재 로컬 앱은 **0.14.0**이다. [써클러 앱](dist/써클러.app)을 열어 사용한다. 기존 실행 중인 앱은 저장하고 **⌘Q로 종료한 뒤 다시 열어야** 새 버전이 실행된다. 이전 앱은 `dist/archive/`에 보관한다. [0.14 검증·제한](qa/0.14-review.md) · [향후 상세 개발 계획](docs/25-development-roadmap.md).
 
 빈 공간 우클릭과 **A**로 서클을 만들고, **⇧⌘P**로 명령과 서클을 검색한다. **⌘/**에서 단축키를 확인한다. **⇧⌘R**은 음악과 캔버스의 MP4 녹화다. [키보드·영상·엔진 2 사용법](docs/26-canvas-keyboard-and-recording.md).
 
@@ -22,17 +22,17 @@ macOS용 앨범·송폼 궤도 편집기. **앨범 → 곡·악장 → 섹션 �
 
 ## 에이전트와 음악 제작
 
-`$circlr-studio` 전용 스킬과 프로듀서·편곡자·연주자·비트메이커·탑라이너·사운드 디자이너·믹싱·마스터링 에이전트를 설치했다. 메인 세션이 편집을 통합하며 전문 역할은 읽기 전용 MCP로 분석·제안한다. [사용법과 역할 계약](docs/24-music-agent-kit.md). 0.13 앱 번들의 `Contents/Resources/Codex`에도 설치 가능한 키트가 들어 있다.
+`$circlr-studio` 전용 스킬과 프로듀서·편곡자·연주자·비트메이커·탑라이너·사운드 디자이너·믹싱·마스터링 에이전트를 설치했다. 메인 세션이 편집을 통합하며 전문 역할은 읽기 전용 MCP로 분석·제안한다. [사용법과 역할 계약](docs/24-music-agent-kit.md). 0.14 앱 번들의 `Contents/Resources/Codex`에도 설치 가능한 키트가 들어 있다.
 
 로컬 stdio MCP와 현재 사용자 전용 Unix socket을 통해 실행 중인 앱의 프로젝트를 읽고 편집한다. **화면을 클릭하지 않고, 창을 최소화한 상태에서도** MIDI 생성·악기/이펙트 편집·바운스·WAV export·저장이 가능하다. [연결 설정과 도구](mcp/README.md) · [명령 아키텍처](docs/17-agent-interface.md).
 
 하단의 접이식 콘솔은 실제 실행 로그와 작업 상태를 보여준다. Ctrl+`로 펼치고 접는다. `help`, `state`, `play`, `stop`, `save`, `undo`를 입력할 수 있다. MIDI 서클을 선택하고 `midi arpeggio`, 트랙을 선택하고 `synth pluck`, `bounce`를 실행할 수도 있다. 외부 AI 에이전트를 연결하는 구조이며 앱 자체에 LLM 계정이나 모델을 자동 설치하지 않는다.
 
-향후 사용자의 ChatGPT/Codex 계정으로 앱 안에서 대화하며 편집하는 [Codex 콘솔 구현 계획](docs/20-codex-account-console-plan.md)을 마련했다. 공식 App Server와 기존 MCP를 연결하며 로그인·작업 중단·대화 복원·앱 단독 배포의 완료 조건을 정의한다. 현재 0.13.0에는 외부 MCP 연결이 구현되어 있고, 앱 안의 계정 대화는 계획 단계다.
+향후 사용자의 ChatGPT/Codex 계정으로 앱 안에서 대화하며 편집하는 [Codex 콘솔 구현 계획](docs/20-codex-account-console-plan.md)을 마련했다. 공식 App Server와 기존 MCP를 연결하며 로그인·작업 중단·대화 복원·앱 단독 배포의 완료 조건을 정의한다. 현재 0.14.0에는 외부 MCP 연결이 구현되어 있고, 앱 안의 계정 대화는 계획 단계다.
 
-내장 synth 6종, 음정별 sample mapping, MIDI 패턴 생성·파일 저장과 이펙트 포함 오디오 바운스를 추가했다. 바운스는 원본 MIDI·악기·이펙트를 보존하고 출력 입력을 오디오로 교체한다. 생성된 오디오 서클의 **원본 복원** 또는 Undo로 돌아갈 수 있다.
+내장 synth 10종(EP·오르간·브라스·스트링 포함), 음정별 sample mapping, MIDI 패턴 생성·파일 저장과 이펙트 포함 오디오 바운스를 추가했다. 바운스는 원본 MIDI·악기·이펙트를 보존하고 출력 입력을 오디오로 교체한다. 생성된 오디오 서클의 **원본 복원** 또는 Undo로 돌아갈 수 있다.
 
-[f0r h3r v3 프로젝트·MIDI·WAV와 튜토리얼](music/f0r-h3r/v3/README.md)을 만들었다. 116 BPM, F♯ minor의 68마디·9트랙 신스웨이브/city pop/future bass 곡이다. 배포용 v3는 **CC0인 FreePats 샘플 6개**를 동봉한다. Splice를 사용했던 v1/v2는 로컬에 보존한다. 새 구매는 없다. [Splice의 배포 정책·공식 AU 연동 조사](docs/27-splice-licensing-and-integration.md).
+[f0r h3r v4 프로젝트·MIDI·WAV와 튜토리얼](music/f0r-h3r/v4/README.md)은 120 BPM, 96마디·15트랙의 3분 14초 클럽 편곡이다. 정박 킥·2/4박 스네어·엇박 하이햇과 16마디 intro/outro를 사용하며, 배포 미디어는 CC0 FreePats bank다. [신스 엔진 3과 기본 음색 10종](docs/29-synth-engine3.md)은 파형 기음 상쇄를 줄이고 ensemble·velocity 배음과 새 악기를 추가한다. 기존 엔진 1/2와 v1–v3는 보존한다. [Splice 정책·공식 AU 연동 조사](docs/27-splice-licensing-and-integration.md).
 
 ## 새 캔버스 사용
 

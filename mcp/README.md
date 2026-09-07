@@ -21,7 +21,7 @@ Python 표준 라이브러리만 사용하는 로컬 stdio MCP 서버다. 음악
 
 `apply`의 `generate_midi` 및 `set_notes`는 기본적으로 해당 lane의 노트를 교체한다. 추가하려면 `append: true`를 지정한다. GUI 콘솔의 `midi arpeggio` 명령은 안전하게 추가 모드를 사용한다. MIDI 노트 JSON에는 beat, length, pitch, velocity가 필요하며 ID를 생략하면 새 ID가 발급된다.
 
-`set_instrument`는 `synthVoice` 정수로 내장 음색을 선택할 수 있다: 0 pad, 1 bass, 2 keys, 3 supersaw, 4 pluck, 5 lead. `add_effect`는 오디오 `from` 서클 뒤에 이펙터를 삽입한다. `connect`는 MIDI/audio 연결, `connect_sections`는 송폼 재생 연결이다. 로컬 tempo/meter 등은 `set_node`/`set_section`의 `settings`로 지정한다.
+`set_instrument`는 `synthVoice` 정수로 내장 음색을 선택할 수 있다: 0 pad, 1 bass, 2 keys, 3 supersaw, 4 pluck, 5 lead, 6 electricPiano, 7 organ, 8 brass, 9 strings. `add_effect`는 오디오 `from` 서클 뒤에 이펙터를 삽입한다. `connect`는 MIDI/audio 연결, `connect_sections`는 송폼 재생 연결이다. 로컬 tempo/meter 등은 `set_node`/`set_section`의 `settings`로 지정한다.
 
 창을 숨기고 작업하려면 `circlr_focus`에 `minimized: true`, 다시 표시하려면 `minimized: false`를 보낸다. 이 경우에는 창 상태만 바뀐다. `snapshot.runtime.windows`로 실제 최소화 상태를 확인할 수 있다.
 

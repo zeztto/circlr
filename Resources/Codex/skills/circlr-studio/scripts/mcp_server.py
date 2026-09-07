@@ -26,7 +26,7 @@ OPERATION = schema({
     **SCOPE, "clipID": STRING, "sourceStart": {"type": "number", "minimum": 0}, "duration": {"type": "number", "exclusiveMinimum": 0}, "laneID": STRING, "nodeID": STRING, "trackID": STRING, "name": STRING,
     "notes": {"type": "array", "items": NOTE, "maxItems": 100000},
     "pattern": {"type": "string", "enum": ["chords", "arpeggio", "bass", "pulse"]},
-    "append": {"type": "boolean"}, "synthVoice": {"type": "integer", "minimum": 0, "maximum": 5, "description": "0 pad, 1 bass, 2 keys, 3 supersaw, 4 pluck, 5 lead"},
+    "append": {"type": "boolean"}, "synthVoice": {"type": "integer", "minimum": 0, "maximum": 9, "description": "0 pad, 1 bass, 2 keys, 3 supersaw, 4 pluck, 5 lead, 6 electricPiano, 7 organ, 8 brass, 9 strings"},
     "instrument": {"type": "object", "description": "Complete Instrument object from snapshot; use synthVoice for built-in synth presets."},
     "effect": {"type": "object", "description": "Effect object: kind, amount, secondary, optional plugin. Use inspect to read the existing object."},
     "context": {"type": "object", "description": "Complete MusicContext object from snapshot, with desired fields changed."},
@@ -158,7 +158,7 @@ def serve(path, read_only=False):
             if method == "initialize":
                 negotiated = True
                 requested = request.get("params", {}).get("protocolVersion")
-                result = {"protocolVersion": requested if requested in VERSIONS else "2025-11-25", "capabilities": {"tools": {"listChanged": False}}, "serverInfo": {"name": "circlr", "version": "0.13.0"}, "instructions": ("Read-only specialist session. Return edit proposals to the coordinator. " if read_only else "") + "Read snapshot before mutations. Use stable IDs and expectedRevision. Long jobs return immediately; monitor with circlr_job/events. CUA is unnecessary."}
+                result = {"protocolVersion": requested if requested in VERSIONS else "2025-11-25", "capabilities": {"tools": {"listChanged": False}}, "serverInfo": {"name": "circlr", "version": "0.14.0"}, "instructions": ("Read-only specialist session. Return edit proposals to the coordinator. " if read_only else "") + "Read snapshot before mutations. Use stable IDs and expectedRevision. Long jobs return immediately; monitor with circlr_job/events. CUA is unnecessary."}
             elif method == "ping":
                 result = {}
             elif not initialized:

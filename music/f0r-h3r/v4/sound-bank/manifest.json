@@ -1,0 +1,162 @@
+[
+  {
+    "bodyRMS" : 0.10000000032824861,
+    "externalEffects" : false,
+    "file" : "0-오로라 패드-engine2.wav",
+    "gain" : 1.5141274877814948,
+    "name" : "오로라 패드",
+    "peak" : 0.34188756346702576,
+    "version" : 2,
+    "voice" : 0
+  },
+  {
+    "bodyRMS" : 0.10000000081989677,
+    "externalEffects" : false,
+    "file" : "0-오로라 패드-engine3.wav",
+    "gain" : 0.98228680267120305,
+    "name" : "오로라 패드",
+    "peak" : 0.33719965815544128,
+    "version" : 3,
+    "voice" : 0
+  },
+  {
+    "bodyRMS" : 0.10000000392884881,
+    "externalEffects" : false,
+    "file" : "1-펄스 베이스-engine2.wav",
+    "gain" : 4.1081465039779044,
+    "name" : "펄스 베이스",
+    "peak" : 0.28957021236419678,
+    "version" : 2,
+    "voice" : 1
+  },
+  {
+    "bodyRMS" : 0.0999999996773797,
+    "externalEffects" : false,
+    "file" : "1-펄스 베이스-engine3.wav",
+    "gain" : 1.577548032198143,
+    "name" : "펄스 베이스",
+    "peak" : 0.26164093613624573,
+    "version" : 3,
+    "voice" : 1
+  },
+  {
+    "bodyRMS" : 0.099999998242827209,
+    "externalEffects" : false,
+    "file" : "2-글라스 키-engine2.wav",
+    "gain" : 1.6409203105935117,
+    "name" : "글라스 키",
+    "peak" : 0.69685113430023193,
+    "version" : 2,
+    "voice" : 2
+  },
+  {
+    "bodyRMS" : 0.099999999940984616,
+    "externalEffects" : false,
+    "file" : "2-글라스 키-engine3.wav",
+    "gain" : 1.5139625077195484,
+    "name" : "글라스 키",
+    "peak" : 0.71236330270767212,
+    "version" : 3,
+    "voice" : 2
+  },
+  {
+    "bodyRMS" : 0.099999996115692671,
+    "externalEffects" : false,
+    "file" : "3-와이드 소우-engine2.wav",
+    "gain" : 2.1059823858984537,
+    "name" : "와이드 소우",
+    "peak" : 0.38116934895515442,
+    "version" : 2,
+    "voice" : 3
+  },
+  {
+    "bodyRMS" : 0.10000000101800192,
+    "externalEffects" : false,
+    "file" : "3-와이드 소우-engine3.wav",
+    "gain" : 0.97458313889808168,
+    "name" : "와이드 소우",
+    "peak" : 0.39524468779563904,
+    "version" : 3,
+    "voice" : 3
+  },
+  {
+    "bodyRMS" : 0.049507298589240203,
+    "externalEffects" : false,
+    "file" : "4-아르페지오 플럭-engine2.wav",
+    "gain" : 9.2470661889660359,
+    "name" : "아르페지오 플럭",
+    "peak" : 0.85000002384185791,
+    "version" : 2,
+    "voice" : 4
+  },
+  {
+    "bodyRMS" : 0.061972191854872419,
+    "externalEffects" : false,
+    "file" : "4-아르페지오 플럭-engine3.wav",
+    "gain" : 2.338834998667858,
+    "name" : "아르페지오 플럭",
+    "peak" : 0.85000002384185791,
+    "version" : 3,
+    "voice" : 4
+  },
+  {
+    "bodyRMS" : 0.10000000120348813,
+    "externalEffects" : false,
+    "file" : "5-폴라 리드-engine2.wav",
+    "gain" : 3.1248857598048745,
+    "name" : "폴라 리드",
+    "peak" : 0.38590991497039795,
+    "version" : 2,
+    "voice" : 5
+  },
+  {
+    "bodyRMS" : 0.099999995593957877,
+    "externalEffects" : false,
+    "file" : "5-폴라 리드-engine3.wav",
+    "gain" : 1.0613871088919327,
+    "name" : "폴라 리드",
+    "peak" : 0.43609863519668579,
+    "version" : 3,
+    "voice" : 5
+  },
+  {
+    "bodyRMS" : 0.09999999988085688,
+    "externalEffects" : false,
+    "file" : "6-벨벳 EP-engine3.wav",
+    "gain" : 0.97455632783221358,
+    "name" : "벨벳 EP",
+    "peak" : 0.489786297082901,
+    "version" : 3,
+    "voice" : 6
+  },
+  {
+    "bodyRMS" : 0.10000000091514467,
+    "externalEffects" : false,
+    "file" : "7-드로바 오르간-engine3.wav",
+    "gain" : 0.63028567452712847,
+    "name" : "드로바 오르간",
+    "peak" : 0.36017364263534546,
+    "version" : 3,
+    "voice" : 7
+  },
+  {
+    "bodyRMS" : 0.099999997973943128,
+    "externalEffects" : false,
+    "file" : "8-폴리 브라스-engine3.wav",
+    "gain" : 1.2934726737418389,
+    "name" : "폴리 브라스",
+    "peak" : 0.52544444799423218,
+    "version" : 3,
+    "voice" : 8
+  },
+  {
+    "bodyRMS" : 0.099999997865673748,
+    "externalEffects" : false,
+    "file" : "9-앙상블 스트링-engine3.wav",
+    "gain" : 0.83646346922925208,
+    "name" : "앙상블 스트링",
+    "peak" : 0.36545407772064209,
+    "version" : 3,
+    "voice" : 9
+  }
+]

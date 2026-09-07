@@ -2,6 +2,15 @@
 
 0.1–0.3은 설계 문서 revision이며, 0.4.0부터 로컬 실행 프로토타입을 포함한다.
 
+## 0.14.0 — 2026-09-08 · 클럽 그루브와 신스 엔진 3
+
+- f0r h3r v4를 120 BPM·96마디·15트랙으로 재편곡했다. 정박 킥, 2/4박 backbeat, 엇박 hat, 16마디 DJ intro/outro를 적용하고 반복 tom fill·snare roll을 제거했다.
+- 신스 엔진 3에 위상 일치 sine/pulse/saw, 비균일 unison, velocity partials, ensemble motion과 배음/움직임 컨트롤을 추가했다. EP·organ·brass·strings를 포함한 기본 10음색을 UI·콘솔·MCP에서 선택한다.
+- 기존 engine 1/2는 유지한다. v3 곡을 최종 바이너리에서 재렌더한 WAV가 기존 파일과 바이트 단위로 일치했다.
+- 전체 준비 메모리를 RAM의 1/4, 최대 2GiB로 제한하며 15트랙 전체곡을 지원한다. 제작 CLI에 기본 음색 비교와 섹션 단위 post-effect/pre-master stem 저장을 추가했다.
+- CC0 bank·라이선스 감사를 유지하고 v4 송폼/grid 감사를 추가했다. 기존 데모와 중간 후보는 보존한다. Splice 지출 0.
+- Swift 오프라인 107개, Python 18개 통과. 실제 0.14 QA 앱의 WAV/바운스와 UI parameter/preset/Undo를 확인했다. 직접 청취·Scarlett 실시간 출력의 검증 범위는 [QA](qa/0.14-review.md)에 명시한다.
+
 ## 2026-09-08 · 배포용 데모 v3와 Splice 조사
 
 - Splice 완성 음원 사용과 샘플 포함 튜토리얼 배포를 구분해 공식 약관·FAQ 근거를 기록했다.

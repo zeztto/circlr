@@ -7,7 +7,12 @@ public final class SynthEngine {
     private let handle: OpaquePointer
     public init(_ patch: SynthPatch) throws {
         try patch.validate()
-        let created=patch.engineVersion==2 ? circlr_synth_create_v2(Int32(patch.voice.rawValue),patch.cutoff,patch.attack,patch.decay,patch.sustain,patch.release,patch.detune,patch.resonance,patch.stereoWidth,patch.filterEnvelope):circlr_synth_create(Int32(patch.voice.rawValue),patch.cutoff,patch.attack,patch.decay,patch.sustain,patch.release,patch.detune)
+        let created:OpaquePointer?
+        switch patch.engineVersion {
+        case 3: created=circlr_synth_create_v3(Int32(patch.voice.rawValue),patch.cutoff,patch.attack,patch.decay,patch.sustain,patch.release,patch.detune,patch.resonance,patch.stereoWidth,patch.filterEnvelope,patch.character,patch.motion)
+        case 2: created=circlr_synth_create_v2(Int32(patch.voice.rawValue),patch.cutoff,patch.attack,patch.decay,patch.sustain,patch.release,patch.detune,patch.resonance,patch.stereoWidth,patch.filterEnvelope)
+        default: created=circlr_synth_create(Int32(patch.voice.rawValue),patch.cutoff,patch.attack,patch.decay,patch.sustain,patch.release,patch.detune)
+        }
         guard let value=created else {throw CirclrError("신스 메모리를 준비할 수 없습니다")}
         handle=value
     }

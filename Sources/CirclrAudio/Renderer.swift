@@ -11,6 +11,9 @@ public struct PreparedAudio {
     public var peak: Float { mix.peak }
 }
 public enum ArrangementRenderer {
+    /// Bound whole-song preparation to at most a quarter of RAM, capped at 2 GiB.
+    /// 15-track club arrangements need more than the previous fixed 1 GiB allowance.
+    static var preparationByteLimit:Double {min(2_147_483_648,Double(ProcessInfo.processInfo.physicalMemory)/4)}
     public static func render(project: Project, root: URL?, plan: ExecutionPlan, tailSeconds: Double = 2, includeStems: Bool = true, includeVisualization: Bool = false, progress: @escaping (String, Double) -> Void = { _,_ in }) async throws -> PreparedAudio {
         guard plan.duration > 0 else { throw CirclrError("먼저 섹션을 만들고 시작 서클을 지정하세요") }
         guard tailSeconds.isFinite, (0...30).contains(tailSeconds) else { throw CirclrError("잔향 길이를 확인하세요") }
@@ -23,7 +26,7 @@ public enum ArrangementRenderer {
             let bytes = localFrames * 8.0 * Double(SectionGraphRenderer.workingBufferCount(graph))
             graphEstimate = max(graphEstimate, bytes)
         }
-        guard estimate + graphEstimate < 1_073_741_824 else { throw CirclrError("준비 오디오가 1 GB 작업 한도를 넘습니다. 구간을 나누어 내보내세요") }
+        guard estimate + graphEstimate < preparationByteLimit else { throw CirclrError("준비 오디오가 메모리 작업 한도를 넘습니다. 구간을 나누어 내보내세요") }
         var tracks = Dictionary(uniqueKeysWithValues: project.tracks.map { ($0.id,PCM(frames: frames)) })
         var visualization = PlaybackAnalysis()
         for (index, occurrence) in plan.occurrences.enumerated() {

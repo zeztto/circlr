@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Audit the actual v3 delivery: every embedded file must belong to the pinned CC0 set."""
+"""Audit demo media against the pinned CC0 set; optionally check v3 composition preservation."""
 import argparse
 import hashlib
 import json
@@ -14,7 +14,7 @@ def checksum(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def verify(project, license_folder):
+def verify(project, license_folder, compare_v2=False):
     metadata = license_folder / 'manifest.json'
     assert checksum(metadata) == '11275cbfd9d933bb293dc266faf373ea65efa918ca2f6136c2f69ce88e5b804b'
     bank = json.loads(metadata.read_text()); assert bank['license'] == 'CC0-1.0'
@@ -34,15 +34,19 @@ def verify(project, license_folder):
     result = {'project': project.name, 'assets': len(files), 'sampleLicense': bank['license'],
               'allEmbeddedFilesAllowlisted': True, 'externalAssetPaths': 0, 'unlistedFiles': 0}
     old_file = ROOT / 'music/f0r-h3r/v2/f0r h3r.circlr/manifest.json'
+    if compare_v2:
+        assert old_file.exists(), 'The original local v2 project is required for composition comparison'
     if old_file.exists():
         old = json.loads(old_file.read_text())
         assert not {a['checksum'] for a in old['assets']} & {a['checksum'] for a in p['assets']}
         def notes(item):
             return [[[(n['beat'], n['length'], n['pitch'], n['velocity']) for n in lane['notes']] for lane in section['lanes']] for section in item['sections']]
-        assert notes(p) == notes(old)
-        assert p['global'] == old['global']
-        assert [s['bars'] for s in p['sections']] == [s['bars'] for s in old['sections']]
-        result.update({'v2SpliceAssetsRemaining': 0, 'v2NotesAndFormPreserved': True})
+        result['v2SpliceAssetsRemaining'] = 0
+        if compare_v2:
+            assert notes(p) == notes(old)
+            assert p['global'] == old['global']
+            assert [s['bars'] for s in p['sections']] == [s['bars'] for s in old['sections']]
+            result['v2NotesAndFormPreserved'] = True
     return result
 
 
@@ -50,9 +54,10 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('project', type=Path)
     parser.add_argument('--licenses', type=Path)
+    parser.add_argument('--compare-v2', action='store_true', help='For v3 only: require the v2 MIDI and form to remain identical')
     parser.add_argument('--output', type=Path)
     args = parser.parse_args()
-    result = verify(args.project, args.licenses or args.project.parent / 'sample-license')
+    result = verify(args.project, args.licenses or args.project.parent / 'sample-license', args.compare_v2)
     text = json.dumps(result, ensure_ascii=False, indent=2) + '\n'
     if args.output: args.output.write_text(text)
     print(text, end='')

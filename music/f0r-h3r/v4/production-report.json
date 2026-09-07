@@ -1,0 +1,121 @@
+{
+  "assets" : [
+    {
+      "license" : "CC0-1.0",
+      "name" : "FreePats · Kick04.wav",
+      "path" : "media\/691A59DC-8860-4DE4-890B-0DC8995E0534.wav",
+      "role" : "kick",
+      "sha256" : "67dcf4e28db83e3126da9bf101bb0b19b5f01f83935d891398296d69bee9c27b",
+      "source" : "https:\/\/freepats.zenvoid.org\/Percussion\/electric-percussion.html",
+      "sourceFile" : "Kick04.wav"
+    },
+    {
+      "license" : "CC0-1.0",
+      "name" : "FreePats · Snare14.wav",
+      "path" : "media\/3EE5D32A-33CB-4235-BC30-4735C5DDE44F.wav",
+      "role" : "snare",
+      "sha256" : "c49715ffd171b6d138e089df1f2513c6fca71ebf32f3b5fea125ddad1c786d52",
+      "source" : "https:\/\/freepats.zenvoid.org\/Percussion\/electric-percussion.html",
+      "sourceFile" : "Snare14.wav"
+    },
+    {
+      "license" : "CC0-1.0",
+      "name" : "FreePats · ClosedHiHat01-01.wav",
+      "path" : "media\/DD26136F-8B60-4AF3-8727-C77C68D1DA76.wav",
+      "role" : "hat",
+      "sha256" : "e1f048e2ef248fda51a830ca64c6c8926c76f8faa9f193bbed801d7adf9ba682",
+      "source" : "https:\/\/freepats.zenvoid.org\/Percussion\/electric-percussion.html",
+      "sourceFile" : "ClosedHiHat01-01.wav"
+    },
+    {
+      "license" : "CC0-1.0",
+      "name" : "FreePats · ShakerLong01.wav",
+      "path" : "media\/E0846529-AB20-4BF2-BFEB-DED58300762F.wav",
+      "role" : "shaker",
+      "sha256" : "b79c1a25375310b810fde37f5c40dc41848de31eb9e6678be8f0b97808465509",
+      "source" : "https:\/\/freepats.zenvoid.org\/Percussion\/electric-percussion.html",
+      "sourceFile" : "ShakerLong01.wav"
+    },
+    {
+      "license" : "CC0-1.0",
+      "name" : "FreePats · HighTom02-01.wav",
+      "path" : "media\/04908EF4-BA04-4B4A-9364-AEEFB84B52F7.wav",
+      "role" : "tom",
+      "sha256" : "a427fe3664ebce4dcdc9f4704cb0bc4b83e757e64372999d264ae5452caba321",
+      "source" : "https:\/\/freepats.zenvoid.org\/Percussion\/electric-percussion.html",
+      "sourceFile" : "HighTom02-01.wav"
+    },
+    {
+      "license" : "CC0-1.0",
+      "name" : "FreePats · Cymbal01-01.wav",
+      "path" : "media\/A4366F74-FEB4-4357-8A7F-BCD3DB3A4895.wav",
+      "role" : "transition",
+      "sha256" : "ac09119a13b9a53fbd38ac44e461c7f46ae9605100b4b002ec2167e29354309e",
+      "source" : "https:\/\/freepats.zenvoid.org\/Percussion\/electric-percussion.html",
+      "sourceFile" : "Cymbal01-01.wav"
+    }
+  ],
+  "bitDepth" : 24,
+  "bodySeconds" : 192,
+  "distribution" : "sample-inclusive project",
+  "key" : "F♯ minor",
+  "listeningReview" : "not_performed_by_model",
+  "masterGain" : 1.093453827297068,
+  "notes" : 2562,
+  "peak" : 0.84139519929885864,
+  "productionVersion" : 4,
+  "rms" : 0.10726961733320528,
+  "sampleLicense" : "CC0-1.0",
+  "sampleRate" : 48000,
+  "sampleSet" : "FreePats synthesizer percussion",
+  "sections" : [
+    {
+      "bars" : 16,
+      "duration" : 32,
+      "name" : "접속 · DJ Intro",
+      "startSeconds" : 0
+    },
+    {
+      "bars" : 16,
+      "duration" : 32,
+      "name" : "도시의 기억 · Groove",
+      "startSeconds" : 32
+    },
+    {
+      "bars" : 8,
+      "duration" : 16,
+      "name" : "수평선 · Lift",
+      "startSeconds" : 64
+    },
+    {
+      "bars" : 16,
+      "duration" : 32,
+      "name" : "f0r h3r · Club Chorus",
+      "startSeconds" : 80
+    },
+    {
+      "bars" : 8,
+      "duration" : 16,
+      "name" : "북쪽의 밤 · Breakdown",
+      "startSeconds" : 112
+    },
+    {
+      "bars" : 16,
+      "duration" : 32,
+      "name" : "너의 도시 · Final Chorus",
+      "startSeconds" : 128
+    },
+    {
+      "bars" : 16,
+      "duration" : 32,
+      "name" : "잔상 · DJ Outro",
+      "startSeconds" : 160
+    }
+  ],
+  "spliceCreditsSpent" : 0,
+  "synthEngineVersion" : 3,
+  "tailSeconds" : 2,
+  "tempo" : 120,
+  "title" : "f0r h3r",
+  "tracks" : 15
+}

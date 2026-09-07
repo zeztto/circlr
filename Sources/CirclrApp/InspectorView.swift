@@ -89,11 +89,14 @@ struct SynthInspector:View {
             HStack{ValueField(title:"Attack 초",value:binding(\.attack),range:0.001...5);ValueField(title:"Decay 초",value:binding(\.decay),range:0.001...10)}
             HStack{ValueField(title:"Sustain",value:binding(\.sustain),range:0...1);ValueField(title:"Release 초",value:binding(\.release),range:0.005...10)}
             ValueField(title:"Detune cent",value:binding(\.detune),range:0...60)
-            if patch.engineVersion==2 {
+            if patch.engineVersion>=2 {
                 HStack{ValueField(title:"공명",value:binding(\.resonance),range:0...0.9);ValueField(title:"스테레오 폭",value:binding(\.stereoWidth),range:0...1)}
                 ValueField(title:"필터 엔벌로프 · 옥타브",value:binding(\.filterEnvelope),range: -4...4)
+            }
+            if patch.engineVersion==3 {
+                HStack{ValueField(title:"배음",value:binding(\.character),range:0...1);ValueField(title:"움직임",value:binding(\.motion),range:0...1)}
             } else {
-                Button("새 신스 엔진으로 전환"){store.updateTrack("신스 엔진 전환"){$0.instrument.synth?.engineVersion=2}}
+                Button("신스 엔진 3으로 전환"){store.updateTrack("신스 엔진 전환"){$0.instrument.synth?.engineVersion=3}}
             }
         }
     }

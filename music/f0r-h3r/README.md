@@ -1,6 +1,6 @@
 # f0r h3r
 
-현재 배포용 개정판은 [v3 프로젝트·WAV·MIDI·편집 튜토리얼](v3/README.md)이다. 내장 엔진 2, 68마디·9트랙을 유지하고 외부 미디어를 CC0 샘플 6개로 교체했다. [Splice 정책·연동 조사](../../docs/27-splice-licensing-and-integration.md). v1/v2는 보존하며 아래는 v1 당시 기록이다.
+현재 개정판은 [v4 Club Arrangement](v4/README.md)다. 120 BPM, 96마디·15트랙, 신스 엔진 3과 단순한 클럽 그루브를 적용했다. CC0 미디어를 사용하며 v1–v3는 보존한다. [v3 CC0 교체 기록](v3/README.md). 아래는 v1 당시 기록이다.
 
 써클러에서 MIDI 생성·신스·샘플·이펙트·오디오 바운스를 직접 확인하기 위한 한 곡이다. 북유럽 신스웨이브의 차가운 pad와 저음 pulse, 일본 city pop의 확장 코드와 keys, future bass의 잘게 끊는 saw 코드를 조합했다.
 

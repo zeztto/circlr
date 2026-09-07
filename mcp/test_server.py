@@ -88,6 +88,14 @@ class MCPTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 server.validate({"follow": value}, schema)
 
+    def test_ten_synth_voices_are_available_and_out_of_range_is_rejected(self):
+        schema=server.BY_NAME['circlr_apply']['inputSchema']
+        for voice in range(10):
+            server.validate({'projectID':'p','expectedRevision':0,'operations':[{'kind':'set_instrument','trackID':'t','synthVoice':voice}]},schema)
+        for voice in [-1,10,True]:
+            with self.assertRaises(ValueError):
+                server.validate({'projectID':'p','expectedRevision':0,'operations':[{'kind':'set_instrument','trackID':'t','synthVoice':voice}]},schema)
+
 
 if __name__ == "__main__":
     unittest.main()

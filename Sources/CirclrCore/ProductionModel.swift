@@ -1,11 +1,13 @@
 import Foundation
 
 public enum SynthVoice: Int, Codable, CaseIterable {
-    case pad, bass, keys, supersaw, pluck, lead
-    public var label: String { ["오로라 패드", "펄스 베이스", "글라스 키", "와이드 소우", "아르페지오 플럭", "폴라 리드"][rawValue] }
+    case pad, bass, keys, supersaw, pluck, lead, electricPiano, organ, brass, strings
+    public var label: String { ["오로라 패드", "펄스 베이스", "글라스 키", "와이드 소우", "아르페지오 플럭", "폴라 리드", "벨벳 EP", "드로바 오르간", "폴리 브라스", "앙상블 스트링"][rawValue] }
 }
 public struct SynthPatch: Codable, Equatable {
-    public var engineVersion: Int = 2
+    public var engineVersion: Int = 3
+    public var character: Double = 0.6
+    public var motion: Double = 0.4
     public var resonance: Double = 0.12
     public var stereoWidth: Double = 0.75
     public var filterEnvelope: Double = 0
@@ -26,9 +28,13 @@ public struct SynthPatch: Codable, Equatable {
         case .supersaw: cutoff=7000; attack=0.008; decay=0.18; sustain=0.72; release=0.12; detune=21
         case .pluck: filterEnvelope=2.1; cutoff=1800; attack=0.002; decay=0.19; sustain=0.08; release=0.15; detune=7
         case .lead: stereoWidth=0.2; filterEnvelope=0.3; cutoff=3800; attack=0.014; decay=0.22; sustain=0.6; release=0.28; detune=8
+        case .electricPiano: cutoff=10000; attack=0.003; decay=2.8; sustain=0.08; release=0.3; detune=0; stereoWidth=0.65; motion=0.55
+        case .organ: cutoff=8000; attack=0.007; decay=0.25; sustain=0.85; release=0.09; detune=0; stereoWidth=0.65; motion=0.5
+        case .brass: cutoff=2000; attack=0.035; decay=0.45; sustain=0.55; release=0.18; detune=9; resonance=0.22; filterEnvelope=0.5; stereoWidth=0.55
+        case .strings: cutoff=5400; attack=0.35; decay=1.2; sustain=0.8; release=0.9; detune=16; stereoWidth=0.95; motion=0.7
         }
     }
-    private enum CodingKeys:String,CodingKey {case voice,cutoff,attack,decay,sustain,release,detune,engineVersion,resonance,stereoWidth,filterEnvelope}
+    private enum CodingKeys:String,CodingKey {case voice,cutoff,attack,decay,sustain,release,detune,engineVersion,resonance,stereoWidth,filterEnvelope,character,motion}
     public init(from decoder:Decoder) throws {
         let c=try decoder.container(keyedBy:CodingKeys.self)
         voice=try c.decode(SynthVoice.self,forKey:.voice)
@@ -39,9 +45,13 @@ public struct SynthPatch: Codable, Equatable {
         resonance=try c.decodeIfPresent(Double.self,forKey:.resonance) ?? 0.12
         stereoWidth=try c.decodeIfPresent(Double.self,forKey:.stereoWidth) ?? 0.75
         filterEnvelope=try c.decodeIfPresent(Double.self,forKey:.filterEnvelope) ?? 0
+        character=try c.decodeIfPresent(Double.self,forKey:.character) ?? 0.6
+        motion=try c.decodeIfPresent(Double.self,forKey:.motion) ?? 0.4
     }
     public func validate() throws {
-        guard (1...2).contains(engineVersion),resonance.isFinite,(0...0.9).contains(resonance),
+        guard (1...3).contains(engineVersion),(voice.rawValue<6 || engineVersion==3),
+              character.isFinite,(0...1).contains(character),motion.isFinite,(0...1).contains(motion),
+              resonance.isFinite,(0...0.9).contains(resonance),
               stereoWidth.isFinite,(0...1).contains(stereoWidth),filterEnvelope.isFinite,(-4...4).contains(filterEnvelope),
               cutoff.isFinite,(40...20000).contains(cutoff), attack.isFinite,(0.001...5).contains(attack),
               decay.isFinite,(0.001...10).contains(decay), sustain.isFinite,(0...1).contains(sustain),

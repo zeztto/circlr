@@ -64,7 +64,7 @@ extension AppStore {
         guard let command=parts.first else{return}
         recordActivity("콘솔","> "+text)
         if command=="help" {
-            recordActivity("콘솔","state · play · stop · save · undo · midi chords|arpeggio|bass|pulse · bounce · synth pad|bass|keys|supersaw|pluck|lead")
+            recordActivity("콘솔","state · play · stop · save · undo · midi chords|arpeggio|bass|pulse · bounce · synth pad|bass|keys|supersaw|pluck|lead|ep|organ|brass|strings")
             return
         }
         var request=AgentRequest(method:command);request.projectID=project.id;request.expectedRevision=project.musicRevision
@@ -75,7 +75,7 @@ extension AppStore {
             guard parts.count==2,let pattern=MIDIPattern(rawValue:parts[1]),let use=selectedUse,let lane=currentLane else {recordActivity("콘솔","MIDI 서클을 선택하고 midi arpeggio처럼 입력하세요");return}
             request.method="apply";var operation=AgentOperation("generate_midi");operation.arrangementID=project.activeArrangementID;operation.useID=use.id;operation.laneID=lane.id;operation.pattern=pattern;operation.append=true;args.operations=[operation]
         case "synth":
-            let names=["pad","bass","keys","supersaw","pluck","lead"]
+            let names=["pad","bass","keys","supersaw","pluck","lead","ep","organ","brass","strings"]
             guard parts.count==2,let i=names.firstIndex(of:parts[1]),let track=selectedTrack else {recordActivity("콘솔","악기를 선택하고 synth pad처럼 입력하세요");return}
             request.method="apply";var operation=AgentOperation("set_instrument");operation.trackID=track.id;operation.synthVoice=SynthVoice(rawValue:i);args.operations=[operation]
         case "bounce":args.arrangementID=project.activeArrangementID;args.useID=selectedUse?.id;args.trackID=selectedTrackID

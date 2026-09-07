@@ -3,6 +3,79 @@ import CirclrCore
 @testable import CirclrAudio
 
 final class SynthQualityTests:XCTestCase {
+    func testEngineThreeParametersRoundTripAndRejectUnsupportedLegacyVoices() throws {
+        for voice in SynthVoice.allCases {
+            var patch=SynthPatch(voice);patch.character=0.83;patch.motion=0.72
+            let restored=try JSONDecoder().decode(SynthPatch.self,from:JSONEncoder().encode(patch))
+            XCTAssertEqual(patch,restored);try restored.validate()
+            if voice.rawValue>=6 {patch.engineVersion=2;XCTAssertThrowsError(try patch.validate())}
+        }
+        var p=SynthPatch();p.motion = .nan;XCTAssertThrowsError(try p.validate())
+        p=SynthPatch();p.character=1.01;XCTAssertThrowsError(try p.validate())
+    }
+    func testLegacyEnginesIgnoreNewControlsAndNewEngineChangesTimbre() throws {
+        for version in [1,2] {
+            var patch=SynthPatch(.pad);patch.engineVersion=version
+            let before=try render(patch)
+            patch.character=0;patch.motion=1
+            XCTAssertEqual(before.left,try render(patch).left)
+        }
+        var patch=SynthPatch(.electricPiano);patch.character=0
+        let dark=try render(patch);patch.character=1
+        XCTAssertNotEqual(dark.left,try render(patch).left)
+        patch=SynthPatch(.strings);patch.motion=0
+        let still=try render(patch);patch.motion=1
+        XCTAssertNotEqual(still.right,try render(patch).right)
+        // Voice identity includes articulation, not just one spectral roughness number.
+        func sustainRatio(_ voice:SynthVoice)throws->Double {
+            let pcm=try render(SynthPatch(voice))
+            return pcm.slice(36000..<45000).rms/pcm.slice(4000..<12000).rms
+        }
+        XCTAssertGreaterThan(try sustainRatio(.organ),0.75)
+        XCTAssertLessThan(try sustainRatio(.keys),0.5)
+        XCTAssertGreaterThan(try sustainRatio(.electricPiano),try sustainRatio(.keys)*1.3)
+        let strings=try render(SynthPatch(.strings))
+        XCTAssertGreaterThan(strings.slice(16000..<24000).rms,strings.slice(0..<4000).rms*3)
+    }
+    func testQueueOverflowReleasesAndEngineCanPlayAgain() throws {
+        let engine=try SynthEngine(SynthPatch(.strings))
+        func block()->PCM {
+            var out=PCM(frames:48000)
+            out.left.withUnsafeMutableBufferPointer {l in out.right.withUnsafeMutableBufferPointer {r in engine.render(left:l.baseAddress!,right:r.baseAddress!,frames:48000)}}
+            return out
+        }
+        engine.note(57,velocity:100,on:true);XCTAssertGreaterThan(block().peak,0.01)
+        for _ in 0..<2200 {engine.note(57,velocity:0,on:false)}
+        _=block();XCTAssertEqual(block().peak,0)
+        engine.note(61,velocity:100,on:true);XCTAssertGreaterThan(block().peak,0.01)
+    }
+    func testBassHarmonicBodyDoesNotCancelItsFundamental() throws {
+        var patch=SynthPatch(.bass);patch.cutoff=12000;patch.character=0;patch.sustain=0.7
+        let pure=try render(patch,pitch:45).slice(12000..<30000)
+        patch.character=1
+        let rich=try render(patch,pitch:45).slice(12000..<30000)
+        // Increasing the pulse contribution must not cancel the sine body.
+        XCTAssertGreaterThan(rich.rms,pure.rms*0.8)
+    }
+    func testEnsembleIsAdditiveAndBlockIndependentForEveryVoice() throws {
+        for voice in SynthVoice.allCases {
+            func run(_ block:Int,_ initial:Float)throws->PCM {
+                let engine=try SynthEngine(SynthPatch(voice));engine.note(57,velocity:105,on:true)
+                var p=PCM(frames:2400);p.left=Array(repeating:initial,count:p.count);p.right=p.left
+                var cursor=0
+                while cursor<p.count {
+                    let n=min(block,p.count-cursor)
+                    p.left.withUnsafeMutableBufferPointer {l in p.right.withUnsafeMutableBufferPointer {r in engine.render(left:l.baseAddress!+cursor,right:r.baseAddress!+cursor,frames:UInt32(n))}}
+                    cursor+=n
+                };return p
+            }
+            let a=try run(37,0),b=try run(1024,0),added=try run(127,0.1)
+            XCTAssertEqual(a.left,b.left);XCTAssertEqual(a.right,b.right)
+            for i in a.left.indices {XCTAssertEqual(added.left[i],a.left[i]+0.1,accuracy:0.0000001)}
+        }
+        XCTAssertLessThanOrEqual(ArrangementRenderer.preparationByteLimit,2_147_483_648)
+        XCTAssertLessThanOrEqual(ArrangementRenderer.preparationByteLimit,Double(ProcessInfo.processInfo.physicalMemory)/4)
+    }
     func render(_ patch:SynthPatch,pitch:Int=57,velocity:Int=100) throws -> PCM {
         var c=MusicContext();c.tempo=120
         return try ProductionInstrument.synth([Note(beat:0,length:2,pitch:pitch,velocity:velocity)],patch:patch,clock:MusicClock(bars:1,context:c),tail:1)
@@ -13,7 +86,7 @@ final class SynthQualityTests:XCTestCase {
         XCTAssertEqual(legacy.engineVersion,1)
         let restored=try JSONDecoder().decode(SynthPatch.self,from:JSONEncoder().encode(legacy))
         XCTAssertEqual(try render(legacy).left,try render(restored).left)
-        XCTAssertEqual(SynthPatch(.bass).engineVersion,2)
+        XCTAssertEqual(SynthPatch(.bass).engineVersion,3)
         XCTAssertNotEqual(try render(legacy).left,try render(SynthPatch(.bass)).left)
     }
     func testBassMonoAndKeysVelocityChangeSpectrum() throws {

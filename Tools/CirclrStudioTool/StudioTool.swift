@@ -9,19 +9,30 @@ import CirclrAudio
         do {
             let args=CommandLine.arguments
             guard args.count>=3 else {throw CirclrError("사용: circlr-studio make-demo 출력폴더 [CC0샘플폴더] | render 프로젝트.circlr 출력.wav · 먼저 scripts/prepare-demo-samples.py 실행")}
-            if args[1]=="make-demo" {
+            if args[1]=="make-demo" || args[1]=="make-demo-v3" {
+                let club=args[1]=="make-demo"
                 let folder=URL(fileURLWithPath:args[2]),samples=URL(fileURLWithPath:args.count>3 ? args[3]:"music/f0r-h3r/samples/freepats")
                 let bank=try DemoSamples.load(samples)
                 if FileManager.default.fileExists(atPath:folder.path),try !FileManager.default.contentsOfDirectory(atPath:folder.path).isEmpty {throw CirclrError("기존 파일을 보존하기 위해 비어 있는 새 출력 폴더를 지정하세요")}
                 try FileManager.default.createDirectory(at:folder,withIntermediateDirectories:true)
-                var project=try F0rH3r.make(sampleRoot:samples,bank:bank)
+                var project=try club ? ClubArrangement.make(sampleRoot:samples,bank:bank):F0rH3r.make(sampleRoot:samples,bank:bank)
                 let target=folder.appendingPathComponent("f0r h3r.circlr")
                 guard !FileManager.default.fileExists(atPath:target.path) else {throw CirclrError("기존 곡을 보존하기 위해 새 출력 폴더를 지정하세요")}
                 project=try ProjectStore.save(project,to:target,mediaRoot:nil)
+                if club {
+                    // Gentle bus control before peak trim; both passes use the saved graph.
+                    let master=project.signal.nodes.first{$0.kind == .master}!.id
+                    var bus=SignalNode(kind:.effect,name:"클럽 버스 컴프레서");bus.effect=Effect(.compressor,amount:0.76,secondary:0.18)
+                    let incoming=project.signal.edges.filter{$0.to==master};project.signal.edges.removeAll{$0.to==master}
+                    for var edge in incoming {edge.to=bus.id;project.signal.edges.append(edge)}
+                    project.signal.nodes.append(bus);project.signal.edges.append(SignalEdge(from:bus.id,to:master))
+                    project.signal.layout.positions[bus.id]=Point(350,100)
+                    project=try ProjectStore.save(project,to:target,mediaRoot:target)
+                }
                 let plan=try AlbumCompiler.executionPlan(project)
                 var audio=try await ArrangementRenderer.render(project:project,root:target,plan:plan,includeStems:false,progress:report)
                 // Store the same gain in the project, then re-render through its real graph.
-                let headroom=pow(10,-1.2/20),gain=min(3,headroom/Double(max(0.001,audio.peak)))
+                let headroom=pow(10,(club ? -1.5:-1.2)/20),gain=min(3,headroom/Double(max(0.001,audio.peak)))
                 let master=project.signal.nodes.first{$0.kind == .master}!.id
                 var trim=SignalNode(kind:.effect,name:"마스터 헤드룸");trim.effect=Effect(.gain,amount:gain)
                 let incoming=project.signal.edges.filter{$0.to==master};project.signal.edges.removeAll{$0.to==master}
@@ -42,13 +53,18 @@ import CirclrAudio
                     if !notes.isEmpty {lanes.append((track.name,notes))}
                 }
                 try MIDIFile.encode(lanes:lanes,tempo:project.global.tempo,meter:project.global.meter).write(to:folder.appendingPathComponent("f0r h3r.mid"))
-                var reportData:[String:Any]=["title":project.name,"tempo":project.global.tempo,"key":project.global.scale.label,"bodySeconds":plan.duration,"tailSeconds":audio.tailSeconds,"sampleRate":PCM.rate,"bitDepth":24,"peak":audio.peak,"rms":audio.mix.rms,"tracks":project.tracks.count,"notes":lanes.reduce(0){$0+$1.1.count},"masterGain":gain,"productionVersion":3,"synthEngineVersion":2,"listeningReview":"not_performed_by_model","spliceCreditsSpent":0,"sampleLicense":bank.license,"sampleSet":bank.name,"distribution":"sample-inclusive project"]
+                var reportData:[String:Any]=["title":project.name,"tempo":project.global.tempo,"key":project.global.scale.label,"bodySeconds":plan.duration,"tailSeconds":audio.tailSeconds,"sampleRate":PCM.rate,"bitDepth":24,"peak":audio.peak,"rms":audio.mix.rms,"tracks":project.tracks.count,"notes":lanes.reduce(0){$0+$1.1.count},"masterGain":gain,"productionVersion":club ? 4:3,"synthEngineVersion":club ? 3:2,"listeningReview":"not_performed_by_model","spliceCreditsSpent":0,"sampleLicense":bank.license,"sampleSet":bank.name,"distribution":"sample-inclusive project"]
                 reportData["sections"]=plan.occurrences.map{["name":$0.use.name,"startSeconds":$0.start,"duration":$0.duration,"bars":$0.clock.meters.count] as [String:Any]}
                 reportData["assets"]=zip(project.assets,bank.files).map{asset,entry in ["name":asset.name,"path":asset.path,"sha256":asset.checksum,"role":entry.role,"sourceFile":entry.sourceFile,"source":bank.sourceURL,"license":bank.license] as [String:Any]}
                 let licenses=folder.appendingPathComponent("sample-license");try FileManager.default.createDirectory(at:licenses,withIntermediateDirectories:true)
                 for name in ["manifest.json","LICENSE","readme.txt"] {try Data(contentsOf:samples.appendingPathComponent(name)).write(to:licenses.appendingPathComponent(name))}
                 try JSONSerialization.data(withJSONObject:reportData,options:[.prettyPrinted,.sortedKeys]).write(to:folder.appendingPathComponent("production-report.json"))
                 print("완료: \(wav.path) · \(audio.mix.duration)s · peak \(audio.peak)")
+            } else if args[1]=="sound-bank" {
+                try SoundBank.write(to:URL(fileURLWithPath:args[2]))
+            } else if args[1]=="section-stems",args.count>=5,let index=Int(args[4]) {
+                let loaded=try ProjectStore.load(URL(fileURLWithPath:args[2]))
+                try await SoundBank.section(loaded.project,root:loaded.root,index:index,to:URL(fileURLWithPath:args[3]))
             } else if args[1]=="render",args.count>=4 {
                 let loaded=try ProjectStore.load(URL(fileURLWithPath:args[2]))
                 let audio=try await ArrangementRenderer.render(project:loaded.project,root:loaded.root,plan:AlbumCompiler.executionPlan(loaded.project),includeStems:false,progress:report)
@@ -73,7 +89,7 @@ enum F0rH3r {
             p.assets.append(Asset(name:"FreePats · "+entry.sourceFile,path:url.path,duration:Double(file.length)/file.processingFormat.sampleRate,sampleRate:file.processingFormat.sampleRate))
         }
         let voices:[(String,SynthVoice,Double)]=[("오로라 패드",.pad,0.8),("도시의 키",.keys,1.1),("펄스 베이스",.bass,1.15),("그녀의 모티프",.lead,1.15),("빛의 코드",.supersaw,1.15),("얼음 아르페지오",.pluck,0.65)]
-        for (name,voice,gain) in voices {let id=p.addTrack(name:name);let i=p.tracks.firstIndex{$0.id==id}!;p.tracks[i].instrument = .synthesizer(voice);p.tracks[i].gain=gain}
+        for (name,voice,gain) in voices {let id=p.addTrack(name:name);let i=p.tracks.firstIndex{$0.id==id}!;p.tracks[i].instrument = .synthesizer(voice);p.tracks[i].instrument.synth?.engineVersion=2;p.tracks[i].gain=gain}
         p.tracks[0].instrument.synth?.attack=0.28;p.tracks[0].instrument.synth?.release=1.1;p.tracks[0].instrument.synth?.cutoff=1800
         p.tracks[1].instrument.synth?.decay=1.6;p.tracks[1].instrument.synth?.sustain=0.08
         p.tracks[2].instrument.synth?.sustain=0.72;p.tracks[2].instrument.synth?.release=0.07
