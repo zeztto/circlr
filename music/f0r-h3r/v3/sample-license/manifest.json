@@ -1,0 +1,90 @@
+{
+  "name": "FreePats synthesizer percussion",
+  "version": "2022-07-18",
+  "creator": "Roberto",
+  "license": "CC0-1.0",
+  "licenseURL": "https://creativecommons.org/publicdomain/zero/1.0/",
+  "sourceURL": "https://freepats.zenvoid.org/Percussion/electric-percussion.html",
+  "archiveURL": "https://freepats.zenvoid.org/Percussion/SynthesizerPercussion/SynthesizerPercussion-SFZ-20220718.7z",
+  "archiveSHA256": "dbb2e5bb8268022fffa6dcc3d11a93368316038bf3ae81a965c58e9d490ed23b",
+  "files": [
+    {
+      "role": "kick",
+      "file": "kick.wav",
+      "sourceFile": "Kick04.wav",
+      "sourceSHA256": "fe8bfae55a9838bfd71ab04685c8dcba7fda114bb85087acdb915641c39b390d",
+      "sha256": "67dcf4e28db83e3126da9bf101bb0b19b5f01f83935d891398296d69bee9c27b",
+      "duration": 0.3262083333333333,
+      "sampleRate": 48000,
+      "channels": 1,
+      "transformation": "20 Hz one-pole DC removal, 100 ms settling tail, linear peak trim",
+      "gain": 0.7113942323472257,
+      "targetPeak": 0.7
+    },
+    {
+      "role": "snare",
+      "file": "snare.wav",
+      "sourceFile": "Snare14.wav",
+      "sourceSHA256": "1bcec0c2fe06b0f35231b81a90602102db8e858236a578af8f47fb40a2bddc77",
+      "sha256": "c49715ffd171b6d138e089df1f2513c6fca71ebf32f3b5fea125ddad1c786d52",
+      "duration": 0.42925,
+      "sampleRate": 48000,
+      "channels": 1,
+      "transformation": "20 Hz one-pole DC removal, 100 ms settling tail, linear peak trim",
+      "gain": 0.7649903766184973,
+      "targetPeak": 0.8
+    },
+    {
+      "role": "hat",
+      "file": "hat.wav",
+      "sourceFile": "ClosedHiHat01-01.wav",
+      "sourceSHA256": "4159b05c0d04a5da8c20eeeb5d465da44c9dc23de1807ea34404a8e2c7a162a4",
+      "sha256": "e1f048e2ef248fda51a830ca64c6c8926c76f8faa9f193bbed801d7adf9ba682",
+      "duration": 0.281375,
+      "sampleRate": 48000,
+      "channels": 1,
+      "transformation": "20 Hz one-pole DC removal, 100 ms settling tail, linear peak trim",
+      "gain": 0.29607265134270544,
+      "targetPeak": 0.28
+    },
+    {
+      "role": "shaker",
+      "file": "shaker.wav",
+      "sourceFile": "ShakerLong01.wav",
+      "sourceSHA256": "44a4b07dc631698f03a14f9d6d0fb4a910e3f08f7c076fd37e042897ff70f5cf",
+      "sha256": "b79c1a25375310b810fde37f5c40dc41848de31eb9e6678be8f0b97808465509",
+      "duration": 0.26697916666666666,
+      "sampleRate": 48000,
+      "channels": 1,
+      "transformation": "20 Hz one-pole DC removal, 100 ms settling tail, linear peak trim",
+      "gain": 0.22021194473282618,
+      "targetPeak": 0.22
+    },
+    {
+      "role": "tom",
+      "file": "tom.wav",
+      "sourceFile": "HighTom02-01.wav",
+      "sourceSHA256": "82873710c70f0d5d90ef78dde5d5558ba0a18317a5410889927e3014b3c080ab",
+      "sha256": "a427fe3664ebce4dcdc9f4704cb0bc4b83e757e64372999d264ae5452caba321",
+      "duration": 0.6362291666666666,
+      "sampleRate": 48000,
+      "channels": 1,
+      "transformation": "20 Hz one-pole DC removal, 100 ms settling tail, linear peak trim",
+      "gain": 0.6574385312213509,
+      "targetPeak": 0.7
+    },
+    {
+      "role": "transition",
+      "file": "transition.wav",
+      "sourceFile": "Cymbal01-01.wav",
+      "sourceSHA256": "43cc3d70d265dd8bae22cf4d7802b04f912300c162cc3418e47cfe511daeee9a",
+      "sha256": "ac09119a13b9a53fbd38ac44e461c7f46ae9605100b4b002ec2167e29354309e",
+      "duration": 3.077958333333333,
+      "sampleRate": 48000,
+      "channels": 1,
+      "transformation": "20 Hz one-pole DC removal, 100 ms settling tail, linear peak trim",
+      "gain": 0.5008703392330935,
+      "targetPeak": 0.5
+    }
+  ]
+}

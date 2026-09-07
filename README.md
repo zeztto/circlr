@@ -32,7 +32,7 @@ macOS용 앨범·송폼 궤도 편집기. **앨범 → 곡·악장 → 섹션 �
 
 내장 synth 6종, 음정별 sample mapping, MIDI 패턴 생성·파일 저장과 이펙트 포함 오디오 바운스를 추가했다. 바운스는 원본 MIDI·악기·이펙트를 보존하고 출력 입력을 오디오로 교체한다. 생성된 오디오 서클의 **원본 복원** 또는 Undo로 돌아갈 수 있다.
 
-[f0r h3r 프로젝트·MIDI·WAV와 튜토리얼](music/f0r-h3r/README.md)을 만들었다. 116 BPM, F♯ minor의 68마디·9트랙의 신스웨이브/city pop/future bass 곡이다. Splice 보유 샘플 6개를 사용했고 추가 지출은 0 credits다. 라이선스된 샘플을 포함한 곡 프로젝트는 사용자의 로컬 산출물이며 앱 배포 번들에 넣지 않는다.
+[f0r h3r v3 프로젝트·MIDI·WAV와 튜토리얼](music/f0r-h3r/v3/README.md)을 만들었다. 116 BPM, F♯ minor의 68마디·9트랙 신스웨이브/city pop/future bass 곡이다. 배포용 v3는 **CC0인 FreePats 샘플 6개**를 동봉한다. Splice를 사용했던 v1/v2는 로컬에 보존한다. 새 구매는 없다. [Splice의 배포 정책·공식 AU 연동 조사](docs/27-splice-licensing-and-integration.md).
 
 ## 새 캔버스 사용
 

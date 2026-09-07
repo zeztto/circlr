@@ -8,11 +8,13 @@ import CirclrAudio
     static func main() async {
         do {
             let args=CommandLine.arguments
-            guard args.count>=3 else {throw CirclrError("사용: circlr-studio make-demo 출력폴더 [Splice폴더] | render 프로젝트.circlr 출력.wav")}
+            guard args.count>=3 else {throw CirclrError("사용: circlr-studio make-demo 출력폴더 [CC0샘플폴더] | render 프로젝트.circlr 출력.wav · 먼저 scripts/prepare-demo-samples.py 실행")}
             if args[1]=="make-demo" {
-                let folder=URL(fileURLWithPath:args[2]),splice=URL(fileURLWithPath:args.count>3 ? args[3]:NSHomeDirectory()+"/Splice")
+                let folder=URL(fileURLWithPath:args[2]),samples=URL(fileURLWithPath:args.count>3 ? args[3]:"music/f0r-h3r/samples/freepats")
+                let bank=try DemoSamples.load(samples)
+                if FileManager.default.fileExists(atPath:folder.path),try !FileManager.default.contentsOfDirectory(atPath:folder.path).isEmpty {throw CirclrError("기존 파일을 보존하기 위해 비어 있는 새 출력 폴더를 지정하세요")}
                 try FileManager.default.createDirectory(at:folder,withIntermediateDirectories:true)
-                var project=try F0rH3r.make(spliceRoot:splice)
+                var project=try F0rH3r.make(sampleRoot:samples,bank:bank)
                 let target=folder.appendingPathComponent("f0r h3r.circlr")
                 guard !FileManager.default.fileExists(atPath:target.path) else {throw CirclrError("기존 곡을 보존하기 위해 새 출력 폴더를 지정하세요")}
                 project=try ProjectStore.save(project,to:target,mediaRoot:nil)
@@ -40,9 +42,11 @@ import CirclrAudio
                     if !notes.isEmpty {lanes.append((track.name,notes))}
                 }
                 try MIDIFile.encode(lanes:lanes,tempo:project.global.tempo,meter:project.global.meter).write(to:folder.appendingPathComponent("f0r h3r.mid"))
-                var reportData:[String:Any]=["title":project.name,"tempo":project.global.tempo,"key":project.global.scale.label,"bodySeconds":plan.duration,"tailSeconds":audio.tailSeconds,"sampleRate":PCM.rate,"bitDepth":24,"peak":audio.peak,"rms":audio.mix.rms,"tracks":project.tracks.count,"notes":lanes.reduce(0){$0+$1.1.count},"masterGain":gain,"productionVersion":2,"synthEngineVersion":2,"listeningReview":"not_performed_by_model","spliceCreditsSpent":0,"creditLimit":10]
+                var reportData:[String:Any]=["title":project.name,"tempo":project.global.tempo,"key":project.global.scale.label,"bodySeconds":plan.duration,"tailSeconds":audio.tailSeconds,"sampleRate":PCM.rate,"bitDepth":24,"peak":audio.peak,"rms":audio.mix.rms,"tracks":project.tracks.count,"notes":lanes.reduce(0){$0+$1.1.count},"masterGain":gain,"productionVersion":3,"synthEngineVersion":2,"listeningReview":"not_performed_by_model","spliceCreditsSpent":0,"sampleLicense":bank.license,"sampleSet":bank.name,"distribution":"sample-inclusive project"]
                 reportData["sections"]=plan.occurrences.map{["name":$0.use.name,"startSeconds":$0.start,"duration":$0.duration,"bars":$0.clock.meters.count] as [String:Any]}
-                reportData["assets"]=project.assets.map{["name":$0.name,"path":$0.path,"sha256":$0.checksum,"source":"Splice owned library · Digi Grid Outrun Sounds","creditsSpent":0] as [String:Any]}
+                reportData["assets"]=zip(project.assets,bank.files).map{asset,entry in ["name":asset.name,"path":asset.path,"sha256":asset.checksum,"role":entry.role,"sourceFile":entry.sourceFile,"source":bank.sourceURL,"license":bank.license] as [String:Any]}
+                let licenses=folder.appendingPathComponent("sample-license");try FileManager.default.createDirectory(at:licenses,withIntermediateDirectories:true)
+                for name in ["manifest.json","LICENSE","readme.txt"] {try Data(contentsOf:samples.appendingPathComponent(name)).write(to:licenses.appendingPathComponent(name))}
                 try JSONSerialization.data(withJSONObject:reportData,options:[.prettyPrinted,.sortedKeys]).write(to:folder.appendingPathComponent("production-report.json"))
                 print("완료: \(wav.path) · \(audio.mix.duration)s · peak \(audio.peak)")
             } else if args[1]=="render",args.count>=4 {
@@ -61,17 +65,12 @@ enum F0rH3r {
     static let a=Harmony(root:33,notes:[56,59,61,64]),c=Harmony(root:37,notes:[53,56,59,62])
     static let b=Harmony(root:35,notes:[54,57,61,62]),e=Harmony(root:40,notes:[56,62,66,68])
     static let cm=Harmony(root:37,notes:[56,59,64,68])
-    static func make(spliceRoot:URL) throws -> Project {
-        let fm=FileManager.default
-        let names=["NW_DG_kick_spot.wav","NW_DG_snare_finale.wav","NW_DG_hat_closed_regret.wav","NW_DG_percussion_shaker_dirty.wav","NW_DG_tom_labyrinth_high.wav","NW_DG_fx_wave.wav"]
-        let enumerator=fm.enumerator(at:spliceRoot,includingPropertiesForKeys:nil)
-        var files:[String:URL]=[:]
-        while let file=enumerator?.nextObject() as? URL {if names.contains(file.lastPathComponent){files[file.lastPathComponent]=file}}
+    static func make(sampleRoot:URL,bank:DemoSamples) throws -> Project {
         var p=Project();p.name="f0r h3r";p.global.tempo=116;p.global.scale=Scale(root:6);p.schemaVersion=2
-        for name in names {
-            guard let url=files[name] else {throw CirclrError("보유 샘플을 Splice에서 동기화하세요: \(name)")}
+        for entry in bank.files {
+            let url=sampleRoot.appendingPathComponent(entry.file)
             let file=try AVAudioFile(forReading:url)
-            p.assets.append(Asset(name:name,path:url.path,duration:Double(file.length)/file.processingFormat.sampleRate,sampleRate:file.processingFormat.sampleRate))
+            p.assets.append(Asset(name:"FreePats · "+entry.sourceFile,path:url.path,duration:Double(file.length)/file.processingFormat.sampleRate,sampleRate:file.processingFormat.sampleRate))
         }
         let voices:[(String,SynthVoice,Double)]=[("오로라 패드",.pad,0.8),("도시의 키",.keys,1.1),("펄스 베이스",.bass,1.15),("그녀의 모티프",.lead,1.15),("빛의 코드",.supersaw,1.15),("얼음 아르페지오",.pluck,0.65)]
         for (name,voice,gain) in voices {let id=p.addTrack(name:name);let i=p.tracks.firstIndex{$0.id==id}!;p.tracks[i].instrument = .synthesizer(voice);p.tracks[i].gain=gain}
@@ -81,11 +80,11 @@ enum F0rH3r {
         p.tracks[3].instrument.synth?.attack=0.025;p.tracks[3].instrument.synth?.release=0.22;p.tracks[3].instrument.synth?.detune=4
         p.tracks[5].instrument.synth?.cutoff=2100;p.tracks[5].instrument.synth?.release=0.25
         p.tracks[4].instrument.synth?.attack=0.016;p.tracks[4].instrument.synth?.cutoff=4200;p.tracks[4].instrument.synth?.stereoWidth=0.85;p.tracks[4].instrument.synth?.detune=17
-        _=p.addTrack(name:"Digi Grid 드럼",drums:true)
+        _=p.addTrack(name:"네온 드럼",drums:true)
         p.tracks[6].instrument = .sampler(assetID:p.assets[0].id);p.tracks[6].instrument.drums=true;p.tracks[6].gain=0.48
         p.tracks[6].instrument.sample?.zones=zip([38,42,70,50],p.assets.dropFirst().prefix(4)).map{SampleZone($0.0,assetID:$0.1.id)}
-        _=p.addTrack(name:"파도와 전환");p.tracks[7].gain=0.13
-        _=p.addTrack(name:"Digi Grid 킥",drums:true);p.tracks[8].instrument = .sampler(assetID:p.assets[0].id,rootPitch:36);p.tracks[8].gain=0.68
+        _=p.addTrack(name:"빛의 잔향");p.tracks[7].gain=0.13
+        _=p.addTrack(name:"네온 킥",drums:true);p.tracks[8].instrument = .sampler(assetID:p.assets[0].id,rootPitch:36);p.tracks[8].gain=0.68
         let form:[(String,Int,String)]=[("멀리서 · Intro",4,"intro"),("도시의 기억 · Verse",8,"verse"),("다가오는 빛 · Lift",4,"lift"),("f0r h3r · Chorus",8,"chorus"),("푸른 공기 · Post",4,"post"),("다시 걷는 길 · Verse B",8,"verseB"),("다시 피는 빛 · Lift",4,"lift"),("너의 도시 · Chorus",8,"chorus"),("북쪽의 밤 · Bridge",4,"bridge"),("마지막 빛 · Final chorus",12,"final"),("잔상 · Outro",4,"outro")]
         for (sectionIndex,item) in form.enumerated() {
             let (name,bars,style)=item
@@ -197,5 +196,38 @@ enum F0rH3r {
         }
         if let drumSource {connect(drumSource,"fx:\(tracks[4].id):0",sidechain:true)}
         return graph
+    }
+}
+
+/// The distributable demo uses a pinned, redistributable bank, never a user's sample library.
+struct DemoSamples: Decodable {
+    struct Entry: Decodable {
+        let role: String
+        let file: String
+        let sourceFile: String
+        let sha256: String
+    }
+    let name: String
+    let version: String
+    let license: String
+    let sourceURL: String
+    let archiveSHA256: String
+    let files: [Entry]
+    static let roles = ["kick", "snare", "hat", "shaker", "tom", "transition"]
+
+    static func load(_ root: URL) throws -> DemoSamples {
+        let manifest = root.appendingPathComponent("manifest.json")
+        guard try ProjectStore.checksum(manifest) == "11275cbfd9d933bb293dc266faf373ea65efa918ca2f6136c2f69ce88e5b804b" else { throw CirclrError("검증된 CC0 샘플 manifest가 아닙니다. scripts/prepare-demo-samples.py로 준비하세요") }
+        let data = try Data(contentsOf: manifest)
+        let bank = try JSONDecoder().decode(Self.self, from: data)
+        guard bank.license == "CC0-1.0", bank.archiveSHA256 == "dbb2e5bb8268022fffa6dcc3d11a93368316038bf3ae81a965c58e9d490ed23b",
+              bank.files.map(\.role) == roles else { throw CirclrError("배포용 데모는 검증된 FreePats CC0 샘플 세트가 필요합니다") }
+        let base = root.standardizedFileURL.resolvingSymlinksInPath().path + "/"
+        for item in bank.files {
+            let url = root.appendingPathComponent(item.file).standardizedFileURL.resolvingSymlinksInPath()
+            guard url.path.hasPrefix(base), item.file == item.role + ".wav",
+                  try ProjectStore.checksum(url) == item.sha256 else { throw CirclrError("데모 샘플 경로·체크섬 오류: \(item.role)") }
+        }
+        return bank
     }
 }

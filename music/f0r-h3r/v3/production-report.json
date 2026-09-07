@@ -1,0 +1,145 @@
+{
+  "assets" : [
+    {
+      "license" : "CC0-1.0",
+      "name" : "FreePats · Kick04.wav",
+      "path" : "media\/B9603F1E-F45A-4EE0-A2AC-03F078A20E25.wav",
+      "role" : "kick",
+      "sha256" : "67dcf4e28db83e3126da9bf101bb0b19b5f01f83935d891398296d69bee9c27b",
+      "source" : "https:\/\/freepats.zenvoid.org\/Percussion\/electric-percussion.html",
+      "sourceFile" : "Kick04.wav"
+    },
+    {
+      "license" : "CC0-1.0",
+      "name" : "FreePats · Snare14.wav",
+      "path" : "media\/C5992AC6-070C-49AE-95A3-2AC8CC65943C.wav",
+      "role" : "snare",
+      "sha256" : "c49715ffd171b6d138e089df1f2513c6fca71ebf32f3b5fea125ddad1c786d52",
+      "source" : "https:\/\/freepats.zenvoid.org\/Percussion\/electric-percussion.html",
+      "sourceFile" : "Snare14.wav"
+    },
+    {
+      "license" : "CC0-1.0",
+      "name" : "FreePats · ClosedHiHat01-01.wav",
+      "path" : "media\/AEED6CBA-63C1-4691-96CD-BE0FE1CD5CC9.wav",
+      "role" : "hat",
+      "sha256" : "e1f048e2ef248fda51a830ca64c6c8926c76f8faa9f193bbed801d7adf9ba682",
+      "source" : "https:\/\/freepats.zenvoid.org\/Percussion\/electric-percussion.html",
+      "sourceFile" : "ClosedHiHat01-01.wav"
+    },
+    {
+      "license" : "CC0-1.0",
+      "name" : "FreePats · ShakerLong01.wav",
+      "path" : "media\/0ABCB335-1A8B-4A91-8944-01E4E119B85D.wav",
+      "role" : "shaker",
+      "sha256" : "b79c1a25375310b810fde37f5c40dc41848de31eb9e6678be8f0b97808465509",
+      "source" : "https:\/\/freepats.zenvoid.org\/Percussion\/electric-percussion.html",
+      "sourceFile" : "ShakerLong01.wav"
+    },
+    {
+      "license" : "CC0-1.0",
+      "name" : "FreePats · HighTom02-01.wav",
+      "path" : "media\/4667E590-5830-49FF-B639-8A30116ECF9D.wav",
+      "role" : "tom",
+      "sha256" : "a427fe3664ebce4dcdc9f4704cb0bc4b83e757e64372999d264ae5452caba321",
+      "source" : "https:\/\/freepats.zenvoid.org\/Percussion\/electric-percussion.html",
+      "sourceFile" : "HighTom02-01.wav"
+    },
+    {
+      "license" : "CC0-1.0",
+      "name" : "FreePats · Cymbal01-01.wav",
+      "path" : "media\/34C1D339-45BF-4F92-AF37-AF46606618DC.wav",
+      "role" : "transition",
+      "sha256" : "ac09119a13b9a53fbd38ac44e461c7f46ae9605100b4b002ec2167e29354309e",
+      "source" : "https:\/\/freepats.zenvoid.org\/Percussion\/electric-percussion.html",
+      "sourceFile" : "Cymbal01-01.wav"
+    }
+  ],
+  "bitDepth" : 24,
+  "bodySeconds" : 140.68965517241381,
+  "distribution" : "sample-inclusive project",
+  "key" : "F♯ minor",
+  "listeningReview" : "not_performed_by_model",
+  "masterGain" : 1.1046531606743817,
+  "notes" : 3119,
+  "peak" : 0.87096357345581055,
+  "productionVersion" : 3,
+  "rms" : 0.094377607023592422,
+  "sampleLicense" : "CC0-1.0",
+  "sampleRate" : 48000,
+  "sampleSet" : "FreePats synthesizer percussion",
+  "sections" : [
+    {
+      "bars" : 4,
+      "duration" : 8.2758620689655178,
+      "name" : "멀리서 · Intro",
+      "startSeconds" : 0
+    },
+    {
+      "bars" : 8,
+      "duration" : 16.551724137931036,
+      "name" : "도시의 기억 · Verse",
+      "startSeconds" : 8.2758620689655178
+    },
+    {
+      "bars" : 4,
+      "duration" : 8.2758620689655178,
+      "name" : "다가오는 빛 · Lift",
+      "startSeconds" : 24.827586206896555
+    },
+    {
+      "bars" : 8,
+      "duration" : 16.551724137931036,
+      "name" : "f0r h3r · Chorus",
+      "startSeconds" : 33.103448275862071
+    },
+    {
+      "bars" : 4,
+      "duration" : 8.2758620689655178,
+      "name" : "푸른 공기 · Post",
+      "startSeconds" : 49.65517241379311
+    },
+    {
+      "bars" : 8,
+      "duration" : 16.551724137931036,
+      "name" : "다시 걷는 길 · Verse B",
+      "startSeconds" : 57.931034482758626
+    },
+    {
+      "bars" : 4,
+      "duration" : 8.2758620689655178,
+      "name" : "다시 피는 빛 · Lift",
+      "startSeconds" : 74.482758620689665
+    },
+    {
+      "bars" : 8,
+      "duration" : 16.551724137931036,
+      "name" : "너의 도시 · Chorus",
+      "startSeconds" : 82.758620689655189
+    },
+    {
+      "bars" : 4,
+      "duration" : 8.2758620689655178,
+      "name" : "북쪽의 밤 · Bridge",
+      "startSeconds" : 99.310344827586221
+    },
+    {
+      "bars" : 12,
+      "duration" : 24.827586206896552,
+      "name" : "마지막 빛 · Final chorus",
+      "startSeconds" : 107.58620689655174
+    },
+    {
+      "bars" : 4,
+      "duration" : 8.2758620689655178,
+      "name" : "잔상 · Outro",
+      "startSeconds" : 132.41379310344828
+    }
+  ],
+  "spliceCreditsSpent" : 0,
+  "synthEngineVersion" : 2,
+  "tailSeconds" : 2,
+  "tempo" : 116,
+  "title" : "f0r h3r",
+  "tracks" : 9
+}
