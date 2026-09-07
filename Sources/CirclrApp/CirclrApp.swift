@@ -17,6 +17,12 @@ import OSLog
             CommandGroup(replacing:.newItem){Button("새 앨범"){store.newProject()}.keyboardShortcut("n");Button("열기…"){store.open()}.keyboardShortcut("o");Divider();Button("창 닫기"){NSApplication.shared.keyWindow?.performClose(nil)}.keyboardShortcut("w")}
             CommandGroup(replacing:.saveItem){Button("저장"){store.save()}.keyboardShortcut("s");Button("다른 이름으로 저장…"){store.save(as:true)}.keyboardShortcut("s",modifiers:[.command,.shift]);Divider();Button("WAV 내보내기…"){store.export()}.keyboardShortcut("e")}
             CommandGroup(replacing:.undoRedo){Button("실행 취소"){store.undo()}.keyboardShortcut("z").disabled(store.undoCount==0);Button("다시 실행"){store.redo()}.keyboardShortcut("z",modifiers:[.command,.shift]).disabled(store.redoCount==0)}
+            CommandMenu("보기") {
+                Button("영상 녹화 시작 / 마치기…"){store.toggleMovieRecording()}.keyboardShortcut("r",modifiers:[.command,.shift])
+                Button("명령 검색…"){store.showCommands()}.keyboardShortcut("p",modifiers:[.command,.shift])
+                Button("키보드 사용법"){store.commandPalette=nil;store.keyboardHelp.toggle()}.keyboardShortcut("/")
+                Button("캔버스로 포커스 이동"){store.commandPalette=nil;store.focusCanvas?()}.keyboardShortcut("0",modifiers:[.command,.option])
+            }
             CommandMenu("곡 구성"){Button("섹션 추가"){store.addSection()}.keyboardShortcut("k");Button("다시 사용"){store.reuse()}.keyboardShortcut("d");Button("그룹 만들기"){store.makeHierarchyGroup()}.keyboardShortcut("g");Button("삭제"){store.removeHierarchy()};Divider();Button("재생 / 정지"){store.play()};Button("오디오 가져오기…"){store.importAudio()}.keyboardShortcut("i")}
         }
     }
@@ -24,7 +30,7 @@ import OSLog
 @MainActor final class AppDelegate:NSObject,NSApplicationDelegate {
     weak var store:AppStore?
     weak var mainWindow:NSWindow?
-    func applicationShouldTerminate(_ sender:NSApplication)->NSApplication.TerminateReply {guard let store else{return .terminateNow};if !store.confirmDiscard(){return .terminateCancel};store.stop();return .terminateNow}
+    func applicationShouldTerminate(_ sender:NSApplication)->NSApplication.TerminateReply {guard let store else{return .terminateNow};if !store.confirmDiscard(){return .terminateCancel};store.stop();if let finalizing=store.movieFinalizing {Task{@MainActor in await finalizing.value;sender.reply(toApplicationShouldTerminate:true)};return .terminateLater};return .terminateNow}
     func applicationShouldTerminateAfterLastWindowClosed(_ sender:NSApplication)->Bool {false}
     func applicationShouldHandleReopen(_ sender:NSApplication,hasVisibleWindows:Bool)->Bool {
         guard let mainWindow else{return true}

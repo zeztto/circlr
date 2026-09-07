@@ -1,6 +1,7 @@
 import hashlib
 import importlib.util
 import json
+import plistlib
 from pathlib import Path
 import re
 import shutil
@@ -29,7 +30,7 @@ class KitTests(unittest.TestCase):
 
     def test_manifest_references_and_roles(self):
         manifest = installer.load_kit(KIT)
-        self.assertEqual(manifest['version'], '0.12.0')
+        self.assertEqual(manifest['version'], plistlib.loads((ROOT/'Resources/Info.plist').read_bytes())['CFBundleShortVersionString'])
         skill = KIT / 'skills/circlr-studio'
         for p in skill.rglob('*.md'):
             for link in re.findall(r'\]\(([^)]+)\)', p.read_text()):

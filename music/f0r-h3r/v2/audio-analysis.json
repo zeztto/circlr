@@ -1,0 +1,23 @@
+{
+  "file": "f0r h3r.wav",
+  "sha256": "201460d66a88f2c005b6eec6807c6312cede578a8d3f00af00cc6c218e66438b",
+  "seconds": 142.68966666666665,
+  "sampleRate": 48000,
+  "bitDepth": 24,
+  "channels": 2,
+  "samplePeakDBFS": -1.199998975710161,
+  "rmsDBFS": -20.462851396849494,
+  "clippedSamples": 0,
+  "dc": [
+    -0.0003689606669261756,
+    -0.0001517546385416448
+  ],
+  "stereoCorrelation": 0.8594165812864326,
+  "sideToMidDB": -11.213371932606575,
+  "integratedLUFS": -17.963510178588844,
+  "estimatedPeak4xDBFS": -1.1853594462783394,
+  "meter": "circlr QA v1; BS.1770-5 stereo K weighting, 400ms/100ms gates; 4x 97-tap Kaiser sinc peak estimate",
+  "listeningReview": "not performed by model",
+  "certifiedMeter": false,
+  "997HzCalibrationLUFS": -19.999970332702244
+}

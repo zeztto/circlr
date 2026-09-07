@@ -78,7 +78,9 @@ struct OrbitAudioEditor:NSViewRepresentable {
         lane.audio[i]=value;store.setLane(lane)
     }
     override func keyDown(with event:NSEvent) {
-        if event.keyCode==53 {preview=nil;original=nil;store.hierarchyParent()}
+        if event.modifierFlags.contains(.command) || event.modifierFlags.contains(.control) {super.keyDown(with:event);return}
+        if store.handleAudioTrimKey(event,clipID:clip.id){needsDisplay=true;return}
+        if event.keyCode==53 {preview=nil;original=nil;store.focusCanvas?();store.hierarchyParent()}
         else if event.keyCode==49 {store.play()}
         else {super.keyDown(with:event)}
     }

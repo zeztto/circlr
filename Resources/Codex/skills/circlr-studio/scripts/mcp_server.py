@@ -158,7 +158,7 @@ def serve(path, read_only=False):
             if method == "initialize":
                 negotiated = True
                 requested = request.get("params", {}).get("protocolVersion")
-                result = {"protocolVersion": requested if requested in VERSIONS else "2025-11-25", "capabilities": {"tools": {"listChanged": False}}, "serverInfo": {"name": "circlr", "version": "0.12.0"}, "instructions": ("Read-only specialist session. Return edit proposals to the coordinator. " if read_only else "") + "Read snapshot before mutations. Use stable IDs and expectedRevision. Long jobs return immediately; monitor with circlr_job/events. CUA is unnecessary."}
+                result = {"protocolVersion": requested if requested in VERSIONS else "2025-11-25", "capabilities": {"tools": {"listChanged": False}}, "serverInfo": {"name": "circlr", "version": "0.13.0"}, "instructions": ("Read-only specialist session. Return edit proposals to the coordinator. " if read_only else "") + "Read snapshot before mutations. Use stable IDs and expectedRevision. Long jobs return immediately; monitor with circlr_job/events. CUA is unnecessary."}
             elif method == "ping":
                 result = {}
             elif not initialized:

@@ -38,7 +38,7 @@ struct PlaybackVisualFrame {
 
     func refreshPlaybackAnimation(playing: Bool? = nil) {
         let playing = playing ?? store.playback.playing
-        let visible = window.map { !$0.isMiniaturized && $0.occlusionState.contains(.visible) } ?? false
+        let visible = store.movieWriter != nil || (window.map { !$0.isMiniaturized && $0.occlusionState.contains(.visible) } ?? false)
         if playing && visible {
             guard playbackAnimation == nil else { return }
             lastVisualFrameTime = 0

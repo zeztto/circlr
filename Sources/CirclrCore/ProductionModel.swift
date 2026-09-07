@@ -5,6 +5,10 @@ public enum SynthVoice: Int, Codable, CaseIterable {
     public var label: String { ["오로라 패드", "펄스 베이스", "글라스 키", "와이드 소우", "아르페지오 플럭", "폴라 리드"][rawValue] }
 }
 public struct SynthPatch: Codable, Equatable {
+    public var engineVersion: Int = 2
+    public var resonance: Double = 0.12
+    public var stereoWidth: Double = 0.75
+    public var filterEnvelope: Double = 0
     public var voice: SynthVoice
     public var cutoff: Double
     public var attack: Double
@@ -17,15 +21,29 @@ public struct SynthPatch: Codable, Equatable {
         attack = 0.15; decay = 0.5; sustain = 0.65; release = 0.8
         switch voice {
         case .pad: break
-        case .bass: cutoff=900; attack=0.004; decay=0.18; sustain=0.5; release=0.08; detune=3
-        case .keys: cutoff=6500; attack=0.003; decay=1.2; sustain=0.16; release=0.25; detune=4
+        case .bass: stereoWidth=0; filterEnvelope=1.3; cutoff=650; attack=0.004; decay=0.18; sustain=0.5; release=0.08; detune=3
+        case .keys: stereoWidth=0; cutoff=7500; attack=0.003; decay=1.2; sustain=0.16; release=0.25; detune=4
         case .supersaw: cutoff=7000; attack=0.008; decay=0.18; sustain=0.72; release=0.12; detune=21
-        case .pluck: cutoff=4800; attack=0.002; decay=0.19; sustain=0.08; release=0.15; detune=7
-        case .lead: cutoff=4300; attack=0.014; decay=0.22; sustain=0.6; release=0.28; detune=8
+        case .pluck: filterEnvelope=2.1; cutoff=1800; attack=0.002; decay=0.19; sustain=0.08; release=0.15; detune=7
+        case .lead: stereoWidth=0.2; filterEnvelope=0.3; cutoff=3800; attack=0.014; decay=0.22; sustain=0.6; release=0.28; detune=8
         }
     }
+    private enum CodingKeys:String,CodingKey {case voice,cutoff,attack,decay,sustain,release,detune,engineVersion,resonance,stereoWidth,filterEnvelope}
+    public init(from decoder:Decoder) throws {
+        let c=try decoder.container(keyedBy:CodingKeys.self)
+        voice=try c.decode(SynthVoice.self,forKey:.voice)
+        cutoff=try c.decode(Double.self,forKey:.cutoff);attack=try c.decode(Double.self,forKey:.attack)
+        decay=try c.decode(Double.self,forKey:.decay);sustain=try c.decode(Double.self,forKey:.sustain)
+        release=try c.decode(Double.self,forKey:.release);detune=try c.decode(Double.self,forKey:.detune)
+        engineVersion=try c.decodeIfPresent(Int.self,forKey:.engineVersion) ?? 1
+        resonance=try c.decodeIfPresent(Double.self,forKey:.resonance) ?? 0.12
+        stereoWidth=try c.decodeIfPresent(Double.self,forKey:.stereoWidth) ?? 0.75
+        filterEnvelope=try c.decodeIfPresent(Double.self,forKey:.filterEnvelope) ?? 0
+    }
     public func validate() throws {
-        guard cutoff.isFinite,(40...20000).contains(cutoff), attack.isFinite,(0.001...5).contains(attack),
+        guard (1...2).contains(engineVersion),resonance.isFinite,(0...0.9).contains(resonance),
+              stereoWidth.isFinite,(0...1).contains(stereoWidth),filterEnvelope.isFinite,(-4...4).contains(filterEnvelope),
+              cutoff.isFinite,(40...20000).contains(cutoff), attack.isFinite,(0.001...5).contains(attack),
               decay.isFinite,(0.001...10).contains(decay), sustain.isFinite,(0...1).contains(sustain),
               release.isFinite,(0.005...10).contains(release),detune.isFinite,(0...60).contains(detune)
         else { throw CirclrError("신스의 필터·엔벌로프·디튠 범위를 확인하세요") }

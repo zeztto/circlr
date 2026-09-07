@@ -116,9 +116,8 @@ struct OrbitMIDIEditor: NSViewRepresentable {
         lane.notes[i]=n;store.setLane(lane)
     }
     override func keyDown(with event:NSEvent) {
-        if event.keyCode==51 || event.keyCode==117 {store.removeNote()}
-        else if event.keyCode==53 {original=nil;preview=nil;store.hierarchyParent()}
-        else if event.keyCode==49 {store.play()}
+        if store.handleMIDIKey(event,topPitch:topPitch){needsDisplay=true;return}
+        if event.keyCode==53 {original=nil;preview=nil;store.focusCanvas?();store.hierarchyParent()}
         else {super.keyDown(with:event)}
     }
 }

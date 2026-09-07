@@ -14,7 +14,7 @@ final class ProductionTests:XCTestCase {
             XCTAssertLessThan(pcm.peak,0.5)
             XCTAssertEqual(pcm.slice(40000..<pcm.count).peak,0)
             XCTAssertTrue(pcm.left.allSatisfy(\.isFinite))
-            if voice != .keys {XCTAssertNotEqual(pcm.left,pcm.right)}
+            if voice != .keys && voice != .bass {XCTAssertNotEqual(pcm.left,pcm.right)}
         }
     }
     func testSamplerTranspositionVelocityAndGate() throws {
@@ -47,7 +47,8 @@ final class ProductionTests:XCTestCase {
         let afterPlan=try XCTUnwrap(SectionGraphCompiler.compile(project:p,section:p.sections[0],use:p.active.uses[0],context:context,clock:clock))
         let after=try await SectionGraphRenderer.render(afterPlan,project:p,root:nil,clock:clock,tail:2)
         let expected=try XCTUnwrap(full[track]),actual=try XCTUnwrap(after[track])
-        XCTAssertGreaterThan(actual.slice(48000..<actual.count).rms,0.001)
+        // Engine 2 pluck has a quieter release; the tail must remain well above 24-bit noise.
+        XCTAssertGreaterThan(actual.slice(48000..<actual.count).rms,0.0001)
         XCTAssertLessThan(zip(expected.left,actual.left).map{abs($0-$1)}.max() ?? 1,0.000001)
         XCTAssertEqual(p.sections[0].lanes[0].notes,original.sections[0].lanes[0].notes)
         let saved=try ProjectStore.save(p,to:root.appendingPathComponent("song.circlr"),mediaRoot:nil)

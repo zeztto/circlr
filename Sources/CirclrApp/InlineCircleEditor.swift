@@ -6,11 +6,12 @@ import CirclrAudio
 struct InlineCircleEditor: View {
     @ObservedObject var store: AppStore
     @State private var topPitch = 72
+    @FocusState private var nameFocused:Bool
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 TextField("서클 이름", text: Binding(get: { store.selectedCircle?.title ?? "" }, set: { store.renameHierarchy($0) }))
-                    .textFieldStyle(.plain).font(.system(size: 17, weight: .semibold))
+                    .textFieldStyle(.plain).font(.system(size: 17, weight: .semibold)).focused($nameFocused)
                 Spacer()
                 if store.selectedMusic != nil {
                     Button { store.hierarchySettingsOpen.toggle() } label: { Image(systemName: "slider.horizontal.3") }.help("템포·박자·스케일·반복 설정")
@@ -66,7 +67,8 @@ struct InlineCircleEditor: View {
         .font(.system(size: 12)).buttonStyle(CanvasButtonStyle()).controlSize(.small)
         .tint(StudioTheme.accent).preferredColorScheme(.dark)
         .onExitCommand { store.hierarchySettingsOpen = false; store.hierarchyParent() }
-        .onAppear { topPitch = store.selectedTrack?.instrument.drums == true ? 48 : 72 }
+        .onAppear { topPitch = store.selectedTrack?.instrument.drums == true ? 48 : 72;nameFocused=store.hierarchySettingsOpen }
+        .onChange(of:store.hierarchySettingsOpen){_,value in nameFocused=value}
     }
     private var midi: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -89,6 +91,7 @@ struct InlineCircleEditor: View {
             } }
             if let id = store.selectedNoteID, let note = store.currentLane?.notes.first(where: { $0.id == id }) {
                 HStack(spacing: 10) {
+                    Text("\(Scale.roots[note.pitch%12])\(note.pitch/12-1)").monospacedDigit().accessibilityLabel("음높이 \(note.pitch)")
                     ValueField(title: "시작 박", value: noteBinding(id, \.beat, note.beat), range: 0...max(0,store.editorBeats-note.length))
                     ValueField(title: "길이", value: noteBinding(id, \.length, note.length), range: 0.03125...max(0.03125,store.editorBeats-note.beat))
                     ValueField(title: "세기", value: Binding(get: { Double(note.velocity) }, set: { value in guard var lane=store.currentLane,let i=lane.notes.firstIndex(where:{$0.id==id}) else{return};lane.notes[i].velocity=Int(value);store.setLane(lane) }), range: 1...127)

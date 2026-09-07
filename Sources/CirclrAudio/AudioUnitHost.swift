@@ -43,6 +43,7 @@ public enum AudioUnitHost {
         if notes.isEmpty { return PCM(frames: frames) }
         let unit = try await instrument(config), engine = AVAudioEngine()
         let format = AVAudioFormat(standardFormatWithSampleRate: PCM.rate, channels: 2)!
+        try engine.enableManualRenderingMode(.offline, format: format, maximumFrameCount: 1024)
         engine.attach(unit); engine.connect(unit, to: engine.mainMixerNode, format: format)
         final class Position { var frame = 0 }
         let position = Position()
@@ -58,7 +59,6 @@ public enum AudioUnitHost {
             tempo?.pointee = clock.bpm(at: q); numerator?.pointee = Double(clock.meters[bar].numerator); denominator?.pointee = clock.meters[bar].denominator
             beat?.pointee = q; offset?.pointee = Int((ceil(q)-q)*60/clock.bpm(at: q)*PCM.rate); downbeat?.pointee = clock.barStarts[bar]; return true
         }
-        try engine.enableManualRenderingMode(.offline, format: format, maximumFrameCount: 1024)
         try engine.start(); defer { engine.stop(); unit.auAudioUnit.musicalContextBlock = nil }
         guard let midi = unit.auAudioUnit.scheduleMIDIEventBlock else { throw CirclrError("선택한 Audio Unit은 MIDI 입력을 지원하지 않습니다") }
         struct Event { var frame: Int; var pitch: UInt8; var velocity: UInt8; var on: Bool }
@@ -94,8 +94,8 @@ public enum AudioUnitHost {
     }
     public static func process(_ input: PCM, unit: AVAudioUnit, duration: Double? = nil) throws -> PCM {
         let engine = AVAudioEngine(), player = AVAudioPlayerNode(), format = AVAudioFormat(standardFormatWithSampleRate: PCM.rate, channels: 2)!
-        engine.attach(player); engine.attach(unit); engine.connect(player,to:unit,format:format); engine.connect(unit,to:engine.mainMixerNode,format:format)
         try engine.enableManualRenderingMode(.offline, format: format, maximumFrameCount: 1024)
+        engine.attach(player); engine.attach(unit); engine.connect(player,to:unit,format:format); engine.connect(unit,to:engine.mainMixerNode,format:format)
         player.scheduleBuffer(try input.buffer()); try engine.start(); player.play(); defer { engine.stop() }
         let frames = Int(((duration ?? input.duration)*PCM.rate).rounded())
         var output = PCM(frames: frames), cursor = 0, retries = 0

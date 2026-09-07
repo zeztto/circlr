@@ -25,3 +25,7 @@ Discover the actual MCP tool catalog before work. The bundled adapter has 14 too
 A read-only adapter rejects mutation and transport calls, including direct tools/call attempts. Filesystem sandbox settings alone do not constrain all MCP servers. This is not a system-wide capability sandbox or the future run-lease gateway: other inherited connectors and raw socket access are outside this adapter. Specialists must not use them to evade scope.
 
 Record sample source, asset ID, acquisition/license evidence when available, and transformations. Ownership does not follow from a filename. Existing paid assets may be reused within the artist's authorized project; new purchases and credits require the current task's budget. Keep licensed media out of the public skill/app bundle. Keep creator credits, lyric authorship and artist review separate from generated technical logs.
+
+## Engine 2 patches (circlr 0.13)
+
+New synth patches use engineVersion=2: mono bass, velocity-shaped harmonic keys, TPT low-pass, resonance 0–0.9, stereoWidth 0–1, filterEnvelope -4–4 octaves. Bass and keys remain mono by design; width applies to the unison voices. Missing engineVersion decodes as legacy engine 1. Changing voice selects a new patch; editing a legacy patch preserves its engine unless explicitly upgraded. New reverb effects use renderVersion=2 for damped stereo diffusion. Missing renderVersion retains the legacy reverb. Never silently rewrite an existing song's engine version.

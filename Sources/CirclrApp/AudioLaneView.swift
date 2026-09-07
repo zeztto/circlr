@@ -63,8 +63,10 @@ struct AudioLane:NSViewRepresentable {
         original=nil;preview=nil;needsDisplay=true
     }
     override func keyDown(with event:NSEvent) {
+        if event.modifierFlags.contains(.command) || event.modifierFlags.contains(.control){super.keyDown(with:event);return}
+        if store.handleAudioTrimKey(event,clipID:store.selectedClipID){needsDisplay=true;return}
         if event.keyCode==51 || event.keyCode==117,let id=store.selectedClipID,var lane=store.currentLane {lane.audio.removeAll{$0.id==id};store.setLane(lane);store.selectedClipID=nil}
-        else if event.keyCode==53 {store.closeFocus()}
+        else if event.keyCode==53 {store.focusCanvas?();store.hierarchyParent()}
         else if event.keyCode==49 {store.play()}
         else {super.keyDown(with:event)}
     }

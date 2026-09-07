@@ -5,14 +5,20 @@
 #define VOICES 64
 #define EVENTS 2048
 #define TAU 6.28318530717958647692
-typedef struct { int pitch, active, released; double age, releaseAge, releaseLevel, level, velocity, frequency, phase[7], l1,l2,r1,r2; } Voice;
+typedef struct { int pitch, active, released; double lastL,lastR; double age, releaseAge, releaseLevel, level, velocity, frequency, phase[7], l1,l2,r1,r2; } Voice;
 typedef struct { int pitch, velocity, on; } Event;
-struct CirclrSynth { int style; double cutoff,attack,decay,sustain,release,detune; Voice voices[VOICES]; Event events[EVENTS]; atomic_uint read,write; atomic_bool overflow; };
+struct CirclrSynth { int style,version; double resonance,width,filterEnvelope,stealL,stealR; double cutoff,attack,decay,sustain,release,detune; Voice voices[VOICES]; Event events[EVENTS]; atomic_uint read,write; atomic_bool overflow; };
 CirclrSynth *circlr_synth_create(int style,double cutoff,double attack,double decay,double sustain,double release,double detune) {
     CirclrSynth *s=calloc(1,sizeof(*s)); if(!s) return NULL;
     s->style=style;s->cutoff=cutoff;s->attack=attack;s->decay=decay;s->sustain=sustain;s->release=release;s->detune=detune;
     atomic_init(&s->read,0);atomic_init(&s->write,0);atomic_init(&s->overflow,0);return s;
 }
+CirclrSynth *circlr_synth_create_v2(int style,double cutoff,double attack,double decay,double sustain,double release,double detune,double resonance,double width,double filterEnvelope) {
+    CirclrSynth *s=circlr_synth_create(style,cutoff,attack,decay,sustain,release,detune);
+    if(s){s->version=2;s->resonance=resonance;s->width=width;s->filterEnvelope=filterEnvelope;}
+    return s;
+}
+static void render_v2(CirclrSynth *s,float *left,float *right,uint32_t frames);
 void circlr_synth_destroy(CirclrSynth *s){free(s);}
 void circlr_synth_note(CirclrSynth *s,int pitch,int velocity,int on) {
     if(!s || pitch<0 || pitch>127) return;
@@ -25,15 +31,20 @@ static double saw(double p,double dt){return 2*p-1-blep(p,dt);}
 void circlr_synth_render(CirclrSynth *s,float *left,float *right,uint32_t frames) {
     if(!s)return;
     unsigned r=atomic_load_explicit(&s->read,memory_order_relaxed),w=atomic_load_explicit(&s->write,memory_order_acquire);
-    if(atomic_exchange(&s->overflow,0)){for(int v=0;v<VOICES;v++)s->voices[v].active=0;r=w;}
+    if(atomic_exchange(&s->overflow,0)){
+        for(int i=0;i<VOICES;i++){Voice *v=&s->voices[i];if(s->version==2 && v->active){v->released=1;v->releaseLevel=v->level;v->releaseAge=0;}else v->active=0;}r=w;
+    }
     while(r<w){Event e=s->events[r++%EVENTS];
         if(e.on && e.velocity>0){int chosen=-1;double oldest=-1;
             for(int v=0;v<VOICES;v++){if(!s->voices[v].active){chosen=v;break;}if(s->voices[v].age>oldest){oldest=s->voices[v].age;chosen=v;}}
-            Voice *v=&s->voices[chosen];*v=(Voice){0};v->active=1;v->pitch=e.pitch;v->velocity=fmin(127,e.velocity)/127.0;v->frequency=440*pow(2,(e.pitch-69)/12.0);
+            Voice *v=&s->voices[chosen];
+            if(s->version==2 && v->active){s->stealL+=v->lastL;s->stealR+=v->lastR;}
+            *v=(Voice){0};v->active=1;v->pitch=e.pitch;v->velocity=fmin(127,e.velocity)/127.0;v->frequency=440*pow(2,(e.pitch-69)/12.0);
             for(int n=0;n<7;n++)v->phase[n]=fmod(n*0.173+e.pitch*0.019,1);
         }else{for(int i=0;i<VOICES;i++){Voice *v=&s->voices[i];if(v->active && v->pitch==e.pitch && !v->released){v->released=1;v->releaseLevel=v->level;break;}}}
     }
     atomic_store_explicit(&s->read,r,memory_order_release);
+    if(s->version==2){render_v2(s,left,right,frames);return;}
     const double dt=1.0/48000;
     for(int vi=0;vi<VOICES;vi++){Voice *v=&s->voices[vi];if(!v->active)continue;
         int count=s->style==3?7:(s->style==2?1:3);double increments[7];
@@ -57,6 +68,59 @@ void circlr_synth_render(CirclrSynth *s,float *left,float *right,uint32_t frames
             double alpha=1-exp(-TAU*cutoff/48000);v->l1+=alpha*(l/count-v->l1);v->l2+=alpha*(v->l1-v->l2);v->r1+=alpha*(rr/count-v->r1);v->r2+=alpha*(v->r1-v->r2);
             double gain=env*v->velocity*.28;
             left[i]+=(float)(v->l2*gain);right[i]+=(float)(v->r2*gain);v->age+=dt;
+        }
+    }
+}
+
+// TPT state-variable low-pass; trapezoidal state update (Simper, Cytomic 2013).
+static double lowpass_v2(double input,double g,double k,double *s1,double *s2) {
+    double a=1/(1+g*(g+k)),v1=a*(*s1+g*(input-*s2)),v2=*s2+g*v1;
+    *s1=2*v1-*s1;*s2=2*v2-*s2;return v2;
+}
+static void render_v2(CirclrSynth *s,float *left,float *right,uint32_t frames) {
+    const double dt=1.0/48000;
+    // Carry the stolen voice's last sample down over ~4 ms instead of a hard reset.
+    for(uint32_t i=0;i<frames;i++){left[i]+=(float)s->stealL;right[i]+=(float)s->stealR;s->stealL*=0.97;s->stealR*=0.97;}
+    for(int vi=0;vi<VOICES;vi++){
+        Voice *v=&s->voices[vi];if(!v->active)continue;
+        int count=(s->style==1 || s->style==2)?1:(s->style==3?7:3);
+        double inc[7];for(int n=0;n<count;n++)inc[n]=fmin(.45,v->frequency*pow(2,((double)n-(count-1)*.5)*s->detune/(count>1?count-1:1)/1200)/48000);
+        for(uint32_t i=0;i<frames;i++){
+            double env;
+            if(v->released){double t=fmax(0,1-v->releaseAge/s->release);env=v->releaseLevel*t*t;v->releaseAge+=dt;if(t<=0){v->active=0;v->lastL=v->lastR=0;break;}}
+            else if(v->age<s->attack){double t=v->age/s->attack;env=t*t*(3-2*t);}
+            else env=s->sustain+(1-s->sustain)*exp(-(v->age-s->attack)*4/s->decay);
+            v->level=env;double l=0,r=0;
+            for(int n=0;n<count;n++){
+                double p=v->phase[n],value=0;
+                if(s->style==1){
+                    // One phase-coherent oscillator in the low end, no stereo beating.
+                    double pulse=saw(p,inc[n])-saw(fmod(p+.48,1),inc[n]);
+                    value=.68*sin(TAU*p)+.22*pulse;
+                }else if(s->style==2){
+                    // Velocity-shaped, integer partials; no unbounded FM sidebands.
+                    value=sin(TAU*p);
+                    const double levels[5]={.32,.16,.065,.035,.012};
+                    for(int h=2;h<=6;h++)if(h*inc[n]<.43)
+                        value+=levels[h-2]*pow(v->velocity,1.3)*exp(-v->age*(h*.9))*sin(TAU*p*h);
+                    value*=.75;
+                }else if(s->style==5)value=.62*sin(TAU*p)+.38*saw(p,inc[n]);
+                else if(s->style==4)value=.7*saw(p,inc[n])+.3*sin(TAU*p);
+                else value=saw(p,inc[n]);
+                double width=(s->style==1 || s->style==2)?0:s->width;
+                double pan=count==1?.5:.5+((double)n/(count-1)-.5)*width;
+                l+=value*sqrt(1-pan);r+=value*sqrt(pan);
+                v->phase[n]+=inc[n];v->phase[n]-=floor(v->phase[n]);
+            }
+            // Tracking preserves brightness across registers; envelope works in octaves.
+            double tracking=pow(v->frequency/261.625565,.28);
+            double sweep=s->filterEnvelope*exp(-v->age*4/fmax(.03,s->decay));
+            double cutoff=fmin(18000,fmax(40,s->cutoff*tracking*(.65+.35*v->velocity)*pow(2,sweep)));
+            double g=tan(TAU*.5*cutoff/48000),k=2-1.6*s->resonance;
+            double gain=env*pow(v->velocity,1.35)*.32;
+            v->lastL=lowpass_v2(l/count,g,k,&v->l1,&v->l2)*gain;
+            v->lastR=lowpass_v2(r/count,g,k,&v->r1,&v->r2)*gain;
+            left[i]+=(float)v->lastL;right[i]+=(float)v->lastR;v->age+=dt;
         }
     }
 }

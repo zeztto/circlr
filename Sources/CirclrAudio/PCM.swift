@@ -94,6 +94,7 @@ public enum NativeDSP {
             var l = [Float](repeating: 0, count: distance), r = l
             for i in out.left.indices { let p = i % distance; let dl = l[p], dr = r[p]; l[p] = input.left[i] + dr*feedback; r[p] = input.right[i] + dl*feedback; out.left[i] += dl*wet; out.right[i] += dr*wet }
         case .reverb:
+            if effect.renderVersion==2 {out=try DiffuseReverb.process(input,size:a,wet:b);break}
             let lengths = [1493, 1601, 1747, 1867].map { max(1, Int(Double($0)*(0.5+a*2))) }
             for (index, length) in lengths.enumerated() {
                 var line = [Float](repeating: 0, count: length); let feedback = Float(0.45 + a*0.38), wet = Float(b*0.3)

@@ -16,6 +16,22 @@ struct RootView: View {
                 .coordinateSpace(name:"albumCanvas")
                 .onPreferenceChange(AgentConsoleBoundsKey.self){store.consoleBounds=$0}
         }
+        .overlay(alignment:.top) {
+            if let palette=store.commandPalette {
+                ZStack(alignment:.top) {
+                    Color.black.opacity(0.25).contentShape(Rectangle()).onTapGesture{store.commandPalette=nil;store.focusCanvas?()}
+                    StudioCommandPalette(store:store,palette:palette).padding(.top,85)
+                }
+            }
+        }
+        .overlay(alignment:.top) {
+            if store.keyboardHelp {
+                ZStack(alignment:.top) {
+                    Color.black.opacity(0.25).contentShape(Rectangle()).onTapGesture{store.keyboardHelp=false}
+                    KeyboardHelpView(store:store).padding(.top,85)
+                }
+            }
+        }
         .frame(minWidth:1024,minHeight:740).background(StudioTheme.canvas)
         .font(.system(size:12)).foregroundStyle(StudioTheme.text).buttonStyle(CanvasButtonStyle())
         .onExitCommand{store.hierarchySettingsOpen=false;store.hierarchyParent()}
@@ -30,7 +46,14 @@ struct RootView: View {
             }label:{HStack(spacing:7){Text(store.project.name).lineLimit(1);if store.dirty{Circle().fill(StudioTheme.accent).frame(width:4,height:4)}}.frame(maxWidth:170,alignment:.leading)}
             Rectangle().fill(StudioTheme.line).frame(width:1,height:24)
             TransportControls(store:store,meter:store.meter)
+            Button{store.toggleMovieRecording()}label:{
+                Image(systemName:store.movieWriter != nil ? "stop.circle.fill":"record.circle")
+                    .foregroundStyle(store.movieWriter != nil ? Color.red:StudioTheme.secondary)
+            }.help(store.movieWriter != nil ? "영상 녹화 마치기":"캔버스와 음악을 MP4로 녹화")
+                .accessibilityLabel(store.movieWriter != nil ? "영상 녹화 마치기":"영상 녹화 시작")
+                .disabled(store.movieFinalizing != nil)
             Spacer(minLength:8)
+            Button{store.showCommands()}label:{Image(systemName:"command")}.help("명령 검색 · ⇧⌘P")
             Button{store.focusHierarchy(.album,detail:true);store.hierarchySettingsOpen=true}label:{
                 HStack(spacing:12){Text("\(store.project.global.tempo.formatted())").font(.system(size:18,weight:.medium,design:.rounded)).monospacedDigit();Text("BPM").font(.system(size:9)).foregroundStyle(StudioTheme.secondary);Text(store.project.global.meter.label);Text(store.project.global.scale.label).foregroundStyle(StudioTheme.secondary)}
             }.help("앨범의 글로벌 음악 설정")

@@ -126,7 +126,7 @@ extension AppStore {
         default: status = "같은 그룹 안에서 호환되는 입력과 출력을 연결하세요"
         }
     }
-    func addComposition(_ kind: CompositionKind) {
+    func addComposition(_ kind: CompositionKind, at point:Point? = nil) {
         var id: ID?
         let parent: ID? = kind == .movement ? selectedCompositionID : nil
         mutate(kind == .song ? "곡 만들기" : "악장 만들기") { p in
@@ -135,7 +135,7 @@ extension AppStore {
             }
             let children = parent.flatMap { p.album?.composition($0)?.children } ?? p.album?.children ?? []
             id = try AlbumEditing.add(name: "\(kind.label) \(children.count+1)", kind: kind, parentID: parent,
-                                      at: Point(Double(children.count)*650, 0), in: &p)
+                                      at: point ?? Point(Double(children.count)*650, 0), in: &p)
         }
         if let id { focusHierarchy(.composition(id)) }
     }
@@ -143,7 +143,7 @@ extension AppStore {
         guard let selected = hierarchySelection else { return nil }
         return hierarchyScene?.path(to: selected).reversed().compactMap { n -> ID? in if case .composition(let id) = n.id { return id }; return nil }.first
     }
-    func addMIDICircle() {
+    func addMIDICircle(at point:Point? = nil) {
         guard let use = selectedUse else { status = "MIDI를 담을 섹션을 먼저 선택하세요"; return }
         var laneID: ID?
         let original = editOriginal
@@ -151,16 +151,17 @@ extension AppStore {
             let track = p.addTrack(name: "악기 \(p.tracks.count+1)")
             let lane = Lane(trackID: track); laneID = lane.id
             try ProjectEditing.setLane(lane, for: use.id, original: original, in: &p)
+            if let point { try HierarchyEditing.move(.music(arrangementID:p.activeArrangementID,useID:use.id,nodeID:"midi:\(lane.id)"),to:point,in:&p) }
         }
         if let laneID { focusHierarchy(.music(arrangementID: project.activeArrangementID, useID: use.id, nodeID: "midi:\(laneID)"), detail: true) }
     }
-    func addMusicEffect(_ kind: EffectKind) {
+    func addMusicEffect(_ kind: EffectKind, at point:Point? = nil) {
         guard var graph = selectedGraph, let use = selectedUse else { return }
         let node = MusicCircle(name: Self.effectName(kind), content: .effect(Effect(kind, amount: kind == .gain ? 1 : 0.5, secondary: 0.3)))
         let source = selectedMusic?.content.output == .audio ? selectedMusic?.id : graph.nodes.first { if case .mix = $0.content { return true }; return false }?.id
         graph.nodes.append(node)
         let position = source.flatMap { graph.layout.positions[$0] } ?? Point()
-        graph.layout.positions[node.id] = Point(position.x+210, position.y+160)
+        graph.layout.positions[node.id] = point ?? Point(position.x+210, position.y+160)
         if let source {
             let outgoing = graph.edges.filter { $0.from == source && !$0.sidechain }
             graph.edges.removeAll { $0.from == source && !$0.sidechain }
@@ -298,12 +299,12 @@ extension AppStore {
 }
 
 extension AppStore {
-    func addHierarchySignalEffect(_ kind: EffectKind) {
-        addEffect(kind)
+    func addHierarchySignalEffect(_ kind: EffectKind, at point:Point? = nil) {
+        addEffect(kind,at:point)
         if let id=selectedSignal?.id { focusHierarchy(.signal(id),detail:true) }
     }
-    func addHierarchyBus() {
-        addBus()
+    func addHierarchyBus(at point:Point? = nil) {
+        addBus(at:point)
         if let id=selectedSignal?.id { focusHierarchy(.signal(id),detail:true) }
     }
 }

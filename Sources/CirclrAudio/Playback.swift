@@ -12,21 +12,30 @@ import CirclrCore
     public private(set) var prepared: PreparedAudio?
     private var generation = 0
     private var connected = false
-    private var connectionTask: Task<Void,Error>?
+    private var connectionTask: Task<Void,Never>?
+    private var connectionReady = false
     // Opening the canvas must not synchronously acquire the system output device.
     public init() {}
     private func connectOutputIfNeeded() async throws {
         guard !connected else { return }
         if connectionTask == nil {
             let engine = engine, player = player
-            connectionTask = Task.detached(priority:.userInitiated) {
+            connectionTask = Task.detached(priority:.userInitiated) { [weak self] in
                 engine.attach(player)
                 engine.connect(player,to:engine.mainMixerNode,format:AVAudioFormat(standardFormatWithSampleRate:PCM.rate,channels:2))
+                await self?.markConnectionReady()
             }
         }
-        try await connectionTask?.value
+        let deadline=Date().addingTimeInterval(10),ticket=generation
+        while !connectionReady {
+            try Task.checkCancellation()
+            guard ticket==generation else{throw CancellationError()}
+            guard Date()<deadline else{throw CirclrError("오디오 출력 장치 연결이 10초를 넘었습니다. macOS 출력 장치 연결 상태를 확인하세요")}
+            try await Task.sleep(for:.milliseconds(40))
+        }
         connected = true
     }
+    private func markConnectionReady(){connectionReady=true}
     public var seconds: Double {
         guard playing, let t = player.lastRenderTime, let p = player.playerTime(forNodeTime:t) else { return offset }
         return offset+Double(p.sampleTime)/p.sampleRate

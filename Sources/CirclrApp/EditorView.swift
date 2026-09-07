@@ -142,5 +142,8 @@ struct PianoRoll:NSViewRepresentable {
     }
     override func mouseDragged(with event:NSEvent){guard var n=original else{return};let p=convert(event.locationInWindow,from:nil);if resizing{n.length=max(1/Double(store.currentContext.beatGrid.subdivisions),min(store.editorBeats-n.beat,snap(n.length+(p.x-down.x)/unit)))}else{n.beat=max(0,min(store.editorBeats-n.length,snap(n.beat+(p.x-down.x)/unit)));n.pitch=max(0,min(127,n.pitch-Int(((p.y-down.y)/row).rounded())))};preview=n;needsDisplay=true}
     override func mouseUp(with event:NSEvent){if let pitch=heldPitch{store.midi(status:0x80,pitch:pitch,velocity:0,time:ProcessInfo.processInfo.systemUptime);heldPitch=nil};if let n=preview,var lane=store.currentLane,let i=lane.notes.firstIndex(where:{$0.id==n.id}){lane.notes[i]=n;store.setLane(lane)};original=nil;preview=nil;needsDisplay=true}
-    override func keyDown(with event:NSEvent){if event.keyCode==51 || event.keyCode==117{store.removeNote()}else if event.keyCode==53{store.hierarchyParent()}else if event.keyCode==49{store.play()}else{super.keyDown(with:event)}}
+    override func keyDown(with event:NSEvent){
+        if store.handleMIDIKey(event,topPitch:topPitch){needsDisplay=true;return}
+        if event.keyCode==53{store.focusCanvas?();store.hierarchyParent()}else{super.keyDown(with:event)}
+    }
 }

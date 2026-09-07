@@ -117,11 +117,12 @@ public struct Track: Codable, Equatable, Identifiable {
 }
 public enum EffectKind: String, Codable, CaseIterable { case gain, lowpass, delay, reverb, drive, pan, compressor, audioUnit }
 public struct Effect: Codable, Equatable {
+    public var renderVersion: Int?
     public var kind: EffectKind = .gain
     public var amount: Double = 0.5
     public var secondary: Double = 0.25
     public var plugin: PluginDescriptor?
-    public init(_ kind: EffectKind = .gain, amount: Double = 0.5, secondary: Double = 0.25) { self.kind = kind; self.amount = amount; self.secondary = secondary }
+    public init(_ kind: EffectKind = .gain, amount: Double = 0.5, secondary: Double = 0.25) { self.kind = kind; self.amount = amount; self.secondary = secondary; self.renderVersion = kind == .reverb ? 2:nil }
 }
 public struct Section: Codable, Equatable, Identifiable {
     public var id: ID = newID()
@@ -273,7 +274,7 @@ public struct Project: Codable, Equatable {
     public var activeIndex: Int { arrangements.firstIndex(where: { $0.id == activeArrangementID }) ?? 0 }
     public var active: Arrangement { arrangements[activeIndex] }
     public mutating func addTrack(name: String, drums: Bool = false) -> ID {
-        let track = Track(name: name, instrument: Instrument(program: drums ? 0 : 0, drums: drums))
+        let track = Track(name: name, instrument: drums ? Instrument(program:0,drums:true):.synthesizer(.keys))
         tracks.append(track)
         let node = SignalNode(kind: .source, name: name, trackID: track.id)
         signal.nodes.append(node)

@@ -57,6 +57,15 @@ struct AlbumCanvas: NSViewRepresentable {
             guard let self,self.initialized,self.bounds.width>0 else{return nil}
             return HierarchyViewport(camera:self.camera,width:self.bounds.width,height:self.bounds.height,selection:self.store.hierarchySelection ?? .album,settingsOpen:self.store.hierarchySettingsOpen)
         }
+        store.captureMovieFrame = { [weak self] in
+            guard let self,self.bounds.width>=64,self.bounds.height>=64 else{return nil}
+            self.updatePlaybackFrame();self.placeEditor()
+            guard let bitmap=self.bitmapImageRepForCachingDisplay(in:self.bounds) else{return nil}
+            self.cacheDisplay(in:self.bounds,to:bitmap)
+            return bitmap.cgImage
+        }
+        store.canvasCommands = { [weak self] in self?.availableCommands() ?? [] }
+        store.focusCanvas = { [weak self] in guard let self else{return};self.window?.makeFirstResponder(self) }
         wantsLayer = true; clipsToBounds = true; layer?.masksToBounds = true; layer?.backgroundColor = StudioTheme.canvasNS.cgColor
         setAccessibilityElement(true); setAccessibilityRole(.group); setAccessibilityLabel("앨범 서클 캔버스")
         store.capturePlaybackVisualization = { [weak self] in self?.playbackDiagnostics() ?? [:] }
@@ -158,6 +167,7 @@ struct AlbumCanvas: NSViewRepresentable {
         } else { camera = target; placeEditor(); needsDisplay = true; store.hierarchyZoom = camera.zoom }
     }
     func placeEditor() {
+        if store.movieWriter != nil {editor?.removeFromSuperview();editor=nil;editorAddress=nil;return}
         if store.playback.playing, store.playbackFollow == .following {
             editor?.removeFromSuperview(); editor = nil; editorAddress = nil; return
         }
@@ -443,14 +453,36 @@ struct AlbumCanvas: NSViewRepresentable {
     }
     override func magnify(with event:NSEvent){let p=convert(event.locationInWindow,from:nil);setCamera(camera.zoomed(to:camera.zoom*exp(event.magnification),around:Point(p.x,p.y)))}
     override func keyDown(with event:NSEvent) {
+        if event.modifierFlags.contains(.command) || event.modifierFlags.contains(.control) {super.keyDown(with:event);return}
+        if event.modifierFlags.contains([.option,.shift]),[123,124,125,126].contains(event.keyCode),!store.project.usesOrbits {
+            let spacing=store.project.album?.layout.spacing ?? 24
+            let x=event.keyCode==123 ? -spacing:event.keyCode==124 ? spacing:0
+            let y=event.keyCode==126 ? -spacing:event.keyCode==125 ? spacing:0
+            let positions=Dictionary(uniqueKeysWithValues:(scene?.nodes ?? []).filter{store.hierarchySelections.contains($0.id)}.map{($0.id,store.hierarchyLocalPosition($0))})
+            store.moveHierarchySelection(positions,delta:Point(x,y));needsDisplay=true;return
+        }
+        if event.modifierFlags.contains(.option),[123,124,125,126].contains(event.keyCode) {
+            let delta=event.modifierFlags.contains(.shift) ? 120.0:40.0
+            let x=event.keyCode==123 ? delta:event.keyCode==124 ? -delta:0
+            let y=event.keyCode==126 ? delta:event.keyCode==125 ? -delta:0
+            setCamera(HierarchyCamera(pan:Point(camera.pan.x+x,camera.pan.y+y),zoom:camera.zoom));return
+        }
         switch event.keyCode {
-        case 53: store.hierarchyParent()
+        case 53: store.hierarchySettingsOpen=false;store.hierarchyParent()
         case 49: store.play()
         case 51,117: store.removeHierarchy()
         case 3: store.hierarchyCommand=HierarchyCommand(action:.fit)
         case 4: store.panMode=true
         case 9: store.panMode=false
-        case 36: if let address=store.hierarchySelection {focus(address,detail:true)}
+        case 36,76: enterSelectedCircle()
+        case 48: selectNeighbor(forward:!event.modifierFlags.contains(.shift))
+        case 123,126: selectNeighbor(forward:false,additive:event.modifierFlags.contains(.shift))
+        case 124,125: selectNeighbor(forward:true,additive:event.modifierFlags.contains(.shift))
+        case 0: creationMenu(at:NSPoint(x:bounds.midX,y:bounds.midY),selected:store.hierarchySelection).popUp(positioning:nil,at:NSPoint(x:bounds.midX,y:bounds.midY),in:self)
+        case 8: circleMenu(at:NSPoint(x:bounds.midX,y:bounds.midY),selected:store.selectedCircle).popUp(positioning:nil,at:NSPoint(x:bounds.midX,y:bounds.midY),in:self)
+        case 15: store.openCircleSettings()
+        case 24,69: store.hierarchyCommand=HierarchyCommand(action:.zoom(1.25))
+        case 27,78: store.hierarchyCommand=HierarchyCommand(action:.zoom(0.8))
         default: super.keyDown(with:event)
         }
     }
@@ -477,15 +509,23 @@ struct AlbumCanvas: NSViewRepresentable {
     override func accessibilityPerformPress()->Bool {canvas?.store.focusHierarchy(address,detail:true);return canvas != nil}
 }
 
-@MainActor private final class CircleMenuAction: NSObject {
+@MainActor final class CircleMenuAction: NSObject {
     let run: () -> Void
     init(_ run: @escaping () -> Void) { self.run=run }
 }
 extension AlbumCanvasView {
     @objc func runCircleMenu(_ sender: NSMenuItem) { (sender.representedObject as? CircleMenuAction)?.run() }
     override func rightMouseDown(with event: NSEvent) {
-        guard let node=hit(convert(event.locationInWindow,from:nil)) else{return}
+        let point=convert(event.locationInWindow,from:nil)
+        window?.makeFirstResponder(self)
+        NSMenu.popUpContextMenu(circleMenu(at:point),with:event,for:self)
+    }
+    func circleMenu(at point:NSPoint, selected:CircleSceneNode? = nil)->NSMenu {
+        let create=creationMenu(at:point,selected:selected?.id)
+        guard let node=selected ?? hit(point) else{return create}
         let menu=NSMenu()
+        let createItem=NSMenuItem(title:"서클 만들기",action:nil,keyEquivalent:"")
+        createItem.submenu=create;menu.addItem(createItem);menu.addItem(.separator())
         func action(_ title:String,in target:NSMenu?=nil,_ block:@escaping()->Void) {
             let item=NSMenuItem(title:title,action:#selector(runCircleMenu(_:)),keyEquivalent:"")
             item.target=self;item.representedObject=CircleMenuAction(block);(target ?? menu).addItem(item)
@@ -499,6 +539,10 @@ extension AlbumCanvasView {
             if let a=store.project.arrangements.first(where:{$0.id==arrangement}),let u=a.uses.first(where:{$0.id==use}),let section=store.project.sections.first(where:{$0.id==u.sectionID}),let graph=try? SectionGraphEditing.effective(section:section,use:u),let source=graph.nodes.first(where:{$0.id==id}) {
                 let targets=graph.nodes.filter{$0.id != id && $0.content.input != nil && $0.content.input==source.content.output}
                 if !targets.isEmpty {let child=submenu("출력 연결");for target in targets {action(target.name,in:child){[weak self] in self?.store.connectHierarchy(node.id,.music(arrangementID:arrangement,useID:use,nodeID:target.id))}}}
+                if source.content.output == .audio {
+                    let compressors=targets.filter{if case .effect(let effect)=$0.content{return effect.kind == .compressor};return false}
+                    if !compressors.isEmpty {let child=submenu("사이드체인 연결");for target in compressors {action(target.name,in:child){[weak self] in self?.store.connectHierarchy(node.id,.music(arrangementID:arrangement,useID:use,nodeID:target.id),sidechain:true)}}}
+                }
                 let outgoing=graph.edges.filter{$0.from==id}
                 if !outgoing.isEmpty {let child=submenu("연결 해제");for edge in outgoing {action(graph.nodes.first{$0.id==edge.to}?.name ?? edge.to,in:child){[weak self] in self?.store.disconnectHierarchy(node.id,edgeID:edge.id)}}}
             }
@@ -530,6 +574,10 @@ extension AlbumCanvasView {
         case .signal(let id):
             if let source=store.project.signal.nodes.first(where:{$0.id==id}) {
                 if source.kind != .master {let child=submenu("출력 연결");for target in store.project.signal.nodes where target.id != id && target.kind != .source {action(target.name,in:child){[weak self] in self?.store.connectHierarchy(node.id,.signal(target.id))}}}
+                if source.kind != .master {
+                    let compressors=store.project.signal.nodes.filter{$0.id != id && $0.kind == .effect && $0.effect.kind == .compressor}
+                    if !compressors.isEmpty {let child=submenu("사이드체인 연결");for target in compressors {action(target.name,in:child){[weak self] in self?.store.connectHierarchy(node.id,.signal(target.id),sidechain:true)}}}
+                }
                 let outgoing=store.project.signal.edges.filter{$0.from==id}
                 if !outgoing.isEmpty {let child=submenu("연결 해제");for edge in outgoing {action(store.project.signal.nodes.first{$0.id==edge.to}?.name ?? edge.to,in:child){[weak self] in self?.store.disconnectHierarchy(node.id,edgeID:edge.id)}}}
             }
@@ -538,6 +586,6 @@ extension AlbumCanvasView {
         if node.role != .album,node.role != .group,node.role != .sound,node.signal?.kind != .source,node.signal?.kind != .master {
             menu.addItem(.separator());action("서클 삭제"){[weak self] in self?.store.selectHierarchy(node.id);self?.store.removeHierarchy()}
         }
-        NSMenu.popUpContextMenu(menu,with:event,for:self)
+        return menu
     }
 }

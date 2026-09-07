@@ -40,7 +40,7 @@ struct StudioChoice<Value:Hashable>:View {
             } label: {
                 HStack(spacing:16){Text(options.first{$0.0==selection}?.1 ?? "선택").lineLimit(1);Spacer(minLength:4);Image(systemName:"chevron.down").font(.system(size:9,weight:.semibold)).foregroundStyle(StudioTheme.secondary)}
                     .padding(.horizontal,11).padding(.vertical,9).background(StudioTheme.raised,in:RoundedRectangle(cornerRadius:5))
-            }.menuStyle(.borderlessButton).menuIndicator(.hidden).frame(maxWidth:title.isEmpty ? .infinity:240).accessibilityLabel(title.isEmpty ? "선택":title)
+            }.menuStyle(.borderlessButton).menuIndicator(.hidden).frame(maxWidth:title.isEmpty ? .infinity:240).accessibilityLabel(title.isEmpty ? "선택":title).accessibilityValue(options.first{$0.0==selection}?.1 ?? "선택되지 않음")
         }
     }
 }

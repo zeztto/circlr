@@ -9,6 +9,8 @@ qa/preserved/
 # Local song projects contain the user's licensed Splice media.
 music/**/*.circlr/
 music/**/*.wav
+music/**/*.mp4
+music/**/.circlr-movie-*
 music/**/provenance/splice-library.txt
 mcp/__pycache__/
 

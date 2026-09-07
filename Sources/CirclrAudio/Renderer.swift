@@ -20,7 +20,7 @@ public enum ArrangementRenderer {
         for occurrence in plan.occurrences {
             guard let graph = occurrence.signalPlan else { continue }
             let localFrames = (occurrence.duration + tailSeconds) * PCM.rate
-            let bytes = localFrames * 8.0 * Double(graph.orderedNodes.count + 3)
+            let bytes = localFrames * 8.0 * Double(SectionGraphRenderer.workingBufferCount(graph))
             graphEstimate = max(graphEstimate, bytes)
         }
         guard estimate + graphEstimate < 1_073_741_824 else { throw CirclrError("준비 오디오가 1 GB 작업 한도를 넘습니다. 구간을 나누어 내보내세요") }
