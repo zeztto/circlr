@@ -1,0 +1,42 @@
+[
+  {
+    "id": "circlr-producer",
+    "label": "프로듀서",
+    "description": "Set artistic direction, prioritize changes and integrate specialist proposals for the artist."
+  },
+  {
+    "id": "circlr-arranger",
+    "label": "편곡자",
+    "description": "Design song form, harmonic motion, orchestration and section contrast in circlr."
+  },
+  {
+    "id": "circlr-performer",
+    "label": "연주자",
+    "description": "Create idiomatic MIDI parts with controlled phrasing, articulation and physical playability."
+  },
+  {
+    "id": "circlr-beatmaker",
+    "label": "비트메이커",
+    "description": "Program drums and groove with intentional microtiming, fills and bass interaction."
+  },
+  {
+    "id": "circlr-topliner",
+    "label": "탑라이너",
+    "description": "Write vocal melody, hook and original lyrics with prosody, tessitura and phrase planning."
+  },
+  {
+    "id": "circlr-sound-designer",
+    "label": "사운드 디자이너",
+    "description": "Design instrument tone, synthesis, sampling and section transition effects using available devices."
+  },
+  {
+    "id": "circlr-mixing-engineer",
+    "label": "믹싱 엔지니어",
+    "description": "Balance tracks, resolve masking and dynamics, and verify mix routing and translation."
+  },
+  {
+    "id": "circlr-mastering-engineer",
+    "label": "마스터링 엔지니어",
+    "description": "Review final mix translation, album sequence and measurable delivery requirements."
+  }
+]

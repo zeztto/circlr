@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "circlr": {
+      "command": "/usr/bin/python3",
+      "args": ["/Users/sungwoonjeon/Documents/ChatGPT/circlr/mcp/server.py"]
+    }
+  }
+}

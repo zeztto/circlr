@@ -1,0 +1,31 @@
+{
+  "schema": "circlr-agent-kit-v1",
+  "version": "0.12.0",
+  "files": {
+    "agents/circlr-arranger.toml": "a3b9415ce5de193c1d89c20d75c3213bba7c39fd07176f1242a6f11093e53308",
+    "agents/circlr-beatmaker.toml": "b29a46b1b52a7042ecce14ef8a91a58347b1c7049fd133fa02f9c2570ae1c90a",
+    "agents/circlr-mastering-engineer.toml": "731ffbd35b36846febe2c1d97d2afb5c9a9376b7833e1fd709fb15423c3e8044",
+    "agents/circlr-mixing-engineer.toml": "8e890ae116576a04bf6502bf194e89e31381dcfb1c4205c91e75dc5354ff17e7",
+    "agents/circlr-performer.toml": "d9b2096aa15e0df943ebf3bcbb5221bbec3d6d6bdd88bca03d5f21a48df13277",
+    "agents/circlr-producer.toml": "55eaa8c89b4064151ad5af94e7744499c18dbdb718f732514002be281c5c0c5b",
+    "agents/circlr-sound-designer.toml": "6e9a870b63d9aff80a6bc21f58e8df6ebdd316eda1953e4eda8705832c5ba4cb",
+    "agents/circlr-topliner.toml": "e7d6311e4ab33ee1df2323fd330dbead7340a2a10a8e64aa2f4a3de866c7892e",
+    "install.py": "9bbef450063265cc33f085751f7a4efeb80f449e5d373b1288b12506cab3271f",
+    "roles.json": "76779cf5e5092224f45e71942b4824510d3a05a26231850f0d086bb995efcde9",
+    "skills/circlr-studio/SKILL.md": "63cec38fc7ace1eb51b011758327be18ee9c16b2f00d49f5430d55415aafc649",
+    "skills/circlr-studio/agents/openai.yaml": "1b6ff6a39ef172a6cb5520cffcf2927b0db08079f4a1fddca4485813f85a3263",
+    "skills/circlr-studio/references/circlr-operations.md": "b88736f4f5486aea005840cb846657e969669cd56953ea86a404033253947b6d",
+    "skills/circlr-studio/references/design-sources.md": "0bbe84f161f792f386e9a77f5c55577a0d0b0542ae64b2f5096801739ca80198",
+    "skills/circlr-studio/references/evaluation-scenarios.md": "36965500999701da0cdd68108954ce8755a05be47d8da5ccbf5f80cbcf1d723f",
+    "skills/circlr-studio/references/roles/arranger.md": "c371ff4d812066edf9c0e33cf821739f7e32d73005a137d24ca3eada212429dd",
+    "skills/circlr-studio/references/roles/beatmaker.md": "acf46fa0268cd4c8c8c6755dda665162aedc34c79ad9d3ea9542a3b246af4713",
+    "skills/circlr-studio/references/roles/mastering-engineer.md": "8665866e97bea9518841013e719e1d0174e576ebd717b68a87b5dbb18f764010",
+    "skills/circlr-studio/references/roles/mixing-engineer.md": "f999df9164097918700ab194404248866effa2e3b8b142b01f2aa3136f1dd6ba",
+    "skills/circlr-studio/references/roles/performer.md": "c3bdc474b2b54cdc795143abd88fa5ce15bf2fb6c1ba81908fe97085d714d1c3",
+    "skills/circlr-studio/references/roles/producer.md": "cd6bb08a94c00e98952e1a006fcc913cf8ed052f32f9883c0866f8ca43ff104d",
+    "skills/circlr-studio/references/roles/sound-designer.md": "13cb4573d8b5fd2b72665beb221ff4169be25cee50a29f8f0d5f806c8d1760fe",
+    "skills/circlr-studio/references/roles/topliner.md": "2d44187636470ac75fa466c85deac56cdc5ef0e9110b166ed09db0e04501cafe",
+    "skills/circlr-studio/references/session-contract.md": "4bddcacb22a3c454fe985787c6fcbf9c7642d98214d046c8e72b859833a2b3e6",
+    "skills/circlr-studio/scripts/mcp_server.py": "b10aedef86fa4096fd0a2814dd3fbae9ff6d9417973b8cfa9396be6b4412c4ad"
+  }
+}

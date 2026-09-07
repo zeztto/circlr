@@ -1,0 +1,110 @@
+{
+  "assets" : [
+    {
+      "creditsSpent" : 0,
+      "name" : "NW_DG_kick_spot.wav",
+      "path" : "media\/FABA601E-43B0-4259-9B27-69042FB75D74.wav",
+      "sha256" : "6d7e0fa9922d1c5ffb4bc92e8b211286e13c201aadcb6680cf176a4d4e5c42a3",
+      "source" : "Splice owned library · Digi Grid Outrun Sounds"
+    },
+    {
+      "creditsSpent" : 0,
+      "name" : "NW_DG_snare_finale.wav",
+      "path" : "media\/29286EC8-DA17-4093-B41A-873EC35597A2.wav",
+      "sha256" : "acb9867ea91d2cee17a75b77037835b4815cf9a61870b9c35d1415739f978800",
+      "source" : "Splice owned library · Digi Grid Outrun Sounds"
+    },
+    {
+      "creditsSpent" : 0,
+      "name" : "NW_DG_hat_closed_regret.wav",
+      "path" : "media\/8287A2AE-42EA-4F2F-9C7F-AA50D1699BF8.wav",
+      "sha256" : "80a8467a5d6ac2f8a8d5ce6a9a152927e71752bc39937bab208b32f63ae1b962",
+      "source" : "Splice owned library · Digi Grid Outrun Sounds"
+    },
+    {
+      "creditsSpent" : 0,
+      "name" : "NW_DG_percussion_shaker_dirty.wav",
+      "path" : "media\/CBA49914-FC98-48A2-9F71-61453C6B475E.wav",
+      "sha256" : "d22157a6c486ff712e2ea1fa5713b34d1c90d62f4f4ebadbcbb686017a2c76cb",
+      "source" : "Splice owned library · Digi Grid Outrun Sounds"
+    },
+    {
+      "creditsSpent" : 0,
+      "name" : "NW_DG_tom_labyrinth_high.wav",
+      "path" : "media\/25AF364A-E47F-4E1B-9B7B-80EBCD3AAE60.wav",
+      "sha256" : "25beea400585aa77c51587735b26ea5bbe386dc66af2c927d1fe129b337073ce",
+      "source" : "Splice owned library · Digi Grid Outrun Sounds"
+    },
+    {
+      "creditsSpent" : 0,
+      "name" : "NW_DG_fx_wave.wav",
+      "path" : "media\/F90705C3-964F-4D02-B337-9C38AC009B28.wav",
+      "sha256" : "e060747c82f409e2628a05ef17d8f2344ad0c96735ecabf1209ea6dbef7ebd8d",
+      "source" : "Splice owned library · Digi Grid Outrun Sounds"
+    }
+  ],
+  "bitDepth" : 24,
+  "bodySeconds" : 99.310344827586221,
+  "creditLimit" : 10,
+  "key" : "F♯ minor",
+  "masterGain" : 0.88408178887838951,
+  "notes" : 2728,
+  "peak" : 0.87096357345581055,
+  "rms" : 0.11433045712041746,
+  "sampleRate" : 48000,
+  "sections" : [
+    {
+      "bars" : 4,
+      "duration" : 8.2758620689655178,
+      "name" : "멀리서 · Intro",
+      "startSeconds" : 0
+    },
+    {
+      "bars" : 8,
+      "duration" : 16.551724137931036,
+      "name" : "도시의 기억 · Verse",
+      "startSeconds" : 8.2758620689655178
+    },
+    {
+      "bars" : 4,
+      "duration" : 8.2758620689655178,
+      "name" : "다가오는 빛 · Lift",
+      "startSeconds" : 24.827586206896555
+    },
+    {
+      "bars" : 8,
+      "duration" : 16.551724137931036,
+      "name" : "f0r h3r · Chorus",
+      "startSeconds" : 33.103448275862071
+    },
+    {
+      "bars" : 4,
+      "duration" : 8.2758620689655178,
+      "name" : "북쪽의 밤 · Bridge",
+      "startSeconds" : 49.65517241379311
+    },
+    {
+      "bars" : 4,
+      "duration" : 8.2758620689655178,
+      "name" : "다시 걷는 길 · Verse B",
+      "startSeconds" : 57.931034482758626
+    },
+    {
+      "bars" : 12,
+      "duration" : 24.827586206896552,
+      "name" : "마지막 빛 · Final chorus",
+      "startSeconds" : 66.206896551724142
+    },
+    {
+      "bars" : 4,
+      "duration" : 8.2758620689655178,
+      "name" : "잔상 · Outro",
+      "startSeconds" : 91.034482758620697
+    }
+  ],
+  "spliceCreditsSpent" : 0,
+  "tailSeconds" : 2,
+  "tempo" : 116,
+  "title" : "f0r h3r",
+  "tracks" : 8
+}

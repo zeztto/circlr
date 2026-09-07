@@ -1,0 +1,23 @@
+.build/
+.swiftpm/
+dist/
+.DS_Store
+qa/generated/
+
+qa/preserved/
+
+# Local song projects contain the user's licensed Splice media.
+music/**/*.circlr/
+music/**/*.wav
+music/**/provenance/splice-library.txt
+mcp/__pycache__/
+
+# Reproducible project-local agent installation (absolute paths).
+.agents/skills/circlr-studio/
+.codex/agents/circlr-*.toml
+.codex/circlr-agent-kit.json
+.codex/config.toml
+Resources/Codex/**/__pycache__/
+Resources/Codex/__pycache__/
+qa/__pycache__/
+scripts/__pycache__/

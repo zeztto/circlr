@@ -1,0 +1,254 @@
+{
+  "checkedAt": "2026-09-07",
+  "purpose": "Read-only planning evidence; no login, model call, or app-server session was started.",
+  "cliVersion": "codex-cli 0.149.1",
+  "generationCommand": "codex app-server generate-json-schema --out <temporary-directory>",
+  "experimentalFlagPassed": false,
+  "cliHelpStatus": "experimental",
+  "schemas": [
+    {
+      "name": "v1/InitializeParams.json",
+      "sha256": "6f0094be9a65242ec779a40794cbd4fdfa32fca1e45084a16adfb50501d33ea2",
+      "required": [
+        "clientInfo"
+      ],
+      "properties": [
+        "capabilities",
+        "clientInfo"
+      ]
+    },
+    {
+      "name": "v2/LoginAccountParams.json",
+      "sha256": "68cbb2156f0c9d449af9356915c7c2fb73d2ce1cbce1e6e2e6b6bb3e6fb7f646",
+      "required": [],
+      "properties": [],
+      "loginVariants": [
+        {
+          "type": "apiKey",
+          "required": [
+            "apiKey",
+            "type"
+          ],
+          "description": null
+        },
+        {
+          "type": "chatgpt",
+          "required": [
+            "type"
+          ],
+          "description": null
+        },
+        {
+          "type": "chatgptDeviceCode",
+          "required": [
+            "type"
+          ],
+          "description": null
+        },
+        {
+          "type": "chatgptAuthTokens",
+          "required": [
+            "accessToken",
+            "chatgptAccountId",
+            "type"
+          ],
+          "description": "[UNSTABLE] FOR OPENAI INTERNAL USE ONLY - DO NOT USE. The access token must contain the same scopes that Codex-managed ChatGPT auth tokens have."
+        },
+        {
+          "type": "amazonBedrock",
+          "required": [
+            "apiKey",
+            "region",
+            "type"
+          ],
+          "description": "[UNSTABLE] Managed Amazon Bedrock login is experimental."
+        }
+      ]
+    },
+    {
+      "name": "v2/LoginAccountResponse.json",
+      "sha256": "72e6d77f49bc5809c3af50f183e2a0862dd8f7836816d4796ff69bb13eae0e89",
+      "required": [],
+      "properties": []
+    },
+    {
+      "name": "v2/ThreadStartParams.json",
+      "sha256": "792e2f32e37cece971bd616664ea2053741acbed4e9c92e9d1766427718f2ecd",
+      "required": [],
+      "properties": [
+        "approvalPolicy",
+        "approvalsReviewer",
+        "baseInstructions",
+        "config",
+        "cwd",
+        "developerInstructions",
+        "ephemeral",
+        "model",
+        "modelProvider",
+        "personality",
+        "sandbox",
+        "serviceName",
+        "serviceTier",
+        "sessionStartSource",
+        "threadSource"
+      ]
+    },
+    {
+      "name": "v2/ThreadReadParams.json",
+      "sha256": "7222da641029c071811f6bcb651de347fe037e6689db22b3fad0c5b17b7f1c21",
+      "required": [
+        "threadId"
+      ],
+      "properties": [
+        "includeTurns",
+        "threadId"
+      ]
+    },
+    {
+      "name": "v2/ThreadResumeParams.json",
+      "sha256": "7d9ff4b7d83702448715ada355a9713af6f71beaf6fcfcb08c4f03ac52842813",
+      "required": [
+        "threadId"
+      ],
+      "properties": [
+        "approvalPolicy",
+        "approvalsReviewer",
+        "baseInstructions",
+        "config",
+        "cwd",
+        "developerInstructions",
+        "model",
+        "modelProvider",
+        "personality",
+        "sandbox",
+        "serviceTier",
+        "threadId"
+      ]
+    },
+    {
+      "name": "v2/TurnStartParams.json",
+      "sha256": "ff2e7e0796fbe2ad99e5ec7d489cc8c8630b75f2ab8f17857711107587e3197d",
+      "required": [
+        "input",
+        "threadId"
+      ],
+      "properties": [
+        "approvalPolicy",
+        "approvalsReviewer",
+        "clientUserMessageId",
+        "cwd",
+        "effort",
+        "input",
+        "model",
+        "outputSchema",
+        "personality",
+        "sandboxPolicy",
+        "serviceTier",
+        "summary",
+        "threadId"
+      ]
+    },
+    {
+      "name": "v2/TurnSteerParams.json",
+      "sha256": "4a52eb76e7a717bb388484ccd7538737fca0df35481fc30a21e259f1bfe96e37",
+      "required": [
+        "expectedTurnId",
+        "input",
+        "threadId"
+      ],
+      "properties": [
+        "clientUserMessageId",
+        "expectedTurnId",
+        "input",
+        "threadId"
+      ]
+    },
+    {
+      "name": "v2/TurnInterruptParams.json",
+      "sha256": "6dff382dae73d1dbc58406ed045605f647e7a49660e2540fbd2c6c24d60c5f2b",
+      "required": [
+        "threadId",
+        "turnId"
+      ],
+      "properties": [
+        "threadId",
+        "turnId"
+      ]
+    },
+    {
+      "name": "v2/GetAccountRateLimitsResponse.json",
+      "sha256": "c102f41b28ee782008b0fc98adb2cefe172bfe6c347770a0896453f23e3d812a",
+      "required": [
+        "rateLimits"
+      ],
+      "properties": [
+        "rateLimitResetCredits",
+        "rateLimits",
+        "rateLimitsByLimitId"
+      ]
+    }
+  ],
+  "methods": {
+    "ClientRequest": {
+      "sha256": "1024db9d23b156e04b020a5d101982841dab158b84ecc9ecec399ab119ac9a1f",
+      "verified": [
+        "initialize",
+        "account/read",
+        "account/login/start",
+        "account/login/cancel",
+        "account/logout",
+        "model/list",
+        "account/rateLimits/read",
+        "mcpServerStatus/list",
+        "thread/start",
+        "thread/read",
+        "thread/resume",
+        "turn/start",
+        "turn/steer",
+        "turn/interrupt"
+      ]
+    },
+    "ClientNotification": {
+      "sha256": "706cf248d75027c84a3c63348d0ed507182e8eba40069dd17541793de029145a",
+      "verified": [
+        "initialized"
+      ]
+    },
+    "ServerRequest": {
+      "sha256": "e5ae9078cddac333262ae392fe25558d6054b77e4beb00784b77cf606849d063",
+      "verified": [
+        "item/commandExecution/requestApproval",
+        "item/fileChange/requestApproval",
+        "item/permissions/requestApproval",
+        "item/tool/requestUserInput",
+        "mcpServer/elicitation/request"
+      ]
+    },
+    "ServerNotification": {
+      "sha256": "be5e648ebf969cba14befd535a20463befb0ea99ae03a923471547b7f473161e",
+      "verified": [
+        "account/login/completed",
+        "account/updated",
+        "account/rateLimits/updated",
+        "item/started",
+        "item/agentMessage/delta",
+        "item/completed",
+        "turn/completed",
+        "serverRequest/resolved"
+      ]
+    }
+  },
+  "officialSources": [
+    "https://learn.chatgpt.com/docs/app-server",
+    "https://learn.chatgpt.com/docs/auth",
+    "https://learn.chatgpt.com/docs/codex-sdk",
+    "https://learn.chatgpt.com/docs/extend/mcp?surface=cli",
+    "https://learn.chatgpt.com/docs/config-file/config-reference",
+    "https://learn.chatgpt.com/docs/open-source"
+  ],
+  "limitations": [
+    "Schema presence does not establish production support or account entitlement.",
+    "No runtime authentication, tool sandbox, credential isolation, clean Mac packaging, or native conversational UI was tested.",
+    "External ChatGPT token injection is excluded; local schema includes an internal-use restriction."
+  ]
+}

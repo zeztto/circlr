@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleName</key>
+	<string>써클러</string>
+	<key>CFBundleDisplayName</key>
+	<string>써클러</string>
+	<key>CFBundleIdentifier</key>
+	<string>com.circlr.desktop</string>
+	<key>CFBundleExecutable</key>
+	<string>circlr</string>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
+	<key>CFBundleIconName</key>
+	<string>Circlr</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>0.12.0</string>
+	<key>CFBundleVersion</key>
+	<string>14</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>14.0</string>
+	<key>NSHighResolutionCapable</key>
+	<true/>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>선택한 서클에 오디오를 녹음하기 위해 마이크를 사용합니다.</string>
+	<key>CFBundleDocumentTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeName</key>
+			<string>circlr 곡</string>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleTypeExtensions</key>
+			<array>
+				<string>circlr</string>
+			</array>
+			<key>LSTypeIsPackage</key>
+			<true/>
+		</dict>
+	</array>
+</dict>
+</plist>

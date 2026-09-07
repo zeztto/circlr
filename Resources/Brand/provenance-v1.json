@@ -1,0 +1,45 @@
+{
+  "schema": "chatgpt-image-result-v1",
+  "status": "success",
+  "date": "2026-09-07",
+  "execution_path": "general ChatGPT browser via CUA",
+  "conversation_url": "https://chatgpt.com/c/6a9ebe53-c330-83ee-b19d-e829351c71ed",
+  "prompts": [
+    "Create a single finished macOS app icon for circlr, an artist creative-universe and music orbit editor. A bold, optically centered circular orbit subtly open like a lowercase c, with one small solid circular satellite at the upper-right opening and a smaller inner circular orbit: clear geometric silhouette, solid pale mint mark on a neutral charcoal rounded-square tile, restrained flat design readable at 32 pixels. Output one square 1024×1024 icon with transparent corners outside the tile, generous consistent margins, no text, no letters printed as typography, no star field, no gradients, no mockup or surrounding interface."
+  ],
+  "submitted_prompt_count": 1,
+  "reference_uploads": [],
+  "asset_export": "Browser pageAssets",
+  "selected_asset_id": "2b0d5cc419ad8ca4",
+  "original_file_id": "file_000000002bd481f9b9a76c8a4a76920b",
+  "source_file": "circlr-icon-v1-source.png",
+  "source_dimensions": [
+    1254,
+    1254
+  ],
+  "source_mode": "RGBA",
+  "source_sha256": "73827a69671e419efe732bb17220e1c75706684c5f916803e5cf169a1f9d104a",
+  "build_input": "circlr-icon-v1.png",
+  "build_input_sha256": "f62b26a868729b816d134b5d4ef9912262e1386cb517716b341d0c1a396bf2ee",
+  "transforms": [
+    "sips resize 1254x1254 to 1024x1024",
+    "sips resize to ten macOS icon representations; iconutil ICNS packaging",
+    "actool compiles same PNG and icon-composer.json as named Circlr asset; layout scale 1.25"
+  ],
+  "selection_reason": "Last exported candidate has true alpha transparency. Earlier candidate contained a baked checkerboard.",
+  "visual_qa": {
+    "orbit_and_inner_circle": true,
+    "single_satellite": true,
+    "no_text": true,
+    "transparent_corners": true,
+    "readable_32px": true,
+    "small_variation": "Subtle texture in generated charcoal fill retained.",
+    "native_macos_render_verified": true
+  },
+  "rate_limits": 0,
+  "safety_responses": 0,
+  "technical_notes": [
+    "ChatGPT returned 1254x1254 instead of requested 1024x1024; source preserved and resized locally.",
+    "Legacy-only macOS 26 preview added a wide pale frame; named Icon Composer catalog resolves it."
+  ]
+}

@@ -1,0 +1,4 @@
+interface:
+  display_name: "써클러 음악 제작팀"
+  short_description: "송폼과 MIDI부터 사운드 디자인·믹스까지 역할을 나눠 제작합니다"
+  default_prompt: "$circlr-studio를 사용해 현재 곡의 의도를 파악하고 필요한 음악 전문 역할로 작업을 나눠 진행하세요."
