@@ -6,7 +6,9 @@ macOS용 앨범·송폼 궤도 편집기. **앨범 → 곡·악장 → 섹션 �
 
 연결 UI는 [서클 둘레 8방향 IN/OUT과 다중 입출력](docs/22-eight-direction-ports.md)으로 확장 중이다. 포트의 신호 의미와 연결점 배치를 분리한다. 아래 일반 사용법은 배포된 0.19 앱 기준이며 새 포트 기능은 독립 개발 브랜치에서 검증한다.
 
-현재 **`codex/daw-integration`의 0.20.0 build 33**에 녹음 lifecycle과 8방향·다중 bus·그룹 포트를 통합했다. 같은 캔버스의 연결 편집·녹음 상태·스텝·오토메이션이 공존하며, 녹음 시작·정리 중 음악 편집과 Undo의 경쟁을 차단한다. build 23의 실제 편집·바운스·Undo·저장/재열기·닫기 최소화 및 출력별 모션 검증은 [통합 QA](qa/daw-integration-review.md)에 기록했다.
+현재 **`codex/daw-integration`의 0.20.0 build 34**에 녹음 lifecycle과 8방향·다중 bus·그룹 포트를 통합했다. 같은 캔버스의 연결 편집·녹음 상태·스텝·오토메이션이 공존하며, 녹음 시작·정리 중 음악 편집과 Undo의 경쟁을 차단한다. build 23의 실제 편집·바운스·Undo·저장/재열기·닫기 최소화 및 출력별 모션 검증은 [통합 QA](qa/daw-integration-review.md)에 기록했다.
+
+build 34는 **오토메이션 곡선·선택 점·공유 원본 전환을 같은 캔버스에서 바로 편집**한다. 자유 배치는 곡선을 넓게, 궤도는 원의 높이를 유지하도록 배치한다. 볼륨 dB·팬 %·로컬 박/초를 표시하고, Return/Esc 뒤 방향키로 이어서 조절한다. ‘전체 점 보기’의 범위를 MCP에도 반영한다. Swift **307개**·Python **26개**, 최종 앱의 궤도/자유 드래그·삭제·Undo·충돌 거절·저장 복원을 검증했다. [편집 계약](docs/48-automation-workspace.md) · [QA와 제한](qa/automation-workspace-review.md).
 
 build 33은 출력 서클에 **서클 레벨 / 트랙 전체 레벨**을 구분해 dB 입력·fader·음소거·0 dB 복원을 제공합니다. 작은 창과 콘솔 열림 상태에서도 두 범위와 볼륨/팬 오토메이션·바운스 바로가기를 함께 표시합니다. 공유 원본은 레벨만 부분 편집하며 개별 사용 설정을 유지합니다. Swift **303개**·Python **26개**, 실제 입력·드래그·Undo·충돌 거절·저장 복원을 검증했습니다. [편집 계약](docs/47-output-editing.md) · [QA와 제한](qa/output-editing-review.md).
 

@@ -28,11 +28,18 @@ public enum GainScale {
 }
 
 public enum NumberEditPresentation:Hashable {
-    case number,gainDecibels
+    case number,gainDecibels,panPercent
     func text(_ value:Double)->String {
-        self == .gainDecibels ? GainScale.text(value):String(format:"%.10g",locale:Locale(identifier:"en_US_POSIX"),value)
+        switch self {
+        case .gainDecibels:return GainScale.text(value)
+        case .panPercent:return String(format:"%.2f",locale:Locale(identifier:"en_US_POSIX"),value*100)
+        case .number:return String(format:"%.10g",locale:Locale(identifier:"en_US_POSIX"),value)
+        }
     }
     func parse(_ text:String)->Double? {
-        self == .gainDecibels ? GainScale.parse(text):Double(text.trimmingCharacters(in:.whitespacesAndNewlines))
+        if self == .gainDecibels{return GainScale.parse(text)}
+        let cleaned=text.trimmingCharacters(in:.whitespacesAndNewlines)
+        let value=Double(self == .panPercent ? cleaned.replacingOccurrences(of:"−",with:"-"):cleaned)
+        return self == .panPercent ? value.map{$0/100}:value
     }
 }
