@@ -22,6 +22,7 @@ struct AlbumCanvas: NSViewRepresentable {
     var editor: NSHostingView<InlineCircleEditor>?
     var editorAddress: CircleAddress?
     var labelPlacements:[CanvasLabelPlacement]=[]
+    var fileDropPreview:CanvasFileDropPreview?
     var hoverAddress:CircleAddress?
     var down = NSPoint.zero
     var dragNode: CircleSceneNode?
@@ -84,6 +85,7 @@ struct AlbumCanvas: NSViewRepresentable {
         }
         store.canvasCommands = { [weak self] in self?.availableCommands() ?? [] }
         store.focusCanvas = { [weak self] in guard let self else{return};self.window?.makeFirstResponder(self) }
+        registerForDraggedTypes([.fileURL])
         wantsLayer = true; clipsToBounds = true; layer?.masksToBounds = true; layer?.backgroundColor = StudioTheme.canvasNS.cgColor
         setAccessibilityElement(true); setAccessibilityRole(.group); setAccessibilityLabel("앨범 서클 캔버스")
         store.capturePlaybackVisualization = { [weak self] in self?.playbackDiagnostics() ?? [:] }
@@ -310,6 +312,7 @@ struct AlbumCanvas: NSViewRepresentable {
         drawCableEditing()
         drawPortLabels()
         drawPlaybackCaption()
+        drawFileDropPreview()
         if let handle = connecting, let node = scene.node(handle.endpoint.node) {
             let target=CirclePortGeometry.hit(Point(connectionPoint.x,connectionPoint.y),visibleHandles:visiblePortHandles()) ??
                 CirclePortHandle(endpoint:handle.endpoint,octant:PortOctant(rawValue:(handle.octant.rawValue+4)%8)!,point:Point(connectionPoint.x,connectionPoint.y))

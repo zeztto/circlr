@@ -10,7 +10,9 @@
 
 **build 25에서 출력 연결 telemetry·nonmodal 대기·단일 물리 attempt·취소/재시도를 구현했다.** 실제 지연과 늦은 완료를 관찰했고 편집기 제거 후 Space 소실도 수정했다. [출력/포커스 QA](../qa/output-connection-review.md). 이 계측은 HAL 지연의 원인 해결이나 전체 장치 lifecycle 출고를 대신하지 않는다.
 
-다음 실행 순서는 다음과 같다. (1) 궤도 배치·다수 섹션 전환·펼친 그룹·긴 이름·시간 손잡이·VoiceOver 조합을 점검한다. 이름표/포트 hit와 그려진 위치가 일치하고 키보드로 편집/복귀가 가능해야 한다. (2) 공통 파일 drop과 로컬 라이브러리를 연결해 import→섹션 배치→편집→바운스→저장 복원의 작업 깊이를 줄인다. 원본 참조·중복 자산·Undo 계약을 먼저 정한다. (3) 새 출력 telemetry로 장치별 cold/warm 연결 시간을 수집해 HAL 대기와 engine 시작/정지의 원인을 분리하고, 연속 render graph/PDC 전에 장치 변경·복구 수명을 확정한다. 마이크 입력의 별도 실행 조건과 E 출고 gate는 유지한다.
+**build 26에서 공통 비동기 오디오 import와 세션 미디어 수명을 구현했다.** 메뉴의 다중 파일·atomic 적용·Undo·MIDI 미리보기·대상 revision 거절을 실제 앱에서 검사했다. file-URL drop 연결과 궤도/자유 배치 기준은 소스에 있으며 Finder 직접 제스처와 Splice promise 수신은 아직 검증되지 않았다. [실행 계약](40-media-import.md) · [검증](../qa/media-import-review.md).
+
+다음 실행 순서는 다음과 같다. (1) 궤도 배치·다수 섹션 전환·펼친 그룹·긴 이름·시간 손잡이·VoiceOver 조합을 점검한다. 이름표/포트 hit와 그려진 위치가 일치하고 키보드로 편집/복귀가 가능해야 한다. (2) file-URL drop의 실제 제스처·orbit 위치·overlay 거절을 먼저 검증하고 file promise와 로컬 라이브러리를 연결해 import→섹션 배치→편집→바운스→저장 복원의 작업 깊이를 줄인다. 원본 참조·중복 자산·Undo 계약을 먼저 정한다. (3) 새 출력 telemetry로 장치별 cold/warm 연결 시간을 수집해 HAL 대기와 engine 시작/정지의 원인을 분리하고, 연속 render graph/PDC 전에 장치 변경·복구 수명을 확정한다. 마이크 입력의 별도 실행 조건과 E 출고 gate는 유지한다.
 
 0.14에서 10음색 engine 3와 15트랙의 f0r h3r v4를 추가했고, 0.15에서 B의 탐색 깊이·라벨 가독성·작은 창 편집을 개선했다. 배포용 v4는 FreePats CC0 bank를 사용한다. 기존 버전·원본 곡은 보존한다. [음질·음악 검증](../qa/0.14-review.md)과 [UI 검증](../qa/0.15-review.md)을 분리한다.
 
@@ -23,7 +25,7 @@
 | C | 캡처·코덱 경로 구현 | Scarlett 실제 출력·MP4 동기/최소화 |
 | D | engine 3·v4 MIDI/CC0/WAV·native bounce | 아티스트 청취 피드백 |
 | E | stable ports·8방향·독립 bus·MCP·그룹 및 녹음 branch 통합 | 전체 신호/밀집 조합·native 입력·사용 앱 출고 |
-| Import | 정책 조사·CC0 대체, 0.17 MIDI 노트 가져오기 완료 | CC/tempo map, 공통 drop·중복 자산 관리 |
+| Import | CC0 대체·MIDI 노트·비동기 오디오 배치·세션 미디어 참조·file-URL drop 코드 | Finder/Splice promise 실제 드롭, CC/tempo map, 중복 자산·GC |
 | F | prepared PCM 기반 | 장치 lifecycle 후 연속 render graph/PDC |
 | G | 공식 계정 콘솔 설계·전문 kit/MCP 구현 | App Server adapter·권한/취소·대화 UI |
 | H | 아티스트 세계관 설계 | catalog/schema·파일 참조·복원 |

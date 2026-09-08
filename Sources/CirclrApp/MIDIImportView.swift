@@ -14,23 +14,30 @@ struct MIDIImportDraft {
 }
 extension AppStore {
     func chooseMIDIImport() {
-        guard let use=selectedUse,!midiRecording,!audioRecording else {status="MIDI를 넣을 섹션을 선택하고 녹음을 정지하세요";return}
-        let projectID=project.id,revision=project.musicRevision,arrangementID=project.activeArrangementID
+        guard let use=selectedUse,canStartMediaImport else {status="MIDI를 넣을 섹션을 선택하고 재생·녹음을 정지하세요";return}
+        let projectID=project.id,revision=project.musicRevision,arrangementID=project.activeArrangementID,generation=mediaImportGeneration
         let panel=NSOpenPanel();panel.title="MIDI 노트 가져오기";panel.allowedContentTypes=[UTType(filenameExtension:"mid")!,UTType(filenameExtension:"midi")!];panel.allowsMultipleSelection=false
         guard panel.runModal() == .OK,let url=panel.url else{return}
-        guard project.id==projectID,project.musicRevision==revision,selectedUse?.id==use.id else {status="대상이 변경됐습니다. 파일을 다시 선택하세요";return}
+        _=previewMIDIImport(url,projectID:projectID,revision:revision,generation:generation,arrangementID:arrangementID,useID:use.id)
+    }
+    @discardableResult func previewMIDIImport(_ url:URL,projectID:ID,revision:Int,generation:Int,arrangementID:ID,useID:ID)->Bool {
+        guard canStartMediaImport,project.id==projectID,project.musicRevision==revision,mediaImportGeneration==generation,
+              project.arrangements.first(where:{$0.id==arrangementID})?.uses.contains(where:{$0.id==useID}) == true else {status="대상이 변경됐습니다. 파일을 다시 선택하세요";return false}
+        let scoped=url.startAccessingSecurityScopedResource();defer{if scoped{url.stopAccessingSecurityScopedResource()}}
         do {
-            let size=try url.resourceValues(forKeys:[.fileSizeKey]).fileSize ?? 0
-            guard size<=16_777_216 else {throw CirclrError("16 MiB 이하의 MIDI 파일을 선택하세요")}
+            guard url.isFileURL else{throw CirclrError("로컬 MIDI 파일을 선택하세요")}
+            let values=try url.resourceValues(forKeys:[.fileSizeKey,.isRegularFileKey])
+            guard values.isRegularFile==true,let size=values.fileSize,size>0,size<=16_777_216 else {throw CirclrError("16 MiB 이하의 MIDI 파일을 선택하세요")}
             let handle=try FileHandle(forReadingFrom:url);defer{try? handle.close()}
             let document=try MIDIImport.read(handle.read(upToCount:16_777_217) ?? Data())
             hierarchySettingsOpen=false
-            focusHierarchy(selectedMusic==nil ? .section(arrangementID:arrangementID,useID:use.id):(hierarchySelection ?? .section(arrangementID:arrangementID,useID:use.id)),detail:true)
-            midiImportDraft=MIDIImportDraft(fileName:url.lastPathComponent,document:document,projectID:projectID,revision:revision,arrangementID:arrangementID,useID:use.id)
-        }catch{fail(error)}
+            focusHierarchy(.section(arrangementID:arrangementID,useID:useID),detail:true)
+            midiImportDraft=MIDIImportDraft(fileName:url.lastPathComponent,document:document,projectID:projectID,revision:revision,arrangementID:arrangementID,useID:useID)
+            return true
+        }catch{status="MIDI 가져오기 실패: \(error.localizedDescription)";return false}
     }
     func commitMIDIImport(_ draft:MIDIImportDraft,selected:Set<String>,extend:Bool) {
-        guard project.id==draft.projectID,project.musicRevision==draft.revision,selectedUse?.id==draft.useID,project.activeArrangementID==draft.arrangementID,!midiRecording,!audioRecording else {fail(CirclrError("프로젝트가 변경됐습니다. 파일을 다시 선택하세요"));return}
+        guard project.id==draft.projectID,project.musicRevision==draft.revision,selectedUse?.id==draft.useID,project.activeArrangementID==draft.arrangementID,!midiRecording,!audioRecordPending,!audioRecordingBusy,!preparing else {fail(CirclrError("프로젝트가 변경됐습니다. 파일을 다시 선택하세요"));return}
         do {
             let parts=draft.document.tracks.filter{selected.contains($0.id)}.map{MIDIImportPart(name:$0.name,notes:$0.notes,drums:$0.channel==9)}
             var candidate=project

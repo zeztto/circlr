@@ -130,7 +130,7 @@ extension AppStore {
             guard let path=args.path ?? projectURL?.path,path.hasSuffix(".circlr") else {throw CirclrError("저장할 .circlr 절대 경로가 필요합니다")}
             let url=try agentPath(path)
             if FileManager.default.fileExists(atPath:url.path),try ProjectStore.load(url).project.id != project.id {throw CirclrError("다른 프로젝트를 덮어쓸 수 없습니다")}
-            captureViewport();project=try ProjectStore.save(project,to:url,mediaRoot:mediaRoot);projectURL=url;mediaRoot=url;dirty=false;clearSavedRecovery();status="에이전트 저장 완료";return agentState()
+            captureViewport();project=try ProjectStore.saveSession(project,to:url,mediaRoot:mediaRoot);projectURL=url;mediaRoot=url;dirty=false;clearSavedRecovery();status="에이전트 저장 완료";return agentState()
         case "open":
             return try beginAgentOpen(request,source:source)
         case "bounce","export":return try beginAgentRender(request,source:source)
