@@ -102,27 +102,20 @@ public enum ProjectEditing {
                 if case .audio(let laneID, let clipID) = node.content, laneID == lane.id, !validClips.contains(clipID) { return node.id }; return nil
             })
             SectionGraphEditing.remove(removed, from: &graph)
-            let defaults = SectionGraphMigration.graph(lanes: [lane], tracks: candidate.tracks.filter { $0.id == lane.trackID }, effects: [])
             let existing = Set(graph.nodes.map(\.id))
-            let hasNewSource = previousLane == nil || lane.audio.contains { !previousClips.contains($0.id) }
+            let includeMIDI = !lane.notes.isEmpty || (previousLane == nil && lane.audio.isEmpty)
+            let newMIDI = !lane.notes.isEmpty && previousLane?.notes.isEmpty != false && !existing.contains("midi:\(lane.id)")
+            let defaults = SectionGraphMigration.graph(lanes: [lane], tracks: candidate.tracks.filter { $0.id == lane.trackID }, effects: [],includeMIDI:includeMIDI)
+            let hasNewSource = previousLane == nil || newMIDI || lane.audio.contains { !previousClips.contains($0.id) }
             let added = Set(defaults.nodes.filter { node in
                 guard !existing.contains(node.id), hasNewSource else { return false }
                 switch node.content {
-                case .midi: return previousLane == nil
+                case .midi: return previousLane == nil || newMIDI
                 case .audio(_, let clip): return !previousClips.contains(clip)
                 default: return true
                 }
             }.map(\.id))
-            graph.nodes += defaults.nodes.filter { added.contains($0.id) }
-            // Only new sources acquire default routes. User-disconnected existing routes stay disconnected.
-            for edge in defaults.edges where added.contains(edge.from) {
-                if !graph.edges.contains(where: { $0.id == edge.id }) { graph.edges.append(edge) }
-            }
-            for id in added.sorted() {
-                var point = defaults.layout.positions[id] ?? Point()
-                while graph.layout.positions.contains(where: { !added.contains($0.key) && hypot($0.value.x-point.x,$0.value.y-point.y) < 180 }) { point.y += 200 }
-                graph.layout.positions[id] = point
-            }
+            SourceCircleEditing.merge(defaults,adding:added,into:&graph)
             try SectionGraphEditing.set(graph, useID: useID, original: original, in: &candidate)
         }
         project = candidate

@@ -285,7 +285,7 @@ public struct Project: Codable, Equatable {
         signal.layout.positions[node.id] = Point(100, Double(tracks.count - 1) * 220)
         if let master = signal.nodes.first(where: { $0.kind == .master }) {
             signal.edges.append(SignalEdge(from: node.id, to: master.id))
-            signal.layout.positions[master.id] = Point(650, 100)
+            if signal.layout.positions[master.id] == nil {signal.layout.positions[master.id] = Point(650, 100)}
         }
         return track.id
     }

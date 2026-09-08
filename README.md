@@ -6,7 +6,9 @@ macOS용 앨범·송폼 궤도 편집기. **앨범 → 곡·악장 → 섹션 �
 
 연결 UI는 [서클 둘레 8방향 IN/OUT과 다중 입출력](docs/22-eight-direction-ports.md)으로 확장 중이다. 포트의 신호 의미와 연결점 배치를 분리한다. 아래 일반 사용법은 배포된 0.19 앱 기준이며 새 포트 기능은 독립 개발 브랜치에서 검증한다.
 
-현재 **`codex/daw-integration`의 0.20.0 build 26**에 녹음 lifecycle과 8방향·다중 bus·그룹 포트를 통합했다. 같은 캔버스의 연결 편집·녹음 상태·스텝·오토메이션이 공존하며, 녹음 시작·정리 중 음악 편집과 Undo의 경쟁을 차단한다. build 23의 실제 편집·바운스·Undo·저장/재열기·닫기 최소화 및 출력별 모션 검증은 [통합 QA](qa/daw-integration-review.md)에 기록했다.
+현재 **`codex/daw-integration`의 0.20.0 build 27**에 녹음 lifecycle과 8방향·다중 bus·그룹 포트를 통합했다. 같은 캔버스의 연결 편집·녹음 상태·스텝·오토메이션이 공존하며, 녹음 시작·정리 중 음악 편집과 Undo의 경쟁을 차단한다. build 23의 실제 편집·바운스·Undo·저장/재열기·닫기 최소화 및 출력별 모션 검증은 [통합 QA](qa/daw-integration-review.md)에 기록했다.
+
+build 27의 새 오디오 lane은 **오디오·믹스·출력 서클**로 시작한다. ⌘J 검색의 Return과 ⌘1은 실제 오디오 편집을 열고, 첫 MIDI 노트 입력이나 명시적 리듬 패턴 생성 때 악기 경로를 추가한다. 편집기 상단 **이펙트 추가**에서 선택한 오디오 뒤 또는 출력 앞에 효과를 넣는다. 기존 문서의 서클·끊어 둔 연결·마스터 위치를 보존한다. Swift **253개**·Python **26개**, 실제 메뉴·MIDI/스텝·34초 WAV·6단계 Undo·저장/재열기를 검증했다. [소스별 서클 계약](docs/41-source-aware-circles.md) · [build 27 QA](qa/source-circles-review.md).
 
 build 26은 **여러 오디오 파일을 백그라운드에서 복사·검증하고 한 번의 Undo로 적용**한다. 여러 파일은 각 트랙으로 추가한 뒤 섹션 전체를 보여준다. 파일 선택 중 대상 음악이 바뀌면 적용하지 않으며, 저장→Undo→저장→Redo에서도 가져온 오디오 참조를 유지한다. 메뉴·MIDI 미리보기와 저장 복원을 별도 앱에서 검증했다. 캔버스 file-URL drop은 구현했으며 실제 Finder 드래그·Splice file promise는 후속 검증 범위다. [파일 가져오기 계약](docs/40-media-import.md) · [build 26 검증](qa/media-import-review.md).
 

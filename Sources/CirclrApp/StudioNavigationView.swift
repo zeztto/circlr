@@ -72,6 +72,11 @@ struct StudioRouteBar:View {
                     .help("다른 트랙으로 이동 · ⌘J")
                 Spacer(minLength:4)
                 StudioRouteButtons(store:store,route:route).buttonStyle(.plain)
+                if store.canInsertMusicEffect {
+                    Menu("이펙트 추가") {
+                        ForEach(EffectKind.allCases,id:\.self) {kind in Button(AppStore.effectName(kind)){store.addMusicEffect(kind)}}
+                    }.menuStyle(.borderlessButton).fixedSize().help("선택한 오디오 경로에 이펙터 추가")
+                }
             }.padding(.vertical,4)
         }
     }

@@ -195,6 +195,17 @@ public enum SectionGraphEditing {
         try connect(from: from, to: node.id, fromPortID: fromPortID, in: &candidate)
         graph = candidate
     }
+    public static func insertEffectBeforeOutput(_ node:MusicCircle,before outputID:ID,in graph:inout SectionGraph)throws {
+        guard case .effect=node.content,let output=graph.nodes.first(where:{$0.id==outputID}),case .output=output.content else {throw CirclrError("이펙터를 넣을 트랙 출력을 선택하세요")}
+        var candidate=graph
+        candidate.nodes.append(node)
+        for i in candidate.edges.indices where candidate.edges[i].to==outputID {
+            candidate.edges[i].to=node.id
+            if candidate.edges[i].toPortID != nil {candidate.edges[i].toPortID=CirclePort.audioInput}
+        }
+        try connect(from:node.id,to:outputID,in:&candidate)
+        graph=candidate
+    }
     public static func remove(_ ids: Set<ID>, from graph: inout SectionGraph) {
         graph.nodes.removeAll { ids.contains($0.id) }
         graph.edges.removeAll { ids.contains($0.from) || ids.contains($0.to) }

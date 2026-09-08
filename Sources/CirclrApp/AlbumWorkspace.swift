@@ -162,16 +162,22 @@ extension AppStore {
         }
         if let laneID { focusHierarchy(.music(arrangementID: project.activeArrangementID, useID: use.id, nodeID: "midi:\(laneID)"), detail: true) }
     }
+    var canInsertMusicEffect:Bool {
+        guard let music=selectedMusic else{return false}
+        if case .output=music.content {return true}
+        return CirclePort.ports(for:music.content).filter{$0.direction == .output && $0.signal == .audio}.count==1
+    }
     func addMusicEffect(_ kind: EffectKind, at point:Point? = nil) {
         guard var graph = selectedGraph, let use = selectedUse else { return }
         let node = MusicCircle(name: Self.effectName(kind), content: .effect(Effect(kind, amount: kind == .gain ? 1 : 0.5, secondary: 0.3)))
-        let source = selectedMusic?.content.output == .audio ? selectedMusic?.id : graph.nodes.first { if case .mix = $0.content { return true }; return false }?.id
-        let position = source.flatMap { graph.layout.positions[$0] } ?? Point()
+        let source = selectedMusic?.content.output == .audio ? selectedMusic?.id:nil
+        let position = selectedMusic.flatMap {graph.layout.positions[$0.id]} ?? Point()
         graph.layout.positions[node.id] = point ?? Point(position.x+210, position.y+160)
-        if let source {
-            do { try SectionGraphEditing.insertEffect(node, from: source, in: &graph) }
-            catch { fail(error); return }
-        } else { graph.nodes.append(node) }
+        do {
+            if let selected=selectedMusic,case .output=selected.content {try SectionGraphEditing.insertEffectBeforeOutput(node,before:selected.id,in:&graph)}
+            else if let source {try SectionGraphEditing.insertEffect(node,from:source,in:&graph)}
+            else {graph.nodes.append(node)}
+        } catch {fail(error);return}
         setGraph("이펙터 서클 만들기", graph)
         if selectedGraph?.nodes.contains(where: { $0.id == node.id }) == true { focusHierarchy(.music(arrangementID: project.activeArrangementID, useID: use.id, nodeID: node.id), detail: true) }
     }
@@ -261,13 +267,15 @@ extension AppStore {
         }
     }
     func makeHierarchyPattern() {
-        guard let use=selectedUse,let track=project.tracks.first(where:{$0.instrument.drums}) ?? selectedTrack else{return}
+        guard let use=selectedUse,let track=selectedTrack ?? project.tracks.first(where:{$0.instrument.drums}) ?? project.tracks.first else{return}
         var pattern=RhythmPattern(name:"리듬 \(project.patterns.count+1)",trackID:track.id)
         pattern.meter=currentContext.meter;pattern.length=currentContext.meter.quarters
         mutate("리듬 패턴 만들기"){p in
             p.patterns.append(pattern)
             if let i=p.arrangements[p.activeIndex].uses.firstIndex(where:{$0.id==use.id}){var assignment=RhythmAssignment();assignment.patternID=pattern.id;p.arrangements[p.activeIndex].uses[i].settings.rhythm = .local(assignment)}
+            try SourceCircleEditing.ensureRhythmMIDI(trackID:track.id,useID:use.id,in:&p)
         }
+        guard project.patterns.contains(where:{$0.id==pattern.id}) else{return}
         hierarchySettingsOpen=false
         focusHierarchy(.music(arrangementID:project.activeArrangementID,useID:use.id,nodeID:"rhythm-midi:\(track.id)"),detail:true)
     }
