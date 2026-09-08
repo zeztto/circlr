@@ -24,7 +24,9 @@
 
 **build 32에서 재생 시작·정지·시간 조회·해제를 직렬 background worker로 분리했다.** 실제 숫자 Return 뒤 Space 소실도 수정하고 293개 Swift·26개 Python과 별도 앱의 대기 중 편집/취소를 확인했다. Scarlett 속성 조회는 약 45 ms였으나 음악 없는 AVAudioEngine도 HAL IOProc 생성에서 7분 이상 대기했다. 특정 드라이버의 원인은 확정하지 않는다. [계약](46-playback-worker.md) · [QA](../qa/playback-worker-review.md).
 
-현재 전달 조건은 기능별로 구분한다. UI·편집 개선은 build 32 QA 앱에서 직접 검토할 수 있다. 사용 중인 0.19 앱을 교체하려면 우선 같은 Mac에서 출력 연결→실제 재생/정지→재시작과 기존 곡/MP4 회귀를 끝내야 한다. 녹음은 별도 허용이 필요한 실제 입력·취소·테이크 저장 회귀가 남았다. VoiceOver와 밀집 연결 조작은 전역의 모든 조합이라는 무한 조건 대신 MIDI/audio/sidechain/flow, 접힌 그룹, 긴 이름, 작은 창의 대표 경로를 명시한 검사표로 좁혀 수행한다. 과거 QA 수치를 새 빌드의 전체 기능 승인으로 합산하지 않는다.
+**build 33에서 출력 서클의 편집 범위와 깊이를 정리했다.** 서클/트랙 전체 레벨을 dB로 조절하고 오토메이션·바운스로 바로 이동한다. 공유 원본은 부분 편집하며 native fader와 숫자 충돌 보호를 검사했다. Swift 303개·Python 26개, 두 사용의 PCM·실제 조절/Undo/저장 근거는 [계약](47-output-editing.md)과 [QA](../qa/output-editing-review.md)에 있다. 다음 레벨 확장은 track pan/solo의 신호·bus·bounce 의미를 먼저 정한 뒤 같은 편집기에 추가한다.
+
+현재 전달 조건은 기능별로 구분한다. UI·편집 개선은 build 33 QA 앱에서 직접 검토할 수 있다. 사용 중인 0.19 앱을 교체하려면 우선 같은 Mac에서 출력 연결→실제 재생/정지→재시작과 기존 곡/MP4 회귀를 끝내야 한다. 녹음은 별도 허용이 필요한 실제 입력·취소·테이크 저장 회귀가 남았다. VoiceOver와 밀집 연결 조작은 전역의 모든 조합이라는 무한 조건 대신 MIDI/audio/sidechain/flow, 접힌 그룹, 긴 이름, 작은 창의 대표 경로를 명시한 검사표로 좁혀 수행한다. 과거 QA 수치를 새 빌드의 전체 기능 승인으로 합산하지 않는다.
 
 다음 실행 순서는 다음과 같다. (1) 궤도 배치·다수 섹션 전환·펼친 그룹·긴 이름·시간 손잡이·VoiceOver 조합을 점검한다. 이름표/포트 hit와 그려진 위치가 일치하고 키보드로 편집/복귀가 가능해야 한다. (2) file-URL drop의 실제 제스처·orbit 위치·overlay 거절을 먼저 검증하고 file promise와 로컬 라이브러리를 연결해 import→섹션 배치→편집→바운스→저장 복원의 작업 깊이를 줄인다. 원본 참조·중복 자산·Undo 계약을 먼저 정한다. (3) 새 출력 telemetry로 장치별 cold/warm 연결 시간을 수집해 HAL 대기와 engine 시작/정지의 원인을 분리하고, 연속 render graph/PDC 전에 장치 변경·복구 수명을 확정한다. 마이크 입력의 별도 실행 조건과 E 출고 gate는 유지한다.
 
@@ -35,7 +37,7 @@
 | 단계 | 현재 상태 | 다음 확인할 결과 |
 |---|---|---|
 | A | private 소스 이력, 로컬 패키징 구현 | CI·서명 배포는 별도 범위 |
-| B | 생성/⌘J/트랙 전환/8방향 연결·follow/라벨·소스별 서클·직접 이펙트·실제 단위/확정 입력·직접 음악 설정 | 전역/전환·legacy/오토메이션 전체 Native·legacy 설정 draft 수명·밀집 조합·VoiceOver |
+| B | 생성/⌘J/트랙 전환/8방향 연결·follow/라벨·소스별 서클·직접 이펙트·실제 단위/확정 입력·직접 음악 설정·출력 dB/범위 편집 | 전역/전환·legacy/오토메이션 전체 Native·legacy 설정 draft 수명·밀집 조합·VoiceOver |
 | C | 캡처·코덱 경로 구현 | Scarlett 실제 출력·MP4 동기/최소화 |
 | D | engine 3·v4 MIDI/CC0/WAV·native bounce | 아티스트 청취 피드백 |
 | E | stable ports·8방향·독립 bus·MCP·그룹 및 녹음 branch 통합 | 전체 신호/밀집 조합·native 입력·사용 앱 출고 |

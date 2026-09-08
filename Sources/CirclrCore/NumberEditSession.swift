@@ -5,13 +5,14 @@ public struct NumberEditSession<Context: Equatable> {
     public var text = ""
     private var baseline: Double?
     private var context: Context?
-    public init() {}
+    public let presentation:NumberEditPresentation
+    public init(presentation:NumberEditPresentation = .number) {self.presentation=presentation}
 
     public static func format(_ value: Double) -> String {
         // Keep small envelope/time values legible; entering and leaving never rounds the model.
         String(format: "%.10g", locale: Locale(identifier: "en_US_POSIX"), value)
     }
-    public var isDirty: Bool {baseline.map {text != Self.format($0)} ?? false}
+    public var isDirty: Bool {baseline.map {text != presentation.text($0)} ?? false}
     public var hasBaseline: Bool {baseline != nil}
     public mutating func type(_ text: String, value: Double, context: Context) {
         // The first text event may arrive before the framework's focus callback.
@@ -19,10 +20,10 @@ public struct NumberEditSession<Context: Equatable> {
         self.text=text
     }
     public mutating func begin(value: Double, context: Context) {
-        baseline=value; self.context=context; text=Self.format(value)
+        baseline=value; self.context=context; text=presentation.text(value)
     }
     public mutating func reset(value: Double) {
-        baseline=nil; context=nil; text=Self.format(value)
+        baseline=nil; context=nil; text=presentation.text(value)
     }
     public mutating func refresh(value: Double, context: Context, editing: Bool) {
         guard !editing || !isDirty else {return}
@@ -34,13 +35,13 @@ public struct NumberEditSession<Context: Equatable> {
         guard self.context == context,baseline == value else {
             throw CirclrError("편집 대상이 변경되었습니다. Esc로 취소한 뒤 다시 입력하세요")
         }
-        guard let number=Double(text.trimmingCharacters(in:.whitespacesAndNewlines)),number.isFinite else {
-            throw CirclrError("유한한 숫자를 입력하세요")
+        guard let number=presentation.parse(text),number.isFinite else {
+            throw CirclrError(presentation == .gainDecibels ? "dB 값 또는 무음을 뜻하는 −∞를 입력하세요":"유한한 숫자를 입력하세요")
         }
         guard range.contains(number) else {
             let min=range.lowerBound,max=range.upperBound,unlimited=Double.greatestFiniteMagnitude
             let description = min == -unlimited ? "\(Self.format(max)) 이하" : max == unlimited ? "\(Self.format(min)) 이상" : "\(Self.format(min))–\(Self.format(max))"
-            throw CirclrError("입력 범위: \(description)")
+            throw CirclrError(presentation == .gainDecibels ? "입력 범위: \(presentation.text(min))–\(presentation.text(max)) dB":"입력 범위: \(description)")
         }
         guard !integerOnly || number.rounded() == number else {throw CirclrError("정수를 입력하세요")}
         return number == baseline ? nil:number

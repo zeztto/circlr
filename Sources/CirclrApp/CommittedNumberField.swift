@@ -71,13 +71,14 @@ struct CommittedNumberField: View {
     var integerOnly=false
     var width: CGFloat=72
     var alignment: TextAlignment = .trailing
+    var presentation:NumberEditPresentation = .number
     @Environment(\.numberEditing) private var context
     @State private var error=""
     @State private var editing=false
 
     var body: some View {
-        NativeNumberField(title:title,value:$value,range:range,integerOnly:integerOnly,alignment:alignment,context:context,error:$error,editing:$editing)
-            .frame(height:18).padding(.horizontal,8).frame(width:width,height:32)
+        NativeNumberField(title:title,value:$value,range:range,integerOnly:integerOnly,alignment:alignment,presentation:presentation,context:context,error:$error,editing:$editing)
+            .id(presentation).frame(height:18).padding(.horizontal,8).frame(width:width,height:32)
             .background(StudioTheme.raised,in:RoundedRectangle(cornerRadius:5))
             .overlay(RoundedRectangle(cornerRadius:5).strokeBorder(error.isEmpty ? (editing ? StudioTheme.accent:StudioTheme.line):Color.red,lineWidth:editing || !error.isEmpty ? 1.5:1))
             .overlay(alignment:.topTrailing) {
@@ -93,6 +94,7 @@ private struct NativeNumberField: NSViewRepresentable {
     let range:ClosedRange<Double>
     let integerOnly:Bool
     let alignment:TextAlignment
+    let presentation:NumberEditPresentation
     let context:NumberEditingContext
     @Binding var error:String
     @Binding var editing:Bool
@@ -122,9 +124,9 @@ private struct NativeNumberField: NSViewRepresentable {
     }
     final class Coordinator:NSObject,NSTextFieldDelegate {
         var parent:NativeNumberField
-        var draft=NumberEditSession<NumberEditIdentity?>()
+        var draft:NumberEditSession<NumberEditIdentity?>
         var active=false
-        init(_ parent:NativeNumberField) {self.parent=parent;draft.reset(value:parent.value)}
+        init(_ parent:NativeNumberField) {self.parent=parent;draft=NumberEditSession(presentation:parent.presentation);draft.reset(value:parent.value)}
         func begin() {
             active=true;draft.begin(value:parent.value,context:parent.context.beforeTyping())
             parent.editing=true;parent.error=""

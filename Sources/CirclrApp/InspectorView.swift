@@ -47,13 +47,10 @@ struct SourcePicker<T:Codable & Equatable>:View {let title:String;@Binding var s
 struct TrackInspector:View {
     @ObservedObject var store:AppStore
     let track:Track
+    var showsTrackLevel=true
     var body:some View {
         VStack(alignment:.leading,spacing:12) {
-            HStack {
-                Toggle("음소거",isOn:Binding(get:{track.muted},set:{v in store.updateTrack("음소거"){$0.muted=v}}))
-                Spacer()
-                ValueField(title:"트랙 볼륨",value:Binding(get:{store.project.tracks.first{$0.id==track.id}?.gain ?? track.gain},set:{v in store.updateTrack("트랙 볼륨"){$0.gain=v}}),range:0...4)
-            }
+            if showsTrackLevel {TrackLevelEditor(store:store,track:track)}
             StudioChoice("악기",selection:Binding(get:{track.instrument.kind},set:{v in
                 if v == .sampler {store.chooseSampleInstrument()}
                 else {store.updateTrack("악기 종류"){$0.instrument.kind=v;if v == .synthesizer && $0.instrument.synth == nil {$0.instrument.synth=SynthPatch()}}}

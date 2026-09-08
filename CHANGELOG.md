@@ -2,6 +2,12 @@
 
 0.1–0.3은 설계 문서 revision이며, 0.4.0부터 로컬 실행 프로토타입을 포함한다.
 
+## 개발 중 — 0.20.0 build 33 출력 레벨 편집
+
+- 출력 전용 편집기에 서클별/트랙 전체 레벨을 분리하고 dB 숫자·fader·음소거·0 dB 복원·볼륨/팬 오토메이션 바로가기를 추가했다. 중복 제목과 여백을 줄여 작은 창에서 두 범위를 함께 표시하며 악기 편집기는 음색에 집중한다.
+- 선형 gain 저장과 DSP를 유지하고 표시만 dB로 변환한다. −∞와 -inf는 무음이며 읽기만 할 때 원래 정밀도를 보존한다. 공유 원본의 gain/muted만 수정해 다른 사용 override가 원본으로 섞이지 않게 했다.
+- Native 검사에서 fader의 중간 재배치와 움직이지 않은 클릭의 불필요한 Undo를 수정했다. 드래그 한 번/방향키 한 번에 적용 한 번, 외부 revision 변경 거절, Return/Esc/Tab과 저장 복원을 확인했다. Swift 303개·Python 26개 및 release 통과. 사용 앱은 0.19이며 정상 출력·마이크·VoiceOver 등 출고 조건은 남아 있다. [QA](qa/output-editing-review.md).
+
 ## 개발 중 — 0.20.0 build 32 재생 worker와 숫자 입력 포커스
 
 - AVAudioEngine/player의 생성·연결·시작·정지·시계 조회·해제를 직렬 background worker가 소유한다. UI는 값 snapshot만 읽으며 정리 중 재시도를 거절한다. 시작 취소/timeout 후 늦은 시작은 음소거 상태에서 정리한다.

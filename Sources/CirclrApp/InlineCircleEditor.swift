@@ -35,7 +35,7 @@ struct InlineCircleEditor: View {
             } else if let signal=store.selectedSignal,case .signal = store.hierarchySelection {
                 ScrollView { VStack(alignment:.leading,spacing:16) {
                     InspectorView(store:store).signal(signal)
-                    if let track=store.selectedTrack { TrackInspector(store:store,track:track) }
+                    if let track=store.selectedTrack { TrackLevelEditor(store:store,track:track) }
                     ForEach(store.project.signal.edges.filter{$0.from==signal.id}) { edge in
                         HStack { Text(store.project.signal.nodes.first{$0.id==edge.to}?.name ?? "출력"); Spacer(); Button("연결 해제"){store.disconnectHierarchy(.signal(signal.id),edgeID:edge.id)} }
                     }
@@ -65,8 +65,10 @@ struct InlineCircleEditor: View {
                             Button("트랙 바운스"){store.bounceTrack()}.disabled(store.preparing || store.selectedTrack == nil)
                         }.frame(maxWidth:660,alignment:.leading)
                     }.padding(.trailing, 8) }
-                case .instrument, .output:
-                    if let track = store.selectedTrack { ScrollView { TrackInspector(store: store, track: track) } }
+                case .instrument:
+                    if let track = store.selectedTrack { ScrollView { TrackInspector(store: store, track: track,showsTrackLevel:false) } }
+                case .output:
+                    if let track = store.selectedTrack { ScrollView { OutputEditor(store:store,track:track) } }
                 case .mix: signalControls(node); Spacer()
                 case .router(let router): AudioRouterEditor(store: store, router: router); signalControls(node); Spacer()
                 case .rhythmAudio: Text("리듬 패턴의 오디오 클립"); AudioLane(store: store); Spacer()
