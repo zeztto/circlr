@@ -62,3 +62,6 @@ Python 표준 라이브러리만 사용하는 로컬 stdio MCP 서버다. 음악
 `apply`의 기존 `set_node.startBeat`로 MIDI·오디오 소스 시작을 바꾼다. `reorder_section`은 `arrangementID`, `useID`, 선택적인 `to`(이 섹션 앞에 배치)를 받는다. `to`를 생략하면 맨 끝이다. 분기 경로와 손실되는 전환은 거부한다. `set_clip`은 `useID`, `laneID`, `clipID`와 `sourceStart`, `duration`, `startBeat`, `gain`을 받으며 원본 파일 길이를 넘는 trim은 거부한다.
 
 `focus.compositionID`로 곡·악장 서클을 보여줄 수 있다. 편집을 위해 focus할 필요는 없다. `mcp/orbit_native.py`는 별도 QA socket과 `qa/generated/0.10-` 문서에서만 실행되는 실제 명령 검증이다.
+
+
+0.20의 `circlr_record`는 현재 선택한 섹션·트랙의 실제 오디오 녹음을 시작한다. 사용자가 입력 녹음을 요청했을 때만 사용하며 `projectID`·`expectedRevision`이 필요하다. macOS 마이크 권한 선택은 사용자에게 맡긴다. snapshot.recording의 phase/busy/seconds/peak/format/message/recoveryPath로 실제 상태를 확인한다. STOP 뒤에도 파일 마무리는 비동기이므로 busy=false와 실제 새 take를 확인하기 전 재시도하지 않는다. 장치의 첫 두 채널(모노는 1채널)을 기록하며, 반주 transport 동기·latency 보정·장치 채널 선택은 후속 범위다. read-only 전문 역할에는 이 도구가 노출되지 않는다. 전체 writable catalog는 15개다.

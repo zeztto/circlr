@@ -57,9 +57,10 @@ struct StudioRouteButtons:View {
     func displayName(_ role:String)->String {role=="악기" ? "음색":role=="이펙터" ? "이펙트":role}
     func title(_ role:String,selected:Bool)->some View {
         Text(displayName(role)).font(.system(size:12,weight:selected ? .semibold:.medium))
-            .foregroundStyle(selected ? StudioTheme.canvas:StudioTheme.text)
+            .foregroundStyle(selected ? StudioTheme.accent:StudioTheme.text)
             .padding(.horizontal,9).padding(.vertical,7)
-            .background(selected ? StudioTheme.accent:StudioTheme.raised,in:RoundedRectangle(cornerRadius:5))
+            .background(StudioTheme.raised,in:RoundedRectangle(cornerRadius:5))
+            .accessibilityAddTraits(selected ? .isSelected:[])
     }
 }
 struct StudioRouteBar:View {

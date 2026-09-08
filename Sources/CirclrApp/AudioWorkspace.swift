@@ -50,7 +50,6 @@ struct AudioWorkspaceView:View {
             HStack {
                 Text(asset.name).foregroundStyle(StudioTheme.secondary).lineLimit(1)
                 Spacer()
-                Button(store.audioRecording ? "녹음 정지":store.audioRecordPending ? "녹음 시작 취소":"오디오 녹음"){store.startAudioRecording()}.disabled(store.midiRecording)
                 if store.selectedMusic?.bounce != nil {Button("원본 복원"){store.restoreBounce()}}
             }
             GeometryReader { geometry in

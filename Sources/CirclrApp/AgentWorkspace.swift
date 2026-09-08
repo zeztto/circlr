@@ -43,7 +43,7 @@ extension AppStore {
          "arrangements":project.arrangements.map{["id":$0.id,"name":$0.name,"uses":$0.uses.map{["id":$0.id,"sectionID":$0.sectionID,"name":$0.name]}]},
          "selection":json(hierarchySelection),"selectedNoteIDs":json(selectedMIDIIDs.sorted()),
          "automationEditor":["visible":automationVisible,"parameter":automationParameter.rawValue,"selectedPointID":json(selectedAutomationPointID),"displayBeats":automationBeats],
-         "recording":["midi":midiRecording,"audio":audioRecording,"permissionPending":audioRecordPending],"job":json(agentJob),"sequence":activitySequence,
+         "recording":["midi":midiRecording,"audio":audioRecording,"permissionPending":audioRecordPending && audioCapturePhase != .starting,"format":json(audioInputFormat),"phase":audioRecordPending && !recorder.busy ? "authorizing":audioCapturePhase.rawValue,"busy":audioRecordingBusy,"seconds":audioInputSeconds,"peak":audioInputLevel,"message":audioCaptureMessage,"recoveryPath":audioRecoveryURL?.path ?? ""],"job":json(agentJob),"sequence":activitySequence,
          "playback":capturePlaybackVisualization?() ?? ["playing":playback.playing,"seconds":playback.seconds],
          "view":["zoom":hierarchyZoom,"layout":project.usesOrbits ? "orbit":"freeform","consoleOpen":consoleOpen,"consoleBounds":[consoleBounds.minX,consoleBounds.minY,consoleBounds.width,consoleBounds.height]],
          "runtime":["version":Bundle.main.object(forInfoDictionaryKey:"CFBundleShortVersionString") as? String ?? "development","bundleID":Bundle.main.bundleIdentifier ?? "","windows":NSApplication.shared.windows.filter{$0.identifier?.rawValue=="main"}.map{["visible":$0.isVisible,"minimized":$0.isMiniaturized]}]]
@@ -101,6 +101,9 @@ extension AppStore {
         guard !midiRecording,!audioRecording else {throw CirclrError("녹음 중에는 에이전트 편집을 적용하지 않습니다")}
         recordActivity(source,"실행 · \(request.method)")
         switch request.method {
+        case "record":
+            guard audioRecordingAvailable,!audioRecordingBusy,!preparing else{throw CirclrError("녹음할 서클·트랙과 장치 정리 상태를 확인하세요")}
+            startAudioRecording();return agentState()
         case "apply":
             let candidate=try AgentProjectEditing.apply(request,to:project)
             mutate("에이전트 편집 · \(args.operations?.count ?? 0)개"){$0=candidate}

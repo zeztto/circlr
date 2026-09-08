@@ -22,6 +22,7 @@ import OSLog
                 Button("작업 이동…"){store.showNavigation()}.keyboardShortcut("j")
                 Button("이 트랙의 MIDI·오디오"){store.openTrackComponent(0)}.keyboardShortcut("1").disabled(store.currentStudioTrack==nil)
                 Button("이 트랙의 음색"){store.openTrackComponent(1)}.keyboardShortcut("2").disabled(store.currentStudioTrack==nil)
+                Button("오디오 녹음 시작 / 정지"){store.startAudioRecording()}.keyboardShortcut("r",modifiers:[.command,.option]).disabled(store.audioRecordingLocked || (!store.audioRecordingAvailable && !store.audioRecordingBusy))
                 Button("MIDI 파일 가져오기"){store.chooseMIDIImport()}.keyboardShortcut("i",modifiers:[.command,.option]).disabled(store.selectedUse == nil)
                 Button("MIDI 스텝 편집"){store.openStepEditor()}.keyboardShortcut("4").disabled(store.currentStudioTrack?.destinations.contains{$0.role=="MIDI"} != true)
                 Button("볼륨·팬 오토메이션"){store.showAutomation()}.keyboardShortcut("5").disabled(store.selectedMusic==nil)
@@ -39,7 +40,24 @@ import OSLog
 @MainActor final class AppDelegate:NSObject,NSApplicationDelegate {
     weak var store:AppStore?
     weak var mainWindow:NSWindow?
-    func applicationShouldTerminate(_ sender:NSApplication)->NSApplication.TerminateReply {guard let store else{return .terminateNow};if !store.confirmDiscard(){return .terminateCancel};store.stop();if let finalizing=store.movieFinalizing {Task{@MainActor in await finalizing.value;sender.reply(toApplicationShouldTerminate:true)};return .terminateLater};return .terminateNow}
+    func applicationShouldTerminate(_ sender:NSApplication)->NSApplication.TerminateReply {
+        guard let store else{return .terminateNow}
+        if store.audioRecordingBusy || store.midiRecording {
+            store.stop()
+            Task{@MainActor in
+                let deadline=ProcessInfo.processInfo.systemUptime+10
+                while store.recorder.busy && ProcessInfo.processInfo.systemUptime<deadline {try? await Task.sleep(for:.milliseconds(40))}
+                guard !store.recorder.busy else{store.status="녹음 장치가 응답하면 파일 마무리 후 다시 종료하세요";sender.reply(toApplicationShouldTerminate:false);return}
+                guard store.confirmDiscard() else{sender.reply(toApplicationShouldTerminate:false);return}
+                if let finalizing=store.movieFinalizing {await finalizing.value}
+                sender.reply(toApplicationShouldTerminate:true)
+            }
+            return .terminateLater
+        }
+        if !store.confirmDiscard(){return .terminateCancel};store.stop()
+        if let finalizing=store.movieFinalizing {Task{@MainActor in await finalizing.value;sender.reply(toApplicationShouldTerminate:true)};return .terminateLater}
+        return .terminateNow
+    }
     func applicationShouldTerminateAfterLastWindowClosed(_ sender:NSApplication)->Bool {false}
     func applicationShouldHandleReopen(_ sender:NSApplication,hasVisibleWindows:Bool)->Bool {
         guard let mainWindow else{return true}

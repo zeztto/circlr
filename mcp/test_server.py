@@ -61,7 +61,7 @@ class MCPTests(unittest.TestCase):
         self.assertEqual(len(replies), 3)
         self.assertEqual(replies[0]["result"]["protocolVersion"], "2025-11-25")
         tools = replies[1]["result"]["tools"]
-        self.assertEqual(len(tools), 14)
+        self.assertEqual(len(tools), 15)
         self.assertTrue(all("method" not in item for item in tools))
         self.assertTrue(replies[2]["result"]["isError"])
 
@@ -76,6 +76,14 @@ class MCPTests(unittest.TestCase):
         ]:
             with self.assertRaises(ValueError):
                 server.validate(arguments, apply)
+
+    def test_record_requires_revision_and_rejects_arbitrary_destination(self):
+        with patch.object(server,'rpc',return_value={'ok':True,'result':{'recording':{'permissionPending':True}}}) as ipc:
+            for args in [{},{'projectID':'p','expectedRevision':True},{'projectID':'p','expectedRevision':0,'path':'/tmp/record.wav'}]:
+                with self.assertRaises(ValueError):server.call_tool('/qa.sock','circlr_record',args)
+            ipc.assert_not_called()
+            server.call_tool('/qa.sock','circlr_record',{'projectID':'p','expectedRevision':0})
+            self.assertEqual(ipc.call_args.args[1]['method'],'record')
 
     def test_finite_edit_packet_is_accepted(self):
         server.validate({"projectID": "p", "expectedRevision": 2, "operations": [{"kind": "set_notes", "useID": "u", "laneID": "l", "notes": [{"beat": 0, "length": 1, "pitch": 66, "velocity": 90}]}]}, server.BY_NAME["circlr_apply"]["inputSchema"])

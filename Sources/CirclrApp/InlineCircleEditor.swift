@@ -13,6 +13,7 @@ struct InlineCircleEditor: View {
                 TextField("서클 이름", text: Binding(get: { store.selectedCircle?.title ?? "" }, set: { store.renameHierarchy($0) }))
                     .textFieldStyle(.plain).font(.system(size: 17, weight: .semibold)).focused($nameFocused).disabled(store.midiImportDraft != nil)
                 Spacer()
+                if store.selectedUse != nil {AudioRecordButton(store:store)}
                 if store.selectedMusic != nil {
                     Button(store.automationVisible ? "편집으로":"오토메이션") {if store.automationVisible {store.automationOpen=false}else{store.showAutomation()}}.help("이 서클의 볼륨·팬 곡선 · ⌘5")
                     Button { store.hierarchySettingsOpen.toggle() } label: { Image(systemName: "slider.horizontal.3") }.help("템포·박자·스케일·반복 설정")
@@ -20,6 +21,7 @@ struct InlineCircleEditor: View {
                 Button { store.hierarchySettingsOpen = false; store.hierarchyParent() } label: { Image(systemName: "arrow.up.left.and.arrow.down.right") }.help("상위 서클로 축소 · Esc")
             }
             if store.selectedMusic != nil {StudioRouteBar(store:store)}
+            if store.audioRecordingStatusVisible {AudioRecordingStatusView(store:store)}
             if let draft=store.midiImportDraft {MIDIImportView(store:store,draft:draft)} else if let id=store.hierarchyTransitionID,let edge=store.project.active.edges.first(where:{$0.id==id}) {
                 HStack{Text("섹션 사이 전환");Spacer();Button("서클 설정"){store.hierarchyTransitionID=nil}}
                 ScrollView{VStack(alignment:.leading,spacing:18){InspectorView(store:store).transition(edge)}}

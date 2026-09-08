@@ -150,7 +150,7 @@ struct TransportControls:View {
     @ObservedObject var meter:TransportMeter
     var body:some View {
         HStack(spacing:12) {
-            Button {store.play()} label:{Image(systemName:meter.playing || store.preparing || store.midiRecording || store.audioRecording || store.audioRecordPending ? "stop.fill":"play.fill").font(.system(size:13)).foregroundStyle(StudioTheme.accent).frame(width:24,height:26)}
+            Button {store.play()} label:{Image(systemName:meter.playing || store.preparing || store.midiRecording || store.audioRecording || store.audioRecordingBusy ? "stop.fill":"play.fill").font(.system(size:13)).foregroundStyle(StudioTheme.accent).frame(width:24,height:26)}
                 .background(StudioTheme.raised,in:Circle()).help("재생 / 정지 · Space")
             Text(time).font(.system(size:13,design:.monospaced)).foregroundStyle(StudioTheme.text).frame(width:65,alignment:.leading)
             Button { store.playbackFollow = store.playbackFollow.toggled() } label: {
@@ -161,10 +161,11 @@ struct TransportControls:View {
             .accessibilityLabel(store.playbackFollow == .suspended ? "재생 팔로우 재개" : "재생 팔로우")
             .accessibilityValue(store.playbackFollow == .following ? "켜짐" : store.playbackFollow == .off ? "꺼짐" : "일시 중지")
             .help("현재 섹션을 따라갑니다. 화면을 직접 조작하면 멈춥니다")
-            if store.midiRecording || store.audioRecording || store.audioRecordPending {Button(store.audioRecordPending ? "녹음 시작 취소":"녹음 정지"){store.stop()}.foregroundStyle(.red)}
+            if store.audioRecordingBusy {Button(store.audioRecordTitle){store.stop()}.disabled(store.audioRecordingLocked).foregroundStyle(.red)}
+            else if store.midiRecording {Button("녹음 정지"){store.stop()}.foregroundStyle(.red)}
         }
     }
-    var time:String {let t=max(0,meter.seconds);return String(format:"%02d:%04.1f",Int(t)/60,t.truncatingRemainder(dividingBy:60))}
+    var time:String {let t=max(0,store.audioRecording ? store.audioInputSeconds:meter.seconds);return String(format:"%02d:%04.1f",Int(t)/60,t.truncatingRemainder(dividingBy:60))}
 }
 struct CanvasButtonStyle:ButtonStyle {
     func makeBody(configuration:Configuration)->some View {StudioButtonBody(configuration:configuration)}
