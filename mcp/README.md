@@ -27,6 +27,8 @@ Python 표준 라이브러리만 사용하는 로컬 stdio MCP 서버다. 음악
 
 0.17의 MIDI 파일 가져오기는 GUI의 **⌥⌘I**에서 제공한다. 파일 읽기를 위한 MCP operation은 아직 없다. snapshot의 `selectedNoteIDs`와 `recording`(`midi`·`audio`·`permissionPending`)은 읽기 전용 상태다. 녹음 권한 대기는 `circlr_stop`으로 취소할 수 있다.
 
+0.18의 `edit_audio`는 실제 `useID`·오디오 `nodeID`와 `edit`를 받는다. `split`에는 선택 구간 시작부터의 원본 초 `sourceOffset`, `fade`에는 원본 초 `fadeIn`·`fadeOut`이 필요하다. `duplicate`의 로컬 4분음표 박 `beatOffset`은 선택 항목이며 생략하면 마지막 반복 뒤에 배치한다. `delete`는 해당 서클과 연결을 지우고 asset을 보존한다. 이후 inspect로 새 clip/node ID를 확인한다. 분할 이전의 fade·resample 기준·반복 주기를 보존하며 조각의 추가 fade는 기존 envelope에 곱해진다. 내부 `renderWindow`와 바운스 `familyID`를 직접 쓰지 않는다. [정확한 시간 의미와 제한](../docs/32-audio-editing.md).
+
 `set_instrument`는 `synthVoice` 정수로 내장 음색을 선택할 수 있다: 0 pad, 1 bass, 2 keys, 3 supersaw, 4 pluck, 5 lead, 6 electricPiano, 7 organ, 8 brass, 9 strings. `add_effect`는 오디오 `from` 서클 뒤에 이펙터를 삽입한다. `connect`는 MIDI/audio 연결, `connect_sections`는 송폼 재생 연결이다. 로컬 tempo/meter 등은 `set_node`/`set_section`의 `settings`로 지정한다.
 
 창을 숨기고 작업하려면 `circlr_focus`에 `minimized: true`, 다시 표시하려면 `minimized: false`를 보낸다. 이 경우에는 창 상태만 바뀐다. `snapshot.runtime.windows`로 실제 최소화 상태를 확인할 수 있다.

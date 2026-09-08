@@ -6,6 +6,7 @@ extension AppStore {
     var midiEditorHasFocus:Bool {let responder=NSApp.keyWindow?.firstResponder;return responder is OrbitMIDIView || responder is PianoRollView || responder is StepGridView}
     func duplicateFocusedContent() {
         if midiEditorHasFocus {duplicateMIDINotes()}
+        else if audioCommandAvailable {duplicateAudio()}
         else if !(NSApp.keyWindow?.firstResponder is NSTextView) {reuse()}
     }
 

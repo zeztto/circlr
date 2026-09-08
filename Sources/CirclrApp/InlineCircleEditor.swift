@@ -112,22 +112,11 @@ struct InlineCircleEditor: View {
     @ViewBuilder private var audio: some View {
         if case .audio(_,let clipID) = store.selectedMusic?.content,
            let clip = store.currentLane?.audio.first(where: { $0.id == clipID }), let asset=store.project.assets.first(where: { $0.id == clip.assetID }) {
-            VStack(alignment: .leading, spacing: 14) {
-                HStack{Button(store.audioRecording ? "녹음 정지" : store.audioRecordPending ? "녹음 시작 취소":"오디오 녹음"){store.startAudioRecording()}.disabled(store.midiRecording);Text(asset.name).foregroundStyle(StudioTheme.secondary).lineLimit(1);Spacer();if store.selectedMusic?.bounce != nil {Button("원본 복원"){store.restoreBounce()}}}
-                if store.project.usesOrbits {OrbitAudioEditor(store:store,clip:clip,asset:asset).frame(minHeight:120,maxHeight:.infinity)}
-                else {AudioTrimView(store: store, clip: clip, asset: asset).frame(minHeight: 120)}
-                HStack { ValueField(title: "시작 박", value: clipBinding(clip, \.beat), range: 0...131072); ValueField(title: "원본 시작 초", value: clipBinding(clip, \.sourceStart), range: 0...max(0,asset.duration-clip.duration)) }
-                HStack { ValueField(title: "길이 초", value: clipBinding(clip, \.duration), range: 0.01...max(0.01,asset.duration-clip.sourceStart)); ValueField(title: "볼륨", value: clipBinding(clip, \.gain), range: 0...4) }
-                HStack {
-                    Toggle("템포 추종", isOn: Binding(get: { clip.followsTempo }, set: { value in editClip(clip) { $0.followsTempo=value } }))
-                    ValueField(title: "원본 BPM", value: clipBinding(clip, \.sourceBPM), range: 1...999)
-                }
-                Text("파형의 양 끝을 드래그해 사용할 구간을 정하세요").font(.system(size:10)).foregroundStyle(StudioTheme.secondary)
-            }.onAppear { store.requestWaveform(asset) }
+            AudioWorkspaceView(store:store,clip:clip,asset:asset)
         }
     }
     func editClip(_ clip: AudioClip, _ edit: (inout AudioClip) -> Void) {
-        guard var lane = store.currentLane, let i=lane.audio.firstIndex(where:{$0.id==clip.id}) else{return};edit(&lane.audio[i]);store.setLane(lane)
+        store.editAudioClip(clip,edit)
     }
     func clipBinding(_ clip: AudioClip, _ key: WritableKeyPath<AudioClip, Double>) -> Binding<Double> { Binding(get: { clip[keyPath:key] }, set: { value in editClip(clip) { $0[keyPath:key]=value } }) }
     @ViewBuilder func signalControls(_ node: MusicCircle) -> some View {

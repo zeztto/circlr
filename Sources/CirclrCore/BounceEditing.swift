@@ -6,6 +6,7 @@ public struct BounceSource: Codable, Equatable {
     public var sourceRevision:Int
     public var bodySeconds:Double
     public var tailSeconds:Double
+    public var familyID:ID?
 }
 public enum BounceEditing {
     /// Captures a track's section output before track gain and global routing.
@@ -33,11 +34,12 @@ public enum BounceEditing {
     public static func restore(nodeID:ID,useID:ID,in project:inout Project) throws {
         var candidate=project
         guard let use=candidate.active.uses.first(where:{$0.id==useID}),let section=candidate.sections.first(where:{$0.id==use.sectionID}),var graph=try SectionGraphEditing.effective(section:section,use:use),let node=graph.nodes.first(where:{$0.id==nodeID}),let source=node.bounce else {throw CirclrError("바운스 원본을 찾을 수 없습니다")}
-        guard source.replacedInputs.allSatisfy({edge in graph.nodes.contains{$0.id==edge.from} && graph.nodes.contains{$0.id==edge.to}}),graph.edges.filter({$0.to==source.outputNodeID}).allSatisfy({$0.from==nodeID}) else {throw CirclrError("바운스 이후 출력 연결이 변경되었습니다. 연결을 정리하거나 Undo로 복원하세요")}
+        let family=Set(graph.nodes.filter{n in n.id==nodeID || (source.familyID != nil && n.bounce?.familyID==source.familyID && n.bounce?.outputNodeID==source.outputNodeID && n.bounce?.replacedInputs==source.replacedInputs)}.map(\.id))
+        guard source.replacedInputs.allSatisfy({edge in graph.nodes.contains{$0.id==edge.from} && graph.nodes.contains{$0.id==edge.to}}),graph.edges.filter({$0.to==source.outputNodeID}).allSatisfy({family.contains($0.from)}) else {throw CirclrError("바운스 이후 출력 연결이 변경되었습니다. 연결을 정리하거나 Undo로 복원하세요")}
         graph.edges.removeAll{$0.to==source.outputNodeID}
         graph.edges.append(contentsOf:source.replacedInputs)
         // Keep the rendered audio circle as a disconnected, reusable archive.
-        if let i=graph.nodes.firstIndex(where:{$0.id==nodeID}) {graph.nodes[i].muted=true;graph.nodes[i].bounce=nil}
+        for i in graph.nodes.indices where family.contains(graph.nodes[i].id) {graph.nodes[i].muted=true;graph.nodes[i].bounce=nil}
         try SectionGraphEditing.set(graph,useID:useID,original:false,in:&candidate)
         try ProjectStore.validateStructure(candidate);project=candidate
     }

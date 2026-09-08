@@ -22,7 +22,7 @@ REVISION = {"projectID": STRING, "expectedRevision": {"type": "integer", "minimu
 SCOPE = {"arrangementID": STRING, "useID": STRING}
 NOTE = schema({"id": STRING, "beat": {"type": "number", "minimum": 0}, "length": {"type": "number", "exclusiveMinimum": 0}, "pitch": {"type": "integer", "minimum": 0, "maximum": 127}, "velocity": {"type": "integer", "minimum": 1, "maximum": 127}}, ["beat", "length", "pitch", "velocity"])
 OPERATION = schema({
-    "kind": {"type": "string", "enum": ["set_global", "rename_project", "set_instrument", "set_track", "add_section", "set_section", "connect_sections", "add_midi", "set_notes", "generate_midi", "set_node", "set_effect", "add_effect", "connect", "reorder_section", "set_clip", "set_step", "edit_notes"]},
+    "kind": {"type": "string", "enum": ["set_global", "rename_project", "set_instrument", "set_track", "add_section", "set_section", "connect_sections", "add_midi", "set_notes", "generate_midi", "set_node", "set_effect", "add_effect", "connect", "reorder_section", "set_clip", "set_step", "edit_notes", "edit_audio"]},
     **SCOPE, "clipID": STRING, "sourceStart": {"type": "number", "minimum": 0}, "duration": {"type": "number", "exclusiveMinimum": 0}, "laneID": STRING, "nodeID": STRING, "trackID": STRING, "name": STRING,
     "stepIndex": {"type": "integer", "minimum": 0, "description": "Zero-based step in the MIDI circle, not within the visible page."},
     "subdivisions": {"type": "integer", "enum": [1, 2, 3, 4, 6, 8], "description": "Steps per quarter note; default 4. Does not quantize existing notes."},
@@ -31,7 +31,9 @@ OPERATION = schema({
     "gate": {"type": "number", "minimum": 0.01, "maximum": 16, "description": "Note length in steps. Omit to preserve an existing note; new notes default to 0.9."},
     "enabled": {"type": "boolean", "description": "Set step on/off; repeated enabled=true never duplicates existing onsets."},
     "noteIDs": {"type": "array", "items": STRING, "minItems": 1, "maxItems": 100000},
-    "edit": {"type": "string", "enum": ["transpose", "move", "duplicate", "quantize", "velocity", "delete"]},
+    "edit": {"type": "string", "enum": ["transpose", "move", "duplicate", "quantize", "velocity", "delete", "split", "fade"]},
+    "sourceOffset": {"type": "number", "exclusiveMinimum": 0, "description": "Split offset in source seconds from the selected clip start."},
+    "fadeIn": {"type": "number", "minimum": 0}, "fadeOut": {"type": "number", "minimum": 0},
     "semitones": {"type": "integer", "minimum": -127, "maximum": 127},
     "beatOffset": {"type": "number", "minimum": -131072, "maximum": 131072},
     "strength": {"type": "number", "minimum": 0, "maximum": 1},
@@ -169,7 +171,7 @@ def serve(path, read_only=False):
             if method == "initialize":
                 negotiated = True
                 requested = request.get("params", {}).get("protocolVersion")
-                result = {"protocolVersion": requested if requested in VERSIONS else "2025-11-25", "capabilities": {"tools": {"listChanged": False}}, "serverInfo": {"name": "circlr", "version": "0.17.0"}, "instructions": ("Read-only specialist session. Return edit proposals to the coordinator. " if read_only else "") + "Read snapshot before mutations. Use stable IDs and expectedRevision. Long jobs return immediately; monitor with circlr_job/events. CUA is unnecessary."}
+                result = {"protocolVersion": requested if requested in VERSIONS else "2025-11-25", "capabilities": {"tools": {"listChanged": False}}, "serverInfo": {"name": "circlr", "version": "0.18.0"}, "instructions": ("Read-only specialist session. Return edit proposals to the coordinator. " if read_only else "") + "Read snapshot before mutations. Use stable IDs and expectedRevision. Long jobs return immediately; monitor with circlr_job/events. CUA is unnecessary."}
             elif method == "ping":
                 result = {}
             elif not initialized:

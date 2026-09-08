@@ -2,6 +2,14 @@
 
 0.1–0.3은 설계 문서 revision이며, 0.4.0부터 로컬 실행 프로토타입을 포함한다.
 
+## 0.18.0 — 2026-09-08 · 오디오 분할·복제·페이드
+
+- 오디오와 바운스 서클의 원본을 보존하는 split/duplicate/fade/delete를 Core·GUI·MCP에 연결했다. 분할 이전의 resample/stretch 기준·envelope·반복 주기·출력/sidechain을 보존한다.
+- 파형 클릭 커서, ⌘T 분할·⌘D 복제와 직접 fade 필드를 같은 캔버스에 배치했다. 궤도와 자유 배치 파형 모두 지원한다. 텍스트 입력 시점의 단축키 충돌과 복제 조각 뒤의 불필요한 간격을 수정했다.
+- 바운스 파생 서클을 family로 묶어 원본 복원 시 함께 archive한다. source 범위·fade·frame 변환을 검증하고 잘못된 batch·stale revision을 거부한다. 동일 fade 값은 Undo를 추가하지 않는다.
+- Swift 138개, Python 21개 통과. Native 분할·복제 PCM 보존, fade 구간 감쇠·원본 hash 보존, 연속 키보드·Undo·저장/재열기를 확인했다. [0.18 검증](qa/0.18-review.md) · [조작과 데이터 의미](docs/32-audio-editing.md).
+- 분할 조각 trim은 기존 처리 window 안에서 지원한다. 실제 장치 녹음·gain/pan automation·연속 실시간 엔진은 남은 개발 범위다.
+
 ## 0.17.0 — 2026-09-08 · MIDI 가져오기·일괄 편집
 
 - ⌥⌘I로 MIDI format 0/1 노트를 읽고, 같은 캔버스에서 트랙을 선택해 새 MIDI 서클로 가져온다. 필요한 이번 섹션의 길이만 늘리며 기존 노트와 트랙을 보존한다. 파일 tempo/meter/CC는 적용하지 않음을 사전에 안내한다.

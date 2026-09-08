@@ -62,6 +62,9 @@ public struct AgentOperation:Codable {
     public var clipID:ID?
     public var sourceStart:Double?
     public var duration:Double?
+    public var sourceOffset:Double?
+    public var fadeIn:Double?
+    public var fadeOut:Double?
     public init(_ kind:String){self.kind=kind}
 }
 
@@ -93,6 +96,17 @@ public enum AgentProjectEditing {
             case "reorder_section":
                 guard let id=op.useID else {throw CirclrError("useID가 필요합니다")}
                 try OrbitEditing.reorderSection(.section(arrangementID:p.activeArrangementID,useID:id),before:op.to,in:&p)
+            case "edit_audio":
+                guard let id=op.useID,let nodeID=op.nodeID else{throw CirclrError("useID와 audio nodeID가 필요합니다")}
+                let change:AudioEditing.Change
+                switch op.edit {
+                case "split":guard let offset=op.sourceOffset else{throw CirclrError("원본 초 단위 sourceOffset이 필요합니다")};change = .split(sourceOffset:offset)
+                case "duplicate":change = .duplicate(beatOffset:op.beatOffset)
+                case "fade":guard let input=op.fadeIn,let output=op.fadeOut else{throw CirclrError("원본 초 단위 fadeIn과 fadeOut이 필요합니다")};change = .fade(input:input,output:output)
+                case "delete":change = .delete
+                default:throw CirclrError("edit: split/duplicate/fade/delete를 선택하세요")
+                }
+                _=try AudioEditing.apply(change,nodeID:nodeID,useID:id,in:&p)
             case "set_clip":
                 guard let id=op.useID,let use=p.active.uses.first(where:{$0.id==id}),let section=p.sections.first(where:{$0.id==use.sectionID}),
                       let laneID=op.laneID,var lane=try ArrangementCompiler.effectiveLanes(section:section,use:use).first(where:{$0.id==laneID}),
@@ -103,6 +117,7 @@ public enum AgentProjectEditing {
                 if let gain=op.gain {lane.audio[i].gain=gain}
                 let clip=lane.audio[i]
                 guard let asset=p.assets.first(where:{$0.id==clip.assetID}),clip.sourceStart+clip.duration<=asset.duration+1/max(1,asset.sampleRate) else {throw CirclrError("오디오 구간이 원본 파일 길이를 넘습니다")}
+                try clip.validateEditing(asset:asset)
                 try ProjectEditing.setLane(lane,for:id,original:false,in:&p)
             case "set_section":
                 guard let id=op.useID,let i=p.arrangements[p.activeIndex].uses.firstIndex(where:{$0.id==id}) else {throw CirclrError("useID가 필요합니다")}

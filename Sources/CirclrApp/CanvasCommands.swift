@@ -54,6 +54,11 @@ extension AppStore {
             }
         }
         if selectedUse != nil {
+            if currentAudioClip != nil {
+                add("audio-split","커서에서 오디오 분할","⌘T"){[weak self] in self?.splitAudio()}
+                add("audio-duplicate","오디오 구간 뒤에 복제","⌘D"){[weak self] in self?.duplicateAudio()}
+                add("audio-delete","선택 오디오 삭제"){[weak self] in self?.applyAudioEdit(.delete,label:"오디오 삭제")}
+            }
             add("reuse","섹션 다시 사용","⌘D"){[weak self] in self?.reuse()}
             add("detach","공유 원본에서 독립 섹션으로 분리"){[weak self] in self?.detach()}
             add("section-play","선택 섹션만 재생"){[weak self] in self?.play(onlySelection:true)}
@@ -269,6 +274,7 @@ struct KeyboardHelpView:View {
         ("MIDI · Tab / Return","노트 선택 / 현재 위치에 노트 입력"),("MIDI · ← → / ↑ ↓","격자 단위 시간 이동 / 반음 이동"),
         ("MIDI · ⇧← → / ⇧↑ ↓","노트 길이 변경 / 옥타브 이동"),("MIDI · ⌥↑ ↓","세기 5단계 변경"),
         ("오디오 · ← → / ⌥← →","원본 시작 / 끝 0.01초 조절 · ⇧ 0.1초"),("설정 · Tab / ⇧Tab","다음·이전 입력 항목 · Return 적용"),
+        ("오디오 · ⌘T / ⌘D","커서에서 분할 / 구간 뒤에 복제"),("오디오 · Delete","선택 오디오 삭제"),
         ("⌘W / ⌘Q","최소화 / 앱 종료")
     ]
     var body:some View {

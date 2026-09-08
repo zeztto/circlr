@@ -79,6 +79,9 @@ public struct AudioClip: Codable, Equatable, Identifiable {
     public var followsTempo: Bool = false
     public var sourceBPM: Double = 120
     public var preservesTail: Bool?
+    public var fadeIn: Double?
+    public var fadeOut: Double?
+    public var renderWindow: AudioRenderWindow?
     public init(assetID: ID, duration: Double, beat: Double = 0) { self.assetID = assetID; self.duration = duration; self.beat = beat }
 }
 public struct Lane: Codable, Equatable, Identifiable {

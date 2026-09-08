@@ -114,6 +114,15 @@ class MCPTests(unittest.TestCase):
             with self.subTest(key=key,value=value),self.assertRaises(ValueError):
                 server.validate({**packet,'operations':[{**op,key:value}]},spec)
 
+    def test_audio_edit_numbers_are_validated(self):
+        spec=server.BY_NAME['circlr_apply']['inputSchema']
+        op={'kind':'edit_audio','useID':'u','nodeID':'n','edit':'split','sourceOffset':0.5}
+        packet={'projectID':'p','expectedRevision':0,'operations':[op]}
+        server.validate(packet,spec)
+        for key,value in [('sourceOffset',0),('sourceOffset',True),('sourceOffset',float('nan')),('fadeIn',-1),('fadeOut',False)]:
+            with self.subTest(key=key,value=value),self.assertRaises(ValueError):
+                server.validate({**packet,'operations':[{**op,key:value}]},spec)
+
 
 if __name__ == "__main__":
     unittest.main()

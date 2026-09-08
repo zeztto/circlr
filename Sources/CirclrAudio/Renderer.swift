@@ -147,14 +147,10 @@ public enum ArrangementRenderer {
         guard FileManager.default.fileExists(atPath:url.path) else { throw CirclrError("\(asset.name)을 다시 연결하세요") }
         let remaining = max(0,clock.seconds-clock.seconds(at:clip.beat))
         if remaining == 0 { return PCM(frames:0) }
-        let sourceDuration = min(clip.duration,remaining*(clip.followsTempo ? clock.bpm(at:clip.beat)/clip.sourceBPM:1))
-        var part = try PCM.read(url,start:clip.sourceStart,duration:sourceDuration)
         if clip.followsTempo {
             guard clock.tempos.count == 1 else { throw CirclrError("Tempo map이 변하는 오디오 clip은 구간을 나누어 tempo 추종을 적용하세요") }
-            part = try AudioUnitHost.stretch(part,rate:clock.bpm(at:clip.beat)/clip.sourceBPM)
         }
-        let maximum = max(0,Int(((clock.seconds-clock.seconds(at:clip.beat))*PCM.rate).rounded()))
-        part = part.slice(0..<min(part.count,maximum)); part.fadeInOut(); return part
+        return try ClipAudioRenderer.read(clip,url:url,rate:clip.followsTempo ? clock.bpm(at:clip.beat)/clip.sourceBPM:1,remaining:remaining,legacyTail:false)
     }
     static func apply(_ input: PCM, effect: Effect, sidechain: PCM? = nil) async throws -> PCM {
         if effect.kind == .audioUnit {

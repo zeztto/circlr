@@ -96,24 +96,22 @@ public enum SectionGraphRenderer {
         let bpm = ownTempo ? tempo : clock.bpm(at: clip.beat + node.startBeat)
         let rate = clip.followsTempo ? bpm / clip.sourceBPM : 1
         guard rate.isFinite, rate > 0 else { throw CirclrError("오디오 tempo 추종 비율을 확인하세요") }
-        let period = clip.duration / rate
+        let period = clip.loopSourceDuration / rate
         guard period.isFinite, period > 0 else { throw CirclrError("오디오 서클의 길이를 확인하세요") }
         let url = try ProjectStore.assetURL(asset, root: root)
+        let timing=AudioClipTiming(node:node,context:context ?? project.global,clock:clock)
         for iteration in 0..<node.repeatCount {
             try Task.checkCancellation()
             let position: Double, end: Double
             if let length = node.lengthBeats {
                 guard clip.beat < length else { break }
-                position = time(Double(iteration)*length + clip.beat)
+                position = timing.position(clip,iteration:iteration)
                 end = min(clock.seconds, time(Double(iteration+1)*length))
             } else { position = start + Double(iteration)*period; end = clip.preservesTail == true ? output.duration : clock.seconds }
             guard position < clock.seconds else { break }
             let remaining = max(0, end-position)
             if remaining <= 0 { continue }
-            var part = try PCM.read(url, start: clip.sourceStart, duration: min(clip.duration, remaining * rate))
-            if clip.followsTempo { part = try AudioUnitHost.stretch(part, rate: rate) }
-            part = part.slice(0..<min(part.count, Int((remaining * PCM.rate).rounded())))
-            if clip.preservesTail != true {part.fadeInOut()}
+            let part=try ClipAudioRenderer.read(clip,url:url,rate:rate,remaining:remaining)
             output.mix(part, at: Int((position * PCM.rate).rounded()), gain: clip.gain)
         }
     }

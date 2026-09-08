@@ -67,13 +67,14 @@ public enum OrbitTiming {
                 let rate=clip.followsTempo ? (own ? context.tempo : clock.bpm(at:node.startBeat+clip.beat))/clip.sourceBPM : 1
                 guard rate.isFinite, rate>0 else {continue}
                 let duration=clip.duration/rate
+                let timing=AudioClipTiming(node:node,context:context,clock:clock)
                 for i in 0..<node.repeatCount {
                     if let length=node.lengthBeats {
                         guard clip.beat<length else {break}
-                        let start=time(Double(i)*length+clip.beat)
+                        let start=timing.position(clip,iteration:i)
                         append(start,min(start+duration,time(Double(i+1)*length)))
                     } else {
-                        let start=time(clip.beat)+Double(i)*duration
+                        let start=time(clip.beat)+Double(i)*clip.loopSourceDuration/rate
                         append(start,start+duration)
                     }
                 }

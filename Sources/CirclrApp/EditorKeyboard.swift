@@ -49,11 +49,11 @@ extension AppStore {
     }
     func handleAudioTrimKey(_ event:NSEvent,clipID:ID?)->Bool {
         guard !event.modifierFlags.contains(.command),!event.modifierFlags.contains(.control),[123,124].contains(event.keyCode) else{return false}
-        guard var lane=currentLane,let i=lane.audio.firstIndex(where:{$0.id==clipID}),let asset=project.assets.first(where:{$0.id==lane.audio[i].assetID}) else{return true}
+        guard let lane=currentLane,let i=lane.audio.firstIndex(where:{$0.id==clipID}),let asset=project.assets.first(where:{$0.id==lane.audio[i].assetID}) else{return true}
         var value=lane.audio[i]
         let delta=(event.keyCode==123 ? -1.0:1.0)*(event.modifierFlags.contains(.shift) ? 0.1:0.01)
         if event.modifierFlags.contains(.option){value.duration=max(0.01,min(asset.duration-value.sourceStart,value.duration+delta))}
         else{let end=value.sourceStart+value.duration;value.sourceStart=max(0,min(end-0.01,value.sourceStart+delta));value.duration=end-value.sourceStart}
-        lane.audio[i]=value;setLane(lane);return true
+        editAudioClip(lane.audio[i]){$0=value};return true
     }
 }

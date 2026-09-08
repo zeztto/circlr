@@ -250,6 +250,7 @@ public enum ArrangementCompiler {
             for note in lane.notes { try validateNote(note) }
             for clip in lane.audio {
                 guard project.assets.contains(where: { $0.id == clip.assetID }), clip.beat.isFinite, clip.beat >= 0, clip.duration.isFinite, clip.duration > 0, clip.sourceStart.isFinite, clip.sourceStart >= 0, clip.gain.isFinite, (0...4).contains(clip.gain), clip.sourceBPM.isFinite, clip.sourceBPM > 0 else { throw CirclrError("오디오 clip의 파일·위치·길이를 확인하세요") }
+                if let asset=project.assets.first(where:{$0.id==clip.assetID}) {try clip.validateEditing(asset:asset,checkBounds:false)}
             }
         }
     }

@@ -11,7 +11,7 @@
 | 스텝 | 0.16 구현·native 검증 완료 | 일반 Note/Lane을 그대로 편집하는 16-step page, 드럼/음정 row, 해상도, 세기/길이, 키보드, MCP, Undo/바운스 |
 | MIDI | 0.17 선택/quantize/transpose/복제·format 0/1 노트 import·native 검증 완료, 기존 MIDI 녹음/테이크 | CC/페달/피치 벤드·tempo map import, 다중 노트 드래그·고급 연주 편집 |
 | 오디오 녹음 | 입력 tap·ring buffer writer·CAF·테이크, 0.17 permission 대기/취소·문맥 guard | 장치 시작의 비동기화·실패 복구, 입력 상태, 실제 녹음→편집→bounce |
-| 오디오 편집 | import, source trim/시작/길이/gain/tempo follow, 바운스 원본 복원 | 분할·복제·fade·무음/삭제·정확한 source 범위·Undo/저장 |
+| 오디오 편집 | 0.18 split/duplicate/fade/mute/delete·MCP·native PCM·Undo/저장 검증 | 전체 source로 trim 재확장, crossfade·time warp·comping·window 처리 cache |
 | 오토메이션 | 데이터/편집/재생 경로 없음 | stable target ID, 점/곡선, gain/pan 우선, tempo/local clock/repeat, 실제 render/export·MCP·Undo |
 | 엔진 | prepared PCM, 일부 live synth/recording | 장치 lifecycle, transport/record sync, 이후 continuous render/PDC·plugin crash 격리 |
 
@@ -46,3 +46,16 @@
 - Git: main에 source/docs/tests/agent kit만 독립 commit. native 검사 통과 후 로컬 app 교체·이전 app 보관·private push. 미디어·QA 산출물·환경 설정은 기존 제외 정책을 유지한다.
 
 0.17 결과: Swift 129/Python 20 통과와 native 시나리오는 [검증 기록](../qa/0.17-review.md)에 있다. 다음 구현은 오디오 split/duplicate/fade의 source·clock 의미를 먼저 고정한 뒤 UI/MCP에 연결한다. 같은 원본 asset을 참조하고 trim/fade를 비파괴 데이터로 저장하며, 분할 전후 PCM 동등성과 변박·tempo-follow·repeat 경계를 검사한다. 작은 창의 궤도는 콘솔을 펼치면 음높이 행이 촘촘해지는 문제가 남아 있어 편집 확대·표시 음역 개선도 이어간다.
+
+## 0.18 실행 계약
+
+역할: development-lead → native Swift utility(Core/Audio) → native UI utility → read-only review/security → QA → lead release. 독립 Audio timing 조사 dispatch는 다시 실행 한도로 실패해 delegation은 none이다. main의 독립 기능 commit이며 이전 앱·곡·오디오를 보존하고 검증 후 private push한다.
+
+- `AudioEditing.swift`와 `Model.swift`: 원본 asset을 참조하는 split/duplicate/fade. 분할은 48 kHz 출력 sample 경계로 맞추고 source window·기존 fade를 보존한다. 원래 범위를 렌더한 뒤 필요한 구간을 사용해 resample/stretch의 접합부 재시작을 막는다. 이후 fade는 원본 초 단위이며 분할 이전의 envelope도 유지한다.
+- `ClipAudioRenderer.swift`·기존 두 renderer: 기존 필드가 없는 프로젝트의 DSP 결과 유지. loop period·local tempo·명시 길이·section tail에 따라 원래 처리 구간을 복원한 뒤 slice한다. 실제 PCM 비교로 확인하며 단순 source offset 일치만으로 성공 판단하지 않는다.
+- `SectionGraph`·`BounceEditing`: 분할·복제한 서클은 원래 gain/mute/context/repeat과 ordinary/sidechain 출력을 복사한다. 같은 clip의 다른 node 참조는 분리한다. 바운스의 분할 파생본은 원본 복원 시 함께 연결 해제하고 archive로 남긴다.
+- `AudioWorkspace.swift`·`InlineCircleEditor`·`OrbitAudioEditor`: 같은 캔버스의 커서·분할/복제/음소거/삭제와 직접 fade 필드. 메뉴 속에 기본 편집을 숨기지 않는다. 원본 파형·선택 구간·커서·fade 표시를 구분한다. 오디오 선택 상태에서 ⌘T/⌘D를 연속 적용하며 텍스트 입력·탐색 UI가 활성화되면 음악 명령을 차단한다.
+- `AgentProtocol`·`mcp/server.py`: 같은 Core의 `edit_audio` 계약, strict fields·revision·atomic batch. 기존 set_clip과 UI trim도 source bounds와 새 envelope 유효성을 검사한다.
+- 검사: `.build/audio-edit-quality`의 Core/PCM tests → 전체 offline Swift, MCP/kit Python → `.build/audio-edit-release`. 전용 0.18 QA 사본에서 split→fade→duplicate→Undo→save/reopen→bounce/export 및 작은 창/콘솔 UI 검증. source/trim/local tempo/repeat/fan-out/bounce 복원·정확한 PCM과 fade 감쇠를 검사한다. Scarlett 하드웨어 녹음은 이 검증과 별도이며 automation 단계도 이어서 남는다.
+
+0.18 결과와 실패 후 수정 사항은 [QA 기록](../qa/0.18-review.md)에 있다. 다음은 gain/pan automation의 target·시간·값 계약과 Core/PCM 검증을 먼저 작성하고, 같은 캔버스에 점 편집을 연결한다. 장치 lifecycle은 독립 작업으로 유지한다. 사용자가 한도 해제를 알려준 후 읽기 전용 코드 검토를 다시 dispatch했지만 도구는 여전히 `agent thread limit reached`를 반환했다. 성공하지 않은 delegation을 검토 증거로 계산하지 않는다.
