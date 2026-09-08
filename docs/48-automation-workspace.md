@@ -20,3 +20,5 @@
 최종 build 34의 궤도/자유 드래그·방향키·삭제·원본 전환·외부 충돌·Undo·저장/재열기를 확인했다. 전체 offline Swift 307개, Python 26개와 최종 release/패키지 일치 검사가 통과했다. [QA 기록](../qa/automation-workspace-review.md)에 후보별 검증과 남은 범위를 구분한다. 테스트 프로젝트는 r65에서 최초 음악·배치로 복원했다.
 
 전체 점 보기는 마지막 점의 위치에 맞춰 범위가 달라진다. 편집 중 범위를 고정하는 기능과 궤도/자유 전환 때 현재 편집 확대 유지, 궤도의 시작/끝 겹침 선택은 다음 UX 범위다. 실제 VoiceOver 발화·외부 변경 중 mouse-down 유지 조합은 검증하지 않았다. 현재 prepared PCM 재생의 gain/pan 계약을 확장한 것으로 보고하지 않는다.
+
+후속 build 35는 범위 고정/재맞춤·배치 전환 편집 유지·겹친 점 선택 유지를 구현했다. [후속 계약](49-canvas-editing-continuity.md)과 [검증](../qa/editing-continuity-review.md)을 따른다. 위 build 34의 역사적 동작과 검사 결과는 그대로 보존한다.

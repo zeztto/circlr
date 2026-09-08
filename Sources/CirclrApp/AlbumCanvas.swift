@@ -14,6 +14,8 @@ struct AlbumCanvas: NSViewRepresentable {
     var camera = HierarchyCamera()
     var scene: HierarchyScene?
     var renderedRevision = -1
+    var renderedProjectID:ID?
+    var renderedOrbits:Bool?
     var commandID: UUID?
     var initialized = false
     var previousSize = NSSize.zero
@@ -142,11 +144,18 @@ struct AlbumCanvas: NSViewRepresentable {
             visualSelection = store.hierarchySelection; playbackVisibilityFocus = nil
         }
         if renderedRevision != store.hierarchyRevision {
+            let anchor=editorAddress ?? store.hierarchySelection ?? .album
+            let previous=renderedProjectID==store.project.id && renderedOrbits != nil && renderedOrbits != store.project.usesOrbits ? scene?.node(anchor):nil
             scene = store.hierarchyScene; renderedRevision = store.hierarchyRevision
+            renderedProjectID=store.project.id;renderedOrbits=store.project.usesOrbits
             followedSection = nil
             if let focus = playbackVisibilityFocus, scene?.node(focus) == nil { playbackVisibilityFocus = nil }
             albumPlan=try? AlbumCompiler.compile(store.project)
             if let selected = store.hierarchySelection, scene?.node(selected) == nil { removePrecisionEditor() }
+            if let previous,let next=scene?.node(anchor) {
+                connecting=nil;orbitDrag=nil;cableDrag=nil;dragNode=nil;dragPreview=nil;panning=false
+                setCamera(camera.preserving(previous,in:next))
+            }
         }
         if let command = store.hierarchyCommand, command.id != commandID {
             commandID = command.id

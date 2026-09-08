@@ -129,7 +129,6 @@ struct RootView: View {
             Menu {
                 Toggle("궤도 타임라인",isOn:Binding(get:{store.project.usesOrbits},set:{value in
                     store.mutate("캔버스 보기",musical:false){$0.circleLayout=value ? .orbit:.freeform}
-                    store.hierarchyCommand=HierarchyCommand(action:.focus(store.hierarchySelection ?? .album,false))
                 }))
                 Divider()
                 Toggle("그리드",isOn:Binding(get:{store.project.album?.layout.grid ?? true},set:{value in store.mutate("그리드",musical:false){$0.album?.layout.grid=value}}))

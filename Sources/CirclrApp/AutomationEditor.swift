@@ -17,7 +17,7 @@ extension AppStore {
         return try? AutomationCompiler.editingClock(node,context:automationContext,parent:parent)
     }
     var automationBeats:Double {max(0.03125,min(1_048_576,automationNode?.lengthBeats ?? currentClock?.beats ?? 32))}
-    var automationDisplayedBeats:Double {automationShowAllPoints ? max(automationBeats,currentAutomation?.points.last?.beat ?? 0):automationBeats}
+    var automationDisplayedBeats:Double {automationViewport.displayedBeats(base:automationBeats)}
     var selectedAutomationPoint:AutomationPoint? {currentAutomation?.points.first{$0.id==selectedAutomationPointID}}
     var automationEditorHasFocus:Bool {NSApp.keyWindow?.firstResponder is AutomationPlotView}
     var automationVisible:Bool {automationOpen && selectedMusic?.supportsAutomation==true && !hierarchySettingsOpen && embeddedPlugin==nil}
@@ -61,16 +61,15 @@ struct AutomationEditor:View {
     @ObservedObject var store:AppStore
     @State private var focusTarget=AutomationFocusTarget()
     var lane:AutomationLane? {store.currentAutomation}
-    var hidden:Int {lane?.points.filter{$0.beat>store.automationBeats}.count ?? 0}
+    var hidden:Int {lane?.points.filter{$0.beat>store.automationDisplayedBeats}.count ?? 0}
     var available:Bool {store.automationNode != nil}
     var body:some View {
         Group {if store.project.usesOrbits {orbital}else{linear}}
-            .onChange(of:store.automationParameter){_,_ in store.selectedAutomationPointID=lane?.points.first?.id;store.automationShowAllPoints=false;focusTarget.focus()}
-            .onChange(of:store.editOriginal){_,_ in store.selectedAutomationPointID=lane?.points.first?.id;store.automationShowAllPoints=false;focusTarget.focus()}
-            .onChange(of:store.hierarchySelection){_,_ in store.automationShowAllPoints=false}
+            .onChange(of:store.automationParameter){_,_ in store.selectedAutomationPointID=lane?.points.first?.id;focusTarget.focus()}
+            .onChange(of:store.editOriginal){_,_ in store.selectedAutomationPointID=lane?.points.first?.id;focusTarget.focus()}
             .environment(\.numberEditing,NumberEditingContext(snapshot:store.numberEditIdentity,current:{store.numberEditIdentity},focusCanvas:{focusTarget.focus()}))
     }
-    var plot:some View {AutomationPlot(store:store,displayBeats:store.automationDisplayedBeats,focusTarget:focusTarget).disabled(!available)}
+    var plot:some View {AutomationPlot(store:store,displayBeats:store.automationDisplayedBeats,focusTarget:focusTarget).disabled(!available).help("겹친 점은 Option 클릭으로 순환 선택합니다. 일반 클릭은 현재 선택을 유지합니다.")}
     var linear:some View {
         VStack(alignment:.leading,spacing:8) {
             HStack(spacing:12){parameterControls;Spacer(minLength:8);originalToggle;pointActions}
@@ -164,7 +163,11 @@ struct AutomationEditor:View {
         return Text(scope+" · "+timing).help("위치는 서클 시작부터의 4분음표 박입니다. 개별 길이가 없는 오디오의 자동 반복에서도 곡선은 연속 진행합니다.")
     }
     @ViewBuilder var rangeButton:some View {
-        if hidden>0 {Button(store.automationShowAllPoints ? "서클 길이 보기":"전체 점 보기 (\(hidden))"){act{store.automationShowAllPoints.toggle()}}}
+        if hidden>0 || store.automationViewport.fittedBeats != nil {
+            Button(hidden>0 ? "전체 점 보기 (\(hidden))":"서클 길이 보기") {
+                act {if hidden>0 {store.automationViewport.fit(base:store.automationBeats,points:lane?.points ?? [])}else{store.automationViewport.reset()}}
+            }.help("전체 점에 맞춘 범위는 편집 중 유지됩니다. 새 점이 범위 밖에 있으면 다시 맞출 수 있습니다.")
+        }
     }
     func act(_ action:()->Void){action();focusTarget.focus()}
     func pointValue(_ point:AutomationPoint,_ key:WritableKeyPath<AutomationPoint,Double>)->Binding<Double> {
@@ -203,7 +206,7 @@ struct AutomationPlot:NSViewRepresentable {
     var accessibilityPoints:[ID:AutomationPointAccessibility]=[:]
     override var isFlipped:Bool {true}
     override var acceptsFirstResponder:Bool {true}
-    init(store:AppStore){self.store=store;super.init(frame:.zero);setAccessibilityElement(true);setAccessibilityRole(.group);setAccessibilityLabel("오토메이션 곡선 · Return 점 추가 · 대괄호 점 선택 · 방향키 시간과 값 · Delete 삭제")}
+    init(store:AppStore){self.store=store;super.init(frame:.zero);setAccessibilityElement(true);setAccessibilityRole(.group);setAccessibilityLabel("오토메이션 곡선 · Return 점 추가 · 대괄호 점 선택 · 방향키 시간과 값 · Delete 삭제 · 겹친 점 Option 클릭")}
     required init?(coder:NSCoder){fatalError()}
     override func viewDidMoveToWindow(){super.viewDidMoveToWindow();DispatchQueue.main.async{[weak self] in guard let self,let window=self.window,!(window.firstResponder is NSTextView) else{return};window.makeFirstResponder(self)}}
     var rect:NSRect {bounds.insetBy(dx:42,dy:24)}
@@ -259,7 +262,8 @@ struct AutomationPlot:NSViewRepresentable {
             if i==0 {curve.move(to:p)}else{curve.line(to:p)}
         }
         (store.currentAutomation?.enabled == false ? StudioTheme.secondaryNS:StudioTheme.accentNS).setStroke();curve.lineWidth=2;curve.stroke()
-        for p in points where p.beat<=displayBeats {
+        let visiblePoints=points.filter{$0.beat<=displayBeats}
+        for p in visiblePoints.filter({$0.id != store.selectedAutomationPointID})+visiblePoints.filter({$0.id == store.selectedAutomationPointID}) {
             let selected=p.id==store.selectedAutomationPointID
             OrbitDrawing.dot(position(p),radius:selected ? 6:4,color:selected ? StudioTheme.textNS:StudioTheme.accentNS)
         }
@@ -293,7 +297,8 @@ struct AutomationPlot:NSViewRepresentable {
         guard allowsEditing else{return}
         window?.makeFirstResponder(self);let p=convert(event.locationInWindow,from:nil)
         let hits=points.filter{$0.beat<=displayBeats && hypot(position($0).x-p.x,position($0).y-p.y)<12}
-        if let hit=event.modifierFlags.contains(.option) ? hits.last:hits.first {
+        let hitID=AutomationDisplay.hit(in:hits.map(\.id),selected:store.selectedAutomationPointID,cycle:event.modifierFlags.contains(.option))
+        if let hit=hits.first(where:{$0.id==hitID}) {
             store.selectedAutomationPointID=hit.id;origin=hit;preview=hit;dragIdentity=store.numberEditIdentity;dragExtent=displayBeats
         } else {
             let (q,v)=coordinate(p),grid=Double(store.automationContext.beatGrid.subdivisions),beat=min(displayBeats,max(0,(q*grid).rounded()/grid))

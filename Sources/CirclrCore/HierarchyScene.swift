@@ -318,6 +318,14 @@ public struct HierarchyCamera: Codable, Equatable, Sendable {
         let z = min(1e12, max(1e-6, value)), point = world(anchor)
         return HierarchyCamera(pan: Point(anchor.x-point.x*z, anchor.y-point.y*z), zoom: z)
     }
+    /// Keep the selected circle in the same screen position and size after a layout change.
+    public func preserving(_ previous:CircleSceneNode,in next:CircleSceneNode)->HierarchyCamera {
+        guard previous.id==next.id,previous.radius.isFinite,previous.radius>0,next.radius.isFinite,next.radius>0 else{return self}
+        let anchor=screen(previous.center),scale=zoom*previous.radius/next.radius
+        guard anchor.x.isFinite,anchor.y.isFinite,scale.isFinite,scale>0,next.center.x.isFinite,next.center.y.isFinite else{return self}
+        let z=min(1e12,max(1e-6,scale))
+        return HierarchyCamera(pan:Point(anchor.x-next.center.x*z,anchor.y-next.center.y*z),zoom:z)
+    }
     public func focused(on node: CircleSceneNode, width: Double, height: Double, detail: Bool = false) -> HierarchyCamera {
         let desired = max(80, min(width - 120, height - 160)) * (detail ? 0.68 : 0.43)
         let z = min(1e12, max(1e-6, desired / max(detail ? node.radius : node.outerRadius, 1e-12)))

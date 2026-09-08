@@ -13,6 +13,8 @@ import uuid
 import copy
 
 ROOT = Path(__file__).resolve().parents[1]
+NAME = 'automation-workspace'
+BUILD = '34'
 OUT = ROOT / 'qa/generated/automation-workspace'
 APP = OUT / '써클러 통합 검증.app'
 SOURCE = Path.home() / 'Library/Application Support/circlr-integration-qa/fixtures/studio.circlr'
@@ -30,7 +32,7 @@ def main():
         OUT = OUT / args.candidate
         APP = OUT / '써클러 통합 검증.app'
         current = json.loads((FIXTURE / 'manifest.json').read_text())
-        assert current['id'] == str(uuid.uuid5(uuid.NAMESPACE_URL, 'circlr-integration-qa/automation-workspace')).upper()
+        assert current['id'] == str(uuid.uuid5(uuid.NAMESPACE_URL, 'circlr-integration-qa/' + NAME)).upper()
     assert not APP.exists(), 'Preserve previous QA app'
     assert args.candidate or not FIXTURE.exists(), 'Preserve previous QA project'
     raw = (SOURCE / 'manifest.json').read_bytes()
@@ -43,7 +45,7 @@ def main():
         assert (SOURCE / path).is_file()
         assert hashlib.sha256((SOURCE / path).read_bytes()).hexdigest() == asset['checksum']
     info = plistlib.loads((ROOT / 'Resources/Info.plist').read_bytes())
-    assert info['CFBundleShortVersionString'] == '0.20.0' and info['CFBundleVersion'] == '34'
+    assert info['CFBundleShortVersionString'] == '0.20.0' and info['CFBundleVersion'] == BUILD
     info.update(CFBundleIdentifier='com.circlr.integrationqa', CFBundleDisplayName='써클러 통합 검증', CFBundleName='써클러 통합 검증')
     info.pop('CFBundleDocumentTypes', None)
     (APP / 'Contents/MacOS').mkdir(parents=True)
@@ -65,16 +67,16 @@ def main():
         for asset in project['assets']:
             target = FIXTURE / asset['path']; target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(SOURCE / asset['path'], target)
-        project['id'] = str(uuid.uuid5(uuid.NAMESPACE_URL, 'circlr-integration-qa/automation-workspace')).upper()
+        project['id'] = str(uuid.uuid5(uuid.NAMESPACE_URL, 'circlr-integration-qa/' + NAME)).upper()
         second=copy.deepcopy(project['arrangements'][0]['uses'][0])
-        second['id']=str(uuid.uuid5(uuid.NAMESPACE_URL,'circlr-integration-qa/automation-workspace/second-use')).upper()
+        second['id']=str(uuid.uuid5(uuid.NAMESPACE_URL,'circlr-integration-qa/' + NAME + '/second-use')).upper()
         second['name']='공유 출력 확인'
         project['arrangements'][0]['uses'].append(second)
         project['arrangements'][0]['layout']['positions'][second['id']]={'x':700,'y':0}
         (FIXTURE / 'manifest.json').write_text(json.dumps(project, ensure_ascii=False, indent=2) + '\n')
     assert (SOURCE / 'manifest.json').read_bytes() == raw
-    project['id'] = str(uuid.uuid5(uuid.NAMESPACE_URL, 'circlr-integration-qa/automation-workspace')).upper()
-    result = dict(app=str(APP), fixture=str(FIXTURE), projectID=project['id'], build='34',
+    project['id'] = str(uuid.uuid5(uuid.NAMESPACE_URL, 'circlr-integration-qa/' + NAME)).upper()
+    result = dict(app=str(APP), fixture=str(FIXTURE), projectID=project['id'], build=BUILD,
                   sourceSHA256=hashlib.sha256(raw).hexdigest(),
                   uuid=subprocess.check_output(['dwarfdump', '--uuid', str(APP / 'Contents/MacOS/circlr')], text=True).strip())
     (OUT / 'package.json').write_text(json.dumps(result, ensure_ascii=False, indent=2) + '\n')

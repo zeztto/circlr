@@ -2,6 +2,11 @@ import Foundation
 
 /// Editor units only. AutomationLane interpolation and stored values are unchanged.
 public enum AutomationDisplay {
+    public static func hit(in ids:[ID],selected:ID?,cycle:Bool)->ID? {
+        guard !ids.isEmpty else{return nil}
+        guard let selected,let index=ids.firstIndex(of:selected) else{return ids.first}
+        return cycle ? ids[(index+1)%ids.count]:selected
+    }
     public static func value(_ value:Double,parameter:AutomationParameter)->String {
         if parameter == .gain{return GainScale.text(value)+" dB"}
         if value==0{return "중앙"}

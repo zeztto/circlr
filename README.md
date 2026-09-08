@@ -6,7 +6,9 @@ macOS용 앨범·송폼 궤도 편집기. **앨범 → 곡·악장 → 섹션 �
 
 연결 UI는 [서클 둘레 8방향 IN/OUT과 다중 입출력](docs/22-eight-direction-ports.md)으로 확장 중이다. 포트의 신호 의미와 연결점 배치를 분리한다. 아래 일반 사용법은 배포된 0.19 앱 기준이며 새 포트 기능은 독립 개발 브랜치에서 검증한다.
 
-현재 **`codex/daw-integration`의 0.20.0 build 34**에 녹음 lifecycle과 8방향·다중 bus·그룹 포트를 통합했다. 같은 캔버스의 연결 편집·녹음 상태·스텝·오토메이션이 공존하며, 녹음 시작·정리 중 음악 편집과 Undo의 경쟁을 차단한다. build 23의 실제 편집·바운스·Undo·저장/재열기·닫기 최소화 및 출력별 모션 검증은 [통합 QA](qa/daw-integration-review.md)에 기록했다.
+현재 **`codex/daw-integration`의 0.20.0 build 35**에 녹음 lifecycle과 8방향·다중 bus·그룹 포트를 통합했다. 같은 캔버스의 연결 편집·녹음 상태·스텝·오토메이션이 공존하며, 녹음 시작·정리 중 음악 편집과 Undo의 경쟁을 차단한다. build 23의 실제 편집·바운스·Undo·저장/재열기·닫기 최소화 및 출력별 모션 검증은 [통합 QA](qa/daw-integration-review.md)에 기록했다.
+
+build 35는 **궤도/자유 배치 전환과 Undo에서도 현재 편집 화면의 위치·크기를 유지**한다. 메뉴와 명령 검색이 같은 동작을 하며 MIDI·스텝·오디오·오토메이션에서 확인했다. 오토메이션 전체 점 범위는 편집 중 고정하고, 겹친 점은 Option 클릭으로 순환하거나 대괄호로 선택한 뒤 그대로 드래그한다. Swift **311개**·Python **26개**, 실제 전환·끝점 드래그·범위/MCP·저장 복원을 검증했다. Option 클릭 조합의 실제 입력은 도구 제약으로 별도 검사 대상이다. [편집 계약](docs/49-canvas-editing-continuity.md) · [QA와 남은 UI](qa/editing-continuity-review.md).
 
 build 34는 **오토메이션 곡선·선택 점·공유 원본 전환을 같은 캔버스에서 바로 편집**한다. 자유 배치는 곡선을 넓게, 궤도는 원의 높이를 유지하도록 배치한다. 볼륨 dB·팬 %·로컬 박/초를 표시하고, Return/Esc 뒤 방향키로 이어서 조절한다. ‘전체 점 보기’의 범위를 MCP에도 반영한다. Swift **307개**·Python **26개**, 최종 앱의 궤도/자유 드래그·삭제·Undo·충돌 거절·저장 복원을 검증했다. [편집 계약](docs/48-automation-workspace.md) · [QA와 제한](qa/automation-workspace-review.md).
 

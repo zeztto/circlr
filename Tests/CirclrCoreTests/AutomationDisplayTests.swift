@@ -2,6 +2,39 @@ import XCTest
 @testable import CirclrCore
 
 final class AutomationDisplayTests:XCTestCase {
+    func testFittedViewportRemainsStableWhenLastPointMovesOrIsRemoved() {
+        var view=AutomationViewport(),points=[AutomationPoint(beat:0,value:1),AutomationPoint(beat:96,value:1)]
+        XCTAssertEqual(view.displayedBeats(base:64),64)
+        view.fit(base:64,points:points)
+        points[1].beat=80
+        XCTAssertEqual(view.displayedBeats(base:64),96)
+        points.removeLast()
+        XCTAssertEqual(view.displayedBeats(base:64),96)
+        view.reset()
+        XCTAssertEqual(view.displayedBeats(base:64),64)
+    }
+    func testViewportCanRefitNewOutsidePointAndRespectChangedBaseLength() {
+        var view=AutomationViewport(),points=[AutomationPoint(beat:96,value:1)]
+        view.fit(base:64,points:points)
+        points.append(AutomationPoint(beat:128,value:1))
+        XCTAssertEqual(view.displayedBeats(base:64),96)
+        view.fit(base:64,points:points)
+        XCTAssertEqual(view.displayedBeats(base:64),128)
+        XCTAssertEqual(view.displayedBeats(base:160),160)
+        view.reset();view.fit(base:64,points:[])
+        XCTAssertEqual(view.displayedBeats(base:64),64)
+    }
+    func testOverlappingHitsCycleAndNormalClickKeepsSelectedPoint() {
+        let ids=["start","middle","end"]
+        XCTAssertEqual(AutomationDisplay.hit(in:ids,selected:nil,cycle:false),"start")
+        XCTAssertEqual(AutomationDisplay.hit(in:ids,selected:"start",cycle:true),"middle")
+        XCTAssertEqual(AutomationDisplay.hit(in:ids,selected:"middle",cycle:true),"end")
+        XCTAssertEqual(AutomationDisplay.hit(in:ids,selected:"end",cycle:true),"start")
+        XCTAssertEqual(AutomationDisplay.hit(in:ids,selected:"end",cycle:false),"end")
+        XCTAssertEqual(AutomationDisplay.hit(in:ids,selected:"removed",cycle:true),"start")
+        XCTAssertEqual(AutomationDisplay.hit(in:["single"],selected:"single",cycle:true),"single")
+        XCTAssertNil(AutomationDisplay.hit(in:[],selected:"start",cycle:true))
+    }
     func testPanPercentageInputPreservesRawUntouchedPrecisionAndRejectsInvalidRange()throws {
         let raw=0.123456789012345
         var edit=NumberEditSession<Int>(presentation:.panPercent);edit.begin(value:raw,context:1)
