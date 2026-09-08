@@ -14,6 +14,7 @@ struct InlineCircleEditor: View {
                     .textFieldStyle(.plain).font(.system(size: 17, weight: .semibold)).focused($nameFocused).disabled(store.midiImportDraft != nil)
                 Spacer()
                 if store.selectedMusic != nil {
+                    Button(store.automationVisible ? "편집으로":"오토메이션") {if store.automationVisible {store.automationOpen=false}else{store.showAutomation()}}.help("이 서클의 볼륨·팬 곡선 · ⌘5")
                     Button { store.hierarchySettingsOpen.toggle() } label: { Image(systemName: "slider.horizontal.3") }.help("템포·박자·스케일·반복 설정")
                 }
                 Button { store.hierarchySettingsOpen = false; store.hierarchyParent() } label: { Image(systemName: "arrow.up.left.and.arrow.down.right") }.help("상위 서클로 축소 · Esc")
@@ -37,6 +38,8 @@ struct InlineCircleEditor: View {
                 VStack(alignment:.leading,spacing:16) { Text("모든 곡의 트랙 출력을 버스와 마스터로 연결합니다"); Button("버스 서클 추가"){store.addHierarchyBus()}; Menu("전역 이펙터 추가"){ForEach(EffectKind.allCases,id:\.self){kind in Button(AppStore.effectName(kind)){store.addHierarchySignalEffect(kind)}}}; Spacer() }
             } else if store.hierarchySettingsOpen || store.selectedMusic == nil {
                 ScrollView { HierarchySettingsEditor(store: store).padding(.trailing, 8) }
+            } else if store.automationVisible {
+                AutomationEditor(store:store)
             } else if let node = store.selectedMusic {
                 switch node.content {
                 case .midi, .rhythmMIDI: midi

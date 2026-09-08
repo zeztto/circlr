@@ -7,8 +7,9 @@ public struct SectionSignalPlan {
     /// Event positions are expressed on the parent section's clock after local timing is resolved.
     public var midi: [ID: [Note]]
     public var audio: [ID: [AudioClip]]
+    public var automation:[ID:[AutomationPlan]] = [:]
     public var eventCount: Int {
-        midi.values.reduce(0) { $0 + $1.count } +
+        automation.values.reduce(0){$0+$1.reduce(0){$0+$1.spans.count}} + midi.values.reduce(0) { $0 + $1.count } +
         orderedNodes.reduce(0) { $0 + (audio[$1.id]?.count ?? 0) * $1.repeatCount }
     }
 }
@@ -34,6 +35,8 @@ public enum SectionGraphCompiler {
                 guard node.startBeat == 0, node.lengthBeats == nil, node.repeatCount == 1 else { throw CirclrError("처리 서클에는 연주 시작·길이·반복을 지정하지 않습니다") }
             default: break
             }
+            plan.automation[node.id]=try AutomationCompiler.compile(node,context:resolved,clock:clock)
+            guard plan.eventCount<=1_000_000 else{throw CirclrError("섹션 내부의 오토메이션 구간이 너무 많습니다")}
             switch node.content {
             case .midi(let laneID):
                 guard let lane = lanes.first(where: { $0.id == laneID }) else { throw CirclrError("\(node.name)의 MIDI 연주 원본을 찾을 수 없습니다") }

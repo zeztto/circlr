@@ -65,6 +65,8 @@ public struct AgentOperation:Codable {
     public var sourceOffset:Double?
     public var fadeIn:Double?
     public var fadeOut:Double?
+    public var parameter:AutomationParameter?
+    public var automationPoints:[AutomationPoint]?
     public init(_ kind:String){self.kind=kind}
 }
 
@@ -107,6 +109,9 @@ public enum AgentProjectEditing {
                 default:throw CirclrError("edit: split/duplicate/fade/delete를 선택하세요")
                 }
                 _=try AudioEditing.apply(change,nodeID:nodeID,useID:id,in:&p)
+            case "set_automation":
+                guard let id=op.useID,let node=op.nodeID,let parameter=op.parameter else{throw CirclrError("useID·nodeID·parameter가 필요합니다")}
+                try AutomationEditing.set(parameter:parameter,points:op.automationPoints,enabled:op.enabled,nodeID:node,useID:id,in:&p)
             case "set_clip":
                 guard let id=op.useID,let use=p.active.uses.first(where:{$0.id==id}),let section=p.sections.first(where:{$0.id==use.sectionID}),
                       let laneID=op.laneID,var lane=try ArrangementCompiler.effectiveLanes(section:section,use:use).first(where:{$0.id==laneID}),

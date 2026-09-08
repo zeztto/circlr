@@ -12,7 +12,7 @@
 | MIDI | 0.17 선택/quantize/transpose/복제·format 0/1 노트 import·native 검증 완료, 기존 MIDI 녹음/테이크 | CC/페달/피치 벤드·tempo map import, 다중 노트 드래그·고급 연주 편집 |
 | 오디오 녹음 | 입력 tap·ring buffer writer·CAF·테이크, 0.17 permission 대기/취소·문맥 guard | 장치 시작의 비동기화·실패 복구, 입력 상태, 실제 녹음→편집→bounce |
 | 오디오 편집 | 0.18 split/duplicate/fade/mute/delete·MCP·native PCM·Undo/저장 검증 | 전체 source로 trim 재확장, crossfade·time warp·comping·window 처리 cache |
-| 오토메이션 | 데이터/편집/재생 경로 없음 | stable target ID, 점/곡선, gain/pan 우선, tempo/local clock/repeat, 실제 render/export·MCP·Undo |
+| 오토메이션 | 0.19 gain/pan·선형/유지·궤도/선형 편집·MCP·native WAV/Undo/저장 검증 | synth filter·plugin parameter·MIDI CC·전역 bus, 실시간 write/touch/latch |
 | 엔진 | prepared PCM, 일부 live synth/recording | 장치 lifecycle, transport/record sync, 이후 continuous render/PDC·plugin crash 격리 |
 
 ## 실행 순서
@@ -59,3 +59,9 @@
 - 검사: `.build/audio-edit-quality`의 Core/PCM tests → 전체 offline Swift, MCP/kit Python → `.build/audio-edit-release`. 전용 0.18 QA 사본에서 split→fade→duplicate→Undo→save/reopen→bounce/export 및 작은 창/콘솔 UI 검증. source/trim/local tempo/repeat/fan-out/bounce 복원·정확한 PCM과 fade 감쇠를 검사한다. Scarlett 하드웨어 녹음은 이 검증과 별도이며 automation 단계도 이어서 남는다.
 
 0.18 결과와 실패 후 수정 사항은 [QA 기록](../qa/0.18-review.md)에 있다. 다음은 gain/pan automation의 target·시간·값 계약과 Core/PCM 검증을 먼저 작성하고, 같은 캔버스에 점 편집을 연결한다. 장치 lifecycle은 독립 작업으로 유지한다. 사용자가 한도 해제를 알려준 후 읽기 전용 코드 검토를 다시 dispatch했지만 도구는 여전히 `agent thread limit reached`를 반환했다. 성공하지 않은 delegation을 검토 증거로 계산하지 않는다.
+
+## 0.19 결과와 다음 실행
+
+선택 서클의 gain/pan을 같은 캔버스에서 직접 편집한다. [시간·신호·UI 계약](33-automation-plan.md)과 [148 Swift/22 Python 및 native 검증](../qa/0.19-review.md)을 연결했다. 개별 tempo의 처리 서클도 편집 좌표와 DSP가 같은 로컬 시간을 사용한다. GUI 점 드래그는 한 번의 Undo, 입력 필드는 음악 단축키와 분리된다.
+
+다음 독립 범위는 장치 lifecycle이다. `AudioRecorder.start`의 동기 장치 연결을 UI에서 분리하고 요청 세대·취소·중복 시작·종료 정리를 정의한다. 입력 tap 이후 실제 오디오 파일과 시작/끝 시간을 검사해야 한다. 기존 Scarlett 출력 준비 timeout과 혼동하지 않고, OS 기본 장치나 권한 설정을 변경하지 않는다. 8방향 포트는 별도 Core endpoint migration → hit/keyboard → MCP/Undo 순서로 진행한다.

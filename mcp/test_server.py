@@ -123,6 +123,17 @@ class MCPTests(unittest.TestCase):
             with self.subTest(key=key,value=value),self.assertRaises(ValueError):
                 server.validate({**packet,'operations':[{**op,key:value}]},spec)
 
+    def test_automation_point_contract_before_ipc(self):
+        spec=server.BY_NAME['circlr_apply']['inputSchema']
+        point={'beat':0,'value':0.5,'shape':'linear'}
+        op={'kind':'set_automation','useID':'u','nodeID':'n','parameter':'gain','automationPoints':[point]}
+        packet={'projectID':'p','expectedRevision':0,'operations':[op]}
+        server.validate(packet,spec)
+        server.validate({**packet,'operations':[{**op,'automationPoints':[]}]},spec)
+        for key,value in [('beat',-1),('beat',float('inf')),('value',True),('value',float('nan')),('value',5),('shape','bezier')]:
+            with self.subTest(key=key,value=value),self.assertRaises(ValueError):
+                server.validate({**packet,'operations':[{**op,'automationPoints':[{**point,key:value}]}]},spec)
+
 
 if __name__ == "__main__":
     unittest.main()

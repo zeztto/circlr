@@ -51,6 +51,7 @@ public struct MusicCircle: Codable, Equatable, Identifiable {
     public var gain: Double = 1
     public var muted = false
     public var bounce: BounceSource?
+    public var automation:[AutomationLane]?
     public init(name: String, content: MusicCircleContent) { self.name = name; self.content = content }
 }
 

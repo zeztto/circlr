@@ -116,6 +116,9 @@ public enum AudioEditing {
             lane.audio.append(copy)
             if var bounce=node.bounce {bounce.familyID=bounce.familyID ?? node.id;node.bounce=bounce;graph.nodes[index]=node}
             var other=node;other.id=newID();other.name += " · 복제";other.content = .audio(laneID:laneID,clipID:copy.id)
+            if node.lengthBeats==nil,other.automation != nil {
+                for l in other.automation!.indices {for p in other.automation![l].points.indices {other.automation![l].points[p].beat += delta}}
+            }
             // Duplicating an explicitly looped circle moves its origin, retaining local clip placement.
             if node.lengthBeats != nil {other.startBeat=timing.clock.beat(atSeconds:timing.time(delta));copy.beat=clip.beat;copy.renderWindow=clip.renderWindow;lane.audio[lane.audio.count-1]=copy}
             append(other,after:node,in:&graph);result=other.id

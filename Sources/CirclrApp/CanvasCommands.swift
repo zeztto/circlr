@@ -54,6 +54,7 @@ extension AppStore {
             }
         }
         if selectedUse != nil {
+            if selectedMusic != nil {add("automation","볼륨·팬 오토메이션","⌘5"){[weak self] in self?.showAutomation()}}
             if currentAudioClip != nil {
                 add("audio-split","커서에서 오디오 분할","⌘T"){[weak self] in self?.splitAudio()}
                 add("audio-duplicate","오디오 구간 뒤에 복제","⌘D"){[weak self] in self?.duplicateAudio()}
@@ -275,6 +276,7 @@ struct KeyboardHelpView:View {
         ("MIDI · ⇧← → / ⇧↑ ↓","노트 길이 변경 / 옥타브 이동"),("MIDI · ⌥↑ ↓","세기 5단계 변경"),
         ("오디오 · ← → / ⌥← →","원본 시작 / 끝 0.01초 조절 · ⇧ 0.1초"),("설정 · Tab / ⇧Tab","다음·이전 입력 항목 · Return 적용"),
         ("오디오 · ⌘T / ⌘D","커서에서 분할 / 구간 뒤에 복제"),("오디오 · Delete","선택 오디오 삭제"),
+        ("⌘5 / 오토메이션 · Return","볼륨·팬 곡선 열기 / 점 추가"),("오토메이션 · [ ] / 방향키","이전·다음 점 / 시간·값 이동"),
         ("⌘W / ⌘Q","최소화 / 앱 종료")
     ]
     var body:some View {

@@ -2,6 +2,14 @@
 
 0.1–0.3은 설계 문서 revision이며, 0.4.0부터 로컬 실행 프로토타입을 포함한다.
 
+## 0.19.0 — 2026-09-08 · 볼륨·팬 오토메이션
+
+- 오디오·악기·이펙터·믹스·출력 서클에 gain/pan 곡선을 추가했다. 로컬 박, 템포 변경, 명시 반복과 연속 진행, 선형/유지 구간을 실제 PCM 렌더·바운스·export에 적용한다. 없는/비활성 곡선은 원래 소리를 보존한다.
+- 같은 캔버스의 직접 버튼·⌘5, 궤도/선형 점 드래그·숫자 입력·방향키·점 추가/삭제·적용 전환을 제공한다. 작은 창에서 곡선과 명령을 나란히 배치하고, 개별 템포 처리 서클의 편집 좌표도 로컬 시간에 맞췄다.
+- GUI/MCP는 같은 Core 명령을 사용한다. `set_automation`은 stable point ID·범위·중복·atomic batch·revision을 검사한다. output automation은 바운스 뒤 한 번만 적용하며 분할/복제의 곡선 시간도 보존한다.
+- Swift 148개, Python 22개 통과. Native gain/pan은 기대 WAV 대비 24-bit 최대 1 LSB, hold는 0 LSB이며 pan bypass는 gain-only 음원과 정확히 같다. 텍스트 단축키 보호·한 번의 Undo·저장/재열기와 기존 v4 WAV 보존을 검사했다. [0.19 검증](qa/0.19-review.md).
+- plugin parameter·MIDI CC·전역 bus 자동화, 실제 장치 녹음, 연속 실시간 엔진은 남은 범위다.
+
 ## 0.18.0 — 2026-09-08 · 오디오 분할·복제·페이드
 
 - 오디오와 바운스 서클의 원본을 보존하는 split/duplicate/fade/delete를 Core·GUI·MCP에 연결했다. 분할 이전의 resample/stretch 기준·envelope·반복 주기·출력/sidechain을 보존한다.

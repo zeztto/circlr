@@ -42,6 +42,7 @@ extension AppStore {
          "tracks":json(project.tracks),"assets":json(project.assets),"album":json(project.album),"patterns":json(project.patterns),"activeArrangementID":project.activeArrangementID,
          "arrangements":project.arrangements.map{["id":$0.id,"name":$0.name,"uses":$0.uses.map{["id":$0.id,"sectionID":$0.sectionID,"name":$0.name]}]},
          "selection":json(hierarchySelection),"selectedNoteIDs":json(selectedMIDIIDs.sorted()),
+         "automationEditor":["visible":automationVisible,"parameter":automationParameter.rawValue,"selectedPointID":json(selectedAutomationPointID),"displayBeats":automationBeats],
          "recording":["midi":midiRecording,"audio":audioRecording,"permissionPending":audioRecordPending],"job":json(agentJob),"sequence":activitySequence,
          "playback":capturePlaybackVisualization?() ?? ["playing":playback.playing,"seconds":playback.seconds],
          "view":["zoom":hierarchyZoom,"layout":project.usesOrbits ? "orbit":"freeform","consoleOpen":consoleOpen,"consoleBounds":[consoleBounds.minX,consoleBounds.minY,consoleBounds.width,consoleBounds.height]],

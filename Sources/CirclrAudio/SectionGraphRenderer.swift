@@ -42,6 +42,7 @@ public enum SectionGraphRenderer {
                 }
                 let isOutput:Bool = {if case .output = node.content{return true};return false}()
                 if node.gain != 1 && (applyOutputGain || !isOutput) { local.multiply(node.gain) }
+                if applyOutputGain || !isOutput {try AutomationDSP.apply(plan.automation[node.id] ?? [],to:&local)}
             }
             observe?(node.id, local)
             if case .output(let trackID) = node.content {

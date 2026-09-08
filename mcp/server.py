@@ -21,17 +21,20 @@ STRING = {"type": "string"}
 REVISION = {"projectID": STRING, "expectedRevision": {"type": "integer", "minimum": 0, "maximum": 9223372036854775807}}
 SCOPE = {"arrangementID": STRING, "useID": STRING}
 NOTE = schema({"id": STRING, "beat": {"type": "number", "minimum": 0}, "length": {"type": "number", "exclusiveMinimum": 0}, "pitch": {"type": "integer", "minimum": 0, "maximum": 127}, "velocity": {"type": "integer", "minimum": 1, "maximum": 127}}, ["beat", "length", "pitch", "velocity"])
+AUTOMATION_POINT = schema({"id": STRING, "beat": {"type": "number", "minimum": 0, "maximum": 1048576}, "value": {"type": "number", "minimum": -1, "maximum": 4}, "shape": {"type": "string", "enum": ["linear", "hold"]}}, ["beat", "value"])
 OPERATION = schema({
-    "kind": {"type": "string", "enum": ["set_global", "rename_project", "set_instrument", "set_track", "add_section", "set_section", "connect_sections", "add_midi", "set_notes", "generate_midi", "set_node", "set_effect", "add_effect", "connect", "reorder_section", "set_clip", "set_step", "edit_notes", "edit_audio"]},
+    "kind": {"type": "string", "enum": ["set_global", "rename_project", "set_instrument", "set_track", "add_section", "set_section", "connect_sections", "add_midi", "set_notes", "generate_midi", "set_node", "set_effect", "add_effect", "connect", "reorder_section", "set_clip", "set_step", "edit_notes", "edit_audio", "set_automation"]},
     **SCOPE, "clipID": STRING, "sourceStart": {"type": "number", "minimum": 0}, "duration": {"type": "number", "exclusiveMinimum": 0}, "laneID": STRING, "nodeID": STRING, "trackID": STRING, "name": STRING,
     "stepIndex": {"type": "integer", "minimum": 0, "description": "Zero-based step in the MIDI circle, not within the visible page."},
     "subdivisions": {"type": "integer", "enum": [1, 2, 3, 4, 6, 8], "description": "Steps per quarter note; default 4. Does not quantize existing notes."},
     "pitch": {"type": "integer", "minimum": 0, "maximum": 127},
     "velocity": {"type": "integer", "minimum": 1, "maximum": 127},
     "gate": {"type": "number", "minimum": 0.01, "maximum": 16, "description": "Note length in steps. Omit to preserve an existing note; new notes default to 0.9."},
-    "enabled": {"type": "boolean", "description": "Set step on/off; repeated enabled=true never duplicates existing onsets."},
+    "enabled": {"type": "boolean", "description": "Enable a step or bypass/read an existing automation curve, according to kind."},
     "noteIDs": {"type": "array", "items": STRING, "minItems": 1, "maxItems": 100000},
     "edit": {"type": "string", "enum": ["transpose", "move", "duplicate", "quantize", "velocity", "delete", "split", "fade"]},
+    "parameter": {"type": "string", "enum": ["gain", "pan"]},
+    "automationPoints": {"type": "array", "items": AUTOMATION_POINT, "maxItems": 4096, "description": "Replace this node parameter curve. Empty clears it. Omitted with enabled changes only bypass."},
     "sourceOffset": {"type": "number", "exclusiveMinimum": 0, "description": "Split offset in source seconds from the selected clip start."},
     "fadeIn": {"type": "number", "minimum": 0}, "fadeOut": {"type": "number", "minimum": 0},
     "semitones": {"type": "integer", "minimum": -127, "maximum": 127},
@@ -171,7 +174,7 @@ def serve(path, read_only=False):
             if method == "initialize":
                 negotiated = True
                 requested = request.get("params", {}).get("protocolVersion")
-                result = {"protocolVersion": requested if requested in VERSIONS else "2025-11-25", "capabilities": {"tools": {"listChanged": False}}, "serverInfo": {"name": "circlr", "version": "0.18.0"}, "instructions": ("Read-only specialist session. Return edit proposals to the coordinator. " if read_only else "") + "Read snapshot before mutations. Use stable IDs and expectedRevision. Long jobs return immediately; monitor with circlr_job/events. CUA is unnecessary."}
+                result = {"protocolVersion": requested if requested in VERSIONS else "2025-11-25", "capabilities": {"tools": {"listChanged": False}}, "serverInfo": {"name": "circlr", "version": "0.19.0"}, "instructions": ("Read-only specialist session. Return edit proposals to the coordinator. " if read_only else "") + "Read snapshot before mutations. Use stable IDs and expectedRevision. Long jobs return immediately; monitor with circlr_job/events. CUA is unnecessary."}
             elif method == "ping":
                 result = {}
             elif not initialized:
