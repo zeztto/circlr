@@ -38,6 +38,12 @@ struct AlbumCanvas: NSViewRepresentable {
     var connectionPoint = NSPoint.zero
     var selectedCable: CircleConnectionID?
     var selectedCableProjectID: ID?
+    var selectedCanvasPort: CirclePortEndpoint?
+    var selectedCableEnd = CirclePortDirection.output
+    var portTools: NSHostingView<PortToolsView>?
+    var circleAccessibility: [CircleAddress: CircleAccessibility] = [:]
+    var portAccessibility: [CirclePortEndpoint: PortAccessibility] = [:]
+    var cableAccessibility: [CircleConnectionID: CableAccessibility] = [:]
     var cableMode = CircleCableGesture.Mode.reconnect
     var cableDrag: CircleCableGesture?
     var cableDragOriginal = false
@@ -146,6 +152,7 @@ struct AlbumCanvas: NSViewRepresentable {
             case .fit: store.selectHierarchy(.album); focus(.album)
             case .restore:
                 connecting=nil;orbitDrag=nil;clearCableSelection()
+                circleAccessibility=[:];portAccessibility=[:];cableAccessibility=[:]
                 if let saved=store.project.hierarchyView,scene?.node(saved.selection) != nil,let restored=saved.restored(width:bounds.width,height:bounds.height) {
                     store.selectHierarchy(saved.selection);store.hierarchySettingsOpen=saved.settingsOpen;store.midiStepMode=saved.midiStepMode ?? false;setCamera(restored)
                 } else {store.selectHierarchy(.album);store.hierarchySettingsOpen=false;focus(.album)}
@@ -180,11 +187,14 @@ struct AlbumCanvas: NSViewRepresentable {
                     let progress = min(1, (ProcessInfo.processInfo.systemUptime-time)/(manual ? 0.28 : 0.65))
                     self.camera = start.interpolated(to: target, progress: progress)
                     self.placeEditor(); self.needsDisplay = true
-                    if progress >= 1 { timer.invalidate(); self.animation = nil; self.store.hierarchyZoom = self.camera.zoom }
+                    if progress >= 1 {
+                        timer.invalidate(); self.animation = nil; self.store.hierarchyZoom = self.camera.zoom
+                        self.finishConnectionEditorFocus()
+                    }
                 }
             }
             if let animation { RunLoop.main.add(animation, forMode: .common) }
-        } else { camera = target; placeEditor(); needsDisplay = true; store.hierarchyZoom = camera.zoom }
+        } else { camera = target; placeEditor(); needsDisplay = true; store.hierarchyZoom = camera.zoom; finishConnectionEditorFocus() }
     }
     func placeEditor() {
         defer { refreshCableTools() }
@@ -206,6 +216,14 @@ struct AlbumCanvas: NSViewRepresentable {
             addSubview(host); editor = host; editorAddress = address
         }
         editor?.frame = frame
+    }
+    func finishConnectionEditorFocus() {
+        guard store.connectionsOpen, let editor else { return }
+        func visit(_ view: NSView) {
+            if let search = view as? PortSearchControl { search.navigation?.scheduleFocusRequest() }
+            for child in view.subviews { visit(child) }
+        }
+        visit(editor)
     }
     func screen(_ node: CircleSceneNode) -> NSPoint {
         var point = node.center
@@ -484,6 +502,7 @@ struct AlbumCanvas: NSViewRepresentable {
     override func magnify(with event:NSEvent){let p=convert(event.locationInWindow,from:nil);setCamera(camera.zoomed(to:camera.zoom*exp(event.magnification),around:Point(p.x,p.y)))}
     override func keyDown(with event:NSEvent) {
         if event.modifierFlags.contains(.command) || event.modifierFlags.contains(.control) {super.keyDown(with:event);return}
+        if handleConnectionKey(event) { return }
         if event.modifierFlags.contains([.option,.shift]),[123,124,125,126].contains(event.keyCode),!store.project.usesOrbits {
             let spacing=store.project.album?.layout.spacing ?? 24
             let x=event.keyCode==123 ? -spacing:event.keyCode==124 ? spacing:0
@@ -528,16 +547,23 @@ struct AlbumCanvas: NSViewRepresentable {
         if playbackAnimation != nil, now-accessibilityUpdateTime < 0.2 { return }
         accessibilityUpdateTime = now
         guard let scene,let window else{return}
-        let visible=scene.nodes.filter{node in let p=screen(node);return isVisible(node) && bounds.contains(p)}
+        let visible=scene.nodes.filter{node in let p=screen(node);return isVisible(node) && cablePointAvailable(Point(p.x,p.y),labels:false)}
         let children=visible.map { node -> NSAccessibilityElement in
             let p=screen(node),r=min(100,node.radius*camera.zoom)
             let hitRect=labelPlacements.first{$0.id==node.id}?.rect ?? NSRect(x:p.x-r,y:p.y-r,width:max(12,r*2),height:max(12,r*2))
             let rect=window.convertToScreen(convert(hitRect,to:nil))
-            let element=CircleAccessibility(parent:self,address:node.id)
+            let element=circleAccessibility[node.id] ?? CircleAccessibility(parent:self,address:node.id)
+            circleAccessibility[node.id]=element
             element.setAccessibilityLabel(node.title+" · "+node.subtitle);element.setAccessibilityFrame(rect)
+            element.setAccessibilitySelected(store.hierarchySelections.contains(node.id))
             return element
         }
-        setAccessibilityChildren(children+(editor.map{[$0]} ?? [])+(cableTools.map{[$0]} ?? []))
+        let ids=Set(visible.map(\.id));circleAccessibility=circleAccessibility.filter{ids.contains($0.key)}
+        var accessible: [Any] = children + connectionAccessibilityChildren()
+        if let editor { accessible.append(editor) }
+        if let cableTools, !cableTools.isHidden { accessible.append(cableTools) }
+        if let portTools { accessible.append(portTools) }
+        setAccessibilityChildren(accessible)
     }
 }
 @MainActor final class CircleAccessibility:NSAccessibilityElement {

@@ -160,7 +160,11 @@ extension AlbumCanvasView {
                 return [StudioCommand(id:identity,title:title,run:action.run)]
             }
         }
-        return flatten(menu)
+        return flatten(menu)+[
+            StudioCommand(id:"next-cable",title:"다음 케이블 선택",shortcut:"K",run:{[weak self] in self?.selectNeighborCable(forward:true)}),
+            StudioCommand(id:"previous-cable",title:"이전 케이블 선택",shortcut:"⇧K",run:{[weak self] in self?.selectNeighborCable(forward:false)}),
+            StudioCommand(id:"next-port",title:"다음 IN/OUT 포트 선택",shortcut:"P",run:{[weak self] in self?.selectNeighborPort(forward:true)})
+        ]
     }
     func selectNeighbor(forward:Bool,additive:Bool=false) {
         guard let scene else{return}
@@ -168,6 +172,7 @@ extension AlbumCanvasView {
         var candidates=scene.nodes.filter{$0.parent==current?.parent && $0.id != .album}
         if current?.id == .album || candidates.isEmpty {candidates=scene.nodes.filter{$0.parent==current?.id}}
         guard !candidates.isEmpty else{return}
+        clearCableSelection()
         let index=candidates.firstIndex(where:{$0.id==current?.id}) ?? (forward ? -1:0)
         let next=candidates[(index+(forward ? 1:-1)+candidates.count)%candidates.count]
         interruptPlaybackFollow();store.selectHierarchy(next.id,additive:additive);needsDisplay=true
@@ -270,6 +275,11 @@ struct KeyboardHelpView:View {
     private let rows:[(String,String)] = [
         ("⌘4","MIDI 스텝 편집"),("⌘J","섹션·트랙 바로 이동"),("⌘1 / ⌘2 / ⌘3","같은 트랙의 MIDI·오디오 / 음색 / 이펙터"),("⇧⌘P","명령·서클 검색"),("⌥⌘0","캔버스로 포커스 이동"),("A / C","서클 생성 / 선택 서클 메뉴"),("L","IN/OUT·대상·8방향 연결 편집"),
         ("Tab · ← → ↑ ↓","다음·이전 서클 선택"),("⇧ 방향키","여러 서클 선택"),("Return / Esc","서클 안으로 / 상위 서클"),
+        ("K / ⇧K · P / ⇧P","다음·이전 케이블 · IN/OUT 포트 선택"),
+        ("케이블 · Tab / ← →","OUT·IN 끝점 선택 / 둘레 8방향 위치 이동"),
+        ("케이블 · ↑ ↓ / Return","다른 케이블 선택 / 선택 케이블 바로 편집"),
+        ("포트 · Tab / Return","다음 포트 선택 / 해당 포트로 연결 편집"),
+        ("케이블 · Delete / Esc","선택 케이블 해제 / 선택 취소"),
         ("R","이름·음악 설정"),("+ − / F","확대·축소 / 전체 앨범"),("⌥ 방향키","화면 이동"),
         ("⇧⌥ 방향키","자유 배치에서 선택 서클 이동"),
         ("Space","재생·정지"),("⇧⌘R","영상 녹화 시작·마치기"),("⌘K / ⌘D / ⌘G","섹션 추가 / 재사용 / 그룹"),("Delete","선택 서클·노트 삭제"),

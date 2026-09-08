@@ -21,6 +21,7 @@ extension AlbumCanvasView {
                           workspaceViewport.contains(CGPoint(x:point.x,y:point.y)),
                           editor?.frame.contains(NSPoint(x:point.x,y:point.y)) != true,
                           !(cableTools?.isHidden == false && cableTools?.frame.contains(NSPoint(x:point.x,y:point.y)) == true),
+                          portTools?.frame.contains(NSPoint(x:point.x,y:point.y)) != true,
                           !labelPlacements.contains(where: { $0.rect.insetBy(dx:-9,dy:-9).contains(NSPoint(x:point.x,y:point.y)) }) else { continue }
                     result.append(.init(endpoint:.init(node:node.id,portID:port.id),octant:direction,point:point))
                 }
@@ -40,6 +41,10 @@ extension AlbumCanvasView {
                 let horizontal=abs(CirclePortGeometry.normal(handle.octant).x)>0.7
                 drawText(label,x:p.x,y:p.y+(horizontal && isOut ? 10:-20),size:9,color:StudioTheme.textNS,maxWidth:42)
             }
+        }
+        if let handle=selectedPortHandle() {
+            let ring=NSBezierPath(ovalIn:NSRect(x:handle.point.x-10,y:handle.point.y-10,width:20,height:20))
+            StudioTheme.accentNS.setStroke();ring.lineWidth=3;ring.stroke()
         }
     }
     func shortPortLabel(_ port:CirclePort)->String {

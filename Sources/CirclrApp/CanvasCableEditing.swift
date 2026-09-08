@@ -6,19 +6,29 @@ struct CableToolsView: View {
     let title: String
     let mode: CircleCableGesture.Mode
     let canReconnect: Bool
+    let direction: CirclePortDirection
+    let placement: CircleConnectionPlacement
     let chooseMode: (CircleCableGesture.Mode) -> Void
+    let chooseEnd: (CirclePortDirection) -> Void
+    let edit: () -> Void
     let disconnect: () -> Void
     let close: () -> Void
     var body: some View {
         VStack(alignment:.leading,spacing:8) {
             HStack { Text(title).lineLimit(1).truncationMode(.middle); Spacer(); Button("닫기",action:close) }
-            HStack(spacing:14) {
+            HStack(spacing:12) {
                 if canReconnect { Button("재연결") { chooseMode(.reconnect) }.foregroundStyle(mode == .reconnect ? StudioTheme.accent:StudioTheme.text) }
                 Button("위치 이동") { chooseMode(.placement) }.foregroundStyle(mode == .placement ? StudioTheme.accent:StudioTheme.text)
-                Text(mode == .reconnect ? "OUT 또는 IN 끝점을 끌어 연결" : "끝점을 원래 서클 둘레로 이동").foregroundStyle(StudioTheme.secondary)
+                Button("OUT · \(placement.from.label)") { chooseEnd(.output) }
+                    .foregroundStyle(direction == .output ? StudioTheme.accent : StudioTheme.text).accessibilityLabel("OUT 끝점 선택 · \(placement.from.label)")
+                Button("IN · \(placement.to.label)") { chooseEnd(.input) }
+                    .foregroundStyle(direction == .input ? StudioTheme.accent : StudioTheme.text).accessibilityLabel("IN 끝점 선택 · \(placement.to.label)")
                 Spacer()
+                if canReconnect { Button("편집", action: edit).help("선택 케이블을 바로 편집 · Return") }
                 if canReconnect { Button("해제",action:disconnect) }
             }
+            Text(canReconnect ? "Tab 끝점 · ← → 위치 · ↑ ↓ 케이블 · Return 편집" : "Tab 끝점 · ← → 위치 · ↑ ↓ 케이블")
+                .foregroundStyle(StudioTheme.secondary).fixedSize(horizontal:false,vertical:true)
         }.font(.system(size:12)).buttonStyle(.plain).padding(12)
             .background(StudioTheme.surface).clipShape(RoundedRectangle(cornerRadius:8))
             .overlay(RoundedRectangle(cornerRadius:8).stroke(StudioTheme.accent.opacity(0.7)))
@@ -27,8 +37,10 @@ struct CableToolsView: View {
 
 extension AlbumCanvasView {
     func cableDiagnostics()->[String:Any] {
-        ["selected":store.json(selectedCable),"mode":cableMode.rawValue,"dragging":cableDrag != nil,
+        ["selected":store.json(selectedCable),"selectedPort":store.json(selectedCanvasPort),"keyboardEnd":selectedCableEnd.rawValue,
+         "editorIntent":store.json(store.connectionEditorIntent),"mode":cableMode.rawValue,"dragging":cableDrag != nil,
          "toolsFrame":cableTools.map{[$0.frame.minX,$0.frame.minY,$0.frame.width,$0.frame.height]} ?? [],
+         "portToolsFrame":portTools.map{[$0.frame.minX,$0.frame.minY,$0.frame.width,$0.frame.height]} ?? [],
          "handles":visiblePortHandles().map{["endpoint":store.json($0.endpoint),"octant":$0.octant.rawValue,"point":[$0.point.x,$0.point.y]]},
          "endpoints":cableEndpointHandles().map{["direction":$0.0.rawValue,"point":[$0.1.point.x,$0.1.point.y]]},
          "cables":(scene?.edges ?? []).compactMap{edge -> [String:Any]? in
@@ -39,15 +51,19 @@ extension AlbumCanvasView {
     }
     var selectedSceneCable: CircleSceneEdge? { guard let selectedCable else{return nil};return scene?.edges.first { $0.connectionID == selectedCable } }
     func clearCableSelection() {
-        selectedCable=nil;cableDrag=nil;connectionToken=nil;cableTools?.removeFromSuperview();cableTools=nil;needsDisplay=true
+        selectedCable=nil;selectedCanvasPort=nil;selectedCableEnd = .output;cableDrag=nil;connectionToken=nil
+        cableTools?.removeFromSuperview();cableTools=nil;portTools?.removeFromSuperview();portTools=nil;needsDisplay=true
     }
     func selectCable(_ edge: CircleSceneEdge) {
         guard let id=edge.connectionID else{return}
+        clearCableSelection()
         selectedCable=id;selectedCableProjectID=store.project.id;cableMode = .reconnect
+        selectedCableEnd = .output
         if case .composition = id.from {cableMode = .placement}
-        refreshCableTools();needsDisplay=true
+        interruptPlaybackFollow();refreshCableTools();window?.makeFirstResponder(self);needsDisplay=true
     }
     func refreshCableTools() {
+        defer { refreshPortTools() }
         guard selectedCableProjectID==store.project.id,let id=selectedCable,let edge=selectedSceneCable,
               let a=scene?.node(edge.from),let b=scene?.node(edge.to),isVisible(a),isVisible(b),let curve=connectionCurve(edge),store.movieWriter==nil,
               !(store.playback.playing && store.playbackFollow == .following),workspaceViewport.width>320 else {
@@ -60,23 +76,25 @@ extension AlbumCanvasView {
         }
         let title=name(id.from,edge.fromPortID)+" → "+name(id.to,edge.toPortID)
         let canReconnect:Bool = {if case .composition = id.from {return false};return true}()
-        let view=CableToolsView(title:title,mode:cableMode,canReconnect:canReconnect,chooseMode:{[weak self] mode in
+        let view=CableToolsView(title:title,mode:cableMode,canReconnect:canReconnect,direction:selectedCableEnd,placement:edge.placement,chooseMode:{[weak self] mode in
             guard let self else{return};self.cableDrag=nil;self.connectionToken=nil;self.cableMode=mode;self.refreshCableTools();self.window?.makeFirstResponder(self);self.needsDisplay=true
-        },disconnect:{[weak self] in self?.disconnectSelectedCable()},close:{[weak self] in self?.clearCableSelection()})
+        },chooseEnd:{[weak self] in self?.chooseCableEnd($0)},edit:{[weak self] in self?.editConnectionSelection()},
+            disconnect:{[weak self] in self?.disconnectSelectedCable()},close:{[weak self] in self?.clearCableSelection()})
         if let cableTools {cableTools.rootView=view} else {let host=NSHostingView(rootView:view);addSubview(host);cableTools=host}
-        let width=min(650,workspaceViewport.width-16),middle=(try? curve.point(at:0.5)) ?? curve.from
+        let width=min(650,workspaceViewport.width-16),height=width<560 ? 116.0:102.0,middle=(try? curve.point(at:0.5)) ?? curve.from
         let x=max(workspaceViewport.minX+8,min(workspaceViewport.maxX-width-8,middle.x-width/2))
-        let positions=[middle.y+30,middle.y-100,workspaceViewport.minY+8,workspaceViewport.maxY-82].map{max(workspaceViewport.minY+8,min(workspaceViewport.maxY-82,$0))}
+        let positions=[middle.y+30,middle.y-height-24,workspaceViewport.minY+8,workspaceViewport.maxY-height-8].map{max(workspaceViewport.minY+8,min(workspaceViewport.maxY-height-8,$0))}
         let y=positions.first {y in
-            let rect=NSRect(x:x,y:y,width:width,height:74).insetBy(dx:-16,dy:-16)
+            let rect=NSRect(x:x,y:y,width:width,height:height).insetBy(dx:-16,dy:-16)
             return !rect.contains(NSPoint(x:curve.from.x,y:curve.from.y)) && !rect.contains(NSPoint(x:curve.to.x,y:curve.to.y)) && editor?.frame.intersects(rect) != true
         } ?? workspaceViewport.minY+8
-        cableTools?.frame=NSRect(x:x,y:y,width:width,height:74)
+        cableTools?.frame=NSRect(x:x,y:y,width:width,height:height)
         cableTools?.isHidden=cableDrag != nil
     }
     func cablePointAvailable(_ point:Point,labels:Bool=true)->Bool {
         let p=NSPoint(x:point.x,y:point.y)
         return workspaceViewport.contains(p) && editor?.frame.contains(p) != true && !(cableTools?.isHidden == false && cableTools?.frame.contains(p) == true) &&
+            portTools?.frame.contains(p) != true &&
             (!labels || !labelPlacements.contains{$0.rect.insetBy(dx:-3,dy:-3).contains(p)})
     }
     func hitCable(_ point:NSPoint)->CircleSceneEdge? {
@@ -95,7 +113,7 @@ extension AlbumCanvasView {
     }
     func beginCableDrag(at point:NSPoint)->Bool {
         guard let hit=cableEndpointHandles().first(where:{hypot($0.1.point.x-point.x,$0.1.point.y-point.y)<=12}),let id=selectedCable else{return false}
-        do {cableDrag=try CircleCableGesture(id:id,direction:hit.0,mode:cableMode,project:store.project);connectionToken=UUID();cableDragOriginal=store.editOriginal;connectionPoint=point;cableTools?.isHidden=true;needsDisplay=true}
+        do {cableDrag=try CircleCableGesture(id:id,direction:hit.0,mode:cableMode,project:store.project);selectedCableEnd=hit.0;connectionToken=UUID();cableDragOriginal=store.editOriginal;connectionPoint=point;cableTools?.isHidden=true;needsDisplay=true}
         catch {store.status=error.localizedDescription}
         return true
     }
@@ -145,7 +163,7 @@ extension AlbumCanvasView {
         for (direction,handle) in cableEndpointHandles() {
             let p=NSPoint(x:handle.point.x,y:handle.point.y)
             StudioTheme.canvasNS.setFill();NSBezierPath(ovalIn:NSRect(x:p.x-10,y:p.y-10,width:20,height:20)).fill()
-            StudioTheme.accentNS.setStroke();let ring=NSBezierPath(ovalIn:NSRect(x:p.x-10,y:p.y-10,width:20,height:20));ring.lineWidth=2;ring.stroke()
+            StudioTheme.accentNS.setStroke();let ring=NSBezierPath(ovalIn:NSRect(x:p.x-10,y:p.y-10,width:20,height:20));ring.lineWidth=direction == selectedCableEnd ? 3.5:1.5;ring.stroke()
             let descriptor=scene?.node(handle.endpoint.node)?.ports.first{$0.id==handle.endpoint.portID}
             let label=descriptor.map(shortPortLabel) ?? (direction == .output ? "OUT":"IN")
             let horizontal=abs(CirclePortGeometry.normal(handle.octant).x)>0.7

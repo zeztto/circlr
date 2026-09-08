@@ -81,3 +81,16 @@ C2 결과: 케이블 선택·OUT/IN 재연결·위치-only drag·Delete를 구�
 - Git: `f3b2ba2`부터 같은 private 개발 branch에 검증된 source checkpoint를 남긴다. C3 전체 완료·녹음 branch 통합·사용 앱 출고는 별도 gate다.
 
 C3a 결과: 전체 Swift 190개와 release build를 통과했다. 전용 native 앱의 출력별 케이블을 10회 확인했고 H.264/AAC 30.755초·919프레임·누락 0의 실제 캔버스 녹화에서 두 출력의 구분을 확인했다. 가려진 일반 창의 애니메이션 중단과 녹화 중 계속 진행하는 기존 정책을 구분한다. 검증 프로젝트 생성기와 helper의 정확한 허용 경로를 추가했다. [C3a QA](../qa/ports-playback-review.md). 다음은 C3b의 개별 케이블/포트 키보드·VoiceOver와 작은 화면 밀집 배치다.
+
+## C3b 작업 계약 · 키보드와 접근성
+
+- development-lead → UX 계약 → native Swift utility → read-only 검토 → QA. 직전 spawn이 실제 슬롯 한도로 거절되어 delegation은 none이다. C3a의 `b477aaf`에서 같은 개발 branch를 이어간다.
+- 캔버스의 K/Shift K는 선택 서클의 케이블, P/Shift P는 논리 포트를 순회한다. 선택 케이블에서 Tab은 OUT/IN 전환, 좌우는 선택한 끝점의 8방향 위치 이동, 상하는 이전/다음 케이블이다. Return/L은 선택 케이블 또는 포트가 미리 지정된 연결 편집기를 연다. Esc는 선택을 해제하고 Delete는 선택 케이블만 해제한다. 키 반복으로 Undo를 쌓지 않으며 위치 변경은 음악 불변·한 키 한 Undo다.
+- 마우스·키보드가 같은 선택 상태와 도구막대를 사용한다. 좁은 화면에서 조작 안내를 줄바꿈하고 도구막대를 workspace 안에 둔다. 포트 선택은 별도 창 없이 표시한다. 명령 검색에도 연결/포트 탐색을 노출한다. 텍스트·MIDI/오디오 편집기 내부 입력을 캔버스 핫키로 가로채지 않는다.
+- 화면에 드러난 실제 포트는 octant 중복 없이 하나의 접근성 항목으로, 케이블은 실제 IN/OUT 이름을 가진 항목으로 제공한다. 접근성 객체를 redraw마다 교체하지 않는다. 가려진 항목을 화면 hit/접근성 대상으로 남기지 않으며 선택 뒤 편집·위치·해제 버튼을 사용할 수 있게 한다. 접힌 그룹은 실제 노출 port binding을 만들지 않는다.
+- 소유 경로: App `AlbumCanvas.swift`, `CanvasCableEditing.swift`, `CanvasPorts.swift`, 신규 `CanvasConnectionNavigation.swift`·`PortKeyboardControls.swift`, `PortConnectionsEditor.swift`, `AppStore.swift`, `CanvasCommands.swift`, 필요한 `AlbumWorkspace.swift`·`InlineCircleEditor.swift`. Core 음악 schema·renderer·MCP 쓰기 계약을 바꾸지 않는다. README/CHANGELOG와 C3b QA 기록을 갱신한다.
+- 검증: 기존 전체 offline Swift 및 release build. 별도 port QA fixture에서 키보드 순회·prefill·IN/OUT 위치·한 Undo·Esc·Delete/Undo·저장/같은 파일 재열기의 상태를 MCP readout과 대조한다. AX의 항목 이름·선택 상태·중복/가림 및 작은 창에서 읽을 수 있는 조작을 확인한다. 실제 VoiceOver 발화 검증 여부는 AX 검증과 구분해 기록한다. 소스 checkpoint만 private push하며 main/사용 앱은 교체하지 않는다.
+
+C3b 결과: 케이블·논리 포트 순환, 선택 대상 prefill, 편집기 내부 Tab/방향키/Return 재연결, 포트 Delete 보호, 케이블 Delete/Undo, 양 끝 16회 방향 이동의 음악 불변과 같은 파일 재열기 상태 초기화를 실제 QA 앱에서 확인했다. 확대 중 초기 검색 포커스가 빠지는 결함은 컨트롤 준비와 카메라 완료를 연결해 수정했다. canvas 1080×673에서도 편집 적용 버튼과 스크롤을 확인했다. [C3b QA와 빌드별 근거](../qa/ports-keyboard-review.md).
+
+다음 실행은 C3의 남은 밀집 배치/시간 손잡이/신호 종류/그룹 조합과 실제 VoiceOver 발화, D의 typed-port MCP·배치 revision 계약 및 group binding, E의 녹음 branch 통합과 앱 출고 회귀다. C3b 소스 checkpoint를 C3/D/E 전체 완료로 취급하지 않는다. 현재 런타임의 추가 spawn도 한도 오류로 거절됐으므로 이번 리뷰는 같은 실행자의 역할 전환이며 독립 서브 에이전트 검토가 아니다.

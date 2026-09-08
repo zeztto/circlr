@@ -1,9 +1,18 @@
 import SwiftUI
 import CirclrCore
 
+struct ConnectionEditorIntent: Equatable, Codable {
+    var id = UUID()
+    var projectID: ID
+    var node: CircleAddress
+    var portID: String?
+    var connection: CircleConnectionID?
+}
+
 extension AppStore {
-    func showConnections() {
+    func showConnections(portID: String? = nil, replacing: CircleConnectionID? = nil) {
         guard let node = selectedCircle, !node.ports.isEmpty else { return }
+        connectionEditorIntent = .init(projectID: project.id, node: node.id, portID: portID, connection: replacing)
         connectionsOpen = true; hierarchySettingsOpen = false; focusHierarchy(node.id, detail: true)
     }
     func moveConnection(_ id: CircleConnectionID, from: PortOctant? = nil, to: PortOctant? = nil) {
@@ -34,6 +43,7 @@ struct PortConnectionsEditor: View {
     @State private var secondOctant = PortOctant.west
     @State private var replacing: CircleConnectionID?
     @State private var query = ""
+    @StateObject private var keyboard = PortKeyboardFocus()
     private var node: CircleSceneNode? { store.selectedCircle }
     private var ports: [CirclePort] { node?.ports ?? [] }
     private var own: CirclePortEndpoint? {
@@ -66,7 +76,8 @@ struct PortConnectionsEditor: View {
                 }
             }
         }
-        .onAppear { reset() }
+        .onAppear { loadIntent(); focusSearch() }
+        .onChange(of: store.connectionEditorIntent?.id) { _, _ in loadIntent(); focusSearch() }
         .onChange(of: ownPortID) { _, _ in
             if let own, let target, (try? CirclePortCatalog.normalize(own,target,in:store.project)) == nil { self.target = nil }
             if replacing == nil, let port = ports.first(where: { $0.id == ownPortID }) {
@@ -79,7 +90,7 @@ struct PortConnectionsEditor: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("연결 \(connections.count)개").fontWeight(.semibold)
             if connections.isEmpty { Text("입력 또는 출력을 골라 첫 연결을 만드세요").foregroundStyle(StudioTheme.secondary) }
-            ForEach(connections, id: \.id) { edge in row(edge) }
+            ForEach(Array(connections.enumerated()), id: \.element.id) { index, edge in row(edge, index: index) }
         }
     }
     private var compose: some View {
@@ -87,26 +98,27 @@ struct PortConnectionsEditor: View {
             HStack {
                 Text(replacing == nil ? "새 연결" : "케이블 재연결").fontWeight(.semibold)
                 Spacer()
-                if replacing != nil { Button("취소") { reset() } }
+                if replacing != nil { PortActionButton(title: "취소", keyboard: keyboard, order: 0) { reset(); focusSearch() } }
             }
-            StudioChoice("", selection: $ownPortID, options: ports.map { ($0.id,$0.name) }).accessibilityLabel("이 서클의 IN OUT 포트")
-            TextField("대상 이름 검색", text: $query).textFieldStyle(StudioFieldStyle())
-            StudioChoice("", selection: $target, options: [(Optional<CirclePortEndpoint>.none,"대상 포트 선택")]+targets.map { (Optional($0.0),$0.1) }).accessibilityLabel("대상 포트")
+            PortChoice(label: "이 서클의 IN OUT 포트", selection: $ownPortID, options: ports.map { ($0.id,$0.name) }, keyboard: keyboard, order: 10)
+            PortSearchField(text: $query, keyboard: keyboard, order: 20)
+            PortChoice(label: "대상 포트", selection: $target, options: [(Optional<CirclePortEndpoint>.none,"대상 포트 선택")]+targets.map { (Optional($0.0),$0.1) }, keyboard: keyboard, order: 30)
             HStack {
-                octantPicker("시작 위치", value: $firstOctant)
-                octantPicker("대상 위치", value: $secondOctant)
+                octantPicker("시작 위치", value: $firstOctant, order: 40)
+                octantPicker("대상 위치", value: $secondOctant, order: 50)
             }
             HStack {
                 Text("신호는 항상 OUT → IN").foregroundStyle(StudioTheme.secondary)
                 Spacer()
-                Button(replacing == nil ? "연결" : "재연결 적용") { commit() }.disabled(own == nil || target == nil)
+                PortActionButton(title: replacing == nil ? "연결" : "재연결 적용", keyboard: keyboard, order: 60) { commit(); focusSearch() }.disabled(own == nil || target == nil)
             }
+            Text("Tab 항목 이동 · ↑ ↓ 포트 선택").font(.system(size: 11)).foregroundStyle(StudioTheme.secondary)
         }
     }
-    private func octantPicker(_ title: String, value: Binding<PortOctant>) -> some View {
+    private func octantPicker(_ title: String, value: Binding<PortOctant>, order: Int) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(title).font(.system(size: 10)).foregroundStyle(StudioTheme.secondary)
-            StudioChoice("", selection: value, options: PortOctant.allCases.map { ($0,$0.label) }).accessibilityLabel(title)
+            PortChoice(label: title, selection: value, options: PortOctant.allCases.map { ($0,$0.label) }, keyboard: keyboard, order: order)
         }
     }
     private func title(_ endpoint: CirclePortEndpoint) -> String {
@@ -114,7 +126,7 @@ struct PortConnectionsEditor: View {
         let port = (try? CirclePortCatalog.ports(at: endpoint.node, in: store.project))?.first { $0.id == endpoint.portID }?.name ?? endpoint.portID
         return name + " · " + port
     }
-    private func row(_ edge: CirclePortConnection) -> some View {
+    private func row(_ edge: CirclePortConnection, index: Int) -> some View {
         VStack(alignment: .leading, spacing: 7) {
             Text(title(edge.from)).lineLimit(2)
             Label(title(edge.to), systemImage: "arrow.down.right").lineLimit(2)
@@ -122,22 +134,33 @@ struct PortConnectionsEditor: View {
                 HStack {
                     Text(edge.signal == .audio ? "오디오 · gain \(edge.gain.formatted())" : edge.signal == .midi ? "MIDI 연주" : "재생 경로").foregroundStyle(StudioTheme.secondary)
                     Spacer()
-                    Button("재연결") {
-                        replacing = edge.id; query = ""
-                        let incoming = edge.to.node == node?.id
-                        ownPortID = incoming ? edge.to.portID : edge.from.portID
-                        target = incoming ? edge.from : edge.to
-                        let placement = store.project.portLayout?.placement(for: edge.id) ?? .init()
-                        firstOctant = incoming ? placement.to : placement.from; secondOctant = incoming ? placement.from : placement.to
-                    }
-                    Button("해제") { let original = store.editOriginal; store.mutate("케이블 해제") { try CircleConnectionEditing.disconnect(edge.id, original: original, in: &$0) } }
+                    PortActionButton(title: "재연결", keyboard: keyboard, order: 100+index*10, label: "재연결 · " + title(edge.from) + " → " + title(edge.to)) { populate(edge); focusSearch() }
+                    PortActionButton(title: "해제", keyboard: keyboard, order: 101+index*10, label: "해제 · " + title(edge.from) + " → " + title(edge.to)) { let original = store.editOriginal; store.mutate("케이블 해제") { try CircleConnectionEditing.disconnect(edge.id, original: original, in: &$0) } }
                 }
             }
             HStack {
-                octantPicker("OUT 위치", value: Binding(get: { store.project.portLayout?.placement(for: edge.id).from ?? .east }, set: { store.moveConnection(edge.id, from: $0) }))
-                octantPicker("IN 위치", value: Binding(get: { store.project.portLayout?.placement(for: edge.id).to ?? .west }, set: { store.moveConnection(edge.id, to: $0) }))
+                octantPicker("OUT 위치", value: Binding(get: { store.project.portLayout?.placement(for: edge.id).from ?? .east }, set: { store.moveConnection(edge.id, from: $0) }), order: 102+index*10)
+                octantPicker("IN 위치", value: Binding(get: { store.project.portLayout?.placement(for: edge.id).to ?? .west }, set: { store.moveConnection(edge.id, to: $0) }), order: 103+index*10)
             }
             Divider()
+        }
+    }
+    private func populate(_ edge: CirclePortConnection) {
+        replacing = edge.id; query = ""
+        let incoming = edge.to.node == node?.id
+        ownPortID = incoming ? edge.to.portID : edge.from.portID
+        target = incoming ? edge.from : edge.to
+        let placement = store.project.portLayout?.placement(for: edge.id) ?? .init()
+        firstOctant = incoming ? placement.to : placement.from; secondOctant = incoming ? placement.from : placement.to
+    }
+    private func focusSearch() { DispatchQueue.main.async { keyboard.focus(20) } }
+    private func loadIntent() {
+        reset()
+        guard let intent = store.connectionEditorIntent, intent.projectID == store.project.id, intent.node == node?.id else { return }
+        if let id = intent.connection, let edge = connections.first(where: { $0.id == id }) { populate(edge) }
+        else if let port = ports.first(where: { $0.id == intent.portID }) {
+            ownPortID = port.id; firstOctant = port.defaultOctant
+            secondOctant = port.direction == .input ? .east : .west
         }
     }
     private func reset() {

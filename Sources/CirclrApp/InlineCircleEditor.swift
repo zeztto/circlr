@@ -76,8 +76,12 @@ struct InlineCircleEditor: View {
         .font(.system(size: 13)).buttonStyle(CanvasButtonStyle()).controlSize(.regular)
         .tint(StudioTheme.accent).preferredColorScheme(.dark)
         .onExitCommand { store.hierarchySettingsOpen = false; store.hierarchyParent() }
-        .onAppear { topPitch = store.currentLane?.notes.map(\.pitch).max().map { min(128,max(12,$0+1)) } ?? (store.selectedTrack?.instrument.drums == true ? 48 : 72);nameFocused=store.hierarchySettingsOpen }
-        .onChange(of:store.hierarchySettingsOpen){_,value in nameFocused=value}
+        .onAppear {
+            topPitch = store.currentLane?.notes.map(\.pitch).max().map { min(128,max(12,$0+1)) } ?? (store.selectedTrack?.instrument.drums == true ? 48 : 72)
+            // A false FocusState write can clear focus already assigned by the connection editor.
+            if store.hierarchySettingsOpen { nameFocused = true }
+        }
+        .onChange(of:store.hierarchySettingsOpen){_,value in if value || nameFocused { nameFocused=value } }
     }
     private var midi: some View {
         VStack(alignment: .leading, spacing: 10) {
