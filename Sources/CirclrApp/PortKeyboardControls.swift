@@ -175,6 +175,9 @@ struct PortSearchField: NSViewRepresentable {
     let keyboard: PortKeyboardFocus
     let order: Int
     var label: String = "대상 이름 검색"
+    var moveSelection: ((Int) -> Void)?
+    var submit: (() -> Void)?
+    @Environment(\.isEnabled) private var enabled
     func makeCoordinator() -> Coordinator { Coordinator(self) }
     func makeNSView(context: Context) -> PortSearchControl {
         let control = PortSearchControl(); control.placeholderString = label
@@ -185,6 +188,7 @@ struct PortSearchField: NSViewRepresentable {
     }
     func updateNSView(_ control: PortSearchControl, context: Context) {
         context.coordinator.parent = self; control.navigation = keyboard; keyboard.register(control, order: order)
+        control.isEnabled=enabled
         control.placeholderString=label;control.setAccessibilityLabel(label)
         if control.stringValue != text { control.stringValue = text }
     }
@@ -198,10 +202,14 @@ struct PortSearchField: NSViewRepresentable {
             if let control = notification.object as? NSTextField { parent.text = control.stringValue }
         }
         func control(_ control: NSControl, textView: NSTextView, doCommandBy selector: Selector) -> Bool {
-            guard !textView.hasMarkedText() else { return false }
+            guard parent.enabled,!textView.hasMarkedText() else { return false }
             if selector == #selector(NSResponder.insertTab(_:)) || selector == #selector(NSResponder.insertBacktab(_:)) {
                 parent.keyboard.move(from: parent.order, backwards: selector == #selector(NSResponder.insertBacktab(_:))); return true
             }
+            if let move=parent.moveSelection,selector == #selector(NSResponder.moveDown(_:)) || selector == #selector(NSResponder.moveUp(_:)) {
+                move(selector == #selector(NSResponder.moveDown(_:)) ? 1:-1);return true
+            }
+            if let submit=parent.submit,selector == #selector(NSResponder.insertNewline(_:)) {submit();return true}
             return false
         }
     }

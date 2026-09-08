@@ -44,6 +44,7 @@ struct PortConnectionsEditor: View {
     @State private var secondOctant = PortOctant.west
     @State private var replacing: CircleConnectionID?
     @State private var query = ""
+    @State private var currentPortOnly = false
     @State private var managingGroupPorts = false
     @StateObject private var keyboard = PortKeyboardFocus()
     private var node: CircleSceneNode? { store.selectedCircle }
@@ -69,19 +70,25 @@ struct PortConnectionsEditor: View {
         }
         return endpoint
     }
-    private var targets: [(CirclePortEndpoint, String)] {
+    private var targets: [PortTargetItem] {
         guard let own else { return [] }
         return (store.hierarchyScene?.nodes ?? []).flatMap { n in n.ports.compactMap { port in
             let endpoint = CirclePortEndpoint(node: n.id, portID: port.id)
             guard (try? CirclePortCatalog.normalize(own, endpoint, in: store.project)) != nil else { return nil }
             let title = n.title + " · " + port.name
             guard query.isEmpty || title.localizedCaseInsensitiveContains(query) else { return nil }
-            return (endpoint, title)
+            return PortTargetItem(endpoint:endpoint,title:n.title,port:port.name)
         } }
     }
+    private var listedConnections:[CirclePortConnection] {
+        guard currentPortOnly,let own else{return connections}
+        let logical=(try? GroupPortEditing.resolve(own,in:store.project)) ?? own
+        return connections.filter{$0.from==logical || $0.to==logical}
+    }
+    private var canConnect:Bool {own != nil && target.map{id in targets.contains{$0.endpoint==id}} == true}
     var body: some View {
         GeometryReader { geometry in
-            ScrollView {
+            VStack(alignment:.leading,spacing:12) {
                 if isGroup {
                     HStack {
                         Text("노출 포트 \(ports.count)개").fontWeight(.semibold)
@@ -92,16 +99,16 @@ struct PortConnectionsEditor: View {
                     }.padding(.bottom,12)
                 }
                 if managing,let node {
-                    GroupPortEditor(store:store,group:node.id,keyboard:keyboard) { id in
+                    ScrollView {GroupPortEditor(store:store,group:node.id,keyboard:keyboard) { id in
                         managingGroupPorts=false;replacing=nil;target=nil;query="";ownPortID=id;focusSearch()
-                    }
-                } else if geometry.size.width >= 660 {
+                    }}
+                } else if geometry.size.width >= 800 {
                     HStack(alignment: .top, spacing: 24) {
-                        compose.frame(maxWidth: .infinity)
-                        connectionList.frame(maxWidth: .infinity)
+                        compose(height:geometry.size.height-(isGroup ? 54:0)).frame(maxWidth: .infinity)
+                        connectionWorkspace.frame(maxWidth: .infinity)
                     }.padding(.trailing, 8)
                 } else {
-                    VStack(alignment: .leading, spacing: 18) { compose; Divider(); connectionList }.padding(.trailing, 8)
+                    ScrollView {VStack(alignment: .leading, spacing: 18) { compose(height:340); Divider(); connectionHeading;connectionList }.padding(.trailing, 8)}
                 }
             }
         }
@@ -113,69 +120,92 @@ struct PortConnectionsEditor: View {
                 firstOctant = port.defaultOctant; secondOctant = port.direction == .input ? .east : .west
             }
         }
-        .onChange(of: query) { _, _ in if let target, !targets.contains(where: { $0.0 == target }) { self.target = nil } }
+        .onChange(of: targets.map(\.endpoint)) { _, ids in if let target,!ids.contains(target) {self.target=nil} }
         .onChange(of: ports.map(\.id)) {_,ids in if !ids.contains(ownPortID) {reset()} }
+    }
+    private var connectionWorkspace:some View {
+        VStack(alignment:.leading,spacing:10) {connectionHeading;ScrollView {connectionList}}
+    }
+    private var connectionHeading:some View {
+        HStack {
+            Text("연결 \(listedConnections.count)개").fontWeight(.semibold)
+            Spacer()
+            PortChoice(label:"연결 표시 범위",selection:$currentPortOnly,options:[(false,"전체 포트"),(true,"현재 포트")],keyboard:keyboard,order:70).frame(width:120)
+        }
     }
     private var connectionList: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("연결 \(connections.count)개").fontWeight(.semibold)
-            if connections.isEmpty { Text("입력 또는 출력을 골라 첫 연결을 만드세요").foregroundStyle(StudioTheme.secondary) }
-            ForEach(Array(connections.enumerated()), id: \.element.id) { index, edge in row(edge, index: index) }
-        }
+            if listedConnections.isEmpty {Text(currentPortOnly ? "이 포트에 연결된 케이블이 없습니다":"입력 또는 출력을 골라 첫 연결을 만드세요").foregroundStyle(StudioTheme.secondary)}
+            ForEach(Array(listedConnections.enumerated()), id: \.element.id) { index, edge in row(edge, index: index) }
+        }.frame(maxWidth:.infinity,alignment:.leading)
     }
-    private var compose: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Text(replacing == nil ? "새 연결" : "케이블 재연결").fontWeight(.semibold)
-                Spacer()
+    private func compose(height:CGFloat)->some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing:8) {
+                PortChoice(label:"이 서클의 IN OUT 포트",selection:$ownPortID,options:ports.map{($0.id,$0.name)},keyboard:keyboard,order:10)
                 if replacing != nil { PortActionButton(title: "취소", keyboard: keyboard, order: 0) { reset(); focusSearch() }.frame(width:60) }
                 PortActionButton(title: replacing == nil ? "연결" : "재연결 적용", keyboard: keyboard, order: 60) { commit(); focusSearch() }
-                    .frame(width:110).disabled(own == nil || target == nil)
-            }
-            PortChoice(label: "이 서클의 IN OUT 포트", selection: $ownPortID, options: ports.map { ($0.id,$0.name) }, keyboard: keyboard, order: 10)
-            PortSearchField(text: $query, keyboard: keyboard, order: 20)
-            PortChoice(label: "대상 포트", selection: $target, options: [(Optional<CirclePortEndpoint>.none,"대상 포트 선택")]+targets.map { (Optional($0.0),$0.1) }, keyboard: keyboard, order: 30)
+                    .frame(width:replacing == nil ? 60:100).disabled(!canConnect)
+            }.frame(height:34)
+            HStack(spacing:8) {
+                PortChoice(label:"시작 위치",selection:$firstOctant,options:PortOctant.allCases.map{($0,"시작 "+$0.label)},keyboard:keyboard,order:40)
+                PortChoice(label:"대상 위치",selection:$secondOctant,options:PortOctant.allCases.map{($0,"대상 "+$0.label)},keyboard:keyboard,order:50)
+            }.frame(height:34)
             HStack {
-                octantPicker("시작 위치", value: $firstOctant, order: 40)
-                octantPicker("대상 위치", value: $secondOctant, order: 50)
-            }
-            HStack {
-                Text("신호는 항상 OUT → IN").foregroundStyle(StudioTheme.secondary)
+                Text("↑ ↓ 대상 선택 · Return 연결 · Tab 항목 이동").font(.system(size:11)).foregroundStyle(StudioTheme.secondary)
                 Spacer()
-            }
-            Text("Tab 항목 이동 · ↑ ↓ 포트 선택").font(.system(size: 11)).foregroundStyle(StudioTheme.secondary)
+            }.frame(height:14)
+            HStack(spacing:8) {
+                PortSearchField(text:$query,keyboard:keyboard,order:20,moveSelection:moveTarget,submit:{commit();focusSearch()})
+                Text("\(targets.count)개").font(.system(size:11)).foregroundStyle(StudioTheme.secondary).frame(width:36)
+            }.frame(height:34)
+            if targets.isEmpty {Text(query.isEmpty ? "연결 가능한 대상 포트가 없습니다":"검색 결과가 없습니다").foregroundStyle(StudioTheme.secondary).frame(maxWidth:.infinity).frame(height:max(60,height-148))}
+            else {PortTargetList(items:targets,selection:$target,keyboard:keyboard,order:30,activate:{commit();focusSearch()}).frame(height:max(60,height-148))}
         }
     }
-    private func octantPicker(_ title: String, value: Binding<PortOctant>, order: Int) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(title).font(.system(size: 10)).foregroundStyle(StudioTheme.secondary)
-            PortChoice(label: title, selection: value, options: PortOctant.allCases.map { ($0,$0.label) }, keyboard: keyboard, order: order)
-        }
+    private func moveTarget(_ step:Int) {
+        guard !targets.isEmpty else {target=nil;return}
+        let current=target.flatMap{id in targets.firstIndex{$0.endpoint==id}}
+        let index=current.map{max(0,min(targets.count-1,$0+step))} ?? 0
+        target=targets[index].endpoint
     }
     private func title(_ endpoint: CirclePortEndpoint) -> String {
         let endpoint=visible(presented(endpoint))
-        let name = store.hierarchyScene?.node(endpoint.node)?.title ?? "접힌 그룹 내부"
+        let name = store.hierarchyScene?.node(endpoint.node)?.title ?? storedTitle(endpoint.node)
         let port = (try? CirclePortCatalog.ports(at: endpoint.node, in: store.project))?.first { $0.id == endpoint.portID }?.name ?? endpoint.portID
         return name + " · " + port
     }
-    private func row(_ edge: CirclePortConnection, index: Int) -> some View {
-        VStack(alignment: .leading, spacing: 7) {
-            Text(title(edge.from)).lineLimit(2)
-            Label(title(edge.to), systemImage: "arrow.down.right").lineLimit(2)
-            if edge.signal != .flow || { if case .section = edge.from.node { return true }; return false }() {
-                HStack {
-                    Text(edge.signal == .audio ? "오디오 · gain \(edge.gain.formatted())" : edge.signal == .midi ? "MIDI 연주" : "재생 경로").foregroundStyle(StudioTheme.secondary)
-                    Spacer()
-                    PortActionButton(title: "재연결", keyboard: keyboard, order: 100+index*10, label: "재연결 · " + title(edge.from) + " → " + title(edge.to)) { populate(edge); focusSearch() }
-                    PortActionButton(title: "해제", keyboard: keyboard, order: 101+index*10, label: "해제 · " + title(edge.from) + " → " + title(edge.to)) { let original = store.editOriginal; store.mutate("케이블 해제") { try CircleConnectionEditing.disconnect(edge.id, original: original, in: &$0) } }
-                }
-            }
-            HStack {
-                octantPicker("OUT 위치", value: Binding(get: { store.project.portLayout?.placement(for: edge.id).from ?? .east }, set: { store.moveConnection(edge.id, from: $0) }), order: 102+index*10)
-                octantPicker("IN 위치", value: Binding(get: { store.project.portLayout?.placement(for: edge.id).to ?? .west }, set: { store.moveConnection(edge.id, to: $0) }), order: 103+index*10)
-            }
-            Divider()
+    private func storedTitle(_ address:CircleAddress)->String {
+        switch address {
+        case .music(let ai,let ui,let ni):
+            if let use=store.project.arrangements.first(where:{$0.id==ai})?.uses.first(where:{$0.id==ui}),
+               let section=store.project.sections.first(where:{$0.id==use.sectionID}),
+               let graph=try? SectionGraphEditing.effective(section:section,use:use),let node=graph.nodes.first(where:{$0.id==ni}) {return node.name}
+        case .signal(let id):if let node=store.project.signal.nodes.first(where:{$0.id==id}) {return node.name}
+        case .section(let ai,let ui):if let use=store.project.arrangements.first(where:{$0.id==ai})?.uses.first(where:{$0.id==ui}) {return use.name}
+        case .composition(let id):if let node=store.project.album?.composition(id) {return node.name}
+        default:break
         }
+        return "대상 서클 없음"
+    }
+    private func row(_ edge: CirclePortConnection, index: Int) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text(title(edge.from)).lineLimit(2).help(title(edge.from))
+            Label(title(edge.to), systemImage: "arrow.down.right").lineLimit(2).help(title(edge.to))
+            HStack(spacing:8) {
+            if edge.signal != .flow || { if case .section = edge.from.node { return true }; return false }() {
+                    PortActionButton(title: "재연결", keyboard: keyboard, order: 100+index*10, label: "재연결 · " + title(edge.from) + " → " + title(edge.to)) { populate(edge); focusSearch() }
+                        .frame(width:66)
+                    PortActionButton(title: "해제", keyboard: keyboard, order: 101+index*10, label: "해제 · " + title(edge.from) + " → " + title(edge.to)) { let original = store.editOriginal; store.mutate("케이블 해제") { try CircleConnectionEditing.disconnect(edge.id, original: original, in: &$0) } }
+                        .frame(width:52)
+            }
+                Spacer(minLength:0)
+                PortChoice(label:"OUT 위치 · "+title(edge.from),selection:Binding(get:{store.project.portLayout?.placement(for:edge.id).from ?? .east},set:{store.moveConnection(edge.id,from:$0)}),options:PortOctant.allCases.map{($0,"OUT "+$0.label)},keyboard:keyboard,order:102+index*10).frame(width:110)
+                PortChoice(label:"IN 위치 · "+title(edge.to),selection:Binding(get:{store.project.portLayout?.placement(for:edge.id).to ?? .west},set:{store.moveConnection(edge.id,to:$0)}),options:PortOctant.allCases.map{($0,"IN "+$0.label)},keyboard:keyboard,order:103+index*10).frame(width:100)
+            }
+            Text(edge.signal == .audio ? "오디오 · \(GainScale.text(edge.gain)) dB" : edge.signal == .midi ? "MIDI 연주" : "재생 경로").font(.system(size:11)).foregroundStyle(StudioTheme.secondary)
+            Divider()
+        }.padding(6).background(replacing==edge.id ? StudioTheme.raised:Color.clear,in:RoundedRectangle(cornerRadius:5))
     }
     private func populate(_ edge: CirclePortConnection) {
         replacing = edge.id; query = ""
@@ -203,7 +233,7 @@ struct PortConnectionsEditor: View {
         secondOctant = port?.direction == .input ? .east : .west
     }
     private func commit() {
-        guard let own, let target else { return }
+        guard canConnect,let own, let target else { return }
         let before = store.project, original = store.editOriginal
         store.mutate(replacing == nil ? "포트 연결" : "케이블 재연결") { p in
             try CircleConnectionEditing.connect(own, target, firstOctant: firstOctant, secondOctant: secondOctant,
