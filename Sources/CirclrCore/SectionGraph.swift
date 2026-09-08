@@ -1,12 +1,13 @@
 import Foundation
 
-public enum MusicSignal: String, Codable { case midi, audio }
+public enum MusicSignal: String, Codable, Sendable { case midi, audio }
 public enum MusicCircleContent: Codable, Equatable {
     case midi(laneID: ID)
     case audio(laneID: ID, clipID: ID)
     case instrument(trackID: ID)
     case effect(Effect)
     case mix
+    case router(AudioRouter)
     case output(trackID: ID)
     case rhythmMIDI(trackID: ID)
     case rhythmAudio(trackID: ID)
@@ -14,7 +15,7 @@ public enum MusicCircleContent: Codable, Equatable {
     public var input: MusicSignal? {
         switch self {
         case .instrument: return .midi
-        case .effect, .mix, .output: return .audio
+        case .effect, .mix, .router, .output: return .audio
         default: return nil
         }
     }
@@ -32,6 +33,7 @@ public enum MusicCircleContent: Codable, Equatable {
         case .instrument: return "악기"
         case .effect: return "이펙터"
         case .mix: return "믹스"
+        case .router: return "오디오 라우터"
         case .output: return "출력"
         case .rhythmMIDI, .rhythmAudio: return "리듬 패턴"
         }
@@ -62,6 +64,10 @@ public struct MusicConnection: Codable, Equatable, Identifiable {
     public var signal: MusicSignal
     public var gain: Double = 1
     public var sidechain = false
+    public var fromPortID: String?
+    public var toPortID: String?
+    public var resolvedFromPortID: String { fromPortID ?? (signal == .midi ? CirclePort.midiOutput : CirclePort.audioOutput) }
+    public var resolvedToPortID: String { toPortID ?? (sidechain ? CirclePort.sidechainInput : signal == .midi ? CirclePort.midiInput : CirclePort.audioInput) }
     public init(from: ID, to: ID, signal: MusicSignal) { self.from = from; self.to = to; self.signal = signal }
 }
 
@@ -148,14 +154,45 @@ public enum SectionGraphEditing {
         }
         project = candidate
     }
-    public static func connect(from: ID, to: ID, sidechain: Bool = false, in graph: inout SectionGraph) throws {
+    public static func connect(from: ID, to: ID, sidechain: Bool = false,
+                               fromPortID: String? = nil, toPortID: String? = nil, in graph: inout SectionGraph) throws {
         guard let source = graph.nodes.first(where: { $0.id == from }), let target = graph.nodes.first(where: { $0.id == to }),
               let signal = source.content.output, signal == target.content.input else { throw CirclrError("같은 종류의 MIDI 또는 오디오 포트에 연결하세요") }
-        if graph.edges.contains(where: { $0.from == from && $0.to == to && $0.sidechain == sidechain }) { return }
+        let outputs = CirclePort.ports(for: source.content).filter { $0.direction == .output &&
+            (fromPortID == nil || $0.id == fromPortID) }
+        let inputs = CirclePort.ports(for: target.content).filter { port in port.direction == .input &&
+            (toPortID.map { port.id == $0 } ?? (port.isSidechain == sidechain)) }
+        guard outputs.count == 1, inputs.count == 1, let output = outputs.first, let input = inputs.first,
+              output.signal == input.signal, !sidechain || input.isSidechain
+        else { throw CirclrError("호환되는 입력·출력 포트를 하나씩 지정하세요. 다중 bus는 port ID가 필요합니다") }
+        if graph.edges.contains(where: { $0.from == from && $0.to == to &&
+            $0.resolvedFromPortID == output.id && $0.resolvedToPortID == input.id }) { return }
         var candidate = graph
-        var edge = MusicConnection(from: from, to: to, signal: signal); edge.sidechain = sidechain
+        var edge = MusicConnection(from: from, to: to, signal: signal); edge.sidechain = input.isSidechain
+        // Keep existing implicit single-port documents byte-compatible when no IDs were requested.
+        edge.fromPortID = fromPortID; edge.toPortID = toPortID
         candidate.edges.append(edge)
         _ = try SectionGraphValidator.sorted(candidate)
+        graph = candidate
+    }
+    /// Insert one effect on one output bus without merging other buses or moving sidechains.
+    public static func insertEffect(_ node: MusicCircle, from: ID, fromPortID: String? = nil,
+                                    in graph: inout SectionGraph) throws {
+        guard case .effect = node.content, let source = graph.nodes.first(where: { $0.id == from }) else {
+            throw CirclrError("오디오 출력 서클과 새 이펙터를 선택하세요")
+        }
+        let ports = CirclePort.ports(for: source.content).filter {
+            $0.direction == .output && $0.signal == .audio && (fromPortID == nil || $0.id == fromPortID)
+        }
+        guard ports.count == 1, let port = ports.first else { throw CirclrError("이펙터를 삽입할 출력 bus를 지정하세요") }
+        var candidate = graph
+        for i in candidate.edges.indices where candidate.edges[i].from == from &&
+            candidate.edges[i].resolvedFromPortID == port.id && !candidate.edges[i].sidechain {
+            candidate.edges[i].from = node.id
+            if candidate.edges[i].fromPortID != nil { candidate.edges[i].fromPortID = CirclePort.audioOutput }
+        }
+        candidate.nodes.append(node)
+        try connect(from: from, to: node.id, fromPortID: fromPortID, in: &candidate)
         graph = candidate
     }
     public static func remove(_ ids: Set<ID>, from graph: inout SectionGraph) {
@@ -173,6 +210,7 @@ public enum SectionGraphValidator {
               edgeIDs.allSatisfy({ !$0.isEmpty }), Set(edgeIDs).count == edgeIDs.count else { throw CirclrError("음악 서클·연결의 ID 또는 개수를 확인하세요") }
         try AlbumEditing.validateLayout(graph.layout)
         let nodes = Dictionary(uniqueKeysWithValues: graph.nodes.map { ($0.id, $0) })
+        for node in graph.nodes { if case .router(let router) = node.content { try router.validate() } }
         var adjacency: [ID: [ID]] = [:], indegrees = Dictionary(uniqueKeysWithValues: ids.map { ($0, 0) })
         for edge in graph.edges {
             guard let from = nodes[edge.from], let to = nodes[edge.to], edge.signal == from.content.output,
@@ -181,6 +219,10 @@ public enum SectionGraphValidator {
             if edge.sidechain {
                 guard case .effect(let effect) = to.content, effect.kind == .compressor else { throw CirclrError("Sidechain은 compressor의 오디오 입력에 연결하세요") }
             }
+            guard CirclePort.ports(for: from.content).contains(where: { $0.id == edge.resolvedFromPortID && $0.direction == .output }),
+                  CirclePort.ports(for: to.content).contains(where: { $0.id == edge.resolvedToPortID && $0.direction == .input }),
+                  edge.sidechain == (edge.resolvedToPortID == CirclePort.sidechainInput)
+            else { throw CirclrError("음악 연결의 입력·출력 port ID와 sidechain 역할을 확인하세요") }
             adjacency[edge.from, default: []].append(edge.to); indegrees[edge.to, default: 0] += 1
         }
         var ready = ids.filter { indegrees[$0] == 0 }, cursor = 0, result: [MusicCircle] = []

@@ -9,18 +9,49 @@ public enum SectionGraphRenderer {
         guard Double(frames) * 8 * Double(workingBufferCount(plan)) < 1_073_741_824 else {
             throw CirclrError("섹션 내부 오디오가 준비 가능한 메모리 범위를 넘습니다")
         }
-        var buffers: [ID: PCM] = [:], outputs: [ID: PCM] = [:]
+        var buffers: [MusicBusEndpoint: PCM] = [:], outputs: [ID: PCM] = [:]
         let needed=audibleAncestors(plan)
         var consumers=audioConsumers(plan,needed:needed)
         for node in plan.orderedNodes where needed.contains(node.id) {
             try Task.checkCancellation()
             if node.content.output == .midi { continue }
+            let incoming = plan.connections.filter { $0.to.nodeID == node.id && $0.signal == .audio }
+            if case .router(let router) = node.content {
+                var inputs: [String: PCM] = [:]
+                if !node.muted {
+                    for edge in incoming {
+                        guard let source = buffers[edge.from] else { continue }
+                        if inputs[edge.to.portID] == nil { inputs[edge.to.portID] = PCM(frames: frames) }
+                        inputs[edge.to.portID]?.mix(source, gain: edge.gain)
+                    }
+                }
+                var visual = observe == nil ? nil : PCM(frames: frames)
+                for portID in AudioRouter.outputs {
+                    try Task.checkCancellation()
+                    let endpoint = MusicBusEndpoint(nodeID: node.id, portID: portID)
+                    guard consumers[endpoint, default: 0] > 0 || observe != nil else { continue }
+                    var bus = PCM(frames: frames)
+                    if !node.muted {
+                        for route in router.routes where route.output == portID {
+                            if let input = inputs[route.input] { bus.mix(input, gain: route.gain) }
+                        }
+                        if node.gain != 1 { bus.multiply(node.gain) }
+                        try AutomationDSP.apply(plan.automation[node.id] ?? [], to: &bus)
+                    }
+                    // Aggregate only for the legacy node meter, never for routing.
+                    visual?.mix(bus)
+                    if consumers[endpoint, default: 0] > 0 { buffers[endpoint] = bus }
+                }
+                if let visual { observe?(node.id, visual) }
+                release(incoming, consumers: &consumers, buffers: &buffers)
+                continue
+            }
             var local = PCM(frames: frames)
             if !node.muted {
                 switch node.content {
                 case .instrument(let trackID):
                     guard let track = project.tracks.first(where: { $0.id == trackID }) else { throw CirclrError("서클의 악기를 찾을 수 없습니다") }
-                    let notes = plan.graph.edges.filter { $0.to == node.id && $0.signal == .midi }.flatMap { plan.midi[$0.from] ?? [] }
+                    let notes = plan.connections.filter { $0.to.nodeID == node.id && $0.signal == .midi }.flatMap { plan.midi[$0.from.nodeID] ?? [] }
                     let overrideHost = node.settings.tempo.source != .inherit || node.settings.meter.source != .inherit
                     local = try await ProductionInstrument.render(notes, instrument: track.instrument, project: project, root: root, clock: clock, tail: tail,
                                                                hostContext: overrideHost ? plan.contexts[node.id] : nil)
@@ -30,7 +61,7 @@ public enum SectionGraphRenderer {
                     }
                 case .effect, .mix, .output:
                     var sidechain = PCM(frames: frames), hasSidechain = false
-                    for edge in plan.graph.edges where edge.to == node.id && edge.signal == .audio {
+                    for edge in incoming {
                         guard let source = buffers[edge.from] else { continue }
                         if edge.sidechain { sidechain.mix(source, gain: edge.gain); hasSidechain = true }
                         else { local.mix(source, gain: edge.gain) }
@@ -38,7 +69,7 @@ public enum SectionGraphRenderer {
                     if case .effect(let effect) = node.content {
                         local = try await ArrangementRenderer.apply(local, effect: effect, sidechain: hasSidechain ? sidechain : nil)
                     }
-                case .midi, .rhythmMIDI: break
+                case .midi, .rhythmMIDI, .router: break
                 }
                 let isOutput:Bool = {if case .output = node.content{return true};return false}()
                 if node.gain != 1 && (applyOutputGain || !isOutput) { local.multiply(node.gain) }
@@ -48,14 +79,22 @@ public enum SectionGraphRenderer {
             if case .output(let trackID) = node.content {
                 if outputs[trackID] == nil { outputs[trackID] = local }
                 else { outputs[trackID]?.mix(local) }
-            } else { buffers[node.id] = local }
-            // A fan-out/sidechain source stays alive until its final consumer has rendered.
-            for edge in plan.graph.edges where edge.to==node.id && edge.signal == .audio {
-                consumers[edge.from,default:0]-=1
-                if consumers[edge.from]==0 {buffers[edge.from]=nil}
+            } else {
+                let endpoint = MusicBusEndpoint(nodeID: node.id, portID: CirclePort.audioOutput)
+                if consumers[endpoint, default: 0] > 0 { buffers[endpoint] = local }
             }
+            // A fan-out/sidechain source stays alive until its final consumer has rendered.
+            release(incoming, consumers: &consumers, buffers: &buffers)
         }
         return outputs
+    }
+
+    private static func release(_ incoming: [MusicBusConnection], consumers: inout [MusicBusEndpoint: Int],
+                                buffers: inout [MusicBusEndpoint: PCM]) {
+        for edge in incoming {
+            consumers[edge.from, default: 0] -= 1
+            if consumers[edge.from] == 0 { buffers[edge.from] = nil }
+        }
     }
 
     static func audibleAncestors(_ plan:SectionSignalPlan)->Set<ID> {
@@ -64,19 +103,25 @@ public enum SectionGraphRenderer {
         while let id=frontier.popLast(){for edge in plan.graph.edges where edge.to==id {if needed.insert(edge.from).inserted {frontier.append(edge.from)}}}
         return needed
     }
-    static func audioConsumers(_ plan:SectionSignalPlan,needed:Set<ID>)->[ID:Int] {
-        var result:[ID:Int]=[:]
-        for edge in plan.graph.edges where edge.signal == .audio && needed.contains(edge.to) {result[edge.from,default:0]+=1}
+    static func audioConsumers(_ plan:SectionSignalPlan,needed:Set<ID>)->[MusicBusEndpoint:Int] {
+        var result:[MusicBusEndpoint:Int]=[:]
+        for edge in plan.connections where edge.signal == .audio && needed.contains(edge.to.nodeID) {result[edge.from,default:0]+=1}
         return result
     }
     static func workingBufferCount(_ plan:SectionSignalPlan)->Int {
         let needed=audibleAncestors(plan);var consumers=audioConsumers(plan,needed:needed)
-        var live=Set<ID>(),outputs=Set<ID>(),maximum=5
+        var live=Set<MusicBusEndpoint>(),outputs=Set<ID>(),maximum=5
         for node in plan.orderedNodes where needed.contains(node.id) && node.content.output != .midi {
             // Current input, output, sidechain and DSP scratch space, plus retained buffers.
-            maximum=max(maximum,live.count+outputs.count+5)
-            if case .output(let track)=node.content {outputs.insert(track)}else{live.insert(node.id)}
-            for edge in plan.graph.edges where edge.to==node.id && edge.signal == .audio {
+            let scratch: Int = { if case .router = node.content { return 9 }; return 5 }()
+            maximum=max(maximum,live.count+outputs.count+scratch)
+            if case .output(let track)=node.content {outputs.insert(track)}else{
+                for port in CirclePort.ports(for: node.content) where port.direction == .output && port.signal == .audio {
+                    let endpoint = MusicBusEndpoint(nodeID: node.id, portID: port.id)
+                    if consumers[endpoint, default: 0] > 0 { live.insert(endpoint) }
+                }
+            }
+            for edge in plan.connections where edge.to.nodeID==node.id && edge.signal == .audio {
                 consumers[edge.from,default:0]-=1;if consumers[edge.from]==0{live.remove(edge.from)}
             }
         }

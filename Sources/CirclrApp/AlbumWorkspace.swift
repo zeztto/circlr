@@ -59,7 +59,7 @@ extension AppStore {
                 if case .audio(_, let clip) = content { selectedClipID = clip }
             case .instrument(let track), .output(let track): selectedTrackID = track
             case .rhythmMIDI(let track), .rhythmAudio(let track): selectedTrackID = track; editPatternID = selectedCircle?.context.rhythm.patternID
-            case .effect,.mix:
+            case .effect,.mix,.router:
                 let tracks=selectedMusic.flatMap{node in selectedGraph.map{StudioNavigation.outputTracks(from:node.id,graph:$0)}} ?? []
                 if selectedTrackID.map({tracks.contains($0)}) != true {selectedTrackID=tracks.count==1 ? tracks.first:nil}
             }
@@ -162,15 +162,12 @@ extension AppStore {
         guard var graph = selectedGraph, let use = selectedUse else { return }
         let node = MusicCircle(name: Self.effectName(kind), content: .effect(Effect(kind, amount: kind == .gain ? 1 : 0.5, secondary: 0.3)))
         let source = selectedMusic?.content.output == .audio ? selectedMusic?.id : graph.nodes.first { if case .mix = $0.content { return true }; return false }?.id
-        graph.nodes.append(node)
         let position = source.flatMap { graph.layout.positions[$0] } ?? Point()
         graph.layout.positions[node.id] = point ?? Point(position.x+210, position.y+160)
         if let source {
-            let outgoing = graph.edges.filter { $0.from == source && !$0.sidechain }
-            graph.edges.removeAll { $0.from == source && !$0.sidechain }
-            graph.edges.append(MusicConnection(from: source, to: node.id, signal: .audio))
-            for var edge in outgoing { edge.from = node.id; graph.edges.append(edge) }
-        }
+            do { try SectionGraphEditing.insertEffect(node, from: source, in: &graph) }
+            catch { fail(error); return }
+        } else { graph.nodes.append(node) }
         setGraph("이펙터 서클 만들기", graph)
         if selectedGraph?.nodes.contains(where: { $0.id == node.id }) == true { focusHierarchy(.music(arrangementID: project.activeArrangementID, useID: use.id, nodeID: node.id), detail: true) }
     }

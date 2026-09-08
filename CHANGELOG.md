@@ -2,6 +2,13 @@
 
 0.1–0.3은 설계 문서 revision이며, 0.4.0부터 로컬 실행 프로토타입을 포함한다.
 
+## 개발 중 — 독립 오디오 bus B 단계
+
+- 오디오 라우터의 스테레오 2 IN / 2 OUT과 2×2 gain routing을 구현했다. renderer의 PCM·소비자 수를 node와 port ID별로 관리해 분기·합류·sidechain을 분리한다. gain/automation/mute는 각 출력에 적용한다.
+- 선택적 연결 port ID를 compiler·scene·catalog·저장·바운스 복원에 보존한다. 기존 생략된 단일 main/sidechain 연결은 유지하며 다중 bus의 모호한 연결·효과 삽입은 무변경으로 거절한다. 효과 삽입의 Core 경로를 앱과 기존 agent 명령이 공유한다.
+- 신규 Core 5개/Audio 8개를 포함한 Swift 172개와 release build를 통과했다. 독립 stereo PCM, matrix, MIDI 합류, 13개 분기, 80개 라우터 chain, 두 트랙 바운스/embedded 저장/복원 검증을 포함한다. [다중 bus QA](qa/ports-bus-review.md).
+- source feature branch 단계이며 main과 사용 앱은 0.19다. 라우터 생성·matrix 편집 UI, 8방향 native 연결, 명시적 port MCP·group binding은 후속이다.
+
 ## 개발 중 — 포트 기반 A 단계
 
 - 기존 MIDI/audio/main/sidechain/송폼 포트에 stable ID·IN/OUT·수용 정책을 부여하고 입력 시작 요청을 OUT→IN으로 정규화한다. 실제 구현하지 않은 bus는 노출하지 않는다.

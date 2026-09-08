@@ -55,7 +55,7 @@ struct InlineCircleEditor: View {
                     }.padding(.trailing, 8) }
                 case .instrument, .output:
                     if let track = store.selectedTrack { ScrollView { TrackInspector(store: store, track: track) } }
-                case .mix: signalControls(node); Spacer()
+                case .mix, .router: signalControls(node); Spacer()
                 case .rhythmAudio: Text("리듬 패턴의 오디오 클립"); AudioLane(store: store); Spacer()
                 }
             }

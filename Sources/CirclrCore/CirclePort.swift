@@ -34,6 +34,9 @@ public struct CirclePort:Codable,Equatable,Identifiable,Sendable {
         case .instrument:return pair(.midi,input:true,output:false)+pair(.audio,input:false,output:true)
         case .effect(let effect):return pair(.audio,input:true,output:true,sidechain:effect.kind == .compressor)
         case .mix:return pair(.audio,input:true,output:true)
+        case .router:
+            return AudioRouter.inputs.enumerated().map { .init(id:$0.element,direction:.input,signal:.audio,name:"IN \($0.offset+1) · 스테레오",policy:.audioSum) } +
+                AudioRouter.outputs.enumerated().map { .init(id:$0.element,direction:.output,signal:.audio,name:"OUT \($0.offset+1) · 스테레오",policy:.broadcast) }
         case .output:return pair(.audio,input:true,output:false)
         }
     }
@@ -62,10 +65,10 @@ public struct CirclePortConnection:Codable,Equatable,Sendable {
     public var signal:CirclePortSignal
     public var gain:Double
     public var sidechain:Bool {to.portID==CirclePort.sidechainInput}
-    init(edgeID:ID,from:CircleAddress,to:CircleAddress,signal:CirclePortSignal,sidechain:Bool=false,gain:Double=1) {
+    init(edgeID:ID,from:CircleAddress,to:CircleAddress,signal:CirclePortSignal,sidechain:Bool=false,gain:Double=1,fromPortID:String?=nil,toPortID:String?=nil) {
         id = .init(edgeID:edgeID,from:from,to:to);self.signal=signal;self.gain=gain
-        self.from = .init(node:from,portID:signal == .audio ? CirclePort.audioOutput:signal == .midi ? CirclePort.midiOutput:CirclePort.flowOutput)
-        self.to = .init(node:to,portID:sidechain ? CirclePort.sidechainInput:signal == .audio ? CirclePort.audioInput:signal == .midi ? CirclePort.midiInput:CirclePort.flowInput)
+        self.from = .init(node:from,portID:fromPortID ?? (signal == .audio ? CirclePort.audioOutput:signal == .midi ? CirclePort.midiOutput:CirclePort.flowOutput))
+        self.to = .init(node:to,portID:toPortID ?? (sidechain ? CirclePort.sidechainInput:signal == .audio ? CirclePort.audioInput:signal == .midi ? CirclePort.midiInput:CirclePort.flowInput))
     }
 }
 public struct NormalizedPortConnection:Equatable,Sendable {
@@ -116,7 +119,7 @@ public enum CirclePortCatalog {
             for use in arrangement.uses {
                 guard let section=project.sections.first(where:{$0.id==use.sectionID}) else{throw CirclrError("섹션 원본을 찾을 수 없습니다")}
                 for edge in try SectionGraphEditing.effective(section:section,use:use)?.edges ?? [] {
-                    result.append(.init(edgeID:edge.id,from:.music(arrangementID:arrangement.id,useID:use.id,nodeID:edge.from),to:.music(arrangementID:arrangement.id,useID:use.id,nodeID:edge.to),signal:edge.signal == .audio ? .audio:.midi,sidechain:edge.sidechain,gain:edge.gain))
+                    result.append(.init(edgeID:edge.id,from:.music(arrangementID:arrangement.id,useID:use.id,nodeID:edge.from),to:.music(arrangementID:arrangement.id,useID:use.id,nodeID:edge.to),signal:edge.signal == .audio ? .audio:.midi,sidechain:edge.sidechain,gain:edge.gain,fromPortID:edge.fromPortID,toPortID:edge.toPortID))
                 }
             }
         }

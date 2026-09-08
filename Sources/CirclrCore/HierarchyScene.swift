@@ -47,8 +47,10 @@ public struct CircleSceneEdge: Identifiable {
     public var gain: Double = 1
     public var connectionID:CircleConnectionID?
     public var placement=CircleConnectionPlacement()
-    public var fromPortID:String {kind == .flow ? CirclePort.flowOutput:kind == .midi ? CirclePort.midiOutput:CirclePort.audioOutput}
-    public var toPortID:String {kind == .flow ? CirclePort.flowInput:kind == .midi ? CirclePort.midiInput:kind == .sidechain ? CirclePort.sidechainInput:CirclePort.audioInput}
+    public var explicitFromPortID:String?
+    public var explicitToPortID:String?
+    public var fromPortID:String {explicitFromPortID ?? (kind == .flow ? CirclePort.flowOutput:kind == .midi ? CirclePort.midiOutput:CirclePort.audioOutput)}
+    public var toPortID:String {explicitToPortID ?? (kind == .flow ? CirclePort.flowInput:kind == .midi ? CirclePort.midiInput:kind == .sidechain ? CirclePort.sidechainInput:CirclePort.audioInput)}
 }
 public struct HierarchyScene {
     public let nodes: [CircleSceneNode]
@@ -212,7 +214,7 @@ public enum HierarchySceneBuilder {
                     if visible.contains(from), visible.contains(to) {
                         edges.append(CircleSceneEdge(id: "\(arrangement.id):\(use.id):\(edge.id)", from: from, to: to,
                                                      kind: edge.sidechain ? .sidechain : (edge.signal == .midi ? .midi : .audio), gain: edge.gain,
-                                                     connectionID:.init(edgeID:edge.id,from:from,to:to)))
+                                                     connectionID:.init(edgeID:edge.id,from:from,to:to),explicitFromPortID:edge.fromPortID,explicitToPortID:edge.toPortID))
                     }
                 }
             }

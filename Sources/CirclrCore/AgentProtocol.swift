@@ -190,8 +190,7 @@ public enum AgentProjectEditing {
                 }else if op.kind=="add_effect" {
                     guard let from=op.from,graph.nodes.first(where:{$0.id==from})?.content.output == .audio,let effect=op.effect else {throw CirclrError("오디오 from 서클과 effect가 필요합니다")}
                     let node=MusicCircle(name:op.name ?? "이펙터",content:.effect(effect))
-                    for i in graph.edges.indices where graph.edges[i].from==from && !graph.edges[i].sidechain{graph.edges[i].from=node.id}
-                    graph.nodes.append(node);graph.edges.append(MusicConnection(from:from,to:node.id,signal:.audio))
+                    try SectionGraphEditing.insertEffect(node,from:from,in:&graph)
                     let position=graph.layout.positions[from] ?? Point();graph.layout.positions[node.id]=Point(position.x+250,position.y)
                 }else{
                     guard let nodeID=op.nodeID,let i=graph.nodes.firstIndex(where:{$0.id==nodeID}) else {throw CirclrError("nodeID가 필요합니다")}

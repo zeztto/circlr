@@ -30,3 +30,16 @@ D. MCP의 포트 조회·명시적 연결·layout revision 명령, 그룹의 노
 E. native 8방향 조작·VoiceOver·저장 복원·기존 v4 PCM을 검증한 후 0.20과 통합한다. README/CHANGELOG/version/kit·패키지/서명/UUID를 갱신하고 기존 승인 범위의 private source만 commit/push한다. 현재 단계에서는 새 사용 앱을 배포하지 않는다.
 
 A 결과: 신규 Core 10/Audio 1개를 포함한 전체 오프라인 Swift 159개와 release build가 통과했다. 중복 배치의 scene crash를 수정하고, 13개 분기·모든 방향·sidechain 포함 PCM 불변을 확인했다. [QA 근거와 남은 범위](../qa/ports-foundation-review.md).
+
+## B 실행 계약 · 독립 스테레오 bus
+
+사용자의 한도 해제 안내 후 read-only compiler/renderer 검토를 재요청했으나 실제 `spawn_agent`가 다시 `agent thread limit reached`를 반환했다. 동시 agent가 실행된 것으로 보고하지 않으며 이번 slice는 native Swift utility가 단독 수행한다.
+
+- `MusicCircleContent.router(AudioRouter)`에 실제 스테레오 2 IN / 2 OUT과 최대 네 개의 gain route를 정의한다. 기본값은 IN 1→OUT 1, IN 2→OUT 2다. 좌우 채널은 하나의 스테레오 bus 안에서 보존한다.
+- `MusicConnection`의 선택적 `fromPortID`/`toPortID`를 compiler에서 검증한다. 기존 생략된 단일 main/sidechain 연결은 그대로 해석한다. 다중 bus의 node-only 연결은 임의 bus를 고르지 않고 거절한다.
+- renderer는 `(nodeID, portID)`별 PCM과 소비자 수를 사용한다. 같은 입력의 fan-in만 합산하며 출력 간 PCM은 공유 합산하지 않는다. node gain/automation/mute는 각 출력에 적용한다. 기존 node observer의 router 값은 시각화를 위한 합계이며 실제 routing buffer와 분리한다.
+- Core 편집과 scene/catalog가 명시적 port ID를 보존한다. 기존 효과 삽입은 다중 출력에서 명시적 선택 없이 신호를 합치지 않아야 한다. 새 router 생성/편집 UI와 MCP 공개는 C/D에서 연결한다.
+- 검사: 다른 두 stereo 입력의 분리, matrix 교차/분기/합류, sidechain, MIDI 합류, bus 소비자 수와 메모리 상한, mute/gain/automation, 잘못된 port/gain/순환의 atomic 거절, legacy JSON, 프로젝트 저장/재열기, 두 track 바운스/복원의 명시적 포트 보존. 기존 전체 offline 검사와 release build를 재실행한다.
+- 전체 8방향 UI·group binding·Audio Unit 다중 bus 호스팅은 이 slice의 완료 판정에 포함시키지 않는다. B 완료 후에도 C/D/E를 이어간다.
+
+B 결과: 신규 Core 5개/Audio 8개를 포함한 전체 offline Swift 172개와 warning 없는 release build를 통과했다. 2×2 matrix, port별 PCM·fan-in/fan-out·sidechain·MIDI 합류, 두 트랙 바운스/embedded 저장/원본 복원을 확인했다. [B 검증과 native 후속 범위](../qa/ports-bus-review.md). 다음 C에서는 router의 생성·matrix/port 선택과 연결선별 bus envelope도 UI 계약에 포함한다.

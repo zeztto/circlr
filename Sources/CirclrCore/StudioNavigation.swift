@@ -60,7 +60,7 @@ public enum StudioNavigation {
                             case .midi(let lane),.audio(let lane,_):owned=laneIDs.contains(lane)
                             case .instrument(let id),.output(let id):owned=id==track.id
                             case .rhythmMIDI,.rhythmAudio:return nil
-                            case .effect,.mix:owned=outputs[node.id]?.contains(track.id)==true
+                            case .effect,.mix,.router:owned=outputs[node.id]?.contains(track.id)==true
                             }
                             guard owned else{return nil}
                             return StudioDestination(id:.music(arrangementID:arrangement.id,useID:use.id,nodeID:node.id),name:node.name,role:node.content.label,connected:outputs[node.id]?.contains(track.id)==true)

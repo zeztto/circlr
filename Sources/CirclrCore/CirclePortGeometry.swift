@@ -30,7 +30,10 @@ public enum CirclePortGeometry {
     /// All distances are screen points; zoomed world coordinates must be converted before calling.
     public static func anchor(center:Point,radius:Double,port:CirclePort,octant:PortOctant)throws->Point {
         guard valid(center),radius.isFinite,(0...1e9).contains(radius) else{throw CirclrError("포트의 화면 좌표와 반경을 확인하세요")}
-        let offset=port.isSidechain ? 68.0:port.direction == .input ? 24.0:46.0
+        let offset:Double
+        if port.id == AudioRouter.input2 { offset=68 }
+        else if port.id == AudioRouter.output2 { offset=90 }
+        else { offset=port.isSidechain ? 68:port.direction == .input ? 24:46 }
         let n=normal(octant);return Point(center.x+(radius+offset)*n.x,center.y+(radius+offset)*n.y)
     }
     /// Only pass handles that were actually drawn. Hidden/collapsed choices cannot be hit.
