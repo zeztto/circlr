@@ -28,14 +28,16 @@ public struct CircleSceneNode: Identifiable {
     public var signal: SignalNode?
     public var timeline: OrbitTimeline?
     public var orbit: OrbitPlacement?
+    public var exposedPorts:[CirclePort]? = nil
     public var ports:[CirclePort] {
+        if let exposedPorts {return exposedPorts}
         if let signal {return CirclePort.ports(for:signal)}
         if let music {return CirclePort.ports(for:music.content)}
         return role == .song || role == .movement || role == .section ? CirclePort.flowPorts:[]
     }
     // The canvas queries these every frame; do not allocate descriptor arrays on that path.
-    public var acceptsInput: Bool {signal.map{$0.kind != .source} ?? (music?.content.input != nil || role == .song || role == .movement || role == .section)}
-    public var providesOutput: Bool {signal.map{$0.kind != .master} ?? (music?.content.output != nil || role == .song || role == .movement || role == .section)}
+    public var acceptsInput: Bool {exposedPorts.map{$0.contains{$0.direction == .input}} ?? (signal.map{$0.kind != .source} ?? (music?.content.input != nil || role == .song || role == .movement || role == .section))}
+    public var providesOutput: Bool {exposedPorts.map{$0.contains{$0.direction == .output}} ?? (signal.map{$0.kind != .master} ?? (music?.content.output != nil || role == .song || role == .movement || role == .section))}
     public var outerRadius: Double { radius + (SectionRings(repeats: repeatCount).outerRadius-80) * scale }
 }
 public struct CircleSceneEdge: Identifiable {
@@ -145,6 +147,7 @@ public enum HierarchySceneBuilder {
                 var container = Tree(node: node(.group(parent: tree.node.id, id: group.id), title: group.name,
                                                 subtitle: "\(members.count)개 서클" + (group.collapsed ? " · 접힘" : ""), role: .group, context: tree.node.context), position: center)
                 container.childScale = 1
+                container.node.exposedPorts = try? GroupPortEditing.ports(at:container.node.id,in:project)
                 container.children = members.map { item in var copy = item; copy.position = Point(item.position.x-center.x,item.position.y-center.y); return copy }
                 container = finish(container)
                 if group.collapsed {
@@ -296,6 +299,8 @@ public enum HierarchySceneBuilder {
             if let id=copy.connectionID,let placement=placements[id] {copy.placement=placement}
             while let owner = hiddenOwners[copy.from] { copy.from = owner }
             while let owner = hiddenOwners[copy.to] { copy.to = owner }
+            if copy.from != edge.from, let alias=GroupPortEditing.presented(.init(node:edge.from,portID:edge.fromPortID),at:copy.from,in:project) {copy.explicitFromPortID=alias.portID}
+            if copy.to != edge.to, let alias=GroupPortEditing.presented(.init(node:edge.to,portID:edge.toPortID),at:copy.to,in:project) {copy.explicitToPortID=alias.portID}
             return copy.from == copy.to ? nil : copy
         }
         return HierarchyScene(nodes: flattened, edges: displayedEdges)

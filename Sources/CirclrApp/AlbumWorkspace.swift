@@ -44,7 +44,10 @@ extension AppStore {
         case .album, .sound: selection = []
         case .signal(let id): selection = [id]; selectedTrackID = project.signal.nodes.first { $0.id == id }?.trackID
         case .group(let parent, _):
-            let chosen = hierarchySelections; selectHierarchy(parent); hierarchySelection = address; hierarchySelections = chosen
+            // Resolving a group's music scope must not close its own inline connection editor.
+            let chosen = hierarchySelections, open = connectionsOpen, intent = connectionEditorIntent
+            selectHierarchy(parent); hierarchySelection = address; hierarchySelections = chosen
+            connectionsOpen = open; connectionEditorIntent = intent
         case .composition(let id):
             selection = []
             if let arrangement = project.album?.composition(id)?.selectedArrangementID { project.activeArrangementID = arrangement }

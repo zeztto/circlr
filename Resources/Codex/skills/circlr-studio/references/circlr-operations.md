@@ -1,6 +1,6 @@
 # circlr operational contract
 
-Discover the actual MCP tool catalog before work. This development adapter has 19 tools; custom specialists use its `--read-only` mode exposing snapshot, inspect, ports, job and events only. Explicit port tools require a native app whose snapshot includes layoutRevision; the older installed 0.19 app does not implement them. Runtime configuration is inherited; inspect availability instead of assuming the tools are registered in an already open session.
+Discover the actual MCP tool catalog before work. This development adapter has 21 tools; custom specialists use its `--read-only` mode exposing snapshot, inspect, ports, job and events only. Explicit port tools require a native app whose snapshot includes layoutRevision; the older installed 0.19 app does not implement them. Runtime configuration is inherited; inspect availability instead of assuming the tools are registered in an already open session.
 
 ## Time, identity and sound
 
@@ -18,11 +18,17 @@ Discover the actual MCP tool catalog before work. This development adapter has 1
 
 ## Explicit logical ports (development app)
 
-Call `circlr_ports(node)` with the actual Codable address from inspect: music addresses contain music: {arrangementID, useID, nodeID}; section addresses contain section: {arrangementID, useID}; signal/composition addresses contain signal/composition: {_0: ID}. Reuse returned ports and connection objects. Groups have no exposed binding yet. A connection ID includes edgeID and logical from/to addresses; edgeID alone is ambiguous across reused sections.
+Call `circlr_ports(node)` with the actual Codable address from inspect: music addresses contain music: {arrangementID, useID, nodeID}; section addresses contain section: {arrangementID, useID}; signal/composition addresses contain signal/composition: {_0: ID}. Reuse returned ports and connection objects. Group addresses contain group: {parent: album/sound/composition/section address, id: actual group ID}. Read explicit group bindings; active descriptors include bindingTarget. Missing targets stay in bindings but are excluded from active ports. A connection ID includes edgeID and logical from/to addresses; edgeID alone is ambiguous across reused sections.
 
 `circlr_connect_ports` takes first/second {node, portID} and firstOctant/secondOctant, 0 N through 7 NW clockwise. Either endpoint can be an input. `circlr_reconnect_ports` additionally requires the exact original connectionID and preserves its edge ID and gain. `circlr_disconnect_ports` requires connectionID. `circlr_move_ports` takes 1–128 distinct {id, placement:{from,to}} entries; placement from/to means normalized OUT/IN, not gesture order. Honor canReconnect/canDisconnect; composition sequence edges are reordered instead.
 
 All four writes require fresh projectID, expectedRevision and expectedLayoutRevision from ports/snapshot. They commit as one Undo. A duplicate connection is changed:false and does not reposition the existing cable. Layout-only edits advance layoutRevision without changing music revision; supply expectedLayoutRevision to circlr_undo too. Never silently retry stale_revision/stale_layout. Choose actual router bus IDs explicitly rather than guessing a main bus. The legacy apply/connect is not an arbitrary multi-bus interface. Background edits preserve the musician's selection/camera. Specialist agents remain read-only and return edit proposals to the coordinator.
+
+## Expose a group port (development app)
+
+A CanvasGroup is a layout container within one graph, not an audio bridge between section clocks. circlr_set_group_port requires node (group address), target (actual member endpoint), name, projectID and both expectedRevision/expectedLayoutRevision. It returns portID. Duplicate exposure of one target returns its existing ID as a no-op. With existing portID, the command renames that same immutable target. Use circlr_remove_group_port with node/portID and both revisions to remove only the alias, preserving every actual cable and node. These metadata commands advance layoutRevision only and share layout Undo. A maximum of 64 distinct targets can be exposed per group.
+
+Use {node: group address, portID: returned alias ID} in connect_ports/reconnect_ports. The resulting connectionID still addresses real engine nodes. The group's ports response lists external logical connections, excluding internal-only cables. Collapse/expand never invents bindings. Removal or a missing member target never reroutes existing audio; do not substitute another bus. Bindings are scoped to the full group/use address and do not leak into another occurrence of a reused section. Specialists propose these edits to their coordinator; they cannot execute writes in read-only mode. Optionally focus(node: group address, detail: true) with no other selector when the musician asks to see it.
 
 ## Gain and pan automation (circlr 0.19)
 

@@ -116,3 +116,17 @@ C3c 결과: 라우터의 실제 기본 handle 4개·한 포트 선택 11개와 �
 - 기존 승인 범위의 source checkpoint만 commit/private push한다. D 전체·녹음 branch 통합·main release 완료로 취급하지 않는다.
 
 D1 결과: 포트 도구 5개와 음악/배치 revision 검사를 구현했다. 전체 Swift 202개·Python 24개, release build를 통과했다. 전용 QA 앱을 최소화한 상태의 연결·재연결·해제·원자적 배치/no-op/stale 거절·한 Undo·저장/재열기와 실제 GUI의 ⌘Z 연동을 검증했다. [D1 QA와 실행 근거](../qa/ports-mcp-review.md). 다음 D2는 그룹 경계의 노출 binding, 이어서 C3 미검증 조합과 E 통합이다. 이번 추가 spawn도 실제 슬롯 한도로 거절됐으며 역할 전환 검토를 독립 agent 리뷰로 보고하지 않는다.
+
+## D2 실행 계약 · 그룹의 명시적 노출 포트
+
+- 기준 `ca55dde`, 같은 worktree. development-lead → UX → Swift utility → Python backend → read-only review → QA. 확인된 단일 슬롯에서 delegation none이다. 이전 D1은 authoritative source/private push와 native 증거를 남긴 progress다.
+- 현재 CanvasGroup은 같은 그래프의 시각 그룹이며 음악 소유자/clock은 바꾸지 않는다. 노출 포트는 그룹 주소·고유 port ID·표시 이름·실제 내부 endpoint를 갖는 명시적 alias다. 하나의 alias는 하나의 기존 IN 또는 OUT을 참조한다. 여러 IN/OUT은 별도 alias로 제공한다. 서로 다른 section clock/graph를 잇는 audio bridge는 이 모델로 가장하지 않는다.
+- binding은 project.portLayout의 선택적 배열에 저장해 musicRevision과 분리하고 layout 전용 Undo로 복원한다. 그룹/use별 주소를 포함하므로 재사용 use가 엉뚱한 내부 노드를 참조하지 않는다. 같은 alias의 target은 불변이며 rename은 의미를 유지한다. 제거/대상 삭제는 기존 음악 케이블을 보존하며 자동으로 다른 포트에 매핑하지 않는다. 유효하지 않은 저장 binding은 관리 목록에 표시하고 연결 후보에서 제외한다.
+- 그룹의 연결 편집에서 내부 서클/포트를 골라 바로 노출하고, 이름·실제 IN/OUT·대상을 읽고 제거할 수 있게 한다. 기존 연결 편집/키보드/8방향 gesture를 그룹 포트에도 사용한다. 접힌 그룹의 기존 logical edge를 실제 alias 위치로 투영하고, unbound legacy edge는 원래 outline 표시를 유지한다. 단순 접기는 binding을 생성하지 않는다.
+- Core 소유: 신규 `GroupPortBinding.swift`, CirclePort/Layout/Geometry/ConnectionEditing/History 계약, HierarchyScene, AgentPortEditing/Protocol와 관련 XCTest. App 소유: 신규 그룹 포트 관리 view, PortConnectionsEditor, InlineCircleEditor, CanvasPorts/CableEditing/ConnectionNavigation 및 명령 접근 경로. Python 소유: mcp server/schema/tests, bundled kit sync. README/CHANGELOG·사용 계약·QA 기록도 갱신한다.
+- 검증: alias 실제 port 해석·IN 시작/sidechain/bus·잘못된 그룹/범위/중복/삭제/target 변경의 원자성, 접기/펼치기·readout·GUI/MCP 공통 Undo, 재사용 use 분리, legacy/save/reopen 및 PCM 불변. 전체 offline Swift, Python, release build 후 기존과 분리한 group QA fixture에서 실제 UI 노출·연결·접기·키보드·Undo·저장을 확인한다. 단계가 미완료이면 그대로 기록하고 사용 앱/main 통합은 E에 유지한다.
+
+
+D2 체크포인트: 그룹 alias·layout Undo·MCP와 같은 캔버스 관리 UI를 구현했다. 실제 키보드 노출/이름/연결·노출 해제/Undo, 그룹 OUT 8방향과 마우스 드래그, native 저장/재열기 및 읽기 전용 조회를 검증했다. 그룹 경계 연결이 사라지던 `CanvasPresentation`의 가시성도 수정했다. album/상위 composition/leaf composition/sound의 소유 검사를 추가해 Swift 212개, Python 25개 및 최종 release build가 통과했다. [D2 근거](../qa/ports-group-review.md).
+
+재생 시 접힌 그룹으로 logical node의 레벨을 전달하는 소스 경로를 보완했으나 최종 QA 앱에서 macOS 출력 장치 연결이 10초를 넘겨 재생이 시작되지 않았다. 이 빌드의 신호 모션·청감은 미검증이다. 다음은 장치 정상 상태의 D2 재생, C3의 남은 신호/밀집/VoiceOver, E의 녹음 branch 보존 통합이다. D2 체크포인트를 전체 포트 완료나 사용 앱 출고로 취급하지 않는다.

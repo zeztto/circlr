@@ -32,7 +32,7 @@ extension AppStore {
         add("save-as","다른 이름으로 저장…","⇧⌘S"){[weak self] in self?.save(as:true)}
         add("play","재생 / 정지","Space"){[weak self] in self?.play()}
         add("stop","모든 재생·렌더 정지"){[weak self] in self?.stop()}
-        if selectedCircle?.ports.isEmpty == false { add("ports", "서클 연결 편집", "L") { [weak self] in self?.showConnections() } }
+        if canEditCirclePorts { add("ports", "서클 연결 편집", "L") { [weak self] in self?.showConnections() } }
         if selectedUse != nil { add("router", "오디오 라우터 서클 만들기") { [weak self] in self?.addMusicRouter() } }
         add("movie","영상 녹화 시작 / 마치기…","⇧⌘R"){[weak self] in self?.toggleMovieRecording()}
         add("wav","앨범 WAV 내보내기…","⌘E"){[weak self] in self?.export()}

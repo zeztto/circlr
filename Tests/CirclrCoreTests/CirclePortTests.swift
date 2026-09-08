@@ -28,7 +28,7 @@ final class CirclePortTests:XCTestCase {
         XCTAssertThrowsError(try CirclePortCatalog.normalize(input,input,in:p))
         XCTAssertThrowsError(try CirclePortCatalog.normalize(endpoint(instrument.id,"out.audio.bus2"),endpoint(compressor.id,CirclePort.audioInput),in:p))
         XCTAssertEqual(try CirclePortCatalog.ports(at:.album,in:p),[])
-        XCTAssertEqual(try CirclePortCatalog.ports(at:.group(parent:.album,id:"visual"),in:p),[])
+        XCTAssertThrowsError(try CirclePortCatalog.ports(at:.group(parent:.album,id:"visual"),in:p))
         var global=SignalNode(kind:.effect,name:"전역 컴프레서");global.effect=Effect(.compressor)
         XCTAssertEqual(CirclePort.ports(for:global).map(\.id),[CirclePort.audioInput,CirclePort.sidechainInput,CirclePort.audioOutput])
         global.effect=Effect(.audioUnit);XCTAssertFalse(CirclePort.ports(for:global).contains{$0.isSidechain})

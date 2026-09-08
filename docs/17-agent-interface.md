@@ -20,7 +20,7 @@ flowchart LR
 
 ## 연결 경계
 
-- `mcp/server.py`: Python 표준 라이브러리의 stdio JSON-RPC MCP adapter. 개발 브랜치는 도구 19개와 입력 schema를 제공하고 native 명령을 전달한다. 사용 앱 0.19의 기존 도구 14개와 구분한다.
+- `mcp/server.py`: Python 표준 라이브러리의 stdio JSON-RPC MCP adapter. 개발 브랜치는 도구 21개와 입력 schema를 제공하고 native 명령을 전달한다. 사용 앱 0.19의 기존 도구 14개와 구분한다.
 - `AgentSocket.swift`: 앱의 `Application Support/circlr/Agent/agent.sock`. 폴더 0700·socket 0600 및 peer UID로 현재 사용자만 연결한다. TCP 포트나 shell 명령 실행은 제공하지 않는다.
 - `AgentWorkspace.swift`: UI와 MCP 공통 dispatcher, request retry, job lifecycle, 실제 activity 기록.
 - `AgentProtocol.swift`: Codable 명령과 Core transaction. 오디오/UI를 직접 제어하는 임의의 스크립트를 모델에 저장하지 않는다.
@@ -32,7 +32,7 @@ flowchart LR
 
 개발 브랜치의 [8방향·다중 입출력](22-eight-direction-ports.md)은 `ports`와 명시적 포트 편집 도구 4개를 제공한다. 먼저 snapshot에 `layoutRevision`이 있는 앱인지 확인한다. 이전 사용 앱은 이 명령을 지원하지 않는다. 정확한 요청 모양은 [MCP 포트 사용법](../mcp/README.md#명시적-포트-편집-개발-브랜치)을 따른다.
 
-`ports(node)`는 실제 logical CircleAddress, 포트 ID·IN/OUT·신호·수용 정책, 관련 연결과 각 끝의 배치, `projectID`/`revision`/`layoutRevision`을 반환한다. 화면에서 접힌 그룹의 가상 endpoint를 반환하지 않는다. composition의 순서 연결은 `canReconnect`/`canDisconnect`가 false이고 배치만 이동할 수 있다. 새 composition 연결은 기존 Core의 순서 편집 의미를 따른다. 그룹 노출 binding은 후속 D2다.
+`ports(node)`는 실제 logical CircleAddress, 포트 ID·IN/OUT·신호·수용 정책과 그룹의 bindingTarget, 관련 연결과 각 끝의 배치, `projectID`/`revision`/`layoutRevision`을 반환한다. 화면에서 접힌 그룹의 가상 endpoint를 반환하지 않는다. composition의 순서 연결은 `canReconnect`/`canDisconnect`가 false이고 배치만 이동할 수 있다. 새 composition 연결은 기존 Core의 순서 편집 의미를 따른다. 그룹 alias와 별도 layout Undo는 [그룹 노출 포트](36-group-ports.md) 계약을 따른다. 다른 section clock을 잇는 audio bridge는 제공하지 않는다.
 
 `connect_ports`, `reconnect_ports`, `disconnect_ports`, `move_ports`는 `projectID`, `expectedRevision`, `expectedLayoutRevision`을 모두 요구한다. 실제 연결·배치 Core 명령과 앱 Undo를 공유한다. 연결은 두 endpoint 및 각 방향을 지정하며 IN에서 시작해도 OUT→IN으로 정규화한다. 중복 연결은 no-op이고 방향 변경은 `move_ports`로 분리한다. 재연결은 전체 logical connectionID를 사용해 edge ID·gain·송폼 transition을 보존한다. use별 variation을 편집하며 다른 use나 원본을 암묵 수정하지 않는다.
 

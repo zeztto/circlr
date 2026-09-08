@@ -13,7 +13,7 @@ struct InlineCircleEditor: View {
                 TextField("서클 이름", text: Binding(get: { store.selectedCircle?.title ?? "" }, set: { store.renameHierarchy($0) }))
                     .textFieldStyle(.plain).font(.system(size: 17, weight: .semibold)).focused($nameFocused).disabled(store.midiImportDraft != nil)
                 Spacer()
-                if store.selectedCircle?.ports.isEmpty == false {
+                if store.canEditCirclePorts {
                     Button(store.connectionsOpen ? "편집으로" : "연결") { if store.connectionsOpen { store.connectionsOpen = false } else { store.showConnections() } }.help("IN/OUT·대상·8방향 위치 편집 · L")
                 }
                 if store.selectedMusic != nil {

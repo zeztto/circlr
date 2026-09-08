@@ -61,7 +61,7 @@ class MCPTests(unittest.TestCase):
         self.assertEqual(len(replies), 3)
         self.assertEqual(replies[0]["result"]["protocolVersion"], "2025-11-25")
         tools = replies[1]["result"]["tools"]
-        self.assertEqual(len(tools), 19)
+        self.assertEqual(len(tools), 21)
         self.assertTrue(all("method" not in item for item in tools))
         self.assertTrue(replies[2]["result"]["isError"])
 
@@ -124,6 +124,27 @@ class MCPTests(unittest.TestCase):
         for moves in [[], [move] * 129, [{**move, "placement": {"from": 0, "to": -1}}]]:
             with self.subTest(count=len(moves)), self.assertRaises(ValueError):
                 server.validate({"projectID": "p", "expectedRevision": 0, "expectedLayoutRevision": 0, "moves": moves}, server.BY_NAME["circlr_move_ports"]["inputSchema"])
+
+    def test_explicit_group_binding_schema_and_write_isolation(self):
+        group = {'group': {'parent': {'section': {'arrangementID': 'a', 'useID': 'u'}}, 'id': 'g'}}
+        target = {'node': {'music': {'arrangementID': 'a', 'useID': 'u', 'nodeID': 'n'}}, 'portID': 'out.audio.bus2'}
+        packet = {'projectID': 'p', 'expectedRevision': 1, 'expectedLayoutRevision': 2, 'node': group, 'target': target, 'name': '신스 출력'}
+        for parent in [{'album': {}}, {'sound': {}}, {'composition': {'_0': 'c'}}, {'section': {'arrangementID': 'a', 'useID': 'u'}}]:
+            server.validate({'group': {'parent': parent, 'id': 'g'}}, server.PORT_ADDRESS)
+        with patch.object(server, 'rpc', return_value={'ok': True}) as ipc:
+            self.assertFalse(server.call_tool('/qa.sock', 'circlr_set_group_port', packet)['isError'])
+            self.assertEqual(ipc.call_args.args[1]['arguments']['node'], group)
+            self.assertEqual(ipc.call_args.args[1]['arguments']['expectedLayoutRevision'], 2)
+        for bad in [{**packet, 'name': ''}, {**packet, 'name': 'a'*129}, {**packet, 'node': target['node']},
+                    {**packet, 'node': {'group': {'parent': group, 'id': 'nested'}}},
+                    {k: v for k, v in packet.items() if k != 'expectedLayoutRevision'}]:
+            with patch.object(server, 'rpc') as ipc, self.assertRaises(ValueError):
+                server.call_tool('/unused.sock', 'circlr_set_group_port', bad)
+            ipc.assert_not_called()
+        for name, args in [('set_group_port', packet), ('remove_group_port', {k: v for k, v in packet.items() if k not in {'target', 'name'}} | {'portID': 'b'})]:
+            with patch.object(server, 'rpc') as ipc, self.assertRaisesRegex(ValueError, 'read-only'):
+                server.call_tool('/unused.sock', 'circlr_'+name, args, read_only=True)
+            ipc.assert_not_called()
 
     def test_finite_edit_packet_is_accepted(self):
         server.validate({"projectID": "p", "expectedRevision": 2, "operations": [{"kind": "set_notes", "useID": "u", "laneID": "l", "notes": [{"beat": 0, "length": 1, "pitch": 66, "velocity": 90}]}]}, server.BY_NAME["circlr_apply"]["inputSchema"])

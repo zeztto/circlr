@@ -4,7 +4,7 @@
 
 **서클 둘레의 8방향 어디에나 연결을 붙이고, 연결점에 IN·OUT을 표시한다. 서클은 여러 입력과 여러 출력을 지원한다.** 왼쪽 입력·오른쪽 출력으로 방향을 고정하지 않는다.
 
-8방향은 배치 기준이다. 포트나 케이블을 8개로 제한한다는 뜻이 아니다. 여러 케이블의 분기·합산과 서로 독립적인 여러 입출력 포트를 함께 설계한다. 독립 branch에서 실제 포트 descriptor·배치 revision·geometry, 스테레오 2 IN/2 OUT 엔진, 같은 캔버스의 직접 연결·배치·라우터 편집과 끝점 드래그를 검증했다. 드래그 간섭·접근성의 확대 검증, 포트별 시각화·MCP·그룹 binding은 후속이다. 사용 앱은 0.19다. [Core 검증](../qa/ports-foundation-review.md) · [bus 검증](../qa/ports-bus-review.md) · [C1 UI 검증](../qa/ports-ui-review.md) · [C2 드래그 검증](../qa/ports-cable-review.md) · [단계별 실행 계획](35-port-foundation-plan.md).
+8방향은 배치 기준이다. 포트나 케이블을 8개로 제한한다는 뜻이 아니다. 여러 케이블의 분기·합산과 서로 독립적인 여러 입출력 포트를 함께 설계한다. 독립 branch에서 실제 포트 descriptor·배치 revision·geometry, 스테레오 2 IN/2 OUT 엔진, 같은 캔버스의 직접 연결·배치·라우터 편집과 끝점 드래그를 검증했다. 출력별 시각화, 포트 MCP와 명시적 그룹 binding의 구현 체크포인트를 추가했다. 드래그 간섭·접근성의 전체 조합과 최종 native 재생·통합 검증은 후속이다. [그룹 포트 사용법](36-group-ports.md) · [D2 QA](../qa/ports-group-review.md). 사용 앱은 0.19다. [Core 검증](../qa/ports-foundation-review.md) · [bus 검증](../qa/ports-bus-review.md) · [C1 UI 검증](../qa/ports-ui-review.md) · [C2 드래그 검증](../qa/ports-cable-review.md) · [단계별 실행 계획](35-port-foundation-plan.md).
 
 ## 1. 방향과 포트의 구분
 

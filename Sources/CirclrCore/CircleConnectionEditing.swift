@@ -7,8 +7,9 @@ public enum CircleConnectionEditing {
         original: Bool = false, in project: inout Project) throws -> CircleConnectionID {
         let connection = try CirclePortCatalog.normalize(first, second, in: project)
         let from = connection.from, to = connection.to
-        let placement = CircleConnectionPlacement(from: from == first ? firstOctant : secondOctant,
-                                                   to: to == second ? secondOctant : firstOctant)
+        let firstLogical = try GroupPortEditing.resolve(first,in:project)
+        let placement = CircleConnectionPlacement(from: from == firstLogical ? firstOctant : secondOctant,
+                                                   to: to == firstLogical ? firstOctant : secondOctant)
         let all = try CirclePortCatalog.connections(in: project)
         if let replacing, !all.contains(where: { $0.id == replacing }) { throw CirclrError("재연결할 원래 케이블이 없습니다") }
         if let duplicate = all.first(where: { $0.from == from && $0.to == to }) {

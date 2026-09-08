@@ -36,7 +36,7 @@ extension AppStore {
             recordActivity("연결","로컬 MCP 연결 준비 · 휠로 확대·축소 · Ctrl `로 콘솔 접기")
         }catch{recordActivity("연결",error.localizedDescription)}
     }
-    func json<T:Encodable>(_ value:T)->Any {((try? JSONSerialization.jsonObject(with:JSONEncoder().encode(value))) ?? NSNull())}
+    func json<T:Encodable>(_ value:T)->Any {((try? JSONSerialization.jsonObject(with:JSONEncoder().encode(value),options:[.fragmentsAllowed])) ?? NSNull())}
     func agentState()->[String:Any] {
         ["projectID":project.id,"revision":project.musicRevision,"layoutRevision":project.portLayout?.revision ?? 0,"name":project.name,"dirty":dirty,"path":projectURL?.path ?? "","global":json(project.global),
          "tracks":json(project.tracks),"assets":json(project.assets),"album":json(project.album),"patterns":json(project.patterns),"activeArrangementID":project.activeArrangementID,
@@ -86,6 +86,9 @@ extension AppStore {
         case "stop":stop();return ["state":"stopped"]
         case "play":guard !preparing else {throw CirclrError("현재 렌더 작업을 정지한 뒤 재생하세요")};if !playback.playing{play()};recordActivity(source,"재생 요청");return ["state":"preparing_or_playing"]
         case "focus":
+            if args.node != nil, args.useID != nil || args.nodeID != nil || args.compositionID != nil || args.arrangementID != nil || args.follow != nil || args.minimized != nil {
+                throw CirclrError("node 주소는 다른 focus 대상 없이 사용하세요")
+            }
             if let follow=args.follow {
                 guard args.minimized == nil,args.useID == nil,args.nodeID == nil,args.compositionID == nil else {throw CirclrError("follow는 다른 focus 대상 없이 사용하세요")}
                 playbackFollow=follow ? .following:.off;return agentState()
@@ -96,7 +99,7 @@ extension AppStore {
                 return agentState()
             }
             let address:CircleAddress
-            if let use=args.useID {address=args.nodeID.map{.music(arrangementID:args.arrangementID ?? project.activeArrangementID,useID:use,nodeID:$0)} ?? .section(arrangementID:args.arrangementID ?? project.activeArrangementID,useID:use)}else if let id=args.compositionID {address = .composition(id)}else{address = .album}
+            if let node=args.node {address=node}else if let use=args.useID {address=args.nodeID.map{.music(arrangementID:args.arrangementID ?? project.activeArrangementID,useID:use,nodeID:$0)} ?? .section(arrangementID:args.arrangementID ?? project.activeArrangementID,useID:use)}else if let id=args.compositionID {address = .composition(id)}else{address = .album}
             guard hierarchyScene?.node(address) != nil else {throw CirclrError("서클을 찾을 수 없습니다")}
             hierarchySettingsOpen=false;focusHierarchy(address,detail:args.detail ?? false);return ["selection":json(address)]
         default:break
@@ -105,12 +108,12 @@ extension AppStore {
         guard !midiRecording,!audioRecording else {throw CirclrError("녹음 중에는 에이전트 편집을 적용하지 않습니다")}
         recordActivity(source,"실행 · \(request.method)")
         switch request.method {
-        case "connect_ports","reconnect_ports","disconnect_ports","move_ports":
+        case "connect_ports","reconnect_ports","disconnect_ports","move_ports","set_group_port","remove_group_port":
             let edit=try AgentPortEditing.apply(request,to:project),changed=edit.project != project
-            let layoutOnly=request.method=="move_ports"
+            let layoutOnly=["move_ports","set_group_port","remove_group_port"].contains(request.method)
             mutate(layoutOnly ? "에이전트 연결 위치 이동":"에이전트 포트 편집",musical:!layoutOnly,portLayoutOnly:layoutOnly){$0=edit.project}
             if changed && !layoutOnly {cancelAudition();normalizeHierarchySelection()}
-            var result=agentState();result["changed"]=changed;result["connectionID"]=json(edit.connectionID)
+            var result=agentState();result["changed"]=changed;result["connectionID"]=json(edit.connectionID);result["portID"]=json(edit.portID)
             return result
         case "apply":
             let candidate=try AgentProjectEditing.apply(request,to:project)

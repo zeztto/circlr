@@ -17,6 +17,7 @@ public struct PlacedCircleConnection:Codable,Equatable,Sendable {
 public struct CirclePortLayout:Codable,Equatable,Sendable {
     public var revision:Int=0
     public var connections:[PlacedCircleConnection]=[]
+    public var bindings:[GroupPortBinding]?
     public init(){}
     public func placement(for id:CircleConnectionID)->CircleConnectionPlacement {connections.first{$0.id==id}?.placement ?? .init()}
     public func validate()throws {
@@ -31,6 +32,21 @@ public struct CirclePortLayout:Codable,Equatable,Sendable {
             }
         }
         for entry in connections {try id(entry.id.edgeID);try address(entry.id.from);try address(entry.id.to);guard entry.id.from != entry.id.to else{throw CirclrError("같은 서클의 연결 배치입니다")}}
+        let bindings=bindings ?? []
+        guard bindings.count<=16_384,Set(bindings.map(\.id)).count==bindings.count else {throw CirclrError("노출 포트의 개수·중복을 확인하세요")}
+        var targets:[CircleAddress:Set<CirclePortEndpoint>]=[:]
+        for binding in bindings {
+            try id(binding.id);try address(binding.target.node);try id(binding.target.portID)
+            guard !binding.name.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty,binding.name.count<=128,
+                  case .group(let parent,let groupID)=binding.group else {throw CirclrError("노출 포트의 이름·그룹 주소를 확인하세요")}
+            try id(groupID)
+            switch parent {
+            case .album,.sound:break
+            case .section,.composition:try address(parent)
+            default:throw CirclrError("노출 포트의 그룹 부모를 확인하세요")
+            }
+            guard targets[binding.group,default:[]].insert(binding.target).inserted,targets[binding.group,default:[]].count<=64 else {throw CirclrError("한 그룹의 노출 포트 대상은 중복 없이 최대 64개입니다")}
+        }
     }
 }
 
@@ -59,7 +75,7 @@ public enum CirclePortLayoutEditing {
         try saved?.validate()
         let old=Dictionary(uniqueKeysWithValues:(project.portLayout?.connections ?? []).map{($0.id,$0.placement)})
         let next=Dictionary(uniqueKeysWithValues:(saved?.connections ?? []).map{($0.id,$0.placement)})
-        guard old != next else{return false}
+        guard old != next || (saved?.bindings ?? []) != (project.portLayout?.bindings ?? []) else{return false}
         var layout=saved ?? CirclePortLayout();layout.revision=expectedLayoutRevision+1
         try layout.validate();project.portLayout=layout;return true
     }

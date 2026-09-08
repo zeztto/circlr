@@ -17,6 +17,9 @@ public struct AgentArguments:Codable {
     public var connectionID:CircleConnectionID?
     public var moves:[PlacedCircleConnection]?
     public var expectedLayoutRevision:Int?
+    public var target:CirclePortEndpoint?
+    public var portID:String?
+    public var name:String?
     public var operations:[AgentOperation]?
     public var arrangementID:ID?
     public var useID:ID?

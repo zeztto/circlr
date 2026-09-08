@@ -105,7 +105,7 @@ struct RootView: View {
     private var actions:some View {
         HStack(spacing:5) {
             if let address=store.hierarchySelection {
-                if store.selectedCircle?.ports.isEmpty == false { Button("연결") { store.showConnections() }.help("IN/OUT·대상·8방향 위치 편집 · L") }
+                if store.canEditCirclePorts { Button("연결") { store.showConnections() }.help("IN/OUT·대상·8방향 위치 편집 · L") }
                 Button{store.connectionsOpen=false;store.hierarchyTransitionID=nil;store.focusHierarchy(address,detail:true);store.hierarchySettingsOpen=true}label:{Image(systemName:"slider.horizontal.3")}.help("선택 서클의 이름·음악 설정")
                 if store.selectedUse != nil {
                     Button{store.play(onlySelection:true)}label:{Image(systemName:"play.circle")}.help("선택 섹션 듣기")

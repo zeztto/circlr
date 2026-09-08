@@ -11,7 +11,9 @@ public struct CirclePort:Codable,Equatable,Identifiable,Sendable {
     public let signal:CirclePortSignal
     public let name:String
     public let policy:CirclePortPolicy
-    public var isSidechain:Bool {id==Self.sidechainInput}
+    public var bindingTarget:CirclePortEndpoint? = nil
+    public var bindingIndex:Int? = nil
+    public var isSidechain:Bool {(bindingTarget?.portID ?? id)==Self.sidechainInput}
     public static let audioInput="in.audio.main",audioOutput="out.audio.main",sidechainInput="in.audio.sidechain"
     public static let midiInput="in.midi.main",midiOutput="out.midi.main"
     public static let flowInput="in.flow.previous",flowOutput="out.flow.next"
@@ -92,11 +94,13 @@ public enum CirclePortCatalog {
         case .composition(let id):
             guard project.album?.composition(id) != nil else{throw CirclrError("곡·악장을 찾을 수 없습니다")}
             return CirclePort.flowPorts
-        case .album,.sound,.group:return [] // Visual grouping is not an exposed signal binding.
+        case .group:return try GroupPortEditing.ports(at:address,in:project)
+        case .album,.sound:return []
         }
     }
     /// Orients a gesture begun at either endpoint. The graph editor still checks cycles and routes.
     public static func normalize(_ first:CirclePortEndpoint,_ second:CirclePortEndpoint,in project:Project)throws->NormalizedPortConnection {
+        let first = try GroupPortEditing.resolve(first,in:project), second = try GroupPortEditing.resolve(second,in:project)
         guard first.node != second.node,
               let a=try ports(at:first.node,in:project).first(where:{$0.id==first.portID}),
               let b=try ports(at:second.node,in:project).first(where:{$0.id==second.portID}),a.direction != b.direction,a.signal==b.signal else{throw CirclrError("호환되는 OUT과 IN을 선택하세요")}

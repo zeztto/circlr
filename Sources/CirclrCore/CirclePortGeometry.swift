@@ -49,7 +49,8 @@ public enum CirclePortGeometry {
     public static func anchor(center:Point,radius:Double,port:CirclePort,octant:PortOctant)throws->Point {
         guard valid(center),radius.isFinite,(0...1e9).contains(radius) else{throw CirclrError("포트의 화면 좌표와 반경을 확인하세요")}
         let offset:Double
-        if port.id == AudioRouter.input2 { offset=68 }
+        if let index=port.bindingIndex { offset=(port.direction == .input ? 24:46)+44*Double(index) }
+        else if port.id == AudioRouter.input2 { offset=68 }
         else if port.id == AudioRouter.output2 { offset=90 }
         else { offset=port.isSidechain ? 68:port.direction == .input ? 24:46 }
         let n=normal(octant);return Point(center.x+(radius+offset)*n.x,center.y+(radius+offset)*n.y)

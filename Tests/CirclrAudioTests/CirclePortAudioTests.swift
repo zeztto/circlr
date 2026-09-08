@@ -3,6 +3,32 @@ import CirclrCore
 @testable import CirclrAudio
 
 final class CirclePortAudioTests:XCTestCase {
+    func testExposedGroupPortsCollapseUndoAndReloadPreservePCM()async throws {
+        var p=Project();_=p.addTrack(name:"그룹 신스");p.global.tempo=240
+        _=p.addSection(name:"검증",at:Point(),bars:1)
+        p.sections[0].lanes[0].notes=[Note(beat:0,length:2,pitch:60,velocity:110)]
+        p.enableAlbum();p=try SectionGraphMigration.migrate(p)
+        let graph=try XCTUnwrap(SectionGraphEditing.effective(section:p.sections[0],use:p.active.uses[0]))
+        let instrument=graph.nodes.first{if case .instrument=$0.content{return true};return false}!
+        let midi=graph.nodes.first{if case .midi=$0.content{return true};return false}!
+        func address(_ id:ID)->CircleAddress {.music(arrangementID:p.active.id,useID:p.active.uses[0].id,nodeID:id)}
+        let baseline=try await ArrangementRenderer.render(project:p,root:nil,plan:ArrangementCompiler.compile(p),tailSeconds:0)
+        XCTAssertGreaterThan(baseline.mix.peak,0.001)
+        let group=try HierarchyEditing.group([address(instrument.id),address(midi.id)],name:"신스",in:&p)
+        let before=p,target=CirclePortEndpoint(node:address(instrument.id),portID:CirclePort.audioOutput)
+        _=try GroupPortEditing.set(group:group,target:target,name:"신스 출력",projectID:p.id,expectedMusicRevision:p.musicRevision,expectedLayoutRevision:0,in:&p)
+        guard case .group(let parent,let id)=group else{return XCTFail()}
+        try HierarchyEditing.editLayout(parent,in:&p){layout in layout.groups[layout.groups.firstIndex{$0.id==id}!].collapsed=true}
+        let collapsed=try await ArrangementRenderer.render(project:p,root:nil,plan:ArrangementCompiler.compile(p),tailSeconds:0)
+        XCTAssertEqual(collapsed.mix.left,baseline.mix.left);XCTAssertEqual(collapsed.mix.right,baseline.mix.right)
+        let package=FileManager.default.temporaryDirectory.appendingPathComponent("group-pcm-\(newID()).circlr")
+        defer{try? FileManager.default.removeItem(at:package)}
+        _=try ProjectStore.save(p,to:package,mediaRoot:nil);let loaded=try ProjectStore.load(package)
+        let restored=try CircleHistory.restore(before,layoutOnly:true,current:loaded.project)
+        XCTAssertEqual(restored.musicRevision,p.musicRevision);XCTAssertNil(restored.portLayout?.bindings)
+        let reopened=try await ArrangementRenderer.render(project:restored,root:loaded.root,plan:ArrangementCompiler.compile(restored),tailSeconds:0)
+        XCTAssertEqual(reopened.mix.left,baseline.mix.left);XCTAssertEqual(reopened.mix.right,baseline.mix.right)
+    }
     func testAllDirectionChangesAndEmbeddedProjectPreserveRenderedPCM()async throws {
         let root=FileManager.default.temporaryDirectory.appendingPathComponent("circlr-port-pcm-\(newID())")
         defer{try? FileManager.default.removeItem(at:root)}

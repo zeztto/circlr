@@ -10,8 +10,9 @@ struct ConnectionEditorIntent: Equatable, Codable {
 }
 
 extension AppStore {
+    var canEditCirclePorts:Bool {selectedCircle?.ports.isEmpty == false || selectedHierarchyGroup != nil}
     func showConnections(portID: String? = nil, replacing: CircleConnectionID? = nil) {
-        guard let node = selectedCircle, !node.ports.isEmpty else { return }
+        guard let node = selectedCircle, canEditCirclePorts else { return }
         connectionEditorIntent = .init(projectID: project.id, node: node.id, portID: portID, connection: replacing)
         connectionsOpen = true; hierarchySettingsOpen = false; focusHierarchy(node.id, detail: true)
     }
@@ -43,6 +44,7 @@ struct PortConnectionsEditor: View {
     @State private var secondOctant = PortOctant.west
     @State private var replacing: CircleConnectionID?
     @State private var query = ""
+    @State private var managingGroupPorts = false
     @StateObject private var keyboard = PortKeyboardFocus()
     private var node: CircleSceneNode? { store.selectedCircle }
     private var ports: [CirclePort] { node?.ports ?? [] }
@@ -51,7 +53,21 @@ struct PortConnectionsEditor: View {
         return .init(node: node.id, portID: ownPortID)
     }
     private var connections: [CirclePortConnection] {
-        ((try? CirclePortCatalog.connections(in: store.project)) ?? []).filter { $0.from.node == node?.id || $0.to.node == node?.id }
+        guard let node else {return []}
+        return ((try? AgentPortEditing.snapshot(at:node.id,in:store.project))?.connections ?? []).map(\.connection)
+    }
+    private var isGroup:Bool {store.selectedHierarchyGroup != nil}
+    private var managing:Bool {isGroup && (managingGroupPorts || ports.isEmpty)}
+    private func presented(_ endpoint:CirclePortEndpoint)->CirclePortEndpoint {
+        guard let node else {return endpoint}
+        return GroupPortEditing.presented(endpoint,at:node.id,in:store.project) ?? endpoint
+    }
+    private func visible(_ endpoint:CirclePortEndpoint)->CirclePortEndpoint {
+        guard let scene=store.hierarchyScene,scene.node(endpoint.node)==nil else {return endpoint}
+        for node in scene.nodes {
+            if let port=node.ports.first(where:{$0.bindingTarget==endpoint}) {return .init(node:node.id,portID:port.id)}
+        }
+        return endpoint
     }
     private var targets: [(CirclePortEndpoint, String)] {
         guard let own else { return [] }
@@ -66,7 +82,20 @@ struct PortConnectionsEditor: View {
     var body: some View {
         GeometryReader { geometry in
             ScrollView {
-                if geometry.size.width >= 660 {
+                if isGroup {
+                    HStack {
+                        Text("노출 포트 \(ports.count)개").fontWeight(.semibold)
+                        Spacer()
+                        if !ports.isEmpty {PortActionButton(title:managing ? "연결 편집":"노출 포트 관리",keyboard:keyboard,order:-100) {
+                            managingGroupPorts.toggle();focusSearch()
+                        }.frame(width:140)}
+                    }.padding(.bottom,12)
+                }
+                if managing,let node {
+                    GroupPortEditor(store:store,group:node.id,keyboard:keyboard) { id in
+                        managingGroupPorts=false;replacing=nil;target=nil;query="";ownPortID=id;focusSearch()
+                    }
+                } else if geometry.size.width >= 660 {
                     HStack(alignment: .top, spacing: 24) {
                         compose.frame(maxWidth: .infinity)
                         connectionList.frame(maxWidth: .infinity)
@@ -85,6 +114,7 @@ struct PortConnectionsEditor: View {
             }
         }
         .onChange(of: query) { _, _ in if let target, !targets.contains(where: { $0.0 == target }) { self.target = nil } }
+        .onChange(of: ports.map(\.id)) {_,ids in if !ids.contains(ownPortID) {reset()} }
     }
     private var connectionList: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -98,7 +128,9 @@ struct PortConnectionsEditor: View {
             HStack {
                 Text(replacing == nil ? "새 연결" : "케이블 재연결").fontWeight(.semibold)
                 Spacer()
-                if replacing != nil { PortActionButton(title: "취소", keyboard: keyboard, order: 0) { reset(); focusSearch() } }
+                if replacing != nil { PortActionButton(title: "취소", keyboard: keyboard, order: 0) { reset(); focusSearch() }.frame(width:60) }
+                PortActionButton(title: replacing == nil ? "연결" : "재연결 적용", keyboard: keyboard, order: 60) { commit(); focusSearch() }
+                    .frame(width:110).disabled(own == nil || target == nil)
             }
             PortChoice(label: "이 서클의 IN OUT 포트", selection: $ownPortID, options: ports.map { ($0.id,$0.name) }, keyboard: keyboard, order: 10)
             PortSearchField(text: $query, keyboard: keyboard, order: 20)
@@ -110,7 +142,6 @@ struct PortConnectionsEditor: View {
             HStack {
                 Text("신호는 항상 OUT → IN").foregroundStyle(StudioTheme.secondary)
                 Spacer()
-                PortActionButton(title: replacing == nil ? "연결" : "재연결 적용", keyboard: keyboard, order: 60) { commit(); focusSearch() }.disabled(own == nil || target == nil)
             }
             Text("Tab 항목 이동 · ↑ ↓ 포트 선택").font(.system(size: 11)).foregroundStyle(StudioTheme.secondary)
         }
@@ -122,6 +153,7 @@ struct PortConnectionsEditor: View {
         }
     }
     private func title(_ endpoint: CirclePortEndpoint) -> String {
+        let endpoint=visible(presented(endpoint))
         let name = store.hierarchyScene?.node(endpoint.node)?.title ?? "접힌 그룹 내부"
         let port = (try? CirclePortCatalog.ports(at: endpoint.node, in: store.project))?.first { $0.id == endpoint.portID }?.name ?? endpoint.portID
         return name + " · " + port
@@ -147,13 +179,14 @@ struct PortConnectionsEditor: View {
     }
     private func populate(_ edge: CirclePortConnection) {
         replacing = edge.id; query = ""
-        let incoming = edge.to.node == node?.id
-        ownPortID = incoming ? edge.to.portID : edge.from.portID
-        target = incoming ? edge.from : edge.to
+        let from=presented(edge.from),to=presented(edge.to)
+        let incoming = to.node == node?.id
+        ownPortID = incoming ? to.portID : from.portID
+        target = visible(incoming ? edge.from : edge.to)
         let placement = store.project.portLayout?.placement(for: edge.id) ?? .init()
         firstOctant = incoming ? placement.to : placement.from; secondOctant = incoming ? placement.from : placement.to
     }
-    private func focusSearch() { DispatchQueue.main.async { keyboard.focus(20) } }
+    private func focusSearch() { DispatchQueue.main.async { keyboard.focus(managing ? -60:20) } }
     private func loadIntent() {
         reset()
         guard let intent = store.connectionEditorIntent, intent.projectID == store.project.id, intent.node == node?.id else { return }

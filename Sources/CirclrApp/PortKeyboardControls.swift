@@ -88,6 +88,7 @@ struct PortChoice<Value: Hashable>: NSViewRepresentable {
     let options: [(Value, String)]
     let keyboard: PortKeyboardFocus
     let order: Int
+    @Environment(\.isEnabled) private var enabled
     func makeCoordinator() -> Coordinator { Coordinator(self) }
     func makeNSView(context: Context) -> PortPopupControl {
         let control = PortPopupControl(frame: .zero, pullsDown: false)
@@ -97,6 +98,7 @@ struct PortChoice<Value: Hashable>: NSViewRepresentable {
     }
     func updateNSView(_ control: PortPopupControl, context: Context) {
         context.coordinator.parent = self; control.navigation = keyboard; keyboard.register(control, order: order)
+        control.isEnabled = enabled
         let titles = options.map(\.1)
         if control.itemTitles != titles { control.removeAllItems(); control.addItems(withTitles: titles) }
         control.selectItem(at: options.firstIndex { $0.0 == selection } ?? -1)
@@ -172,16 +174,18 @@ struct PortSearchField: NSViewRepresentable {
     @Binding var text: String
     let keyboard: PortKeyboardFocus
     let order: Int
+    var label: String = "대상 이름 검색"
     func makeCoordinator() -> Coordinator { Coordinator(self) }
     func makeNSView(context: Context) -> PortSearchControl {
-        let control = PortSearchControl(); control.placeholderString = "대상 이름 검색"
+        let control = PortSearchControl(); control.placeholderString = label
         control.isBordered = false; control.drawsBackground = true; control.backgroundColor = StudioTheme.raisedNS
         control.textColor = StudioTheme.textNS; decoratePortControl(control); control.delegate = context.coordinator
-        control.setAccessibilityLabel("대상 이름 검색")
+        control.setAccessibilityLabel(label)
         return control
     }
     func updateNSView(_ control: PortSearchControl, context: Context) {
         context.coordinator.parent = self; control.navigation = keyboard; keyboard.register(control, order: order)
+        control.placeholderString=label;control.setAccessibilityLabel(label)
         if control.stringValue != text { control.stringValue = text }
     }
     func sizeThatFits(_ proposal: ProposedViewSize, nsView: PortSearchControl, context: Context) -> CGSize? {

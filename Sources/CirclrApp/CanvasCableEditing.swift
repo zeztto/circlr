@@ -76,7 +76,7 @@ extension AlbumCanvasView {
             let port=(try? CirclePortCatalog.ports(at:address,in:store.project))?.first{$0.id==portID}?.name ?? portID
             return (scene?.node(address)?.title ?? "접힌 그룹 내부")+" · "+port
         }
-        let title=name(id.from,edge.fromPortID)+" → "+name(id.to,edge.toPortID)
+        let title=name(edge.from,edge.fromPortID)+" → "+name(edge.to,edge.toPortID)
         let canReconnect:Bool = {if case .composition = id.from {return false};return true}()
         let view=CableToolsView(title:title,mode:cableMode,canReconnect:canReconnect,direction:selectedCableEnd,placement:edge.placement,chooseMode:{[weak self] mode in
             guard let self else{return};self.cableDrag=nil;self.connectionToken=nil;self.cableMode=mode;self.refreshCableTools();self.window?.makeFirstResponder(self);self.needsDisplay=true
@@ -108,13 +108,19 @@ extension AlbumCanvasView {
         }.min{$0.1<$1.1}?.0
     }
     func cableEndpointHandles()->[(CirclePortDirection,CirclePortHandle)] {
-        guard let edge=selectedSceneCable,let id=edge.connectionID,edge.from==id.from,edge.to==id.to,
+        guard let edge=selectedSceneCable,
               let curve=connectionCurve(edge),cableTools != nil else{return []}
         let time = store.selectedCircle.flatMap { visibleTimeHandle($0) }
-        return [(CirclePortDirection.output,CirclePortHandle(endpoint:.init(node:id.from,portID:edge.fromPortID),octant:edge.placement.from,point:curve.from)),
-                (.input,CirclePortHandle(endpoint:.init(node:id.to,portID:edge.toPortID),octant:edge.placement.to,point:curve.to))].filter {
-                    let p=$0.1.point; return cablePointAvailable(p) && (time.map{hypot($0.x-p.x,$0.y-p.y)>23} ?? true)
+        return [(CirclePortDirection.output,CirclePortHandle(endpoint:.init(node:edge.from,portID:edge.fromPortID),octant:edge.placement.from,point:curve.from)),
+                (.input,CirclePortHandle(endpoint:.init(node:edge.to,portID:edge.toPortID),octant:edge.placement.to,point:curve.to))].filter {
+                    let endpoint=$0.1.endpoint,p=$0.1.point
+                    return scene?.node(endpoint.node)?.ports.contains(where:{$0.id==endpoint.portID}) == true &&
+                        cablePointAvailable(p) && (time.map{hypot($0.x-p.x,$0.y-p.y)>23} ?? true)
                 }
+    }
+    func displayedMovingPort(_ gesture:CircleCableGesture)->CirclePortEndpoint {
+        guard let edge=selectedSceneCable else {return gesture.moving}
+        return .init(node:gesture.direction == .output ? edge.from:edge.to,portID:gesture.direction == .output ? edge.fromPortID:edge.toPortID)
     }
     func beginCableDrag(at point:NSPoint)->Bool {
         guard let hit=cableEndpointHandles().first(where:{hypot($0.1.point.x-point.x,$0.1.point.y-point.y)<=12}),let id=selectedCable else{return false}
@@ -140,10 +146,11 @@ extension AlbumCanvasView {
         }
         guard cablePointAvailable(Point(point.x,point.y),labels:false) else{return}
         if gesture.mode == .placement {
-            guard let node=scene?.node(gesture.moving.node) else{return}
+            let endpoint=displayedMovingPort(gesture)
+            guard let node=scene?.node(endpoint.node) else{return}
             let center=screen(node),radius=node.outerRadius*camera.zoom,distance=hypot(point.x-center.x,point.y-center.y)
             guard abs(distance-radius)<=115,let octant=CirclePortGeometry.nearestOctant(to:Point(point.x,point.y),center:Point(center.x,center.y)) else {store.status="위치 이동은 원래 서클 둘레에 놓으세요";return}
-            apply(gesture.moving,octant);return
+            apply(endpoint,octant);return
         }
         if let handle=CirclePortGeometry.hit(Point(point.x,point.y),visibleHandles:visiblePortHandles()) {apply(handle.endpoint,handle.octant);return}
         guard let target=hit(point) else{return}
@@ -173,7 +180,8 @@ extension AlbumCanvasView {
         guard let gesture=cableDrag,let edge=selectedSceneCable,let curve=connectionCurve(edge) else{return}
         let fixedPoint=gesture.direction == .output ? curve.to:curve.from
         var moving=Point(connectionPoint.x,connectionPoint.y),octant=gesture.direction == .output ? edge.placement.from:edge.placement.to
-        if gesture.mode == .placement,let node=scene?.node(gesture.moving.node),let port=node.ports.first(where:{$0.id==gesture.moving.portID}) {
+        let displayed=displayedMovingPort(gesture)
+        if gesture.mode == .placement,let node=scene?.node(displayed.node),let port=node.ports.first(where:{$0.id==displayed.portID}) {
             let center=screen(node)
             octant=CirclePortGeometry.nearestOctant(to:moving,center:Point(center.x,center.y)) ?? octant
             moving=(try? CirclePortGeometry.anchor(center:Point(center.x,center.y),radius:node.outerRadius*camera.zoom,port:port,octant:octant)) ?? moving

@@ -100,6 +100,7 @@ struct PlaybackVisualFrame {
                 guard let data = analysis.occurrences[occurrence.id], let arrangement = owners[occurrence.use.id] else { continue }
                 let local = seconds-occurrence.start, section = CircleAddress.section(arrangementID: arrangement, useID: occurrence.use.id)
                 let level = data.section?.level(at: local) ?? 0
+                frame.levels[section] = max(frame.levels[section] ?? 0,level)
                 for parent in scene.path(to: section) { frame.levels[parent.id] = max(frame.levels[parent.id] ?? 0, level) }
                 for (id, envelope) in data.nodes {
                     let address = CircleAddress.music(arrangementID: arrangement, useID: occurrence.use.id, nodeID: id)
@@ -116,10 +117,14 @@ struct PlaybackVisualFrame {
             frame.phases.removeValue(forKey: node.id)
         }
         for edge in scene.edges {
+            let logicalFrom=edge.connectionID?.from ?? edge.from,logicalTo=edge.connectionID?.to ?? edge.to
+            // A collapsed group's displayed endpoint still represents the hidden engine node.
+            if logicalFrom != edge.from {frame.levels[edge.from]=max(frame.levels[edge.from] ?? 0,frame.levels[logicalFrom] ?? 0)}
+            if logicalTo != edge.to {frame.levels[edge.to]=max(frame.levels[edge.to] ?? 0,frame.levels[logicalTo] ?? 0)}
             if edge.kind == .flow {
                 if plan.transitions.contains(where: { $0.edgeID == edge.id && $0.start <= seconds && seconds < $0.start+max(0.35, $0.duration) }) {
                     frame.edgeLevels[edge.id] = max(0.3, frame.levels[edge.from] ?? 0, frame.levels[edge.to] ?? 0)
-                } else if case .section(_, let source) = edge.from, case .section(_, let target) = edge.to,
+                } else if case .section(_, let source) = logicalFrom, case .section(_, let target) = logicalTo,
                           plan.occurrences.enumerated().contains(where: { i, occurrence in
                               i > 0 && occurrence.use.id == target && plan.occurrences[i-1].use.id == source &&
                               occurrence.start <= seconds && seconds < occurrence.start+0.35

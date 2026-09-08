@@ -130,8 +130,8 @@ extension AlbumCanvasView {
         if let port = selectedCanvasPort {
             clearCableSelection(); store.selectHierarchy(port.node); store.showConnections(portID: port.portID)
         } else if let edge = selectedSceneCable, let id = edge.connectionID {
-            let desired = selectedCableEnd == .output ? id.from : id.to
-            let other = selectedCableEnd == .output ? id.to : id.from
+            let desired = selectedCableEnd == .output ? edge.from : edge.to
+            let other = selectedCableEnd == .output ? edge.to : edge.from
             guard let address = [desired, other].first(where: { scene?.node($0)?.ports.isEmpty == false }) else {
                 store.status = "연결 위치는 방향키로 바꿀 수 있습니다. 내부 포트를 편집하려면 그룹을 펼치세요"; return
             }
@@ -193,8 +193,8 @@ extension AlbumCanvasView {
             cableIDs.insert(id)
             let element = cableAccessibility[id] ?? CableAccessibility(parent: self, connection: id)
             cableAccessibility[id] = element
-            let from = (try? CirclePortCatalog.ports(at: id.from, in: store.project))?.first { $0.id == edge.fromPortID }?.name ?? edge.fromPortID
-            let to = (try? CirclePortCatalog.ports(at: id.to, in: store.project))?.first { $0.id == edge.toPortID }?.name ?? edge.toPortID
+            let from = (try? CirclePortCatalog.ports(at: edge.from, in: store.project))?.first { $0.id == edge.fromPortID }?.name ?? edge.fromPortID
+            let to = (try? CirclePortCatalog.ports(at: edge.to, in: store.project))?.first { $0.id == edge.toPortID }?.name ?? edge.toPortID
             element.setAccessibilityLabel("케이블 · "+a.title+" · "+from+" → "+b.title+" · "+to)
             element.setAccessibilityValue("OUT \(edge.placement.from.label) · IN \(edge.placement.to.label)")
             element.setAccessibilityHelp("선택 후 Tab 끝점 · 좌우 위치 · Return 편집 · Delete 해제")

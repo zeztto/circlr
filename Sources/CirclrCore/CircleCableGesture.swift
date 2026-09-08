@@ -33,7 +33,7 @@ public struct CircleCableGesture: Sendable {
             throw CirclrError("드래그 중 음악·배치가 변경되었습니다. 다시 연결하세요")
         }
         if mode == .placement {
-            guard target == moving else { throw CirclrError("위치 이동은 원래 서클 둘레에 놓으세요") }
+            guard try GroupPortEditing.resolve(target,in:project) == moving else { throw CirclrError("위치 이동은 원래 서클 둘레에 놓으세요") }
             var next = placement
             if direction == .output { next.from = octant } else { next.to = octant }
             try CirclePortLayoutEditing.apply([.init(id: connection.id, placement: next)], projectID: projectID,

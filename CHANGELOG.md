@@ -2,6 +2,13 @@
 
 0.1–0.3은 설계 문서 revision이며, 0.4.0부터 로컬 실행 프로토타입을 포함한다.
 
+## 개발 중 — 그룹 노출 포트 D2 체크포인트
+
+- 그룹 안의 실제 IN/OUT을 명시적으로 노출하고 이름 변경·노출 해제를 같은 캔버스에서 수행한다. 내부 대상과 케이블은 유지하며 metadata만 layout revision과 Undo에 저장한다. 사라진 대상은 미해결 상태로 보존하고 다른 포트로 자동 연결하지 않는다.
+- 그룹 포트를 통한 새 연결·재연결은 원래 endpoint로 검증한다. 접힌 그룹의 외곽에 실제 포트 이름과 케이블을 표시하고 K/P 탐색·8방향 키보드/마우스 배치를 지원한다. 주변 연결이 숨겨지던 표시 규칙과 그룹 선택 시 연결 편집 의도가 사라지던 오류를 수정했다.
+- 연결 적용 버튼을 편집기 상단으로 옮겼다. 이름 변경 중 내부 대상 선택은 비활성화한다. MCP는 set_group_port/remove_group_port와 group focus를 지원하며 도구는 21개다. scalar portID가 null로 반환되던 오류도 수정했다.
+- Swift 212개·Python 25개와 release build를 통과했다. 실제 앱의 그룹 노출·이름 변경·연결·해제·Undo·8방향·드래그·저장/재열기를 확인했다. [D2 QA](qa/ports-group-review.md). 이번 빌드의 재생 신호 화면은 오디오 출력 장치 연결 timeout으로 미검증이며 VoiceOver·전체 조합·0.20 통합·사용 앱 출고도 후속이다.
+
 ## 개발 중 — 명시적 포트 MCP D1 단계
 
 - 포트 descriptor·논리 주소·연결·배치를 읽는 `ports`와 `connect_ports`·`reconnect_ports`·`disconnect_ports`·`move_ports`를 추가했다. MCP 도구는 19개이며 읽기 전용 specialist는 ports 조회만 추가로 사용할 수 있다.

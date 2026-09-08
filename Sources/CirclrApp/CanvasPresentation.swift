@@ -10,7 +10,8 @@ extension AlbumCanvasView {
         let context=scene.path(to:playbackVisibilityFocus ?? store.hierarchySelection ?? .album)
             .last(where:{$0.radius*camera.zoom>min(workspaceViewport.width,workspaceViewport.height)*0.22}) ?? scene.node(.album)
         // Inspecting a circle's ports keeps its siblings and cables available until a precision editor opens.
-        if let context,context.role == .music,editorAddress != context.id,let parent=context.parent {return scene.node(parent)}
+        if let context,context.role == .music || (context.role == .group && !context.ports.isEmpty),
+           editorAddress != context.id,let parent=context.parent {return scene.node(parent)}
         return context
     }
     func drawReadableLabels() {

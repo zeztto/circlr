@@ -81,4 +81,6 @@ Python 표준 라이브러리만 사용하는 로컬 stdio MCP 서버다. 음악
 
 연결 중복은 `changed:false`이며 기존 배치도 유지한다. 이동 no-op도 Undo/revision을 추가하지 않는다. `circlr_undo`에 두 최신 revision을 모두 전달하면 layout 전용 변경도 충돌을 검사하며 한 명령을 되돌린다. batch의 한 항목이라도 실패하면 전체를 유지한다. 쓰기 실패 응답에도 현재 revision/layoutRevision을 제공한다.
 
-`ports`는 읽기 전용 specialist에 허용되며 네 가지 쓰기는 차단된다. 앱 최소화와 무관하게 동작하며 선택이나 카메라를 이동하지 않는다. 접힌 그룹 binding과 Audio Unit의 임의 다중 bus는 아직 제공하지 않는다. composition 순서 연결은 reconnect/disconnect 대신 순서 편집을 사용한다.
+`ports`는 읽기 전용 specialist에 허용되며 네 가지 쓰기는 차단된다. 앱 최소화와 무관하게 동작하며 선택이나 카메라를 이동하지 않는다. 그룹 alias는 [그룹 노출 포트](../docs/36-group-ports.md)에 설명한다. Audio Unit의 임의 다중 bus는 아직 제공하지 않는다. composition 순서 연결은 reconnect/disconnect 대신 순서 편집을 사용한다.
+
+그룹 포트는 `circlr_set_group_port`/`circlr_remove_group_port`로 관리한다. node는 group 주소, target은 내부 실제 endpoint다. 두 명령 모두 project/music/layout revision을 요구하며 음악은 유지한다. 반환 portID를 connect/reconnect에 사용하고, 기존 ID의 target을 바꿀 수는 없다. [정확한 요청·Undo·미해결 대상 계약](../docs/36-group-ports.md#mcp). `circlr_focus`의 node 주소로 그룹을 바로 보여줄 수도 있다.

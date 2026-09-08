@@ -8,7 +8,7 @@ extension AlbumCanvasView {
         guard let scene else { return [] }
         var result: [CirclePortHandle] = []
         let fixed = cableDrag?.mode == .reconnect ? cableDrag?.fixed : connecting?.endpoint
-        let fixedPort = fixed.flatMap { endpoint in scene.node(endpoint.node)?.ports.first { $0.id == endpoint.portID } }
+        let fixedPort = fixed.flatMap { endpoint in (try? CirclePortCatalog.ports(at:endpoint.node,in:store.project))?.first { $0.id == endpoint.portID } }
         let time = store.selectedCircle.flatMap { visibleTimeHandle($0) }
         for node in scene.nodes where isVisible(node) && node.radius*camera.zoom > 45 && !node.ports.isEmpty {
             let center = screen(node)
@@ -24,7 +24,7 @@ extension AlbumCanvasView {
                     engaged = true
                     expanded = endpoint != fixed && hypot(connectionPoint.x-center.x,connectionPoint.y-center.y) <= node.outerRadius*camera.zoom+115
                 } else if let gesture = cableDrag, gesture.mode == .placement {
-                    engaged = endpoint == gesture.moving; expanded = engaged
+                    engaged = (try? GroupPortEditing.resolve(endpoint,in:store.project)) == gesture.moving; expanded = engaged
                 }
                 var connected = Set<PortOctant>()
                 for edge in scene.edges {
@@ -57,6 +57,7 @@ extension AlbumCanvasView {
         }
     }
     func shortPortLabel(_ port:CirclePort)->String {
+        if port.bindingTarget != nil {return String(port.name.prefix(26))}
         if let index=AudioRouter.inputs.firstIndex(of:port.id) {return "IN \(index+1)"}
         if let index=AudioRouter.outputs.firstIndex(of:port.id) {return "OUT \(index+1)"}
         return port.direction == .output ? "OUT":port.isSidechain ? "SC IN":"IN"

@@ -27,6 +27,10 @@ PORT_ADDRESS = {"oneOf": [
     schema({"section": schema({"arrangementID": PORT_ID, "useID": PORT_ID}, ["arrangementID", "useID"])}, ["section"]),
     schema({"music": schema({"arrangementID": PORT_ID, "useID": PORT_ID, "nodeID": PORT_ID}, ["arrangementID", "useID", "nodeID"])}, ["music"]),
 ]}
+GROUP_PARENT = {"oneOf": [PORT_ADDRESS["oneOf"][1], PORT_ADDRESS["oneOf"][2],
+    schema({"album": schema({})}, ["album"]), schema({"sound": schema({})}, ["sound"])]}
+GROUP_ADDRESS = schema({"group": schema({"parent": GROUP_PARENT, "id": PORT_ID}, ["parent", "id"])}, ["group"])
+PORT_ADDRESS["oneOf"].append(GROUP_ADDRESS)
 PORT_ENDPOINT = schema({"node": PORT_ADDRESS, "portID": PORT_ID}, ["node", "portID"])
 CONNECTION_ID = schema({"edgeID": PORT_ID, "from": PORT_ADDRESS, "to": PORT_ADDRESS}, ["edgeID", "from", "to"])
 OCTANT = {"type": "integer", "minimum": 0, "maximum": 7, "description": "Clockwise: 0 N, 1 NE, 2 E, 3 SE, 4 S, 5 SW, 6 W, 7 NW. Position only, not a bus."}
@@ -80,7 +84,9 @@ def tool(name, method, description, properties=None, required=(), write=False):
 TOOLS = [
     tool("snapshot", "snapshot", "Read current project IDs, revision, tracks, arrangements, selection and active job. Read before every edit."),
     tool("inspect", "inspect", "Read the effective notes, clips and node graph of one section use.", SCOPE, ("useID",)),
-    tool("ports", "ports", "Read one logical node's actual IN/OUT descriptors, connections, placements, revision and layoutRevision. Reuse returned addresses and connection IDs. Group aliases are not supported.", {"node": PORT_ADDRESS}, ("node",)),
+    tool("ports", "ports", "Read actual IN/OUT descriptors, connections, placements, revision and layoutRevision. Group ports include bindingTarget and all saved bindings; unresolved targets are excluded from active ports. Reuse returned logical connection IDs.", {"node": PORT_ADDRESS}, ("node",)),
+    tool("set_group_port", "set_group_port", "Explicitly expose one real member endpoint on a layout group. Requires node (group address), target and name. Optional existing portID renames the same immutable target. No audio changes; one layout Undo. Duplicate target returns its existing portID.", {**LAYOUT_REVISION, "node": GROUP_ADDRESS, "target": PORT_ENDPOINT, "name": {"type": "string", "minLength": 1, "maxLength": 128}, "portID": PORT_ID}, ("expectedLayoutRevision", "node", "target", "name"), True),
+    tool("remove_group_port", "remove_group_port", "Remove an exposed alias from a group while preserving its internal endpoint and every existing music cable. One layout Undo. Does not automatically route to a replacement port.", {**LAYOUT_REVISION, "node": GROUP_ADDRESS, "portID": PORT_ID}, ("expectedLayoutRevision", "node", "portID"), True),
     tool("connect_ports", "connect_ports", "Connect explicit compatible endpoints, starting at either IN or OUT. Octants belong to first/second endpoints. One Undo; duplicates are a no-op and do not move existing cables. Requires fresh music and layout revisions.", PORT_PAIR, tuple(PORT_PAIR), True),
     tool("reconnect_ports", "reconnect_ports", "Replace one existing cable using its complete logical connectionID and two explicit endpoints. Preserves edge ID and gain; rejects cross-graph moves, cycles and duplicates atomically. Composition sequence cables cannot be reconnected.", {**PORT_PAIR, "connectionID": CONNECTION_ID}, (*PORT_PAIR, "connectionID"), True),
     tool("disconnect_ports", "disconnect_ports", "Disconnect the exact logical cable. One Undo; other section uses stay unchanged. Composition sequence cables cannot be disconnected.", {**LAYOUT_REVISION, "connectionID": CONNECTION_ID}, ("expectedLayoutRevision", "connectionID"), True),
@@ -96,7 +102,7 @@ TOOLS = [
     tool("events", "events", "Read actual app/agent activity after a sequence cursor. Last 500 events retained. No polling faster than once per second.", {"afterSequence": {"type": "integer", "minimum": 0}}),
     tool("play", "play", "Prepare and play the album through the Mac audio output."),
     tool("stop", "stop", "Immediately stop playback and cancel the active render job."),
-    tool("focus", "focus", "Optionally show a circle; omit useID for the album. With minimized=true/false, only minimize/restore the app window. With follow=true/false alone, resume/disable playback camera follow. Editing and rendering never require focus.", {**SCOPE, "compositionID": STRING, "nodeID": STRING, "detail": {"type": "boolean"}, "minimized": {"type": "boolean"}, "follow": {"type": "boolean"}}),
+    tool("focus", "focus", "Optionally show a circle, including a group via node address (exclusive of other selectors). Omit targets for the album. With minimized=true/false, only minimize/restore the app window. With follow=true/false alone, resume/disable playback camera follow. Editing and rendering never require focus.", {**SCOPE, "node": PORT_ADDRESS, "compositionID": STRING, "nodeID": STRING, "detail": {"type": "boolean"}, "minimized": {"type": "boolean"}, "follow": {"type": "boolean"}}),
 ]
 BY_NAME = {entry["name"]: entry for entry in TOOLS}
 READ_METHODS = frozenset({"snapshot", "inspect", "ports", "events", "job"})

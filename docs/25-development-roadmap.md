@@ -111,6 +111,13 @@
 
 [8방향 계약](22-eight-direction-ports.md)을 구현한다. port ID와 cable endpoint 위치를 분리하고 종류별 입력/출력을 표시한다. Fan-in/out, sidechain, reroute, 다중 케이블 선택을 지원한다. 키보드 연결 선택과 MCP가 동일한 type/cycle 검사를 통과하도록 한다. 기존 그래프 migration·재생 동등성을 우선 검증한다.
 
+현재 독립 branch에서 포트 Core·독립 2 IN/2 OUT bus·직접 연결 UI·케이블/포트 키보드·출력별 envelope·MCP와 그룹 alias까지 구현 체크포인트를 만들었다. [실행 기록](35-port-foundation-plan.md)과 [그룹 QA](../qa/ports-group-review.md)를 기준으로 남은 순서는 다음과 같다.
+
+1. 그룹 경계의 실제 재생을 출력 장치가 정상 연결되는 상태에서 재검증한다. 현재 QA 앱의 10초 장치 연결 timeout을 기록했으며 장치 설정은 바꾸지 않았다.
+2. MIDI/sidechain/flow·고밀도 그룹·최소 너비·실제 VoiceOver와 drag 중 외부 변경의 남은 조합을 검증한다.
+3. recording-lifecycle 0.20 변경을 별도 통합 작업 디렉터리에서 보존·병합하고 전체 저장 호환성·Undo·녹음 수명 주기·기존 곡 렌더 회귀를 확인한다. 마이크 실제 캡처는 기존에 미승인된 범위로 남는다.
+4. 통합 결과에 맞춰 version/README/CHANGELOG/kit·서명·UUID를 갱신하고 검증된 앱을 출고한다. 독립 개발 source push는 출고와 구분한다.
+
 ## 다음 개발 F — 연속 실시간 오디오와 녹음
 
 - immutable render graph를 오디오 callback 경계에서 교체하고 allocation/lock/file I/O를 callback 밖으로 분리한다.
