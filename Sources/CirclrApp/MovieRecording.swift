@@ -28,7 +28,7 @@ extension AppStore {
                     self.moviePreparing=false
                     try recorder.append(self.captureMovieFrame?() ?? image,seconds:0)
                     self.status="영상 녹화 중 · 캔버스 + 음악"
-                }catch{guard self.movieGeneration==generation else{return};self.movieWriter?.cancel();self.movieWriter=nil;self.moviePreparing=false;self.fail(error)}
+                }catch{guard self.movieGeneration==generation else{return};self.movieWriter?.cancel();self.movieWriter=nil;self.moviePreparing=false;self.handlePlaybackError(error)}
             }
         }
     }

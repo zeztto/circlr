@@ -12,30 +12,27 @@ import CirclrCore
     public private(set) var prepared: PreparedAudio?
     private var generation = 0
     private var connected = false
-    private var connectionTask: Task<Void,Never>?
-    private var connectionReady = false
+    public var onOutputChange:(()->Void)?
+    public var outputStatus:PlaybackOutputStatus {outputConnection.status}
+    private lazy var outputConnection:PlaybackOutputConnection = {
+        let engine=engine,player=player
+        let connection=PlaybackOutputConnection{report in
+            engine.attach(player)
+            await report(.device)
+            let mixer=engine.mainMixerNode
+            await report(.routing)
+            engine.connect(player,to:mixer,format:AVAudioFormat(standardFormatWithSampleRate:PCM.rate,channels:2))
+        }
+        connection.onChange = {[weak self] in self?.onOutputChange?()}
+        return connection
+    }()
     // Opening the canvas must not synchronously acquire the system output device.
     public init() {}
     private func connectOutputIfNeeded() async throws {
         guard !connected else { return }
-        if connectionTask == nil {
-            let engine = engine, player = player
-            connectionTask = Task.detached(priority:.userInitiated) { [weak self] in
-                engine.attach(player)
-                engine.connect(player,to:engine.mainMixerNode,format:AVAudioFormat(standardFormatWithSampleRate:PCM.rate,channels:2))
-                await self?.markConnectionReady()
-            }
-        }
-        let deadline=Date().addingTimeInterval(10),ticket=generation
-        while !connectionReady {
-            try Task.checkCancellation()
-            guard ticket==generation else{throw CancellationError()}
-            guard Date()<deadline else{throw CirclrError("오디오 출력 장치 연결이 10초를 넘었습니다. macOS 출력 장치 연결 상태를 확인하세요")}
-            try await Task.sleep(for:.milliseconds(40))
-        }
+        try await outputConnection.waitUntilReady()
         connected = true
     }
-    private func markConnectionReady(){connectionReady=true}
     public var seconds: Double {
         guard playing, let t = player.lastRenderTime, let p = player.playerTime(forNodeTime:t) else { return offset }
         return max(offset,offset+Double(p.sampleTime)/p.sampleRate)
@@ -46,13 +43,13 @@ import CirclrCore
         guard part.count > 0 else { return }
         generation += 1; let ticket = generation
         try await connectOutputIfNeeded()
-        guard generation == ticket, !Task.isCancelled else { return }
+        guard generation == ticket, !Task.isCancelled else { throw CancellationError() }
         player.scheduleBuffer(try part.buffer(),completionCallbackType:.dataPlayedBack) { [weak self] _ in
             Task { @MainActor in guard let self, self.generation == ticket else { return }; self.playing = false; self.offset = 0 }
         }
         try engine.start(); player.play(); playing = true
     }
-    public func stop() { generation += 1; if connected { player.stop(); engine.stop() }; playing = false; offset = 0 }
+    public func stop() { generation += 1; outputConnection.cancelWait(); if connected { player.stop(); engine.stop() }; playing = false; offset = 0 }
 }
 
 public final class TakeWriter {

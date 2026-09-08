@@ -234,6 +234,7 @@ struct PlaybackVisualFrame {
          "camera": store.json(camera), "canvasSize": [bounds.width, bounds.height],
          "ports":cableDiagnostics(),
          "editorAddress":store.json(editorAddress), "editorFrame":editor.map{[$0.frame.minX,$0.frame.minY,$0.frame.width,$0.frame.height]} ?? [],
+         "canvasKeyboardFocus":window?.firstResponder === self,
          "workspaceViewport":[workspaceViewport.minX,workspaceViewport.minY,workspaceViewport.width,workspaceViewport.height],
          "labels":labelPlacements.map{["address":store.json($0.id),"rect":[$0.rect.minX,$0.rect.minY,$0.rect.width,$0.rect.height]]},
          "labelCircles":labelCircles.map{["address":store.json($0.id),"center":[$0.center.x,$0.center.y],"radius":$0.radius]},

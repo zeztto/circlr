@@ -144,7 +144,7 @@ struct AlbumCanvas: NSViewRepresentable {
             followedSection = nil
             if let focus = playbackVisibilityFocus, scene?.node(focus) == nil { playbackVisibilityFocus = nil }
             albumPlan=try? AlbumCompiler.compile(store.project)
-            if let selected = store.hierarchySelection, scene?.node(selected) == nil { editor?.removeFromSuperview(); editor = nil; editorAddress = nil }
+            if let selected = store.hierarchySelection, scene?.node(selected) == nil { removePrecisionEditor() }
         }
         if let command = store.hierarchyCommand, command.id != commandID {
             commandID = command.id
@@ -206,24 +206,34 @@ struct AlbumCanvas: NSViewRepresentable {
     }
     func placeEditor() {
         defer { refreshCableTools() }
-        if store.movieWriter != nil {editor?.removeFromSuperview();editor=nil;editorAddress=nil;return}
+        if store.movieWriter != nil {removePrecisionEditor();return}
         if store.playback.playing, store.playbackFollow == .following {
-            editor?.removeFromSuperview(); editor = nil; editorAddress = nil; return
+            removePrecisionEditor(); return
         }
         guard let address = store.hierarchySelection, let node = scene?.node(address), (node.role == .music || store.hierarchySettingsOpen || store.midiImportDraft != nil || store.connectionsOpen),
               node.radius*camera.zoom >= 325, isVisible(node) else {
-            editor?.removeFromSuperview(); editor = nil; editorAddress = nil; return
+            removePrecisionEditor(); return
         }
         let center = camera.screen(node.center), radius = node.radius*camera.zoom
         let frame=CanvasWorkspaceGeometry.editor(center:CGPoint(x:center.x,y:center.y),radius:radius,within:workspaceViewport)
-        guard frame.intersects(bounds) else { editor?.removeFromSuperview(); editor = nil; editorAddress = nil; return }
+        guard frame.intersects(bounds) else { removePrecisionEditor(); return }
         if editorAddress != address || editor == nil {
-            editor?.removeFromSuperview()
+            removePrecisionEditor()
             let host = NSHostingView(rootView: InlineCircleEditor(store: store))
             host.sizingOptions = []; host.wantsLayer = true; host.layer?.backgroundColor = NSColor.clear.cgColor
             addSubview(host); editor = host; editorAddress = address
         }
         editor?.frame = frame
+    }
+    func removePrecisionEditor() {
+        guard let current=editor else {editorAddress=nil;return}
+        if let responder=window?.firstResponder as? NSView {
+            let fieldOwner=(responder as? NSTextView)?.delegate as? NSView
+            if responder === current || responder.isDescendant(of:current) || fieldOwner?.isDescendant(of:current) == true {
+                window?.makeFirstResponder(self)
+            }
+        }
+        current.removeFromSuperview();editor=nil;editorAddress=nil
     }
     func finishConnectionEditorFocus() {
         guard store.connectionsOpen, let editor else { return }

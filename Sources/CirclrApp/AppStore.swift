@@ -97,6 +97,7 @@ import CirclrAudio
     var projectURL: URL?
     var mediaRoot: URL?
     let playback = Playback()
+    @Published var outputStatus=PlaybackOutputStatus()
     let recorder = AudioRecorder()
     var prepared: PreparedAudio?
     var preparedKey = ""
@@ -154,6 +155,7 @@ import CirclrAudio
     private var recoveryURL:URL { storageRoot.appendingPathComponent("recovery.json") }
     struct Recovery: Codable { var project: Project; var root: URL?; var date: Date }
     init() {
+        playback.onOutputChange = {[weak self] in self?.refreshOutputStatus()}
         do { try FileManager.default.createDirectory(at:storageRoot,withIntermediateDirectories:true) } catch { status = "복구 폴더 준비 실패: \(error.localizedDescription)" }
         selectedTrackID = project.addTrack(name:"악기 1")
         _ = project.addTrack(name:"드럼",drums:true)
@@ -208,6 +210,7 @@ import CirclrAudio
     var isPlaying: Bool { playback.playing }
     var hasPendingMusic: Bool { playback.playing && prepared?.plan.revision != project.musicRevision }
     func tick() {
+        refreshOutputStatus()
         meter.update(seconds:playback.seconds,playing:playback.playing)
         captureMovieTick()
         if recorder.recording {
@@ -387,6 +390,7 @@ import CirclrAudio
         }
     }
     func play(onlySelection:Bool = false) {
+        if moviePreparing {stop();return}
         if midiRecording || audioRecording || audioRecordPending {stop();return}
         if playback.playing { stop(); return }
         if preparing { stop(); return }
@@ -406,7 +410,7 @@ import CirclrAudio
                     do { try await self.playback.play(prepared)
                         guard generation == self.renderGeneration else { return }
                         self.preparing = false; self.status = "재생 중"; completion?(prepared)
-                    } catch { if generation == self.renderGeneration {self.preparing=false;self.fail(error)} }
+                    } catch { if generation == self.renderGeneration {self.preparing=false;self.handlePlaybackError(error)} }
                 }
                 return
             }
@@ -423,10 +427,10 @@ import CirclrAudio
                     guard let self,self.renderGeneration == generation,!Task.isCancelled else { return }
                     self.prepared = result; self.preparedKey = key
                     self.status = result.peak > 1 ? "출력이 0 dBFS를 넘습니다. Gain을 낮추세요" : (plan.warnings.first ?? "재생 준비 완료")
-                    if autoplay { try await self.playback.play(result) }
+                    if autoplay { self.status="오디오 출력 연결 중";try await self.playback.play(result);self.status="재생 중" }
                     guard self.renderGeneration == generation else { return }
                     self.preparing = false; completion?(result)
-                } catch { guard let self,self.renderGeneration == generation else { return }; self.preparing = false; if !(error is CancellationError) { self.fail(error) } }
+                } catch { guard let self,self.renderGeneration == generation else { return }; self.preparing = false; self.handlePlaybackError(error) }
             }
         } catch { fail(error) }
     }

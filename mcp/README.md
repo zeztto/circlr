@@ -19,6 +19,10 @@ Python 표준 라이브러리만 사용하는 로컬 stdio MCP 서버다. 음악
 
 `circlr_open`도 jobID를 반환한다. `circlr_job`의 completed를 확인한 뒤 `circlr_snapshot`으로 새 projectID/revision을 읽는다. macOS가 앱의 문서 폴더 접근을 처음 요청하면 사용자가 시스템 창에서 허용해야 한다. 파일을 읽는 동안에도 상태 조회와 정지는 동작한다. 취소한 열기 요청이 나중에 문서를 교체하지 않는다.
 
+0.20 build 25의 snapshot에는 `output`이 추가된다. `phase`는 `idle/connecting/ready`, `step`은 연결 진행에 따라 `player/device/routing/ready`, `request`는 재생 대기 요청의 `none/waiting/timedOut/cancelled`다. `attemptID`, `attempts`, `elapsedSeconds`는 실제 물리 연결의 식별자·횟수·정수 경과 초이며 최초 요청 전에는 ID/step이 없다. `device`는 시스템 출력 응답을 기다리는 단계다. 음악 렌더 완료나 `circlr_play` 응답만으로 실제 재생됐다고 판단하지 말고 `playback.playing`을 확인한다.
+
+10초 대기 초과와 STOP은 재생 요청을 끝내지만 이미 OS 안에서 진행 중인 연결은 완료될 때까지 하나로 유지한다. snapshot에서 같은 `attemptID`가 계속 `connecting`이면 상태/이벤트를 관찰한다. 지연됐다는 이유만으로 앱을 재실행하거나 연결 작업을 반복 생성하지 않는다. `ready`가 늦게 도착해도 취소한 음악은 자동 재생되지 않는다. 다시 재생할 필요가 있을 때 명시적으로 `circlr_play`를 호출한다. 이 telemetry는 읽기 전용이며 장치 선택/설정 권한을 추가하지 않는다.
+
 `apply`의 `generate_midi` 및 `set_notes`는 기본적으로 해당 lane의 노트를 교체한다. 추가하려면 `append: true`를 지정한다. GUI 콘솔의 `midi arpeggio` 명령은 안전하게 추가 모드를 사용한다. MIDI 노트 JSON에는 beat, length, pitch, velocity가 필요하며 ID를 생략하면 새 ID가 발급된다.
 
 `set_step`은 `useID`, `laneID`, `stepIndex`(0부터), `pitch`, `enabled`로 일반 MIDI 노트를 편집한다. `subdivisions`는 4분음표당 1/2/3/4/6/8칸이며 기본 4다. `velocity` 1–127, `gate` 0.01–16칸은 선택 항목이다. 이미 켜진 셀을 다시 켜면 ID·타이밍·길이를 유지하고 지정한 값만 바꾼다. `nodeID`를 넣으면 그 MIDI 서클의 개별 길이를 사용하며 lane이 일치해야 한다. 같은 칸에서 시작한 같은 음높이 노트들은 함께 편집하고, 이전 칸에서 시작해 유지되는 노트는 지우지 않는다. MCP는 현재 use의 변형을 편집한다. 공유 원본 편집은 GUI 설정에서 선택한다.

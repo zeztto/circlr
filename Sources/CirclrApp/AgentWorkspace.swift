@@ -44,7 +44,7 @@ extension AppStore {
          "selection":json(hierarchySelection),"selectedNoteIDs":json(selectedMIDIIDs.sorted()),
          "automationEditor":["visible":automationVisible,"parameter":automationParameter.rawValue,"selectedPointID":json(selectedAutomationPointID),"displayBeats":automationBeats],
          "recording":["midi":midiRecording,"audio":audioRecording,"permissionPending":audioRecordPending && audioCapturePhase != .starting,"format":json(audioInputFormat),"phase":audioRecordPending && !recorder.busy ? "authorizing":audioCapturePhase.rawValue,"busy":audioRecordingBusy,"seconds":audioInputSeconds,"peak":audioInputLevel,"message":audioCaptureMessage,"recoveryPath":audioRecoveryURL?.path ?? ""],"job":json(agentJob),"sequence":activitySequence,
-         "playback":capturePlaybackVisualization?() ?? ["playing":playback.playing,"seconds":playback.seconds],
+         "playback":capturePlaybackVisualization?() ?? ["playing":playback.playing,"seconds":playback.seconds],"output":json(playback.outputStatus),
          "view":["zoom":hierarchyZoom,"layout":project.usesOrbits ? "orbit":"freeform","consoleOpen":consoleOpen,"consoleBounds":[consoleBounds.minX,consoleBounds.minY,consoleBounds.width,consoleBounds.height]],
          "runtime":["version":Bundle.main.object(forInfoDictionaryKey:"CFBundleShortVersionString") as? String ?? "development","bundleID":Bundle.main.bundleIdentifier ?? "","windows":NSApplication.shared.windows.filter{$0.identifier?.rawValue=="main"}.map{["visible":$0.isVisible,"minimized":$0.isMiniaturized]}]]
     }
