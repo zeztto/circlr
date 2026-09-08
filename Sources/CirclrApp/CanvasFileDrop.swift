@@ -43,7 +43,7 @@ extension AlbumCanvasView {
         defer{fileDropPreview=nil;needsDisplay=true}
         guard let drop=fileDropTarget(sender),case .section(let a,let u)=drop.section.id else{return false}
         if drop.midi {
-            return store.previewMIDIImport(drop.urls[0],projectID:store.project.id,revision:store.project.musicRevision,generation:store.mediaImportGeneration,arrangementID:a,useID:u)
+            return store.previewMIDIImport(drop.urls[0],projectID:store.project.id,revision:store.project.musicRevision,generation:store.mediaImportGeneration,arrangementID:a,useID:u,beat:drop.beat,position:drop.position)
         }
         let destination=AudioImportDestination.section(arrangementID:a,useID:u,trackID:nil,beat:drop.beat,position:drop.position,original:store.editOriginal)
         store.beginAudioImport(drop.urls,request:store.mediaImportRequest(destination))
@@ -54,7 +54,7 @@ extension AlbumCanvasView {
         let center=screen(drop.section),radius=drop.section.radius*camera.zoom
         StudioTheme.accentNS.setStroke()
         let ring=NSBezierPath(ovalIn:NSRect(x:center.x-radius,y:center.y-radius,width:radius*2,height:radius*2));ring.lineWidth=2;ring.stroke()
-        let title=drop.midi ? "\(drop.section.title) · MIDI 트랙 선택":"\(drop.section.title) · 오디오 \(drop.urls.count)개 · \(String(format:"%.2f",drop.beat+1))박"
+        let title="\(drop.section.title) · "+(drop.midi ? "MIDI 트랙 선택":"오디오 \(drop.urls.count)개")+" · \(String(format:"%.2f",drop.beat+1))박"
         let attrs:[NSAttributedString.Key:Any]=[.font:NSFont.systemFont(ofSize:13,weight:.semibold),.foregroundColor:NSColor.white]
         let width=min(workspaceViewport.width-16,(title as NSString).size(withAttributes:attrs).width+24)
         let rect=NSRect(x:max(workspaceViewport.minX+8,min(drop.cursor.x+16,workspaceViewport.maxX-width-8)),y:max(workspaceViewport.minY+8,min(drop.cursor.y+18,workspaceViewport.maxY-40)),width:width,height:32)

@@ -46,7 +46,7 @@ struct InlineCircleEditor: View {
     @ViewBuilder private var editorContent:some View {
         VStack(alignment:.leading,spacing:12) {
             if store.connectionsOpen { PortConnectionsEditor(store: store).id(store.hierarchySelection) }
-            else if let draft=store.midiImportDraft {MIDIImportView(store:store,draft:draft)} else if let id=store.hierarchyTransitionID,let edge=store.project.active.edges.first(where:{$0.id==id}) {
+            else if let draft=store.midiImportDraft {MIDIImportView(store:store,draft:draft).id(draft.id)} else if let id=store.hierarchyTransitionID,let edge=store.project.active.edges.first(where:{$0.id==id}) {
                 TransitionWorkspace(store:store,edgeID:edge.id)
             } else if let plugin = store.embeddedPlugin {
                 HStack { Text("Audio Unit"); Spacer(); Button("서클로 돌아가기") { store.embeddedPlugin = nil } }

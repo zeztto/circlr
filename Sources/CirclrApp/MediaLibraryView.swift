@@ -33,8 +33,8 @@ extension AppStore {
             let (entry,access,url)=try library.accessSelected()
             library.stopPreview()
             if entry.kind == .midi {
-                guard case .section(let a,let u,_,_,_,_)=request.destination else{throw CirclrError("MIDI를 넣을 섹션을 선택하세요")}
-                guard previewMIDIImport(url,projectID:request.projectID,revision:request.revision,generation:request.generation,arrangementID:a,useID:u) else{library.notice=status;return}
+                guard case .section(let a,let u,_,let beat,let position,_)=request.destination else{throw CirclrError("MIDI를 넣을 섹션을 선택하세요")}
+                guard previewMIDIImport(url,projectID:request.projectID,revision:request.revision,generation:request.generation,arrangementID:a,useID:u,beat:beat,position:position) else{library.notice=status;return}
                 withExtendedLifetime(access){}
                 closeMediaLibrary()
             } else {

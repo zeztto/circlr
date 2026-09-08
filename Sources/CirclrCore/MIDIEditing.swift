@@ -49,15 +49,17 @@ public struct MIDIImportPart {
 }
 public enum MIDIImportEditing {
     /// Adds independent MIDI circles to one use in a single transaction, preserving all existing lanes.
-    public static func apply(_ parts:[MIDIImportPart],useID:ID,extendSection:Bool,in project:inout Project)throws->[ID] {
+    public static func apply(_ parts:[MIDIImportPart],useID:ID,extendSection:Bool,atBeat:Double=0,position:Point?=nil,in project:inout Project)throws->[ID] {
         guard !parts.isEmpty,parts.count<=256,parts.reduce(0,{$0+$1.notes.count})<=100000 else {throw CirclrError("가져올 트랙과 노트 수를 확인하세요")}
-        var p=project
+        var p=project;let previousSignalPositions=p.signal.layout.positions
         guard let useIndex=p.active.uses.firstIndex(where:{$0.id==useID}) else {throw CirclrError("대상 섹션을 찾을 수 없습니다")}
         for part in parts {guard !part.notes.isEmpty,!part.name.isEmpty,part.name.count<=1024 else {throw CirclrError("트랙 이름과 MIDI 노트가 필요합니다")};for note in part.notes {try ArrangementCompiler.validateNote(note)}}
-        let extent=parts.flatMap(\.notes).map{$0.beat+$0.length}.max() ?? 0
+        let extent=atBeat+(parts.flatMap(\.notes).map{$0.beat+$0.length}.max() ?? 0)
         guard extent<=131072 else {throw CirclrError("MIDI 길이 한도를 넘습니다")}
         var use=p.active.uses[useIndex]
         let (section,_,initial)=try ArrangementCompiler.context(project:p,use:use)
+        guard atBeat.isFinite,atBeat>=0,atBeat<initial.beats else {throw CirclrError("MIDI 시작 위치는 현재 섹션 안으로 지정하세요")}
+        if let position {guard position.x.isFinite,position.y.isFinite else {throw CirclrError("MIDI 서클 배치 위치를 확인하세요")}}
         if extent>initial.beats+1e-8 {
             guard extendSection else {throw CirclrError("MIDI가 섹션보다 깁니다. 섹션 길이 늘리기를 선택하세요")}
             var bars=use.barsOverride ?? section.bars,clock=initial
@@ -66,11 +68,17 @@ public enum MIDIImportEditing {
             p.arrangements[p.activeIndex].uses[useIndex].barsOverride=bars
         }
         var ids:[ID]=[]
-        for part in parts {
+        for (index,part) in parts.enumerated() {
             let track=p.addTrack(name:part.name,drums:part.drums)
-            var lane=Lane(trackID:track);lane.notes=part.notes.map{var n=$0;n.id=newID();return n}
+            var lane=Lane(trackID:track);lane.notes=part.notes.map{var n=$0;n.id=newID();n.beat+=atBeat;return n}
             try ProjectEditing.setLane(lane,for:useID,original:false,in:&p);ids.append(lane.id)
+            if let position,!p.usesOrbits,let definition=p.sections.first(where:{$0.id==section.id}),
+               var graph=try SectionGraphEditing.effective(section:definition,use:p.active.uses[useIndex]) {
+                graph.layout.positions["midi:\(lane.id)"]=Point(position.x+Double(index%4)*220,position.y+Double(index/4)*220)
+                try SectionGraphEditing.set(graph,useID:useID,original:false,in:&p)
+            }
         }
+        p.signal.layout.positions.merge(previousSignalPositions){_,previous in previous}
         try ProjectStore.validateStructure(p);project=p;return ids
     }
 }
