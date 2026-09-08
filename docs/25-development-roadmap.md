@@ -22,6 +22,10 @@
 
 **build 31에서 다운로드한 샘플의 로컬 검색→가져오기를 연결했다.** 여러 폴더의 read-only bookmark, 파일명/하위 경로/형식 검색, MIDI 선택 화면, 오디오 미리 듣기·취소와 대상 revision 보호를 구현했다. 작은 창의 상단과 검색 접근성도 정리했다. 실제 폴더 등록/재실행/제거·오디오/MIDI import·Undo/Redo·저장 복원을 확인했다. HAL의 장치 시작 지연을 재현했고 player 호출을 모두 백그라운드로 이동했다. [계약](45-local-media-library.md) · [QA 및 출력 제한](../qa/library-review.md).
 
+**build 32에서 재생 시작·정지·시간 조회·해제를 직렬 background worker로 분리했다.** 실제 숫자 Return 뒤 Space 소실도 수정하고 293개 Swift·26개 Python과 별도 앱의 대기 중 편집/취소를 확인했다. Scarlett 속성 조회는 약 45 ms였으나 음악 없는 AVAudioEngine도 HAL IOProc 생성에서 7분 이상 대기했다. 특정 드라이버의 원인은 확정하지 않는다. [계약](46-playback-worker.md) · [QA](../qa/playback-worker-review.md).
+
+현재 전달 조건은 기능별로 구분한다. UI·편집 개선은 build 32 QA 앱에서 직접 검토할 수 있다. 사용 중인 0.19 앱을 교체하려면 우선 같은 Mac에서 출력 연결→실제 재생/정지→재시작과 기존 곡/MP4 회귀를 끝내야 한다. 녹음은 별도 허용이 필요한 실제 입력·취소·테이크 저장 회귀가 남았다. VoiceOver와 밀집 연결 조작은 전역의 모든 조합이라는 무한 조건 대신 MIDI/audio/sidechain/flow, 접힌 그룹, 긴 이름, 작은 창의 대표 경로를 명시한 검사표로 좁혀 수행한다. 과거 QA 수치를 새 빌드의 전체 기능 승인으로 합산하지 않는다.
+
 다음 실행 순서는 다음과 같다. (1) 궤도 배치·다수 섹션 전환·펼친 그룹·긴 이름·시간 손잡이·VoiceOver 조합을 점검한다. 이름표/포트 hit와 그려진 위치가 일치하고 키보드로 편집/복귀가 가능해야 한다. (2) file-URL drop의 실제 제스처·orbit 위치·overlay 거절을 먼저 검증하고 file promise와 로컬 라이브러리를 연결해 import→섹션 배치→편집→바운스→저장 복원의 작업 깊이를 줄인다. 원본 참조·중복 자산·Undo 계약을 먼저 정한다. (3) 새 출력 telemetry로 장치별 cold/warm 연결 시간을 수집해 HAL 대기와 engine 시작/정지의 원인을 분리하고, 연속 render graph/PDC 전에 장치 변경·복구 수명을 확정한다. 마이크 입력의 별도 실행 조건과 E 출고 gate는 유지한다.
 
 0.14에서 10음색 engine 3와 15트랙의 f0r h3r v4를 추가했고, 0.15에서 B의 탐색 깊이·라벨 가독성·작은 창 편집을 개선했다. 배포용 v4는 FreePats CC0 bank를 사용한다. 기존 버전·원본 곡은 보존한다. [음질·음악 검증](../qa/0.14-review.md)과 [UI 검증](../qa/0.15-review.md)을 분리한다.

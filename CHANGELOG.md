@@ -2,6 +2,12 @@
 
 0.1–0.3은 설계 문서 revision이며, 0.4.0부터 로컬 실행 프로토타입을 포함한다.
 
+## 개발 중 — 0.20.0 build 32 재생 worker와 숫자 입력 포커스
+
+- AVAudioEngine/player의 생성·연결·시작·정지·시계 조회·해제를 직렬 background worker가 소유한다. UI는 값 snapshot만 읽으며 정리 중 재시도를 거절한다. 시작 취소/timeout 후 늦은 시작은 음소거 상태에서 정리한다.
+- 출력 시작·정리·실패 상태를 기존 상태 줄과 additive MCP snapshot에 표시한다. 숫자 Return/Esc 후 주 캔버스에 포커스를 돌려 Space가 소실되던 문제를 수정했다. Tab 이동과 콘솔 문자 입력을 보존한다.
+- 제어된 지연/취소/실패/종료 검사 8개를 포함해 Swift 293개·Python 26개 통과. 실제 작은 창의 숫자 확정·취소·Undo·Space 요청/취소·같은 attempt 재사용과 저장 복원을 확인했다. 시스템 HAL 지연과 정상 청감은 미해결이며 사용자 0.19 앱을 교체하지 않았다. [QA](qa/playback-worker-review.md).
+
 ## 개발 중 — 0.20.0 build 31 로컬 샘플 라이브러리
 
 - 같은 캔버스의 샘플 검색에 폴더 추가·형식/경로 검색·방향키 선택·Return 가져오기·오디오 미리 듣기·MIDI 트랙 선택을 연결했다. 폴더는 앱 로컬 read-only bookmark로 보관하며 이동 시 갱신한다. 등록 제거는 원본을 유지한다.

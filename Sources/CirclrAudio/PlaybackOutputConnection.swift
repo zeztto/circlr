@@ -8,6 +8,7 @@ public struct PlaybackOutputStatus:Equatable,Codable,Sendable {
     public var step:Step?
     public var request:Request = .none
     public var attemptID:UUID?
+    public var transport=PlaybackTransportStatus()
     public var attempts=0
     public var elapsedSeconds=0
     public init() {}

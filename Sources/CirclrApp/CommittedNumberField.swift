@@ -29,6 +29,7 @@ struct NumberEditIdentity: Equatable {
 struct NumberEditingContext {
     var snapshot: NumberEditIdentity?
     var current: () -> NumberEditIdentity? = {nil}
+    var focusCanvas: () -> Void = {}
     // Numeric bindings read the live model. Adopt a newer revision only before typing,
     // while preserving the displayed field's project, session and target identity.
     func beforeTyping() -> NumberEditIdentity? {
@@ -58,7 +59,7 @@ extension AppStore {
 }
 extension View {
     @MainActor func numberEditing(in store: AppStore) -> some View {
-        environment(\.numberEditing,NumberEditingContext(snapshot:store.numberEditIdentity,current:{store.numberEditIdentity}))
+        environment(\.numberEditing,NumberEditingContext(snapshot:store.numberEditIdentity,current:{store.numberEditIdentity},focusCanvas:{store.focusCanvas?()}))
     }
 }
 
@@ -144,13 +145,19 @@ private struct NativeNumberField: NSViewRepresentable {
             if command == #selector(NSResponder.cancelOperation(_:)) {
                 draft.reset(value:parent.value);parent.error=""
                 (control as? NSTextField)?.stringValue=draft.text
-                control.window?.makeFirstResponder(nil);return true
+                finishFocus(control);return true
             }
             if command == #selector(NSResponder.insertNewline(_:)) {
-                if commit() {control.window?.makeFirstResponder(nil)}
+                if commit() {finishFocus(control)}
                 return true
             }
             return false
+        }
+        private func finishFocus(_ control:NSControl) {
+            // Explicit Return/Esc leaves the field; Tab still follows AppKit's field order.
+            // Do not transfer a separate editor/dialog's focus into another window.
+            control.window?.makeFirstResponder(nil)
+            if control.window?.identifier?.rawValue == "main" {parent.context.focusCanvas()}
         }
         @discardableResult func commit() -> Bool {
             do {

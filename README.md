@@ -6,7 +6,9 @@ macOS용 앨범·송폼 궤도 편집기. **앨범 → 곡·악장 → 섹션 �
 
 연결 UI는 [서클 둘레 8방향 IN/OUT과 다중 입출력](docs/22-eight-direction-ports.md)으로 확장 중이다. 포트의 신호 의미와 연결점 배치를 분리한다. 아래 일반 사용법은 배포된 0.19 앱 기준이며 새 포트 기능은 독립 개발 브랜치에서 검증한다.
 
-현재 **`codex/daw-integration`의 0.20.0 build 31**에 녹음 lifecycle과 8방향·다중 bus·그룹 포트를 통합했다. 같은 캔버스의 연결 편집·녹음 상태·스텝·오토메이션이 공존하며, 녹음 시작·정리 중 음악 편집과 Undo의 경쟁을 차단한다. build 23의 실제 편집·바운스·Undo·저장/재열기·닫기 최소화 및 출력별 모션 검증은 [통합 QA](qa/daw-integration-review.md)에 기록했다.
+현재 **`codex/daw-integration`의 0.20.0 build 32**에 녹음 lifecycle과 8방향·다중 bus·그룹 포트를 통합했다. 같은 캔버스의 연결 편집·녹음 상태·스텝·오토메이션이 공존하며, 녹음 시작·정리 중 음악 편집과 Undo의 경쟁을 차단한다. build 23의 실제 편집·바운스·Undo·저장/재열기·닫기 최소화 및 출력별 모션 검증은 [통합 QA](qa/daw-integration-review.md)에 기록했다.
+
+build 32는 **재생 장치의 시작·정지·시간 조회·해제를 하나의 background worker로 분리**한다. 출력 시작/정리 상태를 기존 줄에 표시하고, 정리 중 중복 시작과 취소된 시작의 늦은 재생을 차단한다. 숫자 입력의 Return/Esc 뒤에는 캔버스 포커스가 돌아와 Space를 바로 사용할 수 있다. Swift **293개**·Python **26개**, release build와 실제 대기 중 편집·Undo·키보드를 확인했다. 현재 Mac의 HAL 출력 획득 지연은 음악 없는 별도 진단에서도 재현되어 정상 재생·청감과 사용자 앱 교체는 완료되지 않았다. [실행 계약](docs/46-playback-worker.md) · [검증과 제한](qa/playback-worker-review.md).
 
 build 31은 상단 **샘플 / ⌥⌘L**에서 로컬 오디오·MIDI 폴더를 검색하고 바로 가져온다. 여러 폴더의 파일명·하위 경로·형식을 검색하며 **↑↓ 선택 → Return 가져오기**, **⌥Space 미리 듣기**, Esc 닫기를 지원한다. MIDI는 기존 트랙 선택 화면으로 이어진다. 대상이 외부에서 변경되면 갱신 전 가져오기를 막는다. 폴더는 읽기 전용 bookmark로 보관하며 목록 제거는 원본 파일을 삭제하지 않는다. 작은 창의 상단 표시와 검색 화면의 접근성 범위도 정리했다. [라이브러리 계약](docs/45-local-media-library.md) · [실제 검증·출력 지연 제한](qa/library-review.md).
 

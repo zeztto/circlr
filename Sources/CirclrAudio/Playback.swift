@@ -5,51 +5,66 @@ import CirclrRealtime
 import CirclrCore
 
 @MainActor public final class Playback {
-    public let engine = AVAudioEngine()
-    private let player = AVAudioPlayerNode()
-    public private(set) var playing = false
-    public private(set) var offset: Double = 0
-    public private(set) var prepared: PreparedAudio?
-    private var generation = 0
-    private var connected = false
+    public private(set) var offset:Double=0
+    public private(set) var prepared:PreparedAudio?
+    private let transport:PlaybackTransport
+    private var activeID:UUID?
+    private var generation=0
     public var onOutputChange:(()->Void)?
-    public var outputStatus:PlaybackOutputStatus {outputConnection.status}
+    public var outputStatus:PlaybackOutputStatus {
+        var value=outputConnection.status;value.transport=transport.status;return value
+    }
     private lazy var outputConnection:PlaybackOutputConnection = {
-        let engine=engine,player=player
-        let connection=PlaybackOutputConnection{report in
-            engine.attach(player)
-            await report(.device)
-            let mixer=engine.mainMixerNode
-            await report(.routing)
-            engine.connect(player,to:mixer,format:AVAudioFormat(standardFormatWithSampleRate:PCM.rate,channels:2))
-        }
+        let transport=transport
+        let connection=PlaybackOutputConnection{report in await transport.connect(report:report)}
         connection.onChange = {[weak self] in self?.onOutputChange?()}
         return connection
     }()
-    // Opening the canvas must not synchronously acquire the system output device.
-    public init() {}
-    private func connectOutputIfNeeded() async throws {
-        guard !connected else { return }
-        try await outputConnection.waitUntilReady()
-        connected = true
+    public init(){transport=PlaybackTransport()}
+    init(factory:@escaping @Sendable()->any PlaybackBackend){transport=PlaybackTransport(factory:factory)}
+    deinit{transport.shutdown()}
+    public var playing:Bool {let state=transport.status;return state.id==activeID && state.phase == .playing}
+    public var seconds:Double {
+        let state=transport.status
+        guard state.id==activeID,state.phase == .playing else{return 0}
+        return min(prepared?.mix.duration ?? .greatestFiniteMagnitude,offset+state.seconds)
     }
-    public var seconds: Double {
-        guard playing, let t = player.lastRenderTime, let p = player.playerTime(forNodeTime:t) else { return offset }
-        return max(offset,offset+Double(p.sampleTime)/p.sampleRate)
+    public func play(_ audio:PreparedAudio,from:Double=0)async throws {
+        try await start(audio,from:from,timeout:10)
     }
-    public func play(_ audio: PreparedAudio, from: Double = 0) async throws {
-        stop(); prepared = audio; offset = max(0,min(audio.mix.duration,from))
-        let part = audio.mix.slice(Int((offset*PCM.rate).rounded())..<audio.mix.count)
-        guard part.count > 0 else { return }
-        generation += 1; let ticket = generation
-        try await connectOutputIfNeeded()
-        guard generation == ticket, !Task.isCancelled else { throw CancellationError() }
-        player.scheduleBuffer(try part.buffer(),completionCallbackType:.dataPlayedBack) { [weak self] _ in
-            Task { @MainActor in guard let self, self.generation == ticket else { return }; self.playing = false; self.offset = 0 }
+    func start(_ audio:PreparedAudio,from:Double=0,timeout:Double)async throws {
+        guard from.isFinite,from>=0,timeout.isFinite,timeout>0 else{throw PlaybackTransportError.invalidPosition}
+        try Task.checkCancellation()
+        stop();prepared=audio;offset=min(audio.mix.duration,from)
+        guard Int((offset*PCM.rate).rounded())<audio.mix.count else{return}
+        generation+=1;let ticket=generation
+        try await outputConnection.waitUntilReady(timeout:timeout)
+        try Task.checkCancellation()
+        guard generation==ticket else{throw CancellationError()}
+        let id=try transport.begin(audio.mix,from:offset);activeID=id
+        let deadline=ProcessInfo.processInfo.systemUptime+timeout
+        do {
+            while true {
+                try Task.checkCancellation()
+                guard generation==ticket else{throw CancellationError()}
+                let state=transport.status
+                if state.id==id,state.didStart{return}
+                if state.id==id,state.phase == .failed{throw CirclrError(state.message ?? "출력을 시작할 수 없습니다")}
+                if state.id==id,state.phase == .idle{throw CancellationError()}
+                guard ProcessInfo.processInfo.systemUptime<deadline else{throw PlaybackTransportError.timedOut}
+                try await Task.sleep(for:.milliseconds(16))
+            }
+        }catch{
+            transport.cancel(id)
+            if activeID==id{activeID=nil;offset=0}
+            throw error
         }
-        try engine.start(); player.play(); playing = true
     }
-    public func stop() { generation += 1; outputConnection.cancelWait(); if connected { player.stop(); engine.stop() }; playing = false; offset = 0 }
+    public func stop() {
+        generation+=1;outputConnection.cancelWait()
+        if let activeID{transport.cancel(activeID)}
+        activeID=nil;offset=0
+    }
 }
 
 public final class TakeWriter {
