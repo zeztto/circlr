@@ -2,6 +2,13 @@
 
 0.1–0.3은 설계 문서 revision이며, 0.4.0부터 로컬 실행 프로토타입을 포함한다.
 
+## 개발 중 — 포트 기반 A 단계
+
+- 기존 MIDI/audio/main/sidechain/송폼 포트에 stable ID·IN/OUT·수용 정책을 부여하고 입력 시작 요청을 OUT→IN으로 정규화한다. 실제 구현하지 않은 bus는 노출하지 않는다.
+- 선택적 `portLayout`과 별도 revision·atomic 배치/복원 명령, 8방향 화면 geometry·hit·곡선을 추가했다. 재사용 use와 접힌 그룹의 logical endpoint를 보존하며 음악 revision과 PCM은 유지한다.
+- 중복 배치가 scene 생성에서 충돌하는 문제를 수정했다. 13개 분기와 모든 방향의 PCM 불변을 포함해 Swift 159개 및 release build가 통과했다. [포트 기반 QA](qa/ports-foundation-review.md).
+- 독립 feature branch의 Core 단계다. native 8방향 UI·다중 bus·MCP·그룹 binding·앱 통합은 후속이며 사용 앱은 교체하지 않았다.
+
 ## 0.19.0 — 2026-09-08 · 볼륨·팬 오토메이션
 
 - 오디오·악기·이펙터·믹스·출력 서클에 gain/pan 곡선을 추가했다. 로컬 박, 템포 변경, 명시 반복과 연속 진행, 선형/유지 구간을 실제 PCM 렌더·바운스·export에 적용한다. 없는/비활성 곡선은 원래 소리를 보존한다.

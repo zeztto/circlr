@@ -1,10 +1,10 @@
 # 8방향 포트와 다중 입출력
 
-작성일: 2026-09-07 · 상태: 사용자 요구 확정, 상세 계약 제안 · 기준 앱: 0.10.0
+작성일: 2026-09-07 · 갱신: 2026-09-08 · 상태: Core 기반 A 검사 통과, UI·다중 bus 후속 · 구현 기준: 0.19
 
 **서클 둘레의 8방향 어디에나 연결을 붙이고, 연결점에 IN·OUT을 표시한다. 서클은 여러 입력과 여러 출력을 지원한다.** 왼쪽 입력·오른쪽 출력으로 방향을 고정하지 않는다.
 
-8방향은 배치 기준이다. 포트나 케이블을 8개로 제한한다는 뜻이 아니다. 여러 케이블의 분기·합산과 서로 독립적인 여러 입출력 포트를 함께 설계한다. 이번 변경은 문서이며 현재 앱의 포트 UI나 엔진이 갱신된 것은 아니다.
+8방향은 배치 기준이다. 포트나 케이블을 8개로 제한한다는 뜻이 아니다. 여러 케이블의 분기·합산과 서로 독립적인 여러 입출력 포트를 함께 설계한다. 현재 독립 branch에 실제 포트 descriptor·배치 revision·geometry를 구현하고 검사했다. 사용 앱의 포트 UI나 독립 다중 bus 엔진은 아직 갱신하지 않았다. [Core 검증](../qa/ports-foundation-review.md) · [단계별 실행 계획](35-port-foundation-plan.md).
 
 ## 1. 방향과 포트의 구분
 
@@ -134,7 +134,7 @@ compiler/renderer는 node 전체 출력이 아니라 `(nodeID, portID)`를 읽�
 | D · 그룹·에이전트 | Core/App/MCP 담당: 노출 포트 binding, `AgentProtocol.swift`, `AgentWorkspace.swift`, `mcp/server.py` | 그룹 경계 보존과 명시적 port 조회·연결·배치. legacy 모호성 오류 검증 |
 | E · 통합 QA | `Tests/CirclrCoreTests/`, `Tests/CirclrAudioTests/`, Python MCP 테스트, 향후 `qa/eight-direction-ports-review.md` | geometry·실제 신호·native gesture·기존 곡의 회귀를 별도 증거로 확보 |
 
-이 표는 후속 엔지니어링 작업 분해다. 새 파일과 실제 다중 bus 경로는 생성 전이며, 단계 C의 그림만으로 전체 기능을 완료 처리하지 않는다. B의 최소 검증은 모든 외부 plugin 호환성을 요구하지 않는다.
+이 표는 전체 엔지니어링 작업 분해다. A의 `CirclePort.swift`, `CirclePortLayout.swift`, `CirclePortGeometry.swift`와 scene의 logical endpoint·배치 경로를 구현했고 159개 offline 검사와 release build가 통과했다. 현재 layout은 project의 선택적 `portLayout`에 저장하며 기존 음악 edge의 port ID는 실제 기존 main/sidechain 의미에서 결정적으로 조회한다. 명시적 다중 bus edge와 renderer는 B에서 이어간다. 단계 C의 그림만으로 전체 기능을 완료 처리하지 않는다. B의 최소 검증은 모든 외부 plugin 호환성을 요구하지 않는다.
 
 | 인수 시나리오 | 기대 결과 |
 |---|---|
@@ -152,4 +152,4 @@ compiler/renderer는 node 전체 출력이 아니라 `(nodeID, portID)`를 읽�
 | MIDI/audio 불일치·제한 초과·음악 cycle | GUI·MCP 모두 원인과 함께 거절. 부분 edge 적용 없음 |
 | native 키보드·VoiceOver·작은 창 | IN/OUT·역할·형식·대상 이름을 읽고 선택. 포트와 시간 손잡이 구분 |
 
-이번 확인은 소스 조사와 문서 계약 점검이다. 앱 빌드·새 gesture·PCM 검증은 구현 이후 수행한다.
+현재 확인은 Core 데이터·geometry·renderer PCM 불변과 release build다. 실제 8방향 gesture·다중 bus PCM 분리·native UI·MCP는 해당 단계 구현 후 검증한다.

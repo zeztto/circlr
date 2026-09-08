@@ -257,6 +257,7 @@ public struct Project: Codable, Equatable {
     public var album: Album?
     public var hierarchyView: HierarchyViewport?
     public var circleLayout: CircleLayout?
+    public var portLayout:CirclePortLayout?
     public var usesOrbits: Bool { circleLayout != .freeform }
     public var id: ID = newID()
     public var name = "새 곡"

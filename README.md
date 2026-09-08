@@ -6,6 +6,8 @@ macOS용 앨범·송폼 궤도 편집기. **앨범 → 곡·악장 → 섹션 �
 
 연결 UI의 다음 설계는 [서클 둘레 8방향 IN/OUT과 다중 입출력](docs/22-eight-direction-ports.md)이다. 포트의 신호 의미와 연결점 배치를 분리한다. 현재 앱의 좌우 포트 방식은 아래 사용법에 해당하며 8방향 조작은 아직 구현 전이다.
 
+`codex/eight-direction-ports` 브랜치에는 실제 포트 ID·형식·수용 정책, 8방향 geometry, 음악과 분리된 배치 revision·Core Undo·저장 계약을 추가했다. 전체 오프라인 Swift 159개와 release 빌드가 통과했다. **App의 8방향 조작과 독립 다중 bus는 아직 연결하지 않았다.** [포트 기반 검증](qa/ports-foundation-review.md) · [후속 구현 단계](docs/35-port-foundation-plan.md).
+
 현재 로컬 앱은 **0.19.0**이다. [써클러 앱](dist/써클러.app)을 열어 사용한다. 기존 실행 중인 앱은 저장하고 **⌘Q로 종료한 뒤 다시 열어야** 새 버전이 실행된다. 이전 앱은 `dist/archive/`에 보관한다. [0.19 검증·제한](qa/0.19-review.md) · [향후 상세 개발 계획](docs/25-development-roadmap.md).
 
 빈 공간 우클릭과 **A**로 서클을 만들고, **⇧⌘P**로 명령과 서클을 검색한다. **⌘/**에서 단축키를 확인한다. **⇧⌘R**은 음악과 캔버스의 MP4 녹화다. [키보드·영상·엔진 2 사용법](docs/26-canvas-keyboard-and-recording.md).

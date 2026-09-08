@@ -28,8 +28,14 @@ public struct CircleSceneNode: Identifiable {
     public var signal: SignalNode?
     public var timeline: OrbitTimeline?
     public var orbit: OrbitPlacement?
-    public var acceptsInput: Bool { signal.map { $0.kind != .source } ?? (music?.content.input != nil || (role != .music && role != .album && role != .group && role != .sound)) }
-    public var providesOutput: Bool { signal.map { $0.kind != .master } ?? (music?.content.output != nil || (role != .music && role != .album && role != .group && role != .sound)) }
+    public var ports:[CirclePort] {
+        if let signal {return CirclePort.ports(for:signal)}
+        if let music {return CirclePort.ports(for:music.content)}
+        return role == .song || role == .movement || role == .section ? CirclePort.flowPorts:[]
+    }
+    // The canvas queries these every frame; do not allocate descriptor arrays on that path.
+    public var acceptsInput: Bool {signal.map{$0.kind != .source} ?? (music?.content.input != nil || role == .song || role == .movement || role == .section)}
+    public var providesOutput: Bool {signal.map{$0.kind != .master} ?? (music?.content.output != nil || role == .song || role == .movement || role == .section)}
     public var outerRadius: Double { radius + (SectionRings(repeats: repeatCount).outerRadius-80) * scale }
 }
 public struct CircleSceneEdge: Identifiable {
@@ -39,6 +45,10 @@ public struct CircleSceneEdge: Identifiable {
     public var to: CircleAddress
     public var kind: Kind
     public var gain: Double = 1
+    public var connectionID:CircleConnectionID?
+    public var placement=CircleConnectionPlacement()
+    public var fromPortID:String {kind == .flow ? CirclePort.flowOutput:kind == .midi ? CirclePort.midiOutput:CirclePort.audioOutput}
+    public var toPortID:String {kind == .flow ? CirclePort.flowInput:kind == .midi ? CirclePort.midiInput:kind == .sidechain ? CirclePort.sidechainInput:CirclePort.audioInput}
 }
 public struct HierarchyScene {
     public let nodes: [CircleSceneNode]
@@ -71,6 +81,7 @@ public enum HierarchySceneBuilder {
         var layoutRadius: Double?
     }
     public static func build(_ project: Project) throws -> HierarchyScene {
+        try project.portLayout?.validate()
         guard let album = project.album else { throw CirclrError("앨범 서클 모델이 없습니다") }
         try album.validate(arrangements: project.arrangements)
         var edges: [CircleSceneEdge] = []
@@ -200,7 +211,8 @@ public enum HierarchySceneBuilder {
                     let to = CircleAddress.music(arrangementID: arrangement.id, useID: use.id, nodeID: edge.to)
                     if visible.contains(from), visible.contains(to) {
                         edges.append(CircleSceneEdge(id: "\(arrangement.id):\(use.id):\(edge.id)", from: from, to: to,
-                                                     kind: edge.sidechain ? .sidechain : (edge.signal == .midi ? .midi : .audio), gain: edge.gain))
+                                                     kind: edge.sidechain ? .sidechain : (edge.signal == .midi ? .midi : .audio), gain: edge.gain,
+                                                     connectionID:.init(edgeID:edge.id,from:from,to:to)))
                     }
                 }
             }
@@ -231,15 +243,16 @@ public enum HierarchySceneBuilder {
                         }
                     } else if !arrangement.uses.isEmpty {tree.node.subtitle += " · 재생 경로 확인"}
                     for edge in arrangement.edges {
-                        edges.append(CircleSceneEdge(id: edge.id, from: .section(arrangementID: arrangement.id, useID: edge.from),
-                                                     to: .section(arrangementID: arrangement.id, useID: edge.to), kind: .flow))
+                        let from=CircleAddress.section(arrangementID:arrangement.id,useID:edge.from),to=CircleAddress.section(arrangementID:arrangement.id,useID:edge.to)
+                        edges.append(CircleSceneEdge(id:edge.id,from:from,to:to,kind:.flow,connectionID:.init(edgeID:edge.id,from:from,to:to)))
                     }
                 }
                 let groupingLayout = composition.children.isEmpty ? (project.arrangements.first { $0.id == composition.selectedArrangementID }?.layout ?? Layout()) : composition.layout
                 trees.append(seal(tree,layout:groupingLayout))
             }
             for pair in zip(ids, ids.dropFirst()) {
-                edges.append(CircleSceneEdge(id: "composition-flow:\(pair.0):\(pair.1)", from: .composition(pair.0), to: .composition(pair.1), kind: .flow))
+                let id="composition-flow:\(pair.0):\(pair.1)",from=CircleAddress.composition(pair.0),to=CircleAddress.composition(pair.1)
+                edges.append(CircleSceneEdge(id:id,from:from,to:to,kind:.flow,connectionID:.init(edgeID:id,from:from,to:to)))
             }
             return trees
         }
@@ -255,7 +268,10 @@ public enum HierarchySceneBuilder {
         let lowerEdge = root.children.map { $0.position.y+$0.node.outerRadius }.max() ?? 0
         sound.position = album.layout.positions["circlr:sound"] ?? Point(0, lowerEdge+sound.node.outerRadius+220)
         root.children.append(sound)
-        for edge in project.signal.edges { edges.append(CircleSceneEdge(id:"signal:\(edge.id)",from:.signal(edge.from),to:.signal(edge.to),kind:edge.sidechain ? .sidechain:.audio,gain:edge.gain)) }
+        for edge in project.signal.edges {
+            let from=CircleAddress.signal(edge.from),to=CircleAddress.signal(edge.to)
+            edges.append(CircleSceneEdge(id:"signal:\(edge.id)",from:from,to:to,kind:edge.sidechain ? .sidechain:.audio,gain:edge.gain,connectionID:.init(edgeID:edge.id,from:from,to:to)))
+        }
         if project.usesOrbits {sound.position=album.layout.positions["circlr:sound"] ?? Point();root.children[root.children.count-1]=sound}
         root = seal(root,layout:album.layout)
         var flattened: [CircleSceneNode] = []
@@ -272,8 +288,10 @@ public enum HierarchySceneBuilder {
         }
         try flatten(root, center: Point(), scale: 1, parent: nil, depth: 0)
         guard Set(flattened.map(\.id)).count == flattened.count else { throw CirclrError("캔버스의 서클 ID가 중복되었습니다") }
+        let placements=Dictionary(uniqueKeysWithValues:(project.portLayout?.connections ?? []).map{($0.id,$0.placement)})
         let displayedEdges = edges.compactMap { edge -> CircleSceneEdge? in
             var copy = edge
+            if let id=copy.connectionID,let placement=placements[id] {copy.placement=placement}
             while let owner = hiddenOwners[copy.from] { copy.from = owner }
             while let owner = hiddenOwners[copy.to] { copy.to = owner }
             return copy.from == copy.to ? nil : copy
