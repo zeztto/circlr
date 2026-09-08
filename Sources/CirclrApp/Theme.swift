@@ -70,7 +70,7 @@ struct CountControl:View {
             if !title.isEmpty {Text(title).foregroundStyle(StudioTheme.secondary)}
             HStack(spacing:0) {
                 Button {value=max(range.lowerBound,value-1)} label:{Image(systemName:"minus").frame(width:28,height:32)}.disabled(value<=range.lowerBound).accessibilityLabel(title+" 줄이기")
-                TextField(title,value:Binding(get:{value},set:{let next=max(range.lowerBound,min(range.upperBound,$0));if next != value {value=next}}),format:.number).textFieldStyle(.plain).multilineTextAlignment(.center).frame(width:36).monospacedDigit().accessibilityLabel(title)
+                CommittedNumberField(title:title,value:Binding(get:{Double(value)},set:{if let next=Int(exactly:$0) {value=next}}),range:Double(range.lowerBound)...Double(range.upperBound),integerOnly:true,width:48,alignment:.center)
                 Button {value=min(range.upperBound,value+1)} label:{Image(systemName:"plus").frame(width:28,height:32)}.disabled(value>=range.upperBound).accessibilityLabel(title+" 늘리기")
             }.buttonStyle(.plain).background(StudioTheme.raised,in:RoundedRectangle(cornerRadius:5))
             if !suffix.isEmpty {Text(suffix).foregroundStyle(StudioTheme.secondary)}
@@ -83,12 +83,11 @@ struct ValueField:View {
     var width:CGFloat=72
     var showsLabel=true
     var range:ClosedRange<Double> = -Double.greatestFiniteMagnitude...Double.greatestFiniteMagnitude
+    var integerOnly=false
     var body:some View {
         HStack(spacing:7) {
             if showsLabel && !title.isEmpty {Text(title).foregroundStyle(StudioTheme.secondary)}
-            TextField(title,value:Binding(get:{value},set:{if $0.isFinite {let next=max(range.lowerBound,min(range.upperBound,$0));if next != value {value=next}}}),format:.number.precision(.fractionLength(0...3)))
-                .textFieldStyle(.plain).multilineTextAlignment(.trailing).monospacedDigit().padding(.horizontal,8).frame(width:width,height:32)
-                .background(StudioTheme.raised,in:RoundedRectangle(cornerRadius:5)).accessibilityLabel(title)
+            CommittedNumberField(title:title,value:$value,range:range,integerOnly:integerOnly,width:width)
         }.font(.system(size:13))
     }
 }

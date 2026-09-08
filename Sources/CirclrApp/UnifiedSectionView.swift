@@ -18,8 +18,8 @@ struct UnifiedSectionView:View {
     private var structure:some View {
         VStack(alignment:.leading,spacing:10) {
             HStack(spacing:18) {
-                CountControl(title:"길이",value:Binding(get:{use.barsOverride ?? store.project.sections.first{$0.id==use.sectionID}?.bars ?? 8},set:{v in store.updateUse("길이"){$0.barsOverride=v}}),range:1...4096,suffix:"마디")
-                CountControl(title:"재생",value:Binding(get:{use.repeatCount},set:{v in store.updateUse("반복"){$0.repeatCount=v}}),range:1...256,suffix:"회")
+                CountControl(title:"길이",value:Binding(get:{store.selectedUse?.barsOverride ?? store.project.sections.first{$0.id==use.sectionID}?.bars ?? 8},set:{v in store.updateUse("길이"){$0.barsOverride=v}}),range:1...4096,suffix:"마디")
+                CountControl(title:"재생",value:Binding(get:{store.selectedUse?.repeatCount ?? use.repeatCount},set:{v in store.updateUse("반복"){$0.repeatCount=v}}),range:1...256,suffix:"회")
                     .help("테두리 원 하나가 한 번의 재생입니다")
                 Divider().frame(height:22)
                 Button {store.setStart()} label:{Label("곡 시작",systemImage:store.project.active.startID==use.id ? "checkmark.circle.fill":"circle")}.foregroundStyle(store.project.active.startID==use.id ? StudioTheme.accent:StudioTheme.secondary)
@@ -142,7 +142,7 @@ struct SectionEffectsRow:View {
     let use:SectionUse
     var body:some View {
         VStack(alignment:.leading,spacing:10) {
-            HStack(spacing:20){Text("서클 이펙트").font(.system(size:12,weight:.semibold));ValueField(title:"볼륨",value:Binding(get:{use.gain},set:{v in store.updateUse("서클 볼륨"){$0.gain=v}}),range:0...4)
+            HStack(spacing:20){Text("서클 이펙트").font(.system(size:12,weight:.semibold));ValueField(title:"볼륨",value:Binding(get:{store.selectedUse?.gain ?? use.gain},set:{v in store.updateUse("서클 볼륨"){$0.gain=v}}),range:0...4)
                 if use.effects.isEmpty {Text("이 서클의 모든 트랙에 적용").font(.system(size:11)).foregroundStyle(StudioTheme.secondary)}
                 Spacer()
                 Menu {ForEach(EffectKind.allCases.filter{$0 != .audioUnit},id:\.self){kind in Button(AppStore.effectName(kind)){store.updateUse("Effect 추가"){$0.effects.append(Effect(kind,amount:kind == .gain ? 1:0.5))}}}} label:{Label("이펙트 추가",systemImage:"plus")}.menuStyle(.borderlessButton).fixedSize()

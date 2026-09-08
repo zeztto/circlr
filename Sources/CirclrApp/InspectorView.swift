@@ -10,12 +10,12 @@ struct InspectorView:View {
         Menu("출력 연결"){ForEach(store.project.signal.nodes.filter{$0.id != n.id && $0.kind != .source}){target in Button(target.name){store.connect(n.id,target.id)}}}.disabled(n.kind == .master)
         if n.kind == .effect || n.kind == .bus {Button("노드 삭제",role:.destructive){store.removeSelection()}}
     }
-    @ViewBuilder func signalEdge(_ id:ID)->some View {if let e=store.project.signal.edges.first(where:{$0.id==id}) {Text("사운드 연결").font(.headline);CompactNumber("Gain",value:Binding(get:{e.gain},set:{v in store.mutate("연결 Gain"){p in if let i=p.signal.edges.firstIndex(where:{$0.id==id}){p.signal.edges[i].gain=max(0,min(4,v))}}}));Text(e.sidechain ? "Sidechain 입력":"Audio 입력");Button("연결 삭제",role:.destructive){store.removeSelection()}}}
+    @ViewBuilder func signalEdge(_ id:ID)->some View {if let e=store.project.signal.edges.first(where:{$0.id==id}) {Text("사운드 연결").font(.headline);CompactNumber("Gain",value:Binding(get:{store.project.signal.edges.first{$0.id==id}?.gain ?? e.gain},set:{v in store.mutate("연결 Gain"){p in if let i=p.signal.edges.firstIndex(where:{$0.id==id}){p.signal.edges[i].gain=max(0,min(4,v))}}}),range:0...4);Text(e.sidechain ? "Sidechain 입력":"Audio 입력");Button("연결 삭제",role:.destructive){store.removeSelection()}}}
     @ViewBuilder func transition(_ e:FlowEdge)->some View {
         let projectID=store.project.id
         StudioChoice("방식",selection:Binding(get:{e.transition.mode},set:{v in store.updateEdge{$0.transition.mode=v}}),options:[(.within,"끝부분 안에서"),(.insert,"사이에 삽입"),(.overlap,"겹치기")])
         StudioChoice("길이 기준",selection:Binding(get:{e.transition.anchor},set:{v in store.updateEdge{$0.transition.anchor=v}}),options:[(.sourceBars,"앞 서클 마디"),(.targetBars,"뒤 서클 마디"),(.seconds,"초")])
-        CompactNumber("길이",value:Binding(get:{e.transition.length},set:{v in store.updateEdge{$0.transition.length=max(0,v)}}))
+        CompactNumber("길이",value:Binding(get:{store.project.active.edges.first{$0.id==e.id}?.transition.length ?? e.transition.length},set:{v in store.updateEdge{$0.transition.length=max(0,v)}}),range:0...Double.greatestFiniteMagnitude)
         EffectControls(effect:Binding(get:{store.project.active.edges.first{$0.id==e.id}?.transition.effect ?? e.transition.effect},set:{v in store.updateEdge{$0.transition.effect=v}}),isCurrent:{store.project.id==projectID && store.edgeSelection==e.id})
         StudioChoice("전환 리듬",selection:Binding(get:{e.transition.patternID ?? ""},set:{v in store.updateEdge{$0.transition.patternID=v.isEmpty ? nil:v}}),options:[("","없음")]+store.project.patterns.map{($0.id,$0.name)})
         StudioChoice("대체할 트랙",selection:Binding(get:{e.transition.replaceTrackID ?? ""},set:{v in store.updateEdge{$0.transition.replaceTrackID=v.isEmpty ? nil:v}}),options:[("","대체 없이 합치기")]+store.project.tracks.map{($0.id,$0.name)})
@@ -26,10 +26,10 @@ struct InspectorView:View {
 struct ContextInspector:View {
     @ObservedObject var store:AppStore;let use:SectionUse
     func setting<T>(_ key:WritableKeyPath<ContextSettings,Setting<T>>,_ fallback:T)->Binding<Setting<T>> {Binding(get:{use.settings[keyPath:key]},set:{v in store.updateUse("서클 음악 설정"){$0.settings[keyPath:key]=v}})}
-    func value<T>(_ key:WritableKeyPath<ContextSettings,Setting<T>>,_ fallback:T)->Binding<T> {Binding(get:{use.settings[keyPath:key].value ?? fallback},set:{v in store.updateUse("서클 음악 설정"){$0.settings[keyPath:key] = .local(v)}})}
+    func value<T>(_ key:WritableKeyPath<ContextSettings,Setting<T>>,_ fallback:T)->Binding<T> {Binding(get:{store.selectedUse?.settings[keyPath:key].value ?? fallback},set:{v in store.updateUse("서클 음악 설정"){$0.settings[keyPath:key] = .local(v)}})}
     var body:some View{VStack(alignment:.leading,spacing:20){
         SourcePicker(title:"템포",setting:setting(\.tempo,store.currentContext.tempo),fallback:store.currentContext.tempo)
-        if use.settings.tempo.source == .local {CompactNumber("BPM",value:value(\.tempo,store.currentContext.tempo))}
+        if use.settings.tempo.source == .local {CompactNumber("BPM",value:value(\.tempo,store.currentContext.tempo),range:1...999)}
         SourcePicker(title:"박자",setting:setting(\.meter,store.currentContext.meter),fallback:store.currentContext.meter)
         if use.settings.meter.source == .local {MeterEditor(meter:value(\.meter,store.currentContext.meter))}
         SourcePicker(title:"스케일",setting:setting(\.scale,store.currentContext.scale),fallback:store.currentContext.scale)
@@ -52,7 +52,7 @@ struct TrackInspector:View {
             HStack {
                 Toggle("음소거",isOn:Binding(get:{track.muted},set:{v in store.updateTrack("음소거"){$0.muted=v}}))
                 Spacer()
-                ValueField(title:"트랙 볼륨",value:Binding(get:{track.gain},set:{v in store.updateTrack("트랙 볼륨"){$0.gain=v}}),range:0...4)
+                ValueField(title:"트랙 볼륨",value:Binding(get:{store.project.tracks.first{$0.id==track.id}?.gain ?? track.gain},set:{v in store.updateTrack("트랙 볼륨"){$0.gain=v}}),range:0...4)
             }
             StudioChoice("악기",selection:Binding(get:{track.instrument.kind},set:{v in
                 if v == .sampler {store.chooseSampleInstrument()}
@@ -82,7 +82,7 @@ struct TrackInspector:View {
 struct SynthInspector:View {
     @ObservedObject var store:AppStore
     let patch:SynthPatch
-    func binding(_ key:WritableKeyPath<SynthPatch,Double>)->Binding<Double> {Binding(get:{patch[keyPath:key]},set:{v in store.updateTrack("신스 편집"){$0.instrument.synth?[keyPath:key]=v}})}
+    func binding(_ key:WritableKeyPath<SynthPatch,Double>)->Binding<Double> {Binding(get:{store.selectedTrack?.instrument.synth?[keyPath:key] ?? patch[keyPath:key]},set:{v in store.updateTrack("신스 편집"){$0.instrument.synth?[keyPath:key]=v}})}
     var body:some View {
         VStack(alignment:.leading,spacing:12) {
             StudioChoice("음색",selection:Binding(get:{patch.voice},set:{v in store.updateTrack("신스 음색"){$0.instrument.synth=SynthPatch(v)}}),options:SynthVoice.allCases.map{($0,$0.label)})

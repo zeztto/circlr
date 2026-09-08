@@ -32,6 +32,7 @@ struct CircleWorkspace:View {
         .background(StudioTheme.surface).foregroundStyle(StudioTheme.text)
         .font(.system(size:12)).buttonStyle(CanvasButtonStyle()).controlSize(.regular).toggleStyle(.switch)
         .textFieldStyle(StudioFieldStyle()).tint(StudioTheme.accent).accentColor(StudioTheme.accent).preferredColorScheme(.dark)
+        .numberEditing(in:store)
         .onExitCommand{store.closeFocus()}
         .alert("작업을 완료하지 못했습니다",isPresented:Binding(get:{store.errorMessage != nil},set:{if !$0 {store.errorMessage=nil}})) {Button("확인"){store.errorMessage=nil}} message:{Text(store.errorMessage ?? "")}
     }
@@ -68,7 +69,7 @@ struct CircleWorkspace:View {
     @ViewBuilder func patternSettings(_ id:ID)->some View {
         if let pattern=store.project.patterns.first(where:{$0.id==id}) {
             TextField("리듬 이름",text:Binding(get:{pattern.name},set:{v in store.mutate("리듬 이름"){p in if let i=p.patterns.firstIndex(where:{$0.id==id}){p.patterns[i].name=v}}})).textFieldStyle(StudioFieldStyle())
-            CompactNumber("길이 · 4분음표 박",value:Binding(get:{pattern.length},set:{v in store.mutate("리듬 길이"){p in if let i=p.patterns.firstIndex(where:{$0.id==id}){p.patterns[i].length=max(0.25,min(16384,v))}}}))
+            CompactNumber("길이 · 4분음표 박",value:Binding(get:{store.project.patterns.first{$0.id==id}?.length ?? pattern.length},set:{v in store.mutate("리듬 길이"){p in if let i=p.patterns.firstIndex(where:{$0.id==id}){p.patterns[i].length=max(0.25,min(16384,v))}}}),range:0.25...16384)
             Text("글로벌 또는 서클 음악 설정에서 이 리듬을 선택하면 곡과 함께 반복 재생합니다.").foregroundStyle(.secondary)
         }
     }
@@ -88,7 +89,7 @@ struct GlobalCircleSettings:View {
     var body:some View {
         VStack(alignment:.leading,spacing:18) {
             TextField("곡 이름",text:$name).textFieldStyle(StudioFieldStyle())
-            CompactNumber("템포 · BPM",value:$context.tempo)
+            CompactNumber("템포 · BPM",value:$context.tempo,range:1...999)
             MeterEditor(meter:$context.meter);ScaleEditor(scale:$context.scale)
             Divider(); Text("박 분할과 강세").font(.system(size:12,weight:.semibold));BeatEditor(grid:$context.beatGrid)
             Divider();PatternPicker(project:store.project,assignment:$context.rhythm)

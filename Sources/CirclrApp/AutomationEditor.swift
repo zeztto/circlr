@@ -101,7 +101,7 @@ struct AutomationEditor:View {
         }.onChange(of:store.automationParameter){_,_ in store.selectedAutomationPointID=lane?.points.first?.id}
     }
     func pointValue(_ point:AutomationPoint,_ key:WritableKeyPath<AutomationPoint,Double>)->Binding<Double> {
-        Binding(get:{point[keyPath:key]},set:{v in var p=point;p[keyPath:key]=v;store.editAutomationPoint(p)})
+        Binding(get:{store.currentAutomation?.points.first{$0.id==point.id}?[keyPath:key] ?? point[keyPath:key]},set:{v in guard var p=store.currentAutomation?.points.first(where:{$0.id==point.id}) else{return};p[keyPath:key]=v;store.editAutomationPoint(p)})
     }
 }
 struct AutomationPlot:NSViewRepresentable {

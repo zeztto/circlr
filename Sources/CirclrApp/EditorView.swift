@@ -16,7 +16,7 @@ struct SectionEditor:View {
             HStack(spacing:12) {
                 Text("MIDI · \(store.currentLane?.notes.count ?? 0)개 노트").font(.system(size:11,weight:.medium))
                 if let id=store.selectedNoteID,let note=store.currentLane?.notes.first(where:{$0.id==id}) {
-                    ValueField(title:"Velocity",value:Binding(get:{Double(note.velocity)},set:{v in guard var lane=store.currentLane,let i=lane.notes.firstIndex(where:{$0.id==id}) else{return};lane.notes[i].velocity=Int(v);store.setLane(lane)}),width:48,range:1...127)
+                    ValueField(title:"Velocity",value:Binding(get:{Double(store.currentLane?.notes.first{$0.id==id}?.velocity ?? note.velocity)},set:{v in guard var lane=store.currentLane,let i=lane.notes.firstIndex(where:{$0.id==id}) else{return};lane.notes[i].velocity=Int(v);store.setLane(lane)}),width:48,range:1...127,integerOnly:true)
                 }
                 Spacer()
                 Button {topPitch=max(26,topPitch-12)} label:{Image(systemName:"minus")}.help("한 옥타브 아래")
@@ -69,11 +69,11 @@ struct SectionEditor:View {
                     ForEach(store.instruments){plugin in Button(plugin.name){store.updateTrack("악기"){$0.instrument.kind = .audioUnit;$0.instrument.plugin=plugin}}}
                 } label:{Text(track.instrument.kind == .soundBank ? "Sound Bank":track.instrument.plugin?.name ?? "악기 선택").lineLimit(1)}.menuStyle(.borderlessButton).frame(maxWidth:220,alignment:.leading)
                 if track.instrument.kind == .soundBank {
-                    CountControl(title:"GM",value:Binding(get:{track.instrument.program+1},set:{v in store.updateTrack("GM Program"){$0.instrument.program=v-1}}),range:1...128)
+                    CountControl(title:"GM",value:Binding(get:{(store.project.tracks.first{$0.id==track.id}?.instrument.program ?? track.instrument.program)+1},set:{v in store.updateTrack("GM Program"){$0.instrument.program=v-1}}),range:1...128)
                     Toggle("드럼",isOn:Binding(get:{track.instrument.drums},set:{v in store.updateTrack("드럼"){$0.instrument.drums=v}})).controlSize(.mini).fixedSize()
                 } else {Button("Plugin 열기"){store.showPluginEditor(effect:false)}.disabled(track.instrument.plugin==nil)}
                 Spacer(minLength:0)
-                ValueField(title:"트랙 볼륨",value:Binding(get:{track.gain},set:{v in store.updateTrack("트랙 볼륨"){$0.gain=v}}),width:52,range:0...4)
+                ValueField(title:"트랙 볼륨",value:Binding(get:{store.project.tracks.first{$0.id==track.id}?.gain ?? track.gain},set:{v in store.updateTrack("트랙 볼륨"){$0.gain=v}}),width:52,range:0...4)
                 Button {store.updateTrack("음소거"){$0.muted.toggle()}} label:{Image(systemName:track.muted ? "speaker.slash.fill":"speaker.wave.2").foregroundStyle(track.muted ? StudioTheme.accent:StudioTheme.secondary)}.help("트랙 음소거")
             }.font(.system(size:11))
         }
@@ -86,25 +86,23 @@ struct AudioClipFields:View {
     var body:some View {
         HStack(spacing:12) {
             CompactChoice(selection:Binding(get:{clip.id},set:{store.selectedClipID=$0}),options:(store.currentLane?.audio ?? []).map{c in(c.id,store.project.assets.first{$0.id==c.assetID}?.name ?? "미디어 없음")},label:"오디오 클립").frame(maxWidth:150,alignment:.leading)
-            ValueField(title:"시작 박",value:Binding(get:{clip.beat},set:{v in edit{$0.beat=v}}),width:48,range:0...131072)
-            ValueField(title:"원본 초",value:Binding(get:{clip.sourceStart},set:{v in edit{$0.sourceStart=v}}),width:48,range:0...Double.greatestFiniteMagnitude)
-            ValueField(title:"길이 초",value:Binding(get:{clip.duration},set:{v in edit{$0.duration=v}}),width:48,range:0.01...Double.greatestFiniteMagnitude)
-            ValueField(title:"볼륨",value:Binding(get:{clip.gain},set:{v in edit{$0.gain=v}}),width:44,range:0...4)
+            ValueField(title:"시작 박",value:Binding(get:{store.currentLane?.audio.first{$0.id==clip.id}?.beat ?? clip.beat},set:{v in edit{$0.beat=v}}),width:48,range:0...131072)
+            ValueField(title:"원본 초",value:Binding(get:{store.currentLane?.audio.first{$0.id==clip.id}?.sourceStart ?? clip.sourceStart},set:{v in edit{$0.sourceStart=v}}),width:48,range:0...Double.greatestFiniteMagnitude)
+            ValueField(title:"길이 초",value:Binding(get:{store.currentLane?.audio.first{$0.id==clip.id}?.duration ?? clip.duration},set:{v in edit{$0.duration=v}}),width:48,range:0.01...Double.greatestFiniteMagnitude)
+            ValueField(title:"볼륨",value:Binding(get:{store.currentLane?.audio.first{$0.id==clip.id}?.gain ?? clip.gain},set:{v in edit{$0.gain=v}}),width:44,range:0...4)
             Toggle("템포 추종",isOn:Binding(get:{clip.followsTempo},set:{v in edit{$0.followsTempo=v}})).controlSize(.mini).fixedSize()
-            ValueField(title:"원본 BPM",value:Binding(get:{clip.sourceBPM},set:{v in edit{$0.sourceBPM=v}}),width:48,range:1...999)
+            ValueField(title:"원본 BPM",value:Binding(get:{store.currentLane?.audio.first{$0.id==clip.id}?.sourceBPM ?? clip.sourceBPM},set:{v in edit{$0.sourceBPM=v}}),width:48,range:1...999)
             Button {guard var lane=store.currentLane else{return};lane.audio.removeAll{$0.id==clip.id};store.setLane(lane);store.selectedClipID=nil} label:{Image(systemName:"trash")}.help("오디오 클립 제거")
         }.font(.system(size:10))
     }
 }
 struct CompactNumber:View {
     let title:String;@Binding var value:Double
-    @State private var text="";@FocusState private var focused:Bool
-    init(_ title:String,value:Binding<Double>){self.title=title;_value=value}
+    var range:ClosedRange<Double>
+    init(_ title:String,value:Binding<Double>,range:ClosedRange<Double> = -Double.greatestFiniteMagnitude...Double.greatestFiniteMagnitude){self.title=title;_value=value;self.range=range}
     var body:some View {
-        HStack(spacing:8){Text(title).font(.system(size:12));Spacer(minLength:2);TextField("",text:Binding(get:{text},set:{s in text=s;if let n=Double(s),n.isFinite{value=n}})).textFieldStyle(.plain).multilineTextAlignment(.trailing).padding(.horizontal,7).padding(.vertical,6).frame(width:80).background(StudioTheme.raised,in:RoundedRectangle(cornerRadius:5)).focused($focused).onSubmit{normalize()}}
-            .onAppear{normalize()}.onChange(of:value){_,_ in if !focused{normalize()}}.onChange(of:focused){_,f in if !f{normalize()}}
+        HStack(spacing:8){Text(title).font(.system(size:12));Spacer(minLength:2);CommittedNumberField(title:title,value:$value,range:range,width:80)}
     }
-    private func normalize(){text=String(format:"%.4g",value)}
 }
 struct PianoRoll:NSViewRepresentable {
     @ObservedObject var store:AppStore;let topPitch:Int

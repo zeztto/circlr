@@ -22,7 +22,7 @@ struct BeatEditor:View {
     var body:some View {
         VStack(alignment:.leading,spacing:18){
             StudioStepper("박 분할",value:$grid.subdivisions,in:1...32)
-            CompactNumber("Swing · 0–0.75",value:$grid.swing)
+            CompactNumber("Swing · 0–0.75",value:$grid.swing,range:0...0.75)
             HStack{Text("강세 묶음");Spacer();TextField("예: 2+2+3",text:$accents).frame(width:240)
                 .onChange(of:accents){_,value in grid.accents=value.replacingOccurrences(of:"+",with:",").split(separator:",").compactMap{Int($0.trimmingCharacters(in:.whitespaces))}.filter{$0>=1}}}
             Text("박 수를 더한 묶음 · 7/8의 예: 2+2+3").font(.system(size:11)).foregroundStyle(StudioTheme.secondary)

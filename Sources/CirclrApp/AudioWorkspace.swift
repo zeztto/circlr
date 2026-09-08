@@ -39,12 +39,14 @@ struct AudioWorkspaceView:View {
     @ObservedObject var store:AppStore
     let clip:AudioClip
     let asset:Asset
+    var liveClip:AudioClip {store.currentLane?.audio.first{$0.id==clip.id} ?? clip}
     var defaultFade:Double {
+        let clip=liveClip
         guard clip.preservesTail != true,let node=store.selectedMusic,let clock=store.sectionClock else{return 0}
         return min(clip.duration/2,0.005*AudioClipTiming(node:node,context:store.currentContext,clock:clock).rate(clip))
     }
-    var fadeIn:Double {clip.fadeIn ?? defaultFade}
-    var fadeOut:Double {clip.fadeOut ?? defaultFade}
+    var fadeIn:Double {liveClip.fadeIn ?? defaultFade}
+    var fadeOut:Double {liveClip.fadeOut ?? defaultFade}
     var body:some View {
         VStack(alignment:.leading,spacing:12) {
             HStack {
