@@ -50,9 +50,11 @@ struct TrackInspector:View {
     let track:Track
     var body:some View {
         VStack(alignment:.leading,spacing:12) {
-            Text("트랙 · \(track.name)").font(.headline)
-            Toggle("음소거",isOn:Binding(get:{track.muted},set:{v in store.updateTrack("음소거"){$0.muted=v}}))
-            CompactNumber("Gain",value:Binding(get:{track.gain},set:{v in store.updateTrack("트랙 Gain"){$0.gain=max(0,min(4,v))}}))
+            HStack {
+                Toggle("음소거",isOn:Binding(get:{track.muted},set:{v in store.updateTrack("음소거"){$0.muted=v}}))
+                Spacer()
+                ValueField(title:"트랙 볼륨",value:Binding(get:{track.gain},set:{v in store.updateTrack("트랙 볼륨"){$0.gain=v}}),range:0...4)
+            }
             StudioChoice("악기",selection:Binding(get:{track.instrument.kind},set:{v in
                 if v == .sampler {store.chooseSampleInstrument()}
                 else {store.updateTrack("악기 종류"){$0.instrument.kind=v;if v == .synthesizer && $0.instrument.synth == nil {$0.instrument.synth=SynthPatch()}}}
@@ -85,19 +87,32 @@ struct SynthInspector:View {
     var body:some View {
         VStack(alignment:.leading,spacing:12) {
             StudioChoice("음색",selection:Binding(get:{patch.voice},set:{v in store.updateTrack("신스 음색"){$0.instrument.synth=SynthPatch(v)}}),options:SynthVoice.allCases.map{($0,$0.label)})
-            ValueField(title:"필터 Hz",value:binding(\.cutoff),range:40...20000)
-            HStack{ValueField(title:"Attack 초",value:binding(\.attack),range:0.001...5);ValueField(title:"Decay 초",value:binding(\.decay),range:0.001...10)}
-            HStack{ValueField(title:"Sustain",value:binding(\.sustain),range:0...1);ValueField(title:"Release 초",value:binding(\.release),range:0.005...10)}
-            ValueField(title:"Detune cent",value:binding(\.detune),range:0...60)
-            if patch.engineVersion>=2 {
-                HStack{ValueField(title:"공명",value:binding(\.resonance),range:0...0.9);ValueField(title:"스테레오 폭",value:binding(\.stereoWidth),range:0...1)}
-                ValueField(title:"필터 엔벌로프 · 옥타브",value:binding(\.filterEnvelope),range: -4...4)
+            LazyVGrid(columns:[GridItem(.flexible(minimum:240),spacing:28),GridItem(.flexible(minimum:240))],alignment:.leading,spacing:10) {
+                parameter("필터 Hz",\.cutoff,40...20000)
+                parameter("Detune cent",\.detune,0...60)
+                parameter("Attack 초",\.attack,0.001...5)
+                parameter("Decay 초",\.decay,0.001...10)
+                parameter("Sustain",\.sustain,0...1)
+                parameter("Release 초",\.release,0.005...10)
+                if patch.engineVersion>=2 {
+                    parameter("공명",\.resonance,0...0.9)
+                    parameter("스테레오 폭",\.stereoWidth,0...1)
+                    parameter("필터 엔벌로프 · 옥타브",\.filterEnvelope,-4...4)
+                }
+                if patch.engineVersion==3 {
+                    parameter("배음",\.character,0...1)
+                    parameter("움직임",\.motion,0...1)
+                }
             }
-            if patch.engineVersion==3 {
-                HStack{ValueField(title:"배음",value:binding(\.character),range:0...1);ValueField(title:"움직임",value:binding(\.motion),range:0...1)}
-            } else {
-                Button("신스 엔진 3으로 전환"){store.updateTrack("신스 엔진 전환"){$0.instrument.synth?.engineVersion=3}}
-            }
+            if patch.engineVersion<3 {Button("신스 엔진 3으로 전환"){store.updateTrack("신스 엔진 전환"){$0.instrument.synth?.engineVersion=3}}}
         }
     }
+    func parameter(_ title:String,_ key:WritableKeyPath<SynthPatch,Double>,_ range:ClosedRange<Double>)->some View {
+        HStack(spacing:10) {
+            Text(title).foregroundStyle(StudioTheme.secondary).lineLimit(1)
+            Spacer(minLength:8)
+            ValueField(title:title,value:binding(key),showsLabel:false,range:range)
+        }
+    }
+
 }

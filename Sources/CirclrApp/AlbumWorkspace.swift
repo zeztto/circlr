@@ -58,7 +58,9 @@ extension AppStore {
                 if case .audio(_, let clip) = content { selectedClipID = clip }
             case .instrument(let track), .output(let track): selectedTrackID = track
             case .rhythmMIDI(let track), .rhythmAudio(let track): selectedTrackID = track; editPatternID = selectedCircle?.context.rhythm.patternID
-            default: break
+            case .effect,.mix:
+                let tracks=selectedMusic.flatMap{node in selectedGraph.map{StudioNavigation.outputTracks(from:node.id,graph:$0)}} ?? []
+                if selectedTrackID.map({tracks.contains($0)}) != true {selectedTrackID=tracks.count==1 ? tracks.first:nil}
             }
         }
     }

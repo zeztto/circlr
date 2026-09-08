@@ -14,13 +14,21 @@ struct RootView: View {
                 .overlay(alignment:.bottomLeading){AgentConsole(store:store).background(GeometryReader{geometry in Color.clear.preference(key:AgentConsoleBoundsKey.self,value:geometry.frame(in:.named("albumCanvas")))}).padding(.leading,20).padding(.trailing,210).padding(.bottom,18)}
                 .overlay(alignment:.bottomTrailing){navigation.padding(20)}
                 .coordinateSpace(name:"albumCanvas")
-                .onPreferenceChange(AgentConsoleBoundsKey.self){store.consoleBounds=$0}
+                .onPreferenceChange(AgentConsoleBoundsKey.self){if store.consoleBounds != $0 {store.consoleBounds=$0}}
         }
         .overlay(alignment:.top) {
             if let palette=store.commandPalette {
                 ZStack(alignment:.top) {
                     Color.black.opacity(0.25).contentShape(Rectangle()).onTapGesture{store.commandPalette=nil;store.focusCanvas?()}
                     StudioCommandPalette(store:store,palette:palette).padding(.top,85)
+                }
+            }
+        }
+        .overlay(alignment:.top) {
+            if store.navigationOpen {
+                ZStack(alignment:.top) {
+                    Color.black.opacity(0.3).contentShape(Rectangle()).onTapGesture{store.navigationOpen=false;store.focusCanvas?()}
+                    StudioNavigationView(store:store).padding(.top,85)
                 }
             }
         }
@@ -34,7 +42,7 @@ struct RootView: View {
         }
         .frame(minWidth:1024,minHeight:740).background(StudioTheme.canvas)
         .font(.system(size:12)).foregroundStyle(StudioTheme.text).buttonStyle(CanvasButtonStyle())
-        .onExitCommand{store.hierarchySettingsOpen=false;store.hierarchyParent()}
+        .onExitCommand{if store.navigationOpen {store.navigationOpen=false;store.focusCanvas?()} else if store.commandPalette != nil {store.commandPalette=nil;store.focusCanvas?()} else if store.keyboardHelp {store.keyboardHelp=false} else {store.hierarchySettingsOpen=false;store.hierarchyParent()}}
         .alert("작업을 완료하지 못했습니다",isPresented:Binding(get:{store.errorMessage != nil},set:{if !$0{store.errorMessage=nil}})){Button("확인"){store.errorMessage=nil}}message:{Text(store.errorMessage ?? "")}
     }
     private var header:some View {
@@ -53,6 +61,7 @@ struct RootView: View {
                 .accessibilityLabel(store.movieWriter != nil ? "영상 녹화 마치기":"영상 녹화 시작")
                 .disabled(store.movieFinalizing != nil)
             Spacer(minLength:8)
+            Button{store.showNavigation()}label:{Label("작업 이동",systemImage:"arrow.left.arrow.right")}.help("섹션·트랙·음색·이펙트로 바로 이동 · ⌘J")
             Button{store.showCommands()}label:{Image(systemName:"command")}.help("명령 검색 · ⇧⌘P")
             Button{store.focusHierarchy(.album,detail:true);store.hierarchySettingsOpen=true}label:{
                 HStack(spacing:12){Text("\(store.project.global.tempo.formatted())").font(.system(size:18,weight:.medium,design:.rounded)).monospacedDigit();Text("BPM").font(.system(size:9)).foregroundStyle(StudioTheme.secondary);Text(store.project.global.meter.label);Text(store.project.global.scale.label).foregroundStyle(StudioTheme.secondary)}
@@ -75,12 +84,22 @@ struct RootView: View {
         }.menuStyle(.borderlessButton).padding(.horizontal,22).frame(height:66).background(StudioTheme.surface)
     }
     private var breadcrumbs:some View {
-        HStack(spacing:3) {
-            ForEach(store.hierarchyScene?.path(to:store.hierarchySelection ?? .album) ?? []){node in
-                if node.parent != nil{Image(systemName:"chevron.right").font(.system(size:8)).foregroundStyle(StudioTheme.secondary)}
-                Button{store.hierarchySettingsOpen=false;store.focusHierarchy(node.id)}label:{Text(node.title).lineLimit(1).frame(maxWidth:130).foregroundStyle(node.id==store.hierarchySelection ? StudioTheme.text:StudioTheme.secondary)}
+        let path=store.hierarchyScene?.path(to:store.hierarchySelection ?? .album) ?? []
+        return HStack(spacing:3) {
+            if let root=path.first {breadcrumb(root)}
+            if path.count>4 {
+                Image(systemName:"chevron.right").font(.system(size:10)).foregroundStyle(StudioTheme.secondary)
+                Menu("…") {ForEach(Array(path.dropFirst().dropLast(2))){node in Button(node.title){store.hierarchySettingsOpen=false;store.focusHierarchy(node.id)}}}
+                    .menuStyle(.borderlessButton).fixedSize().accessibilityLabel("상위 서클 경로")
+            }
+            ForEach(Array(path.count>4 ? path.suffix(2):path.dropFirst())){node in
+                Image(systemName:"chevron.right").font(.system(size:10)).foregroundStyle(StudioTheme.secondary)
+                breadcrumb(node)
             }
         }.padding(3).background(StudioTheme.canvas.opacity(0.94),in:RoundedRectangle(cornerRadius:6))
+    }
+    private func breadcrumb(_ node:CircleSceneNode)->some View {
+        Button{store.hierarchySettingsOpen=false;store.focusHierarchy(node.id)}label:{Text(node.role == .album ? "앨범":node.title).lineLimit(1).frame(maxWidth:130).foregroundStyle(node.id==store.hierarchySelection ? StudioTheme.text:StudioTheme.secondary)}.help(node.title+" · "+node.subtitle)
     }
     private var actions:some View {
         HStack(spacing:5) {

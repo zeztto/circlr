@@ -21,6 +21,8 @@ struct AlbumCanvas: NSViewRepresentable {
     var scrollMonitor: Any?
     var editor: NSHostingView<InlineCircleEditor>?
     var editorAddress: CircleAddress?
+    var labelPlacements:[CanvasLabelPlacement]=[]
+    var hoverAddress:CircleAddress?
     var down = NSPoint.zero
     var dragNode: CircleSceneNode?
     var dragOrigin = Point()
@@ -110,6 +112,7 @@ struct AlbumCanvas: NSViewRepresentable {
     }
     override func mouseMoved(with event:NSEvent) {
         let node=hit(convert(event.locationInWindow,from:nil))
+        if hoverAddress != node?.id {hoverAddress=node?.id;needsDisplay=true}
         toolTip=node.map{$0.title+" · "+$0.subtitle+" · 두 번 클릭해 확대"}
     }
     func update() {
@@ -147,7 +150,13 @@ struct AlbumCanvas: NSViewRepresentable {
     }
     func focus(_ address: CircleAddress, detail: Bool = false) {
         guard let node = scene?.node(address), bounds.width > 100 else { return }
-        setCamera(camera.focused(on: node, width: bounds.width, height: bounds.height, detail: detail), animated: true)
+        var target=camera.focused(on:node,width:workspaceViewport.width,height:workspaceViewport.height,detail:detail)
+        if detail {
+            let r=max(360,min(620,workspaceViewport.width*0.52))
+            target.zoom=r/max(node.radius,1e-12)
+        }
+        target.pan=Point(workspaceViewport.midX-node.center.x*target.zoom,workspaceViewport.midY-node.center.y*target.zoom)
+        setCamera(target,animated:true)
     }
     func setCamera(_ target: HierarchyCamera, animated: Bool = false, manual: Bool = true) {
         if manual { interruptPlaybackFollow() }
@@ -176,9 +185,7 @@ struct AlbumCanvas: NSViewRepresentable {
             editor?.removeFromSuperview(); editor = nil; editorAddress = nil; return
         }
         let center = camera.screen(node.center), radius = node.radius*camera.zoom
-        let bottom=bounds.height-(store.consoleOpen ? 226:54)
-        let width = min(1040, radius*1.52), height = min(store.project.usesOrbits ? 760:600, radius*(store.project.usesOrbits ? 1.6:1.15),max(160,bottom-max(100,center.y-radius*0.8)))
-        let frame = NSRect(x: center.x-width/2, y:min(center.y-height/2+16,bottom-height), width: width, height: height)
+        let frame=CanvasWorkspaceGeometry.editor(center:CGPoint(x:center.x,y:center.y),radius:radius,within:workspaceViewport)
         guard frame.intersects(bounds) else { editor?.removeFromSuperview(); editor = nil; editorAddress = nil; return }
         if editorAddress != address || editor == nil {
             editor?.removeFromSuperview()
@@ -206,13 +213,14 @@ struct AlbumCanvas: NSViewRepresentable {
         }
     }
     func isVisible(_ node: CircleSceneNode) -> Bool {
-        guard node.radius*camera.zoom > (store.project.usesOrbits ? 1.2:20) else { return false }
+        let context=labelContext
+        let direct=node.parent==context?.id
+        guard node.radius*camera.zoom > (direct ? 0.000001:(store.project.usesOrbits ? 1.2:20)) else { return false }
         // At editing depth, unrelated overlapping freeform branches must not cover the active circle.
-        if let scene,let address=playbackVisibilityFocus ?? store.hierarchySelection,
-           let selected=scene.path(to:address).last(where:{$0.radius*camera.zoom>min(bounds.width,bounds.height)*0.28}),
+        if let scene,let selected=context,
            !scene.path(to:node.id).contains(where:{$0.id==selected.id}),!scene.path(to:selected.id).contains(where:{$0.id==node.id}) { return false }
         guard let parent = node.parent.flatMap({ scene?.node($0) }) else { return true }
-        return parent.radius*camera.zoom >= 140
+        return direct || parent.radius*camera.zoom >= 140
     }
     override func draw(_ dirtyRect: NSRect) {
         StudioTheme.canvasNS.setFill(); bounds.fill()
@@ -223,7 +231,8 @@ struct AlbumCanvas: NSViewRepresentable {
             guard isVisible(node) else { continue }
             let rect = NSRect(x: center.x-radius, y: center.y-radius, width: 2*radius, height: 2*radius)
             guard rect.intersects(bounds), radius < 1e7 else { continue }
-            let path = NSBezierPath(ovalIn: rect)
+            let displayRect=radius<3 && node.parent==labelContext?.id ? NSRect(x:center.x-3,y:center.y-3,width:6,height:6):rect
+            let path = NSBezierPath(ovalIn: displayRect)
             NSColor(white: node.role == .music ? 0.105 : 0.065+Double(min(4,node.depth))*0.008, alpha: 1).setFill(); path.fill()
             let selected = store.hierarchySelections.contains(node.id)
             (selected ? color(node) : StudioTheme.lineNS.withAlphaComponent(node.role == .music ? 0.9 : 0.65)).setStroke()
@@ -244,12 +253,7 @@ struct AlbumCanvas: NSViewRepresentable {
             let radius = node.radius*camera.zoom, center = screen(node)
             guard isVisible(node), NSRect(x: center.x-radius, y: center.y-radius, width: 2*radius, height: 2*radius).intersects(bounds) else { continue }
             if radius<22 {continue}
-            let expanded = node.childCount > 0 && scene.children(of: node.id).contains { isVisible($0) }
             let isEditor = editorAddress == node.id
-            let font = min(24, max(11, radius*0.11))
-            let titleY = (expanded || isEditor) ? center.y-radius+max(24, min(45,radius*0.18)) : center.y-15
-            if !isEditor, !expanded || titleY > 75 { drawText(node.role == .music && radius < 65 ? (node.music?.content.label ?? node.title) : node.title, x: center.x, y: titleY, size: font, color: StudioTheme.textNS, maxWidth: max(40,radius*1.5)) }
-            if radius > 65, !isEditor, !expanded || titleY > 75 { drawText(node.subtitle+(node.repeatCount > 1 ? " · ×\(node.repeatCount)" : ""), x: center.x, y: titleY+font+7, size: 10, color: StudioTheme.secondaryNS, maxWidth: radius*1.5) }
             if node.role == .music, !isEditor, radius > 65 { drawMusic(node, center: center, radius: radius) }
             if radius > 45, node.role != .album, node.role != .group {
                 if node.acceptsInput { port(at: NSPoint(x: center.x-node.outerRadius*camera.zoom, y: center.y), color: color(node), filled: false) }
@@ -257,6 +261,7 @@ struct AlbumCanvas: NSViewRepresentable {
             }
         }
         for node in scene.nodes where isVisible(node) { drawPlaybackCircle(node) }
+        drawReadableLabels()
         drawPlaybackCaption()
         if let address = connecting, let node = scene.node(address) {
             let center = screen(node); wire(NSPoint(x: center.x+node.outerRadius*camera.zoom,y:center.y), connectionPoint, color: color(node), dashed: true)
@@ -375,6 +380,7 @@ struct AlbumCanvas: NSViewRepresentable {
     }
     func hit(_ point:NSPoint,portOnly:Bool=false) -> CircleSceneNode? {
         guard let scene else{return nil}
+        if !portOnly,let label=labelPlacements.reversed().first(where:{$0.rect.contains(point)}),let node=scene.node(label.id) {return node}
         // Rings remain selectable even when a child is under their centre.
         return scene.nodes.reversed().first { node in
             let p=screen(node),r=node.outerRadius*camera.zoom
@@ -390,11 +396,12 @@ struct AlbumCanvas: NSViewRepresentable {
         orbitDrag=nil
         panning=store.panMode || event.buttonNumber==2
         if panning{return}
-        if let node=store.hierarchySelection.flatMap({scene?.node($0)}),let handle=timeHandle(node),hypot(handle.x-down.x,handle.y-down.y)<13,let orbit=node.orbit,let owner=scene?.node(orbit.owner) {
+        let labelHit=labelPlacements.contains{$0.rect.contains(down)}
+        if !labelHit,let node=store.hierarchySelection.flatMap({scene?.node($0)}),let handle=timeHandle(node),hypot(handle.x-down.x,handle.y-down.y)<13,let orbit=node.orbit,let owner=scene?.node(orbit.owner) {
             orbitDrag=node;orbitSeconds=orbit.anchor;orbitTravel=0;orbitRevision=store.project.musicRevision
             let center=screen(owner);orbitPhase=OrbitTimeline.phase(Point(down.x-center.x,down.y-center.y));return
         }
-        if let node=hit(down,portOnly:true),node.providesOutput {connecting=node.id;connectionPoint=down;return}
+        if !labelHit,let node=hit(down,portOnly:true),node.providesOutput {connecting=node.id;connectionPoint=down;return}
         guard let node=hit(down) else{panning=true;return}
         if !event.modifierFlags.contains(.shift), store.hierarchySelections.contains(node.id), store.hierarchySelections.count > 1 { store.hierarchySelection=node.id }
         else { store.selectHierarchy(node.id,additive:event.modifierFlags.contains(.shift)) }
@@ -494,7 +501,8 @@ struct AlbumCanvas: NSViewRepresentable {
         let visible=scene.nodes.filter{node in let p=screen(node);return isVisible(node) && bounds.contains(p)}
         let children=visible.map { node -> NSAccessibilityElement in
             let p=screen(node),r=min(100,node.radius*camera.zoom)
-            let rect=window.convertToScreen(convert(NSRect(x:p.x-r,y:p.y-r,width:r*2,height:r*2),to:nil))
+            let hitRect=labelPlacements.first{$0.id==node.id}?.rect ?? NSRect(x:p.x-r,y:p.y-r,width:max(12,r*2),height:max(12,r*2))
+            let rect=window.convertToScreen(convert(hitRect,to:nil))
             let element=CircleAccessibility(parent:self,address:node.id)
             element.setAccessibilityLabel(node.title+" · "+node.subtitle);element.setAccessibilityFrame(rect)
             return element

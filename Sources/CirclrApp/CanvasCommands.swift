@@ -20,6 +20,7 @@ extension AppStore {
         hierarchyTransitionID=nil;focusHierarchy(address,detail:true);hierarchySettingsOpen=true
     }
     func showCommands() {
+        navigationOpen=false
         var commands=canvasCommands?() ?? []
         func add(_ id:String,_ title:String,_ shortcut:String="",_ run:@escaping()->Void) {
             commands.append(StudioCommand(id:id,title:title,shortcut:shortcut,run:run))
@@ -37,6 +38,7 @@ extension AppStore {
         if redoCount>0 {add("redo","다시 실행","⇧⌘Z"){[weak self] in self?.redo()}}
         add("global","글로벌 템포·박자·스케일 설정"){[weak self] in self?.focusHierarchy(.album,detail:true);self?.hierarchySettingsOpen=true}
         add("settings","선택 서클 이름·음악 설정","R"){[weak self] in self?.openCircleSettings()}
+        add("navigation","섹션·트랙으로 바로 이동","⌘J"){[weak self] in self?.showNavigation()}
         add("parent","상위 서클로 이동","Esc"){[weak self] in self?.hierarchyParent()}
         add("fit","전체 앨범 보기","F"){[weak self] in self?.hierarchyCommand=HierarchyCommand(action:.fit)}
         add("follow","재생 팔로우 켜기 / 끄기"){[weak self] in guard let self else{return};self.playbackFollow=self.playbackFollow.toggled()}
@@ -65,7 +67,7 @@ extension AppStore {
             }
         }
         for node in hierarchyScene?.nodes ?? [] {
-            commands.append(StudioCommand(id:"find-\(node.id)",title:node.title,detail:"서클로 이동 · \(node.subtitle)",run:{[weak self] in self?.focusHierarchy(node.id,detail:node.role == .music)}))
+            commands.append(StudioCommand(id:"find-\(node.id)",title:node.title,detail:(hierarchyScene?.path(to:node.id).dropLast().map(\.title).joined(separator:" › ") ?? "")+" · \(node.subtitle)",run:{[weak self] in self?.focusHierarchy(node.id,detail:node.role == .music)}))
         }
         add("keyboard-help","키보드 사용법","⌘/"){[weak self] in self?.keyboardHelp=true}
         keyboardHelp=false;commandPalette=StudioPalette(commands:commands)
@@ -223,14 +225,15 @@ struct StudioCommandPalette:View {
     }
     private func execute() {guard results.indices.contains(selection) else{return};store.performCommand(results[selection])}
 }
-private struct CommandSearchField:NSViewRepresentable {
+struct CommandSearchField:NSViewRepresentable {
     @Binding var text:String
     let onMove:(Int)->Void
     let onSubmit:()->Void
     let onCancel:()->Void
+    var placeholder="명령 또는 서클 이름 검색"
     func makeCoordinator()->Coordinator {Coordinator(self)}
     func makeNSView(context:Context)->NSSearchField {
-        let field=NSSearchField();field.placeholderString="명령 또는 서클 이름 검색";field.isBordered=false;field.focusRingType = .none
+        let field=NSSearchField();field.placeholderString=placeholder;field.isBordered=false;field.focusRingType = .none
         field.font = .systemFont(ofSize:15);field.delegate=context.coordinator
         DispatchQueue.main.async{field.window?.makeFirstResponder(field)}
         return field
@@ -254,7 +257,7 @@ private struct CommandSearchField:NSViewRepresentable {
 struct KeyboardHelpView:View {
     @ObservedObject var store:AppStore
     private let rows:[(String,String)] = [
-        ("⇧⌘P","명령·서클 검색"),("⌥⌘0","캔버스로 포커스 이동"),("A / C","서클 생성 / 선택 서클 메뉴"),
+        ("⌘J","섹션·트랙 바로 이동"),("⌘1 / ⌘2 / ⌘3","같은 트랙의 MIDI·오디오 / 음색 / 이펙터"),("⇧⌘P","명령·서클 검색"),("⌥⌘0","캔버스로 포커스 이동"),("A / C","서클 생성 / 선택 서클 메뉴"),
         ("Tab · ← → ↑ ↓","다음·이전 서클 선택"),("⇧ 방향키","여러 서클 선택"),("Return / Esc","서클 안으로 / 상위 서클"),
         ("R","이름·음악 설정"),("+ − / F","확대·축소 / 전체 앨범"),("⌥ 방향키","화면 이동"),
         ("⇧⌥ 방향키","자유 배치에서 선택 서클 이동"),
