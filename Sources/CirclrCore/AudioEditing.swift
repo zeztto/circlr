@@ -62,7 +62,7 @@ public struct AudioClipTiming {
 }
 
 public enum AudioEditing {
-    public enum Change {case split(sourceOffset:Double),duplicate(beatOffset:Double?),fade(input:Double,output:Double),delete}
+    public enum Change {case split(sourceOffset:Double),duplicate(beatOffset:Double?),fade(input:Double,output:Double),replace(AudioClip),delete}
     @discardableResult public static func apply(_ change:Change,nodeID:ID,useID:ID,original:Bool=false,in project:inout Project)throws->ID? {
         var p=project
         guard let use=p.active.uses.first(where:{$0.id==useID}) else{throw CirclrError("오디오 섹션을 찾을 수 없습니다")}
@@ -79,6 +79,12 @@ public enum AudioEditing {
         let shared=graph.nodes.filter{if case .audio(let l,let c)=$0.content{return l==laneID && c==clipID};return false}.count>1
         var result:ID?=nodeID
         switch change {
+        case .replace(let replacement):
+            guard replacement.id==clip.id,replacement.assetID==clip.assetID else{throw CirclrError("편집할 오디오 원본이 변경되었습니다")}
+            try replacement.validateEditing(asset:asset)
+            guard replacement != clip else{return nodeID}
+            clip=replacement
+            if shared {clip.id=newID();lane.audio.append(clip);graph.nodes[index].content = .audio(laneID:laneID,clipID:clip.id)}else{lane.audio[ci]=clip}
         case .delete:
             SectionGraphEditing.remove([nodeID],from:&graph)
             if !shared {lane.audio.remove(at:ci)}

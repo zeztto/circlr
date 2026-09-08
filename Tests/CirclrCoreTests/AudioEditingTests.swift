@@ -83,4 +83,39 @@ final class AudioEditingTests:XCTestCase {
         let clips=try audio(p).1;XCTAssertEqual(clips.last?.beat,5)
         XCTAssertEqual(clips.last?.duration,1.25);XCTAssertEqual(clips.last?.loopSourceDuration,2)
     }
+    func testReplacementSeparatesSharedClipAndPreservesGraphAndOtherUse()throws {
+        var p=try fixture();let use=p.active.uses[0].id
+        _=try ProjectEditing.reuse(use,in:&p,at:Point(100,0))
+        var graph=try audio(p).0
+        let node=try XCTUnwrap(graph.nodes.first{if case .audio=$0.content{return true};return false})
+        var alias=node;alias.id=newID();graph.nodes.append(alias)
+        try SectionGraphEditing.set(graph,useID:use,original:false,in:&p)
+        let before=p,source=try audio(p).1[0]
+        var replacement=source;replacement.sourceStart=0.5;replacement.duration=1.5;replacement.gain=0.5;replacement.followsTempo=true;replacement.sourceBPM=90
+        XCTAssertEqual(try AudioEditing.apply(.replace(replacement),nodeID:node.id,useID:use,in:&p),node.id)
+        let (after,clips)=try audio(p)
+        XCTAssertEqual(clips.count,2);XCTAssertEqual(clips[0],source)
+        replacement.id=clips[1].id;XCTAssertEqual(clips[1],replacement);XCTAssertNotEqual(replacement.id,source.id)
+        var expected=graph
+        let i=try XCTUnwrap(expected.nodes.firstIndex{$0.id==node.id})
+        if case .audio(let laneID,_)=node.content{expected.nodes[i].content = .audio(laneID:laneID,clipID:replacement.id)}
+        XCTAssertEqual(after,expected);XCTAssertEqual(p.sections,before.sections);XCTAssertEqual(p.active.uses[1],before.active.uses[1])
+        XCTAssertEqual(try JSONDecoder().decode(Project.self,from:JSONEncoder().encode(p)),p)
+    }
+    func testReplacementRejectsInvalidIdentityAndValuesAtomicallyAndNoopDoesNotDetach()throws {
+        var p=try fixture(),graph=try audio(p).0
+        let node=try XCTUnwrap(graph.nodes.first{if case .audio=$0.content{return true};return false})
+        var alias=node;alias.id=newID();graph.nodes.append(alias)
+        let use=p.active.uses[0].id
+        try SectionGraphEditing.set(graph,useID:use,original:false,in:&p)
+        let before=p,source=try audio(p).1[0]
+        _=try AudioEditing.apply(.replace(source),nodeID:node.id,useID:use,in:&p);XCTAssertEqual(p,before)
+        let invalid:[(inout AudioClip)->Void]=[
+            {$0.id=newID()},{$0.assetID=newID()},{$0.sourceStart = -1},{$0.duration=10},{$0.gain=5},{$0.sourceBPM=0},{$0.fadeIn=2;$0.fadeOut=1}
+        ]
+        for edit in invalid {
+            var value=source;edit(&value)
+            XCTAssertThrowsError(try AudioEditing.apply(.replace(value),nodeID:node.id,useID:use,in:&p));XCTAssertEqual(p,before)
+        }
+    }
 }

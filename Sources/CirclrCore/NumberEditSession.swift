@@ -41,7 +41,8 @@ public struct NumberEditSession<Context: Equatable> {
         guard range.contains(number) else {
             let min=range.lowerBound,max=range.upperBound,unlimited=Double.greatestFiniteMagnitude
             let description = min == -unlimited ? "\(Self.format(max)) 이하" : max == unlimited ? "\(Self.format(min)) 이상" : "\(Self.format(min))–\(Self.format(max))"
-            let unit=presentation == .gainDecibels ? "dB":"%"
+            let unit:String
+            switch presentation {case .gainDecibels:unit="dB";case .panPercent:unit="%";case .sourceSeconds:unit="초";case .sourceMilliseconds:unit="ms";case .number:unit=""}
             throw CirclrError(presentation == .number ? "입력 범위: \(description)":"입력 범위: \(presentation.text(min))–\(presentation.text(max)) \(unit)")
         }
         guard !integerOnly || number.rounded() == number else {throw CirclrError("정수를 입력하세요")}

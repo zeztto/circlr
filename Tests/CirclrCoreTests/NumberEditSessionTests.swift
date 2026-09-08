@@ -52,4 +52,15 @@ final class NumberEditSessionTests: XCTestCase {
         edit.type("0.8",value:1,context:2)
         XCTAssertEqual(try edit.resolve(value:1,context:2,range:0...4),0.8)
     }
+    func testRoundedSourceTimeDisplayPreservesRawValueAndAcceptsPreciseInput()throws {
+        for (presentation,text,unit) in [(NumberEditPresentation.sourceSeconds,"9.032","초"),(.sourceMilliseconds,"9.0","ms")] {
+            let raw=9.031723050019
+            var edit=NumberEditSession<Int>(presentation:presentation);edit.begin(value:raw,context:1)
+            XCTAssertEqual(edit.text,text);XCTAssertNil(try edit.resolve(value:raw,context:1,range:0...32))
+            edit.text="10.123456789";XCTAssertEqual(try edit.resolve(value:raw,context:1,range:0...32),10.123456789)
+            edit.text="33"
+            XCTAssertThrowsError(try edit.resolve(value:raw,context:1,range:0...32)){XCTAssertTrue(String(describing:$0).contains(unit))}
+            edit.reset(value:raw);XCTAssertNil(try edit.resolve(value:raw,context:2,range:0...32))
+        }
+    }
 }

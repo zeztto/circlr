@@ -52,8 +52,8 @@ extension AppStore {
         guard let lane=currentLane,let i=lane.audio.firstIndex(where:{$0.id==clipID}),let asset=project.assets.first(where:{$0.id==lane.audio[i].assetID}) else{return true}
         var value=lane.audio[i]
         let delta=(event.keyCode==123 ? -1.0:1.0)*(event.modifierFlags.contains(.shift) ? 0.1:0.01)
-        if event.modifierFlags.contains(.option){value.duration=max(0.01,min(asset.duration-value.sourceStart,value.duration+delta))}
-        else{let end=value.sourceStart+value.duration;value.sourceStart=max(0,min(end-0.01,value.sourceStart+delta));value.duration=end-value.sourceStart}
+        let editingEnd=event.modifierFlags.contains(.option)
+        value=AudioTrimBounds(clip:value,asset:asset).trimming(value,to:value.sourceStart+(editingEnd ? value.duration:0)+delta,editingEnd:editingEnd)
         editAudioClip(lane.audio[i]){$0=value};return true
     }
 }

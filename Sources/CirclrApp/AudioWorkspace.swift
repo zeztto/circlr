@@ -11,17 +11,28 @@ extension AppStore {
     func duplicateAudio(){applyAudioEdit(.duplicate(beatOffset:nil),label:"오디오 복제")}
     func applyAudioEdit(_ change:AudioEditing.Change,label:String) {
         guard let use=selectedUse,let node=selectedMusic,currentAudioClip != nil else{return}
-        let original=editOriginal,revision=project.musicRevision;var result:ID?
+        let original=editOriginal,revision=project.musicRevision
+        let sourceCursor=audioSplitOffset.map{(currentAudioClip?.sourceStart ?? 0)+$0}
+        var result:ID?
         mutate(label){result=try AudioEditing.apply(change,nodeID:node.id,useID:use.id,original:original,in:&$0)}
         guard project.musicRevision != revision else{return}
-        if case .fade=change {}else{audioSplitOffset=nil}
+        switch change {
+        case .fade:break
+        case .replace:
+            if let sourceCursor,let clip=currentAudioClip {audioSplitOffset=min(clip.duration,max(0,sourceCursor-clip.sourceStart))}
+        default:audioSplitOffset=nil
+        }
         if let result,result != node.id {focusHierarchy(.music(arrangementID:project.activeArrangementID,useID:use.id,nodeID:result),detail:true)}
         else if result==nil {focusHierarchy(.section(arrangementID:project.activeArrangementID,useID:use.id),detail:false)}
     }
     func editAudioClip(_ clip:AudioClip,_ edit:(inout AudioClip)->Void) {
         guard var lane=currentLane,let i=lane.audio.firstIndex(where:{$0.id==clip.id}),let asset=project.assets.first(where:{$0.id==clip.assetID}) else{return}
         var value=lane.audio[i];edit(&value)
-        do {try value.validateEditing(asset:asset);lane.audio[i]=value;if lane != currentLane{setLane(lane)}}catch{fail(error)}
+        if case .audio(let laneID,let clipID)=selectedMusic?.content,laneID==lane.id,clipID==clip.id {
+            applyAudioEdit(.replace(value),label:"오디오 편집")
+        } else {
+            do {try value.validateEditing(asset:asset);lane.audio[i]=value;if lane != currentLane{setLane(lane)}}catch{fail(error)}
+        }
     }
     func handleAudioEditKey(_ event:NSEvent)->Bool {
         if event.modifierFlags.contains(.control){return false}
@@ -35,61 +46,110 @@ extension AppStore {
     }
 }
 
+@MainActor final class AudioEditorFocus {
+    weak var view:NSView?
+    func focus(){guard let view else{return};view.window?.makeFirstResponder(view)}
+}
+
 struct AudioWorkspaceView:View {
     @ObservedObject var store:AppStore
     let clip:AudioClip
     let asset:Asset
-    var liveClip:AudioClip {store.currentLane?.audio.first{$0.id==clip.id} ?? clip}
-    var defaultFade:Double {
-        let clip=liveClip
-        guard clip.preservesTail != true,let node=store.selectedMusic,let clock=store.sectionClock else{return 0}
-        return min(clip.duration/2,0.005*AudioClipTiming(node:node,context:store.currentContext,clock:clock).rate(clip))
+    @State private var viewport=AudioSourceViewport()
+    @State private var focusTarget=AudioEditorFocus()
+    @State private var fieldFocus=NumberFieldFocus([
+        "오디오 배치 박","오디오 원본 시작 초","오디오 원본 끝 초","오디오 분할 위치 초",
+        "오디오 볼륨 dB","오디오 페이드 인 ms","오디오 페이드 아웃 ms","오디오 원본 BPM"])
+    var liveClip:AudioClip {store.currentAudioClip ?? clip}
+    var rate:Double {
+        guard let node=store.selectedMusic,let clock=store.sectionClock else{return 1}
+        return AudioClipTiming(node:node,context:store.currentContext,clock:clock).rate(liveClip)
     }
-    var fadeIn:Double {liveClip.fadeIn ?? defaultFade}
-    var fadeOut:Double {liveClip.fadeOut ?? defaultFade}
+    var defaultFade:Double {liveClip.preservesTail == true ? 0:min(liveClip.duration/2,0.005*rate)}
+    var fadeIn:Double {liveClip.explicitEnvelope?.fadeIn ?? defaultFade}
+    var fadeOut:Double {liveClip.explicitEnvelope?.fadeOut ?? defaultFade}
+    var trim:AudioTrimBounds {AudioTrimBounds(clip:liveClip,asset:asset)}
+    var selectionOutside:Bool {!viewport.contains(liveClip.sourceStart,assetDuration:asset.duration) || !viewport.contains(liveClip.sourceStart+liveClip.duration,assetDuration:asset.duration)}
     var body:some View {
-        VStack(alignment:.leading,spacing:12) {
-            HStack {
-                Text(asset.name).foregroundStyle(StudioTheme.secondary).lineLimit(1)
-                Spacer()
-                if store.selectedMusic?.bounce != nil {Button("원본 복원"){store.restoreBounce()}}
+        VStack(alignment:.leading,spacing:10) {
+            HStack(spacing:12) {
+                Text(asset.name).foregroundStyle(StudioTheme.secondary).lineLimit(1).help(asset.name)
+                Spacer(minLength:12)
+                Button("전체 파일"){viewport.showAll();focusTarget.focus()}.disabled(viewport.fitted==nil)
+                Button("선택 구간"){viewport.fit(liveClip,assetDuration:asset.duration);focusTarget.focus()}
+                    .help(selectionOutside ? "화면 밖 구간까지 다시 맞춤":"현재 구간을 확대 · 편집 중 표시 범위 유지")
+                Button("복제"){act{store.duplicateAudio()}}.help("구간 뒤로 복제 · ⌘D")
+                Button("트랙 바운스"){store.bounceTrack()}.disabled(store.preparing || store.selectedTrack == nil)
+                if store.selectedMusic?.bounce != nil {Button("원본 복원"){act{store.restoreBounce()}}}
             }
-            GeometryReader { geometry in
-                HStack(alignment:.top,spacing:24) {
-                    OrbitAudioEditor(store:store,clip:clip,asset:asset).frame(width:min(380,geometry.size.width*0.38),height:geometry.size.height)
-                    ScrollView {
-                        VStack(alignment:.leading,spacing:10) {
-                            HStack(spacing:10) {
-                                ValueField(title:"분할 위치 초",value:Binding(get:{store.audioCutOffset},set:{store.audioSplitOffset=$0}),range:0...clip.duration)
-                                Button("분할"){store.splitAudio()}.help("커서에서 두 서클로 분할 · ⌘T")
-                                Button("복제"){store.duplicateAudio()}.help("구간 뒤로 복제 · ⌘D")
-                            }
-                            Text("파형 클릭으로 분할 위치 선택 · 선택 시작 기준 · 원본 초").font(.system(size:11)).foregroundStyle(StudioTheme.secondary)
-                            HStack(spacing:14) {
-                                ValueField(title:"시작 박",value:binding(\.beat),range:0...131072)
-                                ValueField(title:"원본 시작 초",value:binding(\.sourceStart),range:(clip.renderWindow?.sourceStart ?? 0)...max(clip.renderWindow?.sourceStart ?? 0,(clip.renderWindow.map{$0.sourceStart+$0.duration} ?? asset.duration)-clip.duration))
-                            }
-                            HStack(spacing:14) {
-                                ValueField(title:"길이 초",value:binding(\.duration),range:0.01...max(0.01,(clip.renderWindow.map{$0.sourceStart+$0.duration} ?? asset.duration)-clip.sourceStart))
-                                ValueField(title:"볼륨",value:binding(\.gain),range:0...4)
-                            }
-                            HStack(spacing:14) {
-                                ValueField(title:"페이드 인 초",value:Binding(get:{fadeIn},set:{store.applyAudioEdit(.fade(input:$0,output:fadeOut),label:"페이드 인")}),range:0...max(0,clip.duration-fadeOut))
-                                ValueField(title:"페이드 아웃 초",value:Binding(get:{fadeOut},set:{store.applyAudioEdit(.fade(input:fadeIn,output:$0),label:"페이드 아웃")}),range:0...max(0,clip.duration-fadeIn))
-                            }
-                            HStack(spacing:12) {
-                                Toggle("템포 추종",isOn:Binding(get:{clip.followsTempo},set:{value in store.editAudioClip(clip){$0.followsTempo=value}}))
-                                ValueField(title:"원본 BPM",value:binding(\.sourceBPM),range:1...999)
-                                Toggle("음소거",isOn:Binding(get:{store.selectedMusic?.muted ?? false},set:{v in store.updateMusic("오디오 음소거"){$0.muted=v}}))
-                                Button("삭제"){store.applyAudioEdit(.delete,label:"오디오 삭제")}
-                            }
-                        }.padding(.trailing,8)
-                    }.frame(maxWidth:.infinity)
-                }
-            }
-        }.onAppear{store.requestWaveform(asset)}
+            HStack(alignment:.top,spacing:16) {
+                VStack(alignment:.leading,spacing:8) {
+                    field("배치",unit:"박",value:binding(\.beat),range:0...131072)
+                    field("원본 시작",unit:"초",value:trimBinding(end:false),range:trim.start)
+                    field("원본 끝",unit:"초",value:trimBinding(end:true),range:trim.end)
+                    field("분할 위치",unit:"초",value:Binding(get:{store.audioCutOffset},set:{store.audioSplitOffset=$0}),range:0...liveClip.duration)
+                    HStack {Button("분할"){act{store.splitAudio()}}.disabled(store.audioCutOffset<=0 || store.audioCutOffset>=liveClip.duration).help("커서에서 두 서클로 분할 · ⌘T");Text("선택 시작 기준").foregroundStyle(StudioTheme.secondary)}
+                    Text("← → 시작 · ⌥ 끝\n⇧ 0.1초 · 기본 0.01초").font(.system(size:11)).foregroundStyle(StudioTheme.secondary)
+                    Spacer(minLength:0)
+                }.frame(width:204,alignment:.leading)
+                VStack(spacing:6) {
+                    OrbitAudioEditor(store:store,clip:liveClip,asset:asset,viewport:viewport,focusTarget:focusTarget)
+                        .frame(maxWidth:.infinity,maxHeight:.infinity)
+                    Text(String(format:"원본 %.3f초 · 재생 %.3f초",liveClip.duration,liveClip.duration/max(1e-9,rate)))
+                        .font(.system(size:11)).monospacedDigit().foregroundStyle(StudioTheme.secondary)
+                    if selectionOutside {Text("화면 밖 구간 · 선택 구간으로 다시 맞춤").font(.system(size:11)).foregroundStyle(StudioTheme.secondary)}
+                }.frame(maxWidth:.infinity,maxHeight:.infinity)
+                VStack(alignment:.leading,spacing:8) {
+                    field("볼륨",unit:"dB",value:binding(\.gain),range:0...4,presentation:.gainDecibels)
+                    field("페이드 인",unit:"ms",value:fadeBinding(input:true),range:0...max(0,(liveClip.duration-fadeOut)*1000))
+                    field("페이드 아웃",unit:"ms",value:fadeBinding(input:false),range:0...max(0,(liveClip.duration-fadeIn)*1000))
+                    Toggle("템포 추종",isOn:Binding(get:{liveClip.followsTempo},set:{value in store.editAudioClip(liveClip){$0.followsTempo=value}}))
+                    field("원본",unit:"BPM",value:binding(\.sourceBPM),range:1...999)
+                    HStack(spacing:16) {
+                        Toggle("음소거",isOn:Binding(get:{store.selectedMusic?.muted ?? false},set:{v in store.updateMusic("오디오 음소거"){$0.muted=v}}))
+                        Button("삭제"){act{store.applyAudioEdit(.delete,label:"오디오 삭제")}}
+                    }
+                    Text(liveClip.renderWindow?.envelopes.isEmpty==false ? "원본 시간의 페이드 · 이전 페이드도 유지":"페이드는 원본 시간 기준")
+                        .font(.system(size:11)).foregroundStyle(StudioTheme.secondary)
+                    Spacer(minLength:0)
+                }.frame(width:220,alignment:.leading)
+            }.frame(maxHeight:.infinity)
+        }
+        .environment(\.numberEditing,NumberEditingContext(snapshot:store.numberEditIdentity,current:{store.numberEditIdentity},focusCanvas:{focusTarget.focus()},fieldFocus:fieldFocus))
+        .onAppear{store.requestWaveform(asset)}
+        .onChange(of:asset.id){_,_ in viewport.showAll();store.requestWaveform(asset)}
+        .onChange(of:store.hierarchySelection){_,_ in viewport.showAll()}
+        .onChange(of:store.editOriginal){_,_ in viewport.showAll()}
+    }
+    func field(_ title:String,unit:String,value:Binding<Double>,range:ClosedRange<Double>,presentation:NumberEditPresentation = .number)->some View {
+        HStack(spacing:6) {
+            Text(title).foregroundStyle(StudioTheme.secondary).frame(width:72,alignment:.leading)
+            CommittedNumberField(title:"오디오 "+title+" "+unit,value:value,range:range,width:88,
+                presentation:unit=="초" ? .sourceSeconds:unit=="ms" ? .sourceMilliseconds:presentation)
+            Text(unit).foregroundStyle(StudioTheme.secondary).font(.system(size:11))
+        }
+    }
+    func act(_ action:()->Void){action();focusTarget.focus()}
+    func guarded(_ get:@escaping()->Double,_ set:@escaping(Double)->Void)->Binding<Double> {
+        let identity=store.numberEditIdentity,clipID=clip.id,assetID=asset.id
+        return Binding(get:get,set:{value in
+            var current=store.numberEditIdentity;current.revision=identity.revision
+            guard current==identity,store.currentAudioClip?.id==clipID,store.currentAudioClip?.assetID==assetID else{return}
+            set(value)
+        })
     }
     func binding(_ key:WritableKeyPath<AudioClip,Double>)->Binding<Double> {
-        Binding(get:{store.currentAudioClip?[keyPath:key] ?? clip[keyPath:key]},set:{v in store.editAudioClip(clip){$0[keyPath:key]=v}})
+        guarded({liveClip[keyPath:key]},{value in store.editAudioClip(liveClip){$0[keyPath:key]=value}})
+    }
+    func trimBinding(end:Bool)->Binding<Double> {
+        guarded({liveClip.sourceStart+(end ? liveClip.duration:0)},{value in
+            let current=liveClip,bounds=AudioTrimBounds(clip:current,asset:asset)
+            store.editAudioClip(current){$0=bounds.trimming(current,to:value,editingEnd:end)}
+        })
+    }
+    func fadeBinding(input:Bool)->Binding<Double> {
+        guarded({(input ? fadeIn:fadeOut)*1000},{value in
+            store.applyAudioEdit(.fade(input:input ? value/1000:fadeIn,output:input ? fadeOut:value/1000),label:input ? "페이드 인":"페이드 아웃")
+        })
     }
 }
