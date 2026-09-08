@@ -55,7 +55,11 @@ import CirclrAudio
     @Published var editOriginal = false
     @Published var selectedTrackID: ID?
     @Published var selectedBeat = 0.0
-    @Published var selectedNoteID: ID?
+    @Published var additionalNoteIDs:Set<ID>=[]
+    @Published var selectedNoteID: ID? {didSet{additionalNoteIDs=[]}}
+    @Published var midiQuantizeSubdivision=4
+    @Published var midiQuantizeStrength=1.0
+    @Published var midiImportDraft:MIDIImportDraft?
     @Published var selectedClipID: ID?
     @Published var editPatternID: ID?
     @Published var insertMode = false
@@ -112,6 +116,8 @@ import CirclrAudio
     private var liveUnit: AVAudioUnit?
     private var liveTrackKey = ""
     private var liveGeneration = 0
+    @Published var audioRecordPending=false
+    private var recordingAuthorization=RecordingAuthorization()
     private var recordStart: Double = 0
     private var recordClock: MusicClock?
     private var recordUseID: ID?
@@ -191,6 +197,7 @@ import CirclrAudio
         if audioRecording,let clock = recordClock,ProcessInfo.processInfo.systemUptime-recordStart >= clock.seconds*Double(recordRepeats) { stopRecording() }
     }
     func mutate(_ name: String, musical: Bool = true, _ action: (inout Project) throws -> Void) {
+        if musical && audioRecordPending {cancelRecordingRequest()}
         if musical && (midiRecording || audioRecording) { status = "녹음을 정지한 뒤 음악을 편집하세요"; return }
         do {
             var candidate = project; try action(&candidate)
@@ -292,7 +299,7 @@ import CirclrAudio
             for (i,id) in ids.enumerated() { var p = l.positions[id]!; if mode == 0 { p.y = y } else if mode == 1 { p.x = x } else { p.x = points.first!.x + Double(i)*(points.last!.x-points.first!.x)/Double(ids.count-1) }; l.positions[id] = p }
         }
     }
-    func selectTrack(_ id:ID) {cancelAudition();selectedTrackID=id;selectedNoteID=nil;selectedClipID=nil;embeddedPlugin=nil}
+    func selectTrack(_ id:ID) {if selectedTrackID != id {cancelRecordingRequest()};cancelAudition();selectedTrackID=id;selectedNoteID=nil;selectedClipID=nil;embeddedPlugin=nil}
     func addTrack() { let name = "악기 \(project.tracks.count+1)"; var id:ID?; mutate("트랙 추가") { id = $0.addTrack(name:name) }; if let id {selectTrack(id)} }
     func addEffect(_ kind:EffectKind, at point:Point? = nil) {
         let pointOverride = point
@@ -324,7 +331,7 @@ import CirclrAudio
         let auditionGeneration=liveGeneration
         Task { try? await Task.sleep(nanoseconds:180_000_000); guard liveGeneration==auditionGeneration else{return}; audition(pitch:note.pitch,velocity:0,on:false) }
     }
-    func removeNote() { guard let id = selectedNoteID,var lane = currentLane else { return }; lane.notes.removeAll{$0.id == id}; setLane(lane); selectedNoteID = nil }
+    func removeNote() {editMIDINotes(.delete)}
     func makePattern() {
         guard let track = project.tracks.first(where:{$0.instrument.drums}) ?? selectedTrack else { return }; let name = "리듬 \(project.patterns.count+1)"
         var pattern = RhythmPattern(name:name,trackID:track.id); pattern.meter = currentContext.meter; pattern.length = currentContext.meter.quarters
@@ -350,6 +357,7 @@ import CirclrAudio
         }
     }
     func play(onlySelection:Bool = false) {
+        if midiRecording || audioRecording || audioRecordPending {stop();return}
         if playback.playing { stop(); return }
         if preparing { stop(); return }
         playbackFollow = playbackFollow.startingPlayback()
@@ -392,7 +400,7 @@ import CirclrAudio
             }
         } catch { fail(error) }
     }
-    func stop() { finishMovieRecording(); if agentJob?.state == "running" {agentJob?.state="cancelled";agentJob?.message="사용자가 정지했습니다";recordActivity("앱","작업 취소")}; productionGeneration += 1; productionTask?.cancel(); productionWorker?.cancel(); agentOpenWorker?.cancel(); cancelAudition(); renderGeneration += 1; renderTask?.cancel(); renderWorker?.cancel(); renderTask = nil; preparing = false; playback.stop(); meter.update(seconds:0,playing:false); if midiRecording || audioRecording { stopRecording() }; status = "정지" }
+    func stop() { cancelRecordingRequest(); finishMovieRecording(); if agentJob?.state == "running" {agentJob?.state="cancelled";agentJob?.message="사용자가 정지했습니다";recordActivity("앱","작업 취소")}; productionGeneration += 1; productionTask?.cancel(); productionWorker?.cancel(); agentOpenWorker?.cancel(); cancelAudition(); renderGeneration += 1; renderTask?.cancel(); renderWorker?.cancel(); renderTask = nil; preparing = false; playback.stop(); meter.update(seconds:0,playing:false); if midiRecording || audioRecording { stopRecording() }; status = "정지" }
     func export(stems:Bool = false) {
         let panel = NSSavePanel(); panel.nameFieldStringValue = project.name + (stems ? "-stems" : ".wav"); panel.title = stems ? "Stem 저장 폴더" : "WAV 내보내기"
         if !stems { panel.allowedContentTypes = [UTType(filenameExtension:"wav")!] }
@@ -426,7 +434,7 @@ import CirclrAudio
         do { let loaded = try ProjectStore.load(target); stop(); var migrated = loaded.project; migrated.enableAlbum(); migrated = try SectionGraphMigration.migrate(migrated); project = migrated; projectURL = migrated == loaded.project ? target : nil; mediaRoot = target; selectedTrackID = project.tracks.first?.id; resetSession(); dirty = migrated != loaded.project; status = dirty ? "앨범으로 확장했습니다 · 새 위치에 저장하세요" : "\(project.name) 열기 완료" }
         catch { fail(error) }
     }
-    func resetSession() { navigationOpen=false; commandPalette=nil; soundView=false; hierarchyTransitionID=nil; hierarchySelection = .album; hierarchySelections = [.album]; hierarchySettingsOpen = false; hierarchyCommand = HierarchyCommand(action: .restore); waveformGeneration += 1; waveforms = [:]; waveformLoading = []; focus = nil; embeddedPlugin = nil; recoveryTask?.cancel(); recoveryTask = nil; try? FileManager.default.removeItem(at:recoveryURL); selection = []; edgeSelection = nil; editPatternID = nil; prepared = nil; preparedKey = ""; dirty = false; undoStack = []; redoStack = []; undoCount = 0; redoCount = 0 }
+    func resetSession() { cancelRecordingRequest(); midiImportDraft=nil;selectedNoteID=nil; navigationOpen=false; commandPalette=nil; soundView=false; hierarchyTransitionID=nil; hierarchySelection = .album; hierarchySelections = [.album]; hierarchySettingsOpen = false; hierarchyCommand = HierarchyCommand(action: .restore); waveformGeneration += 1; waveforms = [:]; waveformLoading = []; focus = nil; embeddedPlugin = nil; recoveryTask?.cancel(); recoveryTask = nil; try? FileManager.default.removeItem(at:recoveryURL); selection = []; edgeSelection = nil; editPatternID = nil; prepared = nil; preparedKey = ""; dirty = false; undoStack = []; redoStack = []; undoCount = 0; redoCount = 0 }
     func scheduleViewportRecovery() { captureViewport(); scheduleRecovery() }
     private func scheduleRecovery() {
         recoveryTask?.cancel(); let snapshot = project,root = mediaRoot,url = recoveryURL
@@ -520,20 +528,30 @@ import CirclrAudio
         stop(); recordClock = clock; recordUseID = use.id; recordLaneID = selectedLaneID; recordArrangementID = project.activeArrangementID; recordingTrackID = track; originalRecordProject = project
         recordRepeats = selectedMusic?.repeatCount ?? use.repeatCount; recordedNotes = []; heldNotes = [:]; recordStart = ProcessInfo.processInfo.systemUptime; midiRecording = true; status = "MIDI 녹음 중 · MIDI 장치 또는 화면 건반을 연주하세요"
     }
+    func cancelRecordingRequest() {recordingAuthorization.cancel();audioRecordPending=false}
     func startAudioRecording() {
-        if audioRecording { stopRecording(); return }
-        guard selectedUse != nil,currentClock != nil else { status = "녹음할 서클을 선택하세요"; return }
-        let requestedAddress=hierarchySelection
+        if audioRecording {stopRecording();return}
+        if audioRecordPending {cancelRecordingRequest();status="녹음 시작 취소";return}
+        guard selectedUse != nil,recordingClock != nil,let address=hierarchySelection,let track=selectedTrackID else {status="녹음할 서클과 트랙을 선택하세요";return}
+        stop()
+        let request=recordingAuthorization.begin(projectID:project.id,revision:project.musicRevision,address:address,trackID:track,laneID:selectedLaneID)
+        audioRecordPending=true;status="마이크 접근 확인 중 · 다시 누르거나 정지하면 취소"
         AVCaptureDevice.requestAccess(for:.audio) { [weak self] allowed in Task { @MainActor in
-            guard let self,self.hierarchySelection==requestedAddress else { return }; guard allowed else { self.fail(CirclrError("시스템 설정에서 써클러의 마이크 접근을 허용하세요")); return }
-            guard let use = self.selectedUse,let clock = self.recordingClock,let track = self.selectedTrackID else { return }
+            guard let self,self.recordingAuthorization.pending?.id==request.id else{return}
+            self.audioRecordPending=false
+            guard self.recordingAuthorization.consume(request,projectID:self.project.id,revision:self.project.musicRevision,address:self.hierarchySelection,trackID:self.selectedTrackID,laneID:self.selectedLaneID) else {self.status="대상이 변경되어 녹음 시작을 취소했습니다";return}
+            guard allowed else {self.fail(CirclrError("시스템 설정에서 써클러의 마이크 접근을 허용하세요"));return}
+            guard let use=self.selectedUse,let clock=self.recordingClock,let track=self.selectedTrackID else{return}
             do {
-                self.stop(); self.recordRepeats = self.selectedMusic?.repeatCount ?? use.repeatCount; let url = self.storageRoot.appendingPathComponent("takes/\(newID()).caf")
-                try self.recorder.start(to:url); self.recordStart = ProcessInfo.processInfo.systemUptime; self.recordClock = clock; self.recordUseID = use.id; self.recordLaneID=self.selectedLaneID; self.recordArrangementID=self.project.activeArrangementID; self.recordingTrackID = track; self.originalRecordProject = self.project; self.audioRecordURL = url; self.audioRecording = true; self.status = "오디오 녹음 중"
-            } catch { self.fail(error) }
-        } }
+                self.recordRepeats=self.selectedMusic?.repeatCount ?? use.repeatCount
+                let url=self.storageRoot.appendingPathComponent("takes/\(newID()).caf")
+                try self.recorder.start(to:url)
+                self.recordStart=ProcessInfo.processInfo.systemUptime;self.recordClock=clock;self.recordUseID=use.id;self.recordLaneID=self.selectedLaneID;self.recordArrangementID=self.project.activeArrangementID;self.recordingTrackID=track;self.originalRecordProject=self.project;self.audioRecordURL=url;self.audioRecording=true;self.status="오디오 녹음 중"
+            }catch{self.fail(error)}
+        }}
     }
     func stopRecording() {
+        cancelRecordingRequest()
         guard midiRecording || audioRecording,let useID = recordUseID,let trackID = recordingTrackID,let clock = recordClock else { return }
         let elapsed = ProcessInfo.processInfo.systemUptime-recordStart
         if midiRecording {

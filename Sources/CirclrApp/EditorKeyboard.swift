@@ -4,6 +4,7 @@ import CirclrCore
 extension AppStore {
     /// Shared by orbital and rectangular editors so changing layout keeps the key map.
     func handleMIDIKey(_ event:NSEvent,topPitch:Int)->Bool {
+        if handleMIDIBatchKey(event){return true}
         if event.modifierFlags.contains(.command) || event.modifierFlags.contains(.control){return false}
         let notes=(currentLane?.notes ?? []).sorted{$0.beat == $1.beat ? $0.pitch<$1.pitch:$0.beat<$1.beat}
         let step=1/Double(currentContext.beatGrid.subdivisions)
@@ -27,6 +28,17 @@ extension AppStore {
             if event.keyCode==123 || event.keyCode==124 {change=event.modifierFlags.contains(.shift) ? .length(sign*step):.time(sign*step)}
             else if event.modifierFlags.contains(.option){change = .velocity(Int(sign)*5)}
             else {change = .pitch(Int(sign)*(event.modifierFlags.contains(.shift) ? 12:1))}
+            if selectedMIDIIDs.count>1 {
+                switch change {
+                case .pitch(let delta):editMIDINotes(.transpose(delta))
+                case .time(let delta):editMIDINotes(.move(delta))
+                default:
+                    let ids=selectedMIDIIDs
+                    for index in lane.notes.indices where ids.contains(lane.notes[index].id) {lane.notes[index]=KeyboardEditing.changed(lane.notes[index],by:change,beats:editorBeats)}
+                    setLane(lane);selectMIDINotes(ids)
+                }
+                return true
+            }
             lane.notes[i]=KeyboardEditing.changed(lane.notes[i],by:change,beats:editorBeats)
             selectedBeat=lane.notes[i].beat;setLane(lane)
         case 51,117:removeNote()

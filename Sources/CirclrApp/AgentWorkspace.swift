@@ -41,7 +41,8 @@ extension AppStore {
         ["projectID":project.id,"revision":project.musicRevision,"name":project.name,"dirty":dirty,"path":projectURL?.path ?? "","global":json(project.global),
          "tracks":json(project.tracks),"assets":json(project.assets),"album":json(project.album),"patterns":json(project.patterns),"activeArrangementID":project.activeArrangementID,
          "arrangements":project.arrangements.map{["id":$0.id,"name":$0.name,"uses":$0.uses.map{["id":$0.id,"sectionID":$0.sectionID,"name":$0.name]}]},
-         "selection":json(hierarchySelection),"job":json(agentJob),"sequence":activitySequence,
+         "selection":json(hierarchySelection),"selectedNoteIDs":json(selectedMIDIIDs.sorted()),
+         "recording":["midi":midiRecording,"audio":audioRecording,"permissionPending":audioRecordPending],"job":json(agentJob),"sequence":activitySequence,
          "playback":capturePlaybackVisualization?() ?? ["playing":playback.playing,"seconds":playback.seconds],
          "view":["zoom":hierarchyZoom,"layout":project.usesOrbits ? "orbit":"freeform","consoleOpen":consoleOpen,"consoleBounds":[consoleBounds.minX,consoleBounds.minY,consoleBounds.width,consoleBounds.height]],
          "runtime":["version":Bundle.main.object(forInfoDictionaryKey:"CFBundleShortVersionString") as? String ?? "development","bundleID":Bundle.main.bundleIdentifier ?? "","windows":NSApplication.shared.windows.filter{$0.identifier?.rawValue=="main"}.map{["visible":$0.isVisible,"minimized":$0.isMiniaturized]}]]

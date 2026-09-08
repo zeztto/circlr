@@ -1,10 +1,10 @@
 # 써클러 개발 방향과 실행 계획
 
-작성: 2026-09-08. 계획 시작 기준: 0.11 native 앱, 0.12 음악 에이전트 키트 소스. 현재 산출물은 0.15.0이다. 목표는 송폼 중심의 전문 음악 제작을 먼저 완성하고, 이를 아티스트의 작품·세계관 관리로 확장하는 것이다.
+작성: 2026-09-08. 계획 시작 기준: 0.11 native 앱, 0.12 음악 에이전트 키트 소스. 현재 산출물은 0.17.0이다. 목표는 송폼 중심의 전문 음악 제작을 먼저 완성하고, 이를 아티스트의 작품·세계관 관리로 확장하는 것이다.
 
 0.14에서 10음색 engine 3와 15트랙의 f0r h3r v4를 추가했고, 0.15에서 B의 탐색 깊이·라벨 가독성·작은 창 편집을 개선했다. 배포용 v4는 FreePats CC0 bank를 사용한다. 기존 버전·원본 곡은 보존한다. [음질·음악 검증](../qa/0.14-review.md)과 [UI 검증](../qa/0.15-review.md)을 분리한다.
 
-다음 실행 순서는 E의 endpoint 데이터·표시·hit·Undo/MCP 통합 → 공통 파일 drop/import와 로컬 라이브러리 → 오디오 장치 lifecycle/실제 MP4 재검증 → F/G/H다. Scarlett 출력 연결과 실제 재생 녹화 검증은 남아 있으며, UI 완료가 이를 대신하지 않는다. [Splice 연동 계획](27-splice-licensing-and-integration.md)은 공통 파일 import → 로컬 라이브러리 → companion AU 순서다.
+추가된 기본 DAW 요청에 따라 0.16 스텝, 0.17 MIDI 일괄 편집·노트 import와 권한 대기 guard를 구현했다. 다음 실행 순서는 오디오 split/duplicate/fade·장치 lifecycle → gain/pan automation → E의 endpoint 데이터·표시·hit·Undo/MCP → 공통 drop/로컬 라이브러리 → 실제 MP4 재검증과 F/G/H다. 상세 완료 조건은 [기본 DAW 확장 계획](31-daw-basics-plan.md)을 따른다. Scarlett 출력 연결과 실제 재생 녹화 검증은 남아 있으며, UI 완료가 이를 대신하지 않는다. [Splice 연동 계획](27-splice-licensing-and-integration.md)은 공통 파일 import → 로컬 라이브러리 → companion AU 순서다.
 
 | 단계 | 현재 상태 | 다음 확인할 결과 |
 |---|---|---|
@@ -13,7 +13,7 @@
 | C | 캡처·코덱 경로 구현 | Scarlett 실제 출력·MP4 동기/최소화 |
 | D | engine 3·v4 MIDI/CC0/WAV·native bounce | 아티스트 청취 피드백 |
 | E | 상세 계약 확정, 구현 전 | stable ports·8방향 cable placement·migration |
-| Import | 정책 조사·CC0 대체 완료 | audio/MIDI 공통 import·drop·중복 자산 관리 |
+| Import | 정책 조사·CC0 대체, 0.17 MIDI 노트 가져오기 완료 | CC/tempo map, 공통 drop·중복 자산 관리 |
 | F | prepared PCM 기반 | 장치 lifecycle 후 연속 render graph/PDC |
 | G | 공식 계정 콘솔 설계·전문 kit/MCP 구현 | App Server adapter·권한/취소·대화 UI |
 | H | 아티스트 세계관 설계 | catalog/schema·파일 참조·복원 |

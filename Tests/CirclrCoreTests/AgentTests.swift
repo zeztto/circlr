@@ -63,4 +63,16 @@ final class AgentTests:XCTestCase {
         XCTAssertTrue(try ArrangementCompiler.effectiveLanes(section:cleared.sections[0],use:cleared.active.uses[0])[0].notes.isEmpty)
     }
 
+    func testBatchMIDICommandsPreserveUntouchedNotesAndRejectStaleIDs()throws {
+        var p=try project();var lane=p.sections[0].lanes[0];lane.notes=[Note(beat:0.13,length:1,pitch:60),Note(beat:0.13,length:1,pitch:64),Note(beat:3,length:1,pitch:67)]
+        let use=p.active.uses[0].id;try ProjectEditing.setLane(lane,for:use,original:false,in:&p)
+        var op=AgentOperation("edit_notes");op.useID=use;op.laneID=lane.id;op.nodeID="midi:\(lane.id)";op.noteIDs=lane.notes.prefix(2).map(\.id);op.edit="transpose";op.semitones=12
+        let changed=try AgentProjectEditing.apply(request(p,[op]),to:p),notes=try ArrangementCompiler.effectiveLanes(section:changed.sections[0],use:changed.active.uses[0])[0].notes
+        XCTAssertEqual(notes.map(\.pitch),[72,76,67]);XCTAssertEqual(notes.map(\.id),lane.notes.map(\.id))
+        var bad=op;bad.noteIDs=["missing"]
+        XCTAssertThrowsError(try AgentProjectEditing.apply(request(p,[op,bad]),to:p));XCTAssertEqual(lane.notes.map(\.pitch),[60,64,67])
+        bad=op;bad.noteIDs=[lane.notes[0].id,lane.notes[0].id];XCTAssertThrowsError(try AgentProjectEditing.apply(request(p,[bad]),to:p))
+        bad=op;bad.nodeID="instrument:\(lane.trackID)";XCTAssertThrowsError(try AgentProjectEditing.apply(request(p,[bad]),to:p))
+    }
+
 }

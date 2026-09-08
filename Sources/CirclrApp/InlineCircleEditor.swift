@@ -11,7 +11,7 @@ struct InlineCircleEditor: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 TextField("서클 이름", text: Binding(get: { store.selectedCircle?.title ?? "" }, set: { store.renameHierarchy($0) }))
-                    .textFieldStyle(.plain).font(.system(size: 17, weight: .semibold)).focused($nameFocused)
+                    .textFieldStyle(.plain).font(.system(size: 17, weight: .semibold)).focused($nameFocused).disabled(store.midiImportDraft != nil)
                 Spacer()
                 if store.selectedMusic != nil {
                     Button { store.hierarchySettingsOpen.toggle() } label: { Image(systemName: "slider.horizontal.3") }.help("템포·박자·스케일·반복 설정")
@@ -19,7 +19,7 @@ struct InlineCircleEditor: View {
                 Button { store.hierarchySettingsOpen = false; store.hierarchyParent() } label: { Image(systemName: "arrow.up.left.and.arrow.down.right") }.help("상위 서클로 축소 · Esc")
             }
             if store.selectedMusic != nil {StudioRouteBar(store:store)}
-            if let id=store.hierarchyTransitionID,let edge=store.project.active.edges.first(where:{$0.id==id}) {
+            if let draft=store.midiImportDraft {MIDIImportView(store:store,draft:draft)} else if let id=store.hierarchyTransitionID,let edge=store.project.active.edges.first(where:{$0.id==id}) {
                 HStack{Text("섹션 사이 전환");Spacer();Button("서클 설정"){store.hierarchyTransitionID=nil}}
                 ScrollView{VStack(alignment:.leading,spacing:18){InspectorView(store:store).transition(edge)}}
             } else if let plugin = store.embeddedPlugin {
@@ -64,7 +64,7 @@ struct InlineCircleEditor: View {
                 .font(.system(size: 11)).foregroundStyle(StudioTheme.secondary)
         }
         .frame(maxWidth:.infinity,maxHeight:.infinity,alignment:.topLeading)
-        .padding(14).background(store.project.usesOrbits && !store.hierarchySettingsOpen ? Color.clear:StudioTheme.surface).foregroundStyle(StudioTheme.text)
+        .padding(14).background(store.project.usesOrbits && !store.hierarchySettingsOpen && store.midiImportDraft==nil ? Color.clear:StudioTheme.surface).foregroundStyle(StudioTheme.text)
         .font(.system(size: 13)).buttonStyle(CanvasButtonStyle()).controlSize(.regular)
         .tint(StudioTheme.accent).preferredColorScheme(.dark)
         .onExitCommand { store.hierarchySettingsOpen = false; store.hierarchyParent() }
@@ -76,7 +76,7 @@ struct InlineCircleEditor: View {
             HStack(spacing: 8) {
                 Picker("MIDI 편집 방식",selection:$store.midiStepMode){Text(store.project.usesOrbits ? "궤도":"피아노 롤").tag(false);Text("스텝").tag(true)}.pickerStyle(.segmented).labelsHidden().frame(width:110)
                 Text("\(store.currentLane?.notes.count ?? 0)개 노트").foregroundStyle(StudioTheme.secondary)
-                Menu("MIDI"){Menu("패턴 추가"){ForEach(MIDIPattern.allCases,id:\.self){pattern in Button(pattern.label){store.generateMIDI(pattern)}}};Button("MIDI 저장"){store.exportMIDI()}}
+                Menu("MIDI"){Button("MIDI 파일 가져오기"){store.chooseMIDIImport()};Divider();Button("노트 전체 선택 · ⌘A"){store.selectMIDINotes(Set((store.currentLane?.notes ?? []).map(\.id)))};Button("선택 해제"){store.selectedNoteID=nil};Divider();Menu("패턴 추가"){ForEach(MIDIPattern.allCases,id:\.self){pattern in Button(pattern.label){store.generateMIDI(pattern)}}};Button("MIDI 저장"){store.exportMIDI()}}
                 Button("바운스"){store.bounceTrack()}.disabled(store.preparing).help("이 트랙의 섹션 출력을 이펙트와 함께 오디오로 변환")
                 Spacer()
                 Button { topPitch = max(12, topPitch-12) } label: { Image(systemName: "minus") }.help("한 옥타브 아래")
@@ -85,13 +85,14 @@ struct InlineCircleEditor: View {
                 Button { store.startMIDIRecording() } label: { Label(store.midiRecording ? "녹음 정지" : "MIDI 녹음", systemImage: "record.circle") }.disabled(store.editPatternID != nil)
             }
             if store.midiStepMode {StepEditor(store:store,topPitch:topPitch)} else if store.project.usesOrbits {
-                OrbitMIDIEditor(store:store,topPitch:topPitch).frame(minHeight:120,maxHeight:.infinity)
+                OrbitMIDIEditor(store:store,topPitch:topPitch-1).frame(minHeight:120,maxHeight:.infinity)
             } else { GeometryReader { geometry in
                 ScrollView([.horizontal, .vertical]) {
-                    PianoRoll(store: store, topPitch: topPitch).frame(width: max(geometry.size.width, store.editorBeats*48+64), height: 452)
+                    PianoRoll(store: store, topPitch: topPitch-1).frame(width: max(geometry.size.width, store.editorBeats*48+64), height: 452)
                 }.background(StudioTheme.canvas)
             } }
-            if let id = store.selectedNoteID, let note = store.currentLane?.notes.first(where: { $0.id == id }) {
+            if !store.selectedMIDIIDs.isEmpty {MIDISelectionControls(store:store)}
+            if store.selectedMIDIIDs.count==1,let id = store.selectedNoteID, let note = store.currentLane?.notes.first(where: { $0.id == id }) {
                 HStack(spacing: 10) {
                     Text("\(Scale.roots[note.pitch%12])\(note.pitch/12-1)").monospacedDigit().accessibilityLabel("음높이 \(note.pitch)")
                     ValueField(title: "시작 박", value: noteBinding(id, \.beat, note.beat), range: 0...max(0,store.editorBeats-note.length))
@@ -99,7 +100,7 @@ struct InlineCircleEditor: View {
                     ValueField(title: "세기", value: Binding(get: { Double(note.velocity) }, set: { value in guard var lane=store.currentLane,let i=lane.notes.firstIndex(where:{$0.id==id}) else{return};lane.notes[i].velocity=Int(value);store.setLane(lane) }), range: 1...127)
                     Button { store.removeNote() } label: { Image(systemName: "trash") }.help("선택 노트 삭제")
                 }
-            } else { Text(store.midiStepMode ? "셀 클릭으로 입력 · ⌥ 클릭으로 선택 · Tab으로 입력 필드 이동" : store.project.usesOrbits ? "원호에 노트 입력 · 각도로 시간 이동 · 반경으로 음높이 · 끝 점으로 길이 조절":"빈 칸에 노트 입력 · 드래그로 이동 · 오른쪽 끝으로 길이 조절").font(.system(size: 11)).foregroundStyle(StudioTheme.secondary) }
+            } else if store.selectedMIDIIDs.isEmpty { Text(store.midiStepMode ? "셀 클릭으로 입력 · ⌥ 클릭으로 선택 · Tab으로 입력 필드 이동" : store.project.usesOrbits ? "원호에 노트 입력 · 각도로 시간 이동 · 반경으로 음높이 · 끝 점으로 길이 조절":"빈 칸에 노트 입력 · 드래그로 이동 · 오른쪽 끝으로 길이 조절").font(.system(size: 11)).foregroundStyle(StudioTheme.secondary) }
         }
     }
     func noteBinding(_ id: ID, _ key: WritableKeyPath<Note, Double>, _ fallback: Double) -> Binding<Double> {
@@ -112,7 +113,7 @@ struct InlineCircleEditor: View {
         if case .audio(_,let clipID) = store.selectedMusic?.content,
            let clip = store.currentLane?.audio.first(where: { $0.id == clipID }), let asset=store.project.assets.first(where: { $0.id == clip.assetID }) {
             VStack(alignment: .leading, spacing: 14) {
-                HStack{Text(asset.name).foregroundStyle(StudioTheme.secondary).lineLimit(1);Spacer();if store.selectedMusic?.bounce != nil {Button("원본 복원"){store.restoreBounce()}}}
+                HStack{Button(store.audioRecording ? "녹음 정지" : store.audioRecordPending ? "녹음 시작 취소":"오디오 녹음"){store.startAudioRecording()}.disabled(store.midiRecording);Text(asset.name).foregroundStyle(StudioTheme.secondary).lineLimit(1);Spacer();if store.selectedMusic?.bounce != nil {Button("원본 복원"){store.restoreBounce()}}}
                 if store.project.usesOrbits {OrbitAudioEditor(store:store,clip:clip,asset:asset).frame(minHeight:120,maxHeight:.infinity)}
                 else {AudioTrimView(store: store, clip: clip, asset: asset).frame(minHeight: 120)}
                 HStack { ValueField(title: "시작 박", value: clipBinding(clip, \.beat), range: 0...131072); ValueField(title: "원본 시작 초", value: clipBinding(clip, \.sourceStart), range: 0...max(0,asset.duration-clip.duration)) }

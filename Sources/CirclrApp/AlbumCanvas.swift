@@ -180,7 +180,7 @@ struct AlbumCanvas: NSViewRepresentable {
         if store.playback.playing, store.playbackFollow == .following {
             editor?.removeFromSuperview(); editor = nil; editorAddress = nil; return
         }
-        guard let address = store.hierarchySelection, let node = scene?.node(address), (node.role == .music || store.hierarchySettingsOpen),
+        guard let address = store.hierarchySelection, let node = scene?.node(address), (node.role == .music || store.hierarchySettingsOpen || store.midiImportDraft != nil),
               node.radius*camera.zoom >= 325, isVisible(node) else {
             editor?.removeFromSuperview(); editor = nil; editorAddress = nil; return
         }

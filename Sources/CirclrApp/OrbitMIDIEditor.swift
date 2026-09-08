@@ -68,12 +68,13 @@ struct OrbitMIDIEditor: NSViewRepresentable {
         for (i,beat) in clock.barStarts.dropLast().enumerated() where i%max(1,clock.meters.count/24)==0 {
             OrbitDrawing.text(String(i+1),at:OrbitDrawing.point(center,radius:outer+12,phase:clock.seconds(at:beat)/duration),size:9)
         }
+        let selectedIDs=store.selectedMIDIIDs
         for note in store.currentLane?.notes ?? [] {
             let n=preview?.id==note.id ? preview!:note
             guard n.pitch<=topPitch,n.pitch>topPitch-24,n.beat<clock.beats else {continue}
             let start=clock.seconds(at:n.beat)/duration,end=clock.seconds(at:min(clock.beats,n.beat+n.length))/duration
             let arc=OrbitDrawing.arc(center,radius:radius(n.pitch),from:start,to:end)
-            let selected=store.selectedNoteID==n.id
+            let selected=selectedIDs.contains(n.id)
             StudioTheme.accentNS.withAlphaComponent(selected ? 1:0.35+Double(n.velocity)/220).setStroke();arc.lineWidth=max(2,row-1.5);arc.stroke()
             if selected {OrbitDrawing.dot(OrbitDrawing.point(center,radius:radius(n.pitch),phase:end),radius:4,color:StudioTheme.textNS)}
         }
@@ -93,10 +94,11 @@ struct OrbitMIDIEditor: NSViewRepresentable {
             let endpoint=OrbitDrawing.point(center,radius:radius(n.pitch),phase:clock.seconds(at:min(clock.beats,n.beat+n.length))/clock.seconds)
             return (beat>=n.beat && beat<=n.beat+n.length) || hypot(p.x-endpoint.x,p.y-endpoint.y)<7
         }) {
+            if event.modifierFlags.contains(.shift) {store.toggleMIDISelection(n.id);original=nil;preview=nil;needsDisplay=true;return}
             original=n;preview=n;store.selectedNoteID=n.id
             let end=OrbitDrawing.point(center,radius:radius(n.pitch),phase:clock.seconds(at:min(clock.beats,n.beat+n.length))/clock.seconds)
             resizing=hypot(p.x-end.x,p.y-end.y)<8
-        } else {store.addNote(beat:max(0,min(clock.beats-1/grid, snap(beat))),pitch:pitch,length:1/grid)}
+        } else if !event.modifierFlags.contains(.shift) {store.addNote(beat:max(0,min(clock.beats-1/grid, snap(beat))),pitch:pitch,length:1/grid)}
         needsDisplay=true
     }
     var grid:Double {Double(max(1,store.currentContext.beatGrid.subdivisions))}
@@ -114,6 +116,10 @@ struct OrbitMIDIEditor: NSViewRepresentable {
         defer{original=nil;preview=nil;needsDisplay=true}
         guard let n=preview,n != original,store.project.musicRevision==revision,var lane=store.currentLane,lane.id==laneID,let i=lane.notes.firstIndex(where:{$0.id==n.id}) else{return}
         lane.notes[i]=n;store.setLane(lane)
+    }
+    override func performKeyEquivalent(with event:NSEvent)->Bool {
+        if window?.firstResponder===self,event.modifierFlags.contains(.command),store.handleMIDIBatchKey(event){needsDisplay=true;return true}
+        return super.performKeyEquivalent(with:event)
     }
     override func keyDown(with event:NSEvent) {
         if store.handleMIDIKey(event,topPitch:topPitch){needsDisplay=true;return}

@@ -54,6 +54,11 @@ public struct AgentOperation:Codable {
     public var velocity:Int?
     public var gate:Double?
     public var enabled:Bool?
+    public var noteIDs:[ID]?
+    public var edit:String?
+    public var semitones:Int?
+    public var beatOffset:Double?
+    public var strength:Double?
     public var clipID:ID?
     public var sourceStart:Double?
     public var duration:Double?
@@ -116,6 +121,26 @@ public enum AgentProjectEditing {
                 }
                 let grid=try StepGrid(subdivisions:op.subdivisions ?? 4,beats:beats)
                 let next=try StepEditing.set(lane,grid:grid,index:index,pitch:pitch,enabled:enabled,velocity:op.velocity,gate:op.gate)
+                if next != lane {try ProjectEditing.setLane(next,for:id,original:false,in:&p)}
+            case "edit_notes":
+                guard let id=op.useID,let use=p.active.uses.first(where:{$0.id==id}),let section=p.sections.first(where:{$0.id==use.sectionID}),
+                      let laneID=op.laneID,let lane=try ArrangementCompiler.effectiveLanes(section:section,use:use).first(where:{$0.id==laneID}),let ids=op.noteIDs,ids.count<=100000,Set(ids).count==ids.count else {throw CirclrError("useID·laneID·중복 없는 noteIDs가 필요합니다")}
+                var beats=try ArrangementCompiler.context(project:p,use:use).2.beats
+                if let nodeID=op.nodeID {
+                    guard let node=try SectionGraphEditing.effective(section:section,use:use)?.nodes.first(where:{$0.id==nodeID}),case .midi(let owner)=node.content,owner==laneID else {throw CirclrError("nodeID가 MIDI lane과 일치하지 않습니다")}
+                    beats=node.lengthBeats ?? beats
+                }
+                let change:MIDIEditing.Change
+                switch op.edit {
+                case "transpose":guard let value=op.semitones else{throw CirclrError("semitones가 필요합니다")};change = .transpose(value)
+                case "move":guard let value=op.beatOffset else{throw CirclrError("beatOffset이 필요합니다")};change = .move(value)
+                case "duplicate":guard let value=op.beatOffset else{throw CirclrError("beatOffset이 필요합니다")};change = .duplicate(value)
+                case "quantize":change = .quantize(subdivisions:op.subdivisions ?? 4,strength:op.strength ?? 1)
+                case "velocity":guard let value=op.velocity else{throw CirclrError("velocity가 필요합니다")};change = .velocity(value)
+                case "delete":change = .delete
+                default:throw CirclrError("edit: transpose/move/duplicate/quantize/velocity/delete를 선택하세요")
+                }
+                let next=try MIDIEditing.apply(change,to:lane,ids:Set(ids),beats:beats)
                 if next != lane {try ProjectEditing.setLane(next,for:id,original:false,in:&p)}
             case "set_notes","generate_midi","add_midi":
                 guard let id=op.useID,let use=p.active.uses.first(where:{$0.id==id}),let section=p.sections.first(where:{$0.id==use.sectionID}) else {throw CirclrError("useID가 필요합니다")}

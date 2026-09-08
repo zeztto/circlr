@@ -128,7 +128,8 @@ struct PianoRoll:NSViewRepresentable {
         let step=1/Double(max(1,ctx.beatGrid.subdivisions)),count=min(131072,Int(store.editorBeats/step))
         let first=max(0,Int((visibleRect.minX-left)/unit/step)-1),last=min(count,max(0,Int((visibleRect.maxX-left)/unit/step)+1))
         for i in first...max(first,last) {let q=Double(i)*step,x=left+q*unit;let line=NSBezierPath();line.move(to:NSPoint(x:x,y:20));line.line(to:NSPoint(x:x,y:bounds.height));(i%ctx.beatGrid.subdivisions==0 ? NSColor(white:0.32,alpha:1):NSColor(white:0.16,alpha:1)).setStroke();line.lineWidth=0.5;line.stroke();if i%ctx.beatGrid.subdivisions==0 {(String(Int(q)+1) as NSString).draw(at:NSPoint(x:x+3,y:2),withAttributes:[.font:NSFont.systemFont(ofSize:10),.foregroundColor:StudioTheme.secondaryNS])}}
-        for note in store.currentLane?.notes ?? [] {let n=preview?.id==note.id ? preview!:note;if n.pitch>topPitch || n.pitch<topPitch-26{continue};let r=rect(n);(store.selectedNoteID==n.id ? StudioTheme.accentNS:StudioTheme.accentNS.withAlphaComponent(0.60)).setFill();NSBezierPath(roundedRect:r,xRadius:2,yRadius:2).fill()}
+        let selectedIDs=store.selectedMIDIIDs
+        for note in store.currentLane?.notes ?? [] {let n=preview?.id==note.id ? preview!:note;if n.pitch>topPitch || n.pitch<topPitch-26{continue};let r=rect(n);(selectedIDs.contains(n.id) ? StudioTheme.accentNS:StudioTheme.accentNS.withAlphaComponent(0.60)).setFill();NSBezierPath(roundedRect:r,xRadius:2,yRadius:2).fill()}
         StudioTheme.accentNS.withAlphaComponent(0.5).setStroke();let cursor=NSBezierPath();cursor.move(to:NSPoint(x:left+store.selectedBeat*unit,y:20));cursor.line(to:NSPoint(x:left+store.selectedBeat*unit,y:bounds.height));cursor.stroke()
     }
     func snap(_ q:Double)->Double{let s=Double(max(1,store.currentContext.beatGrid.subdivisions));return (q*s).rounded()/s}
@@ -137,11 +138,15 @@ struct PianoRoll:NSViewRepresentable {
             let pitch=max(0,min(127,topPitch-Int((down.y-20)/row)));heldPitch=pitch;store.midi(status:0x90,pitch:pitch,velocity:100,time:ProcessInfo.processInfo.systemUptime);needsDisplay=true;return
         }
         store.selectedClipID=nil;let q=max(0,min(store.editorBeats-0.03125,snap((down.x-left)/unit)));store.selectedBeat=q
-        if let n=store.currentLane?.notes.reversed().first(where:{rect($0).contains(down)}) {store.selectedNoteID=n.id;original=n;preview=n;resizing=down.x>rect(n).maxX-7}
-        else {store.addNote(beat:q,pitch:topPitch-Int((down.y-20)/row),length:1/Double(store.currentContext.beatGrid.subdivisions))};needsDisplay=true
+        if let n=store.currentLane?.notes.reversed().first(where:{rect($0).contains(down)}) {if event.modifierFlags.contains(.shift){store.toggleMIDISelection(n.id);original=nil;preview=nil;needsDisplay=true;return};store.selectedNoteID=n.id;original=n;preview=n;resizing=down.x>rect(n).maxX-7}
+        else if !event.modifierFlags.contains(.shift) {store.addNote(beat:q,pitch:topPitch-Int((down.y-20)/row),length:1/Double(store.currentContext.beatGrid.subdivisions))};needsDisplay=true
     }
     override func mouseDragged(with event:NSEvent){guard var n=original else{return};let p=convert(event.locationInWindow,from:nil);if resizing{n.length=max(1/Double(store.currentContext.beatGrid.subdivisions),min(store.editorBeats-n.beat,snap(n.length+(p.x-down.x)/unit)))}else{n.beat=max(0,min(store.editorBeats-n.length,snap(n.beat+(p.x-down.x)/unit)));n.pitch=max(0,min(127,n.pitch-Int(((p.y-down.y)/row).rounded())))};preview=n;needsDisplay=true}
     override func mouseUp(with event:NSEvent){if let pitch=heldPitch{store.midi(status:0x80,pitch:pitch,velocity:0,time:ProcessInfo.processInfo.systemUptime);heldPitch=nil};if let n=preview,var lane=store.currentLane,let i=lane.notes.firstIndex(where:{$0.id==n.id}){lane.notes[i]=n;store.setLane(lane)};original=nil;preview=nil;needsDisplay=true}
+    override func performKeyEquivalent(with event:NSEvent)->Bool {
+        if window?.firstResponder===self,event.modifierFlags.contains(.command),store.handleMIDIBatchKey(event){needsDisplay=true;return true}
+        return super.performKeyEquivalent(with:event)
+    }
     override func keyDown(with event:NSEvent){
         if store.handleMIDIKey(event,topPitch:topPitch){needsDisplay=true;return}
         if event.keyCode==53{store.focusCanvas?();store.hierarchyParent()}else{super.keyDown(with:event)}

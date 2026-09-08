@@ -145,13 +145,13 @@ struct StepGridCanvas:NSViewRepresentable {
     }
     override func draw(_ dirtyRect:NSRect) {
         StudioTheme.canvasNS.setFill();bounds.fill()
-        refreshCells();let playing=playingStep
+        refreshCells();let playing=playingStep,selectedIDs=store.selectedMIDIIDs
         for col in 0..<columns {
             let index=page*16+col,r=rect(row:0,column:col)
             OrbitDrawing.text(String(index+1),at:CGPoint(x:r.midX,y:13),size:11,color:playing==index ? StudioTheme.accentNS:StudioTheme.secondaryNS)
             for row in pitches.indices {
                 let rect=rect(row:row,column:col),onsets=cellNotes[row*16+col] ?? [],path=NSBezierPath(roundedRect:rect,xRadius:4,yRadius:4)
-                let focused=self.row==row && self.column==col
+                let focused=(self.row==row && self.column==col) || onsets.contains{selectedIDs.contains($0.id)}
                 (onsets.isEmpty ? (index%grid.subdivisions==0 ? StudioTheme.raisedNS:StudioTheme.surfaceNS):StudioTheme.accentNS.withAlphaComponent(0.32)).setFill();path.fill()
                 if let velocity=onsets.map(\.velocity).max() {
                     StudioTheme.accentNS.setFill();NSBezierPath(roundedRect:rect.insetBy(dx:4,dy:4).intersection(CGRect(x:rect.minX+4,y:rect.maxY-4-(rect.height-8)*Double(velocity)/127,width:rect.width-8,height:rect.height)),xRadius:2,yRadius:2).fill()
@@ -178,11 +178,20 @@ struct StepGridCanvas:NSViewRepresentable {
         guard point.x>=112,point.y>=28 else{return}
         let row=Int((point.y-28)/28),col=Int((point.x-112)/cellWidth)
         guard pitches.indices.contains(row),(0..<columns).contains(col) else{return}
+        if event.modifierFlags.contains(.shift) {
+            if let note=store.currentLane.flatMap({grid.onsets(in:$0,pitch:pitches[row],index:page*16+col).first}) {store.toggleMIDISelection(note.id)}
+            needsDisplay=true;return
+        }
         choose(row:row,column:col)
         if !event.modifierFlags.contains(.option) {store.editStep(grid:grid,index:page*16+col,pitch:pitches[row])}
         needsDisplay=true
     }
+    override func performKeyEquivalent(with event:NSEvent)->Bool {
+        if window?.firstResponder===self,event.modifierFlags.contains(.command),store.handleMIDIBatchKey(event){needsDisplay=true;return true}
+        return super.performKeyEquivalent(with:event)
+    }
     override func keyDown(with event:NSEvent) {
+        if store.handleMIDIBatchKey(event){needsDisplay=true;return}
         guard !event.modifierFlags.contains(.command),!event.modifierFlags.contains(.control),!pitches.isEmpty else{super.keyDown(with:event);return}
         switch event.keyCode {
         case 123:choose(row:row,column:max(0,column-1))
@@ -192,7 +201,8 @@ struct StepGridCanvas:NSViewRepresentable {
         case 48:
             if event.modifierFlags.contains(.shift) {window?.selectPreviousKeyView(self)} else {window?.selectNextKeyView(self)}
         case 36,76:store.editStep(grid:grid,index:page*16+column,pitch:pitches[row]);needsDisplay=true
-        case 51,117:store.editStep(grid:grid,index:page*16+column,pitch:pitches[row],enabled:false);needsDisplay=true
+        case 51,117:
+            if store.selectedMIDIIDs.count>1 {store.removeNote()}else{store.editStep(grid:grid,index:page*16+column,pitch:pitches[row],enabled:false)};needsDisplay=true
         case 49:store.play()
         default:super.keyDown(with:event)
         }

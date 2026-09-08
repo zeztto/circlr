@@ -57,6 +57,7 @@ extension AppStore {
             add("reuse","섹션 다시 사용","⌘D"){[weak self] in self?.reuse()}
             add("detach","공유 원본에서 독립 섹션으로 분리"){[weak self] in self?.detach()}
             add("section-play","선택 섹션만 재생"){[weak self] in self?.play(onlySelection:true)}
+            add("midi-import","MIDI 파일 가져오기…","⌥⌘I"){[weak self] in self?.chooseMIDIImport()}
             add("record-midi","MIDI 녹음 시작 / 정지"){[weak self] in self?.startMIDIRecording()}
             add("record-audio","오디오 녹음 시작 / 정지"){[weak self] in self?.startAudioRecording()}
             add("rhythm","이 섹션의 리듬 패턴 만들기"){[weak self] in self?.makeHierarchyPattern()}
@@ -171,7 +172,7 @@ extension AlbumCanvasView {
         DispatchQueue.main.asyncAfter(deadline:.now()+0.32){[weak self] in
             guard let self,let editor=self.editor else{return}
             func target(_ view:NSView)->NSView? {
-                if view is OrbitMIDIView || view is OrbitAudioView || view is PianoRollView || view is AudioLaneView {return view}
+                if view is StepGridView || view is OrbitMIDIView || view is OrbitAudioView || view is PianoRollView || view is AudioLaneView {return view}
                 for child in view.subviews {if let result=target(child){return result}}
                 return nil
             }
@@ -264,6 +265,7 @@ struct KeyboardHelpView:View {
         ("Space","재생·정지"),("⇧⌘R","영상 녹화 시작·마치기"),("⌘K / ⌘D / ⌘G","섹션 추가 / 재사용 / 그룹"),("Delete","선택 서클·노트 삭제"),
         ("⌘N O S / ⇧⌘S","새 앨범·열기·저장 / 다른 이름으로 저장"),("⌘Z / ⇧⌘Z","실행 취소 / 다시 실행"),
         ("⌘I / ⌘E","오디오 가져오기 / WAV 내보내기"),("⌃`","콘솔 접기·펼치기"),
+        ("MIDI · ⌘A / ⇧클릭","노트 전체 선택 / 선택 추가·제외"),("MIDI · Q / ⌘D","선택 퀀타이즈 / 선택 구간 뒤 복제"),("⌥⌘I","MIDI 파일 가져오기"),
         ("MIDI · Tab / Return","노트 선택 / 현재 위치에 노트 입력"),("MIDI · ← → / ↑ ↓","격자 단위 시간 이동 / 반음 이동"),
         ("MIDI · ⇧← → / ⇧↑ ↓","노트 길이 변경 / 옥타브 이동"),("MIDI · ⌥↑ ↓","세기 5단계 변경"),
         ("오디오 · ← → / ⌥← →","원본 시작 / 끝 0.01초 조절 · ⇧ 0.1초"),("설정 · Tab / ⇧Tab","다음·이전 입력 항목 · Return 적용"),

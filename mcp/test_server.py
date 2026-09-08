@@ -105,6 +105,15 @@ class MCPTests(unittest.TestCase):
             with self.subTest(key=key,value=value),self.assertRaises(ValueError):
                 server.validate({**packet,'operations':[{**op,key:value}]},spec)
 
+    def test_batch_note_fields_reject_invalid_types_before_ipc(self):
+        spec=server.BY_NAME['circlr_apply']['inputSchema']
+        op={'kind':'edit_notes','useID':'u','laneID':'l','noteIDs':['n'],'edit':'quantize','subdivisions':4,'strength':.5}
+        packet={'projectID':'p','expectedRevision':0,'operations':[op]}
+        server.validate(packet,spec)
+        for key,value in [('noteIDs',[]),('noteIDs',[3]),('strength',1.1),('strength',True),('edit','unknown'),('semitones',128),('beatOffset',float('inf'))]:
+            with self.subTest(key=key,value=value),self.assertRaises(ValueError):
+                server.validate({**packet,'operations':[{**op,key:value}]},spec)
+
 
 if __name__ == "__main__":
     unittest.main()
