@@ -105,3 +105,14 @@ C3b 결과: 케이블·논리 포트 순환, 선택 대상 prefill, 편집기 �
 - 검사: 표시 상태별 4→11개 방향, 기존 비기본 연결 위치 보존, 근접 후보·작은 확대·시간 손잡이/라벨 충돌과 draw/hit 일치. 전체 offline Swift와 release build. 전용 QA 앱에서 클릭/P 선택·방향 드래그·음악 불변·Undo·키보드 prefill/포커스·저장 복원과 실제 전후 화면을 확인한다. native로 확인하지 못한 모든 종류/그룹/밀집 조합은 남은 범위로 명시한다.
 
 C3c 결과: 라우터의 실제 기본 handle 4개·한 포트 선택 11개와 음악 불변을 확인했다. 대각선 IN에서 OUT으로 연결, 도구막대에 가려진 대상 연결, 궤도 시작 0.5 beat 이동과 각각의 Undo를 실제 앱에서 검증했다. 라벨의 중복/교차/viewport와 시간 손잡이 거리, 같은 파일 재열기 복원을 저장 증거와 대조했다. 전체 Swift 194개와 release build 통과. [C3c QA](../qa/ports-density-review.md). 다음은 D의 백그라운드 포트 MCP 계약 구현을 우선하고 C3의 미검증 VoiceOver·전체 조합 검증을 병행한다. 이 상태는 C3/D/E 전체 완료나 사용 앱 출고가 아니다.
+
+## D1 실행 계약 · 명시적 포트 MCP
+
+- 기준 `1337ce5`, 동일 private 개발 branch. development-lead → Swift utility → Python backend → read-only security/code review → QA. 사용자 한도 해제 안내 후 독립 계약 검토를 요청했지만 실제 spawn은 `agent thread limit reached`로 거절됐다. delegation none이며 역할을 순차 전환한다.
+- `ports(node)`는 실제 논리 주소의 descriptor·endpoint·관련 케이블·배치·편집 가능 여부와 project/music/layout revision을 반환한다. 접힌 화면의 가상 주소나 octant를 새 bus로 해석하지 않는다. 현재 Core의 Codable 주소와 endpoint를 그대로 반환해 재사용한다.
+- `connect_ports`, `reconnect_ports`, `disconnect_ports`, `move_ports`는 projectID/expectedRevision/expectedLayoutRevision을 모두 요구한다. 연결 두 끝과 방향을 명시하고 GUI의 `CircleConnectionEditing`·`CirclePortLayoutEditing`을 호출한다. 후보 문서에서 실패하면 전체 무변경, 실제 변경만 한 Undo다. 배치만 변경하면 음악 revision·PCM을 보존한다. 기존 undo에도 선택적 layout revision 검사를 추가한다.
+- 소유: Core `AgentProtocol.swift`, 신규 `AgentPortEditing.swift` 및 XCTest; App `AgentWorkspace.swift`; Python `mcp/server.py`·`test_server.py`; README/CHANGELOG, `docs/17-agent-interface.md`, `mcp/README.md`, 신규 QA 기록/검증 스크립트. 소켓 인증·기존 도구·음악 schema·사용 앱은 유지한다. group binding은 D2다.
+- 검증: Swift 전체 offline 검사(`swift test --scratch-path .build/ports-quality --skip testArrangementRenderExportAndPlayback`), release build(`swift build -c release --scratch-path .build/ports-release`), Python MCP/kit 검사. 별도 com.circlr.portsqa에서 정확한 QA fixture/socket만 사용해 조회·연결·재연결·해제·배치/no-op/stale/Undo·save/open을 대조한다. 앱 최소화 중 편집과 카메라 보존을 확인한다. 입력 오류와 read-only 차단도 검사한다. 마이크/사용자 프로젝트는 작업 대상이 아니다.
+- 기존 승인 범위의 source checkpoint만 commit/private push한다. D 전체·녹음 branch 통합·main release 완료로 취급하지 않는다.
+
+D1 결과: 포트 도구 5개와 음악/배치 revision 검사를 구현했다. 전체 Swift 202개·Python 24개, release build를 통과했다. 전용 QA 앱을 최소화한 상태의 연결·재연결·해제·원자적 배치/no-op/stale 거절·한 Undo·저장/재열기와 실제 GUI의 ⌘Z 연동을 검증했다. [D1 QA와 실행 근거](../qa/ports-mcp-review.md). 다음 D2는 그룹 경계의 노출 binding, 이어서 C3 미검증 조합과 E 통합이다. 이번 추가 spawn도 실제 슬롯 한도로 거절됐으며 역할 전환 검토를 독립 agent 리뷰로 보고하지 않는다.

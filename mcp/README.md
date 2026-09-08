@@ -11,7 +11,7 @@ Python 표준 라이브러리만 사용하는 로컬 stdio MCP 서버다. 음악
 ## 에이전트 작업 흐름
 
 1. `circlr_snapshot`으로 projectID, revision, arrangement/use/track ID를 읽는다.
-2. `circlr_inspect`로 대상 섹션의 실제 lane, notes, node, connection ID를 읽는다.
+2. `circlr_inspect`로 대상 섹션의 실제 lane, notes, node, connection ID를 읽는다. 포트 기능이 포함된 개발 앱에서는 `circlr_ports`로 명시적 bus와 케이블 배치를 읽는다.
 3. `circlr_apply`에 projectID, expectedRevision, operations를 전달한다. 한 batch가 한 Undo 단위다. 다른 편곡의 편집도 사용자의 캔버스 선택을 이동시키지 않는다.
 4. `circlr_bounce` 또는 `circlr_export`는 jobID를 즉시 반환한다. `circlr_job`으로 완료 상태를 확인한다. 도구 호출 성공은 렌더 완료를 뜻하지 않는다.
 5. `circlr_events`로 sequence 이후의 실제 로그를 읽는다. 렌더 취소는 `circlr_stop`이다. 작업 중 문서가 바뀌면 이전 snapshot의 결과를 적용하지 않는다.
@@ -62,3 +62,23 @@ Python 표준 라이브러리만 사용하는 로컬 stdio MCP 서버다. 음악
 `apply`의 기존 `set_node.startBeat`로 MIDI·오디오 소스 시작을 바꾼다. `reorder_section`은 `arrangementID`, `useID`, 선택적인 `to`(이 섹션 앞에 배치)를 받는다. `to`를 생략하면 맨 끝이다. 분기 경로와 손실되는 전환은 거부한다. `set_clip`은 `useID`, `laneID`, `clipID`와 `sourceStart`, `duration`, `startBeat`, `gain`을 받으며 원본 파일 길이를 넘는 trim은 거부한다.
 
 `focus.compositionID`로 곡·악장 서클을 보여줄 수 있다. 편집을 위해 focus할 필요는 없다. `mcp/orbit_native.py`는 별도 QA socket과 `qa/generated/0.10-` 문서에서만 실행되는 실제 명령 검증이다.
+
+
+## 명시적 포트 편집 (개발 브랜치)
+
+포트 QA/개발 앱에서만 지원한다. 먼저 snapshot의 `layoutRevision` 존재를 확인한다. `circlr_ports`의 `node`는 기존 Codable 주소다. 음악 서클은 `{"music":{"arrangementID":"실제 편곡 ID","useID":"실제 use ID","nodeID":"실제 노드 ID"}}`, 섹션은 `{"section":{"arrangementID":"실제 편곡 ID","useID":"실제 use ID"}}`, 사운드 노드/곡은 각각 `{"signal":{"_0":"실제 ID"}}`/`{"composition":{"_0":"실제 ID"}}`다. ID를 만들어내지 말고 snapshot/inspect에서 얻는다.
+
+응답의 `ports`는 실제 descriptor 배열, `connections`의 각 항목은 `{connection, placement, canReconnect, canDisconnect}`다. `connection.from/to`는 `{node, portID}`, `connection.id`는 `{edgeID, from, to}`이며 뒤의 from/to는 logical 주소다. 여러 use가 같은 edgeID를 공유할 수 있으므로 전체 id를 재사용한다.
+
+| 도구 | revision 외 필수 인자 | 실제 동작 |
+| --- | --- | --- |
+| `circlr_connect_ports` | first, second, firstOctant, secondOctant | 호환되는 OUT과 IN 연결. IN 시작도 가능 |
+| `circlr_reconnect_ports` | 위 인자와 connectionID | 기존 edge ID·gain을 유지하며 두 끝 교체 |
+| `circlr_disconnect_ports` | connectionID | 해당 케이블 하나 해제 |
+| `circlr_move_ports` | moves: `[{id, placement:{from,to}}]` | 기존 케이블 1–128개의 둘레 위치만 변경 |
+
+위 쓰기는 모두 `projectID`, `expectedRevision`, `expectedLayoutRevision`을 요구한다. octant는 0=위부터 시계 방향 0–7이며 음악 bus가 아니다. `firstOctant`/`secondOctant`는 지정한 first/second에 대응한다. layout의 from/to는 정규화된 OUT/IN이다. 라우터의 `in.audio.bus1/bus2`, `out.audio.bus1/bus2`를 명시하고 단일 main bus를 추정하지 않는다. sidechain은 실제 `in.audio.sidechain`을 선택한다.
+
+연결 중복은 `changed:false`이며 기존 배치도 유지한다. 이동 no-op도 Undo/revision을 추가하지 않는다. `circlr_undo`에 두 최신 revision을 모두 전달하면 layout 전용 변경도 충돌을 검사하며 한 명령을 되돌린다. batch의 한 항목이라도 실패하면 전체를 유지한다. 쓰기 실패 응답에도 현재 revision/layoutRevision을 제공한다.
+
+`ports`는 읽기 전용 specialist에 허용되며 네 가지 쓰기는 차단된다. 앱 최소화와 무관하게 동작하며 선택이나 카메라를 이동하지 않는다. 접힌 그룹 binding과 Audio Unit의 임의 다중 bus는 아직 제공하지 않는다. composition 순서 연결은 reconnect/disconnect 대신 순서 편집을 사용한다.

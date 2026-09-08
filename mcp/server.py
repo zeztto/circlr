@@ -20,6 +20,19 @@ def schema(properties, required=()):
 STRING = {"type": "string"}
 REVISION = {"projectID": STRING, "expectedRevision": {"type": "integer", "minimum": 0, "maximum": 9223372036854775807}}
 SCOPE = {"arrangementID": STRING, "useID": STRING}
+PORT_ID = {"type": "string", "minLength": 1, "maxLength": 1024}
+PORT_ADDRESS = {"oneOf": [
+    schema({"signal": schema({"_0": PORT_ID}, ["_0"])}, ["signal"]),
+    schema({"composition": schema({"_0": PORT_ID}, ["_0"])}, ["composition"]),
+    schema({"section": schema({"arrangementID": PORT_ID, "useID": PORT_ID}, ["arrangementID", "useID"])}, ["section"]),
+    schema({"music": schema({"arrangementID": PORT_ID, "useID": PORT_ID, "nodeID": PORT_ID}, ["arrangementID", "useID", "nodeID"])}, ["music"]),
+]}
+PORT_ENDPOINT = schema({"node": PORT_ADDRESS, "portID": PORT_ID}, ["node", "portID"])
+CONNECTION_ID = schema({"edgeID": PORT_ID, "from": PORT_ADDRESS, "to": PORT_ADDRESS}, ["edgeID", "from", "to"])
+OCTANT = {"type": "integer", "minimum": 0, "maximum": 7, "description": "Clockwise: 0 N, 1 NE, 2 E, 3 SE, 4 S, 5 SW, 6 W, 7 NW. Position only, not a bus."}
+LAYOUT_REVISION = {"expectedLayoutRevision": {"type": "integer", "minimum": 0, "maximum": 9223372036854775806}}
+PORT_PAIR = {**LAYOUT_REVISION, "first": PORT_ENDPOINT, "second": PORT_ENDPOINT, "firstOctant": OCTANT, "secondOctant": OCTANT}
+PLACED_CONNECTION = schema({"id": CONNECTION_ID, "placement": schema({"from": OCTANT, "to": OCTANT}, ["from", "to"])}, ["id", "placement"])
 NOTE = schema({"id": STRING, "beat": {"type": "number", "minimum": 0}, "length": {"type": "number", "exclusiveMinimum": 0}, "pitch": {"type": "integer", "minimum": 0, "maximum": 127}, "velocity": {"type": "integer", "minimum": 1, "maximum": 127}}, ["beat", "length", "pitch", "velocity"])
 AUTOMATION_POINT = schema({"id": STRING, "beat": {"type": "number", "minimum": 0, "maximum": 1048576}, "value": {"type": "number", "minimum": -1, "maximum": 4}, "shape": {"type": "string", "enum": ["linear", "hold"]}}, ["beat", "value"])
 OPERATION = schema({
@@ -61,19 +74,24 @@ def tool(name, method, description, properties=None, required=(), write=False):
         required = ("projectID", "expectedRevision", *required)
     return {"name": "circlr_" + name, "method": method, "description": description,
             "inputSchema": schema(properties, required),
-            "annotations": {"readOnlyHint": method in {"snapshot", "inspect", "events", "job"}, "destructiveHint": write, "openWorldHint": False}}
+            "annotations": {"readOnlyHint": method in {"snapshot", "inspect", "ports", "events", "job"}, "destructiveHint": write, "openWorldHint": False}}
 
 
 TOOLS = [
     tool("snapshot", "snapshot", "Read current project IDs, revision, tracks, arrangements, selection and active job. Read before every edit."),
     tool("inspect", "inspect", "Read the effective notes, clips and node graph of one section use.", SCOPE, ("useID",)),
+    tool("ports", "ports", "Read one logical node's actual IN/OUT descriptors, connections, placements, revision and layoutRevision. Reuse returned addresses and connection IDs. Group aliases are not supported.", {"node": PORT_ADDRESS}, ("node",)),
+    tool("connect_ports", "connect_ports", "Connect explicit compatible endpoints, starting at either IN or OUT. Octants belong to first/second endpoints. One Undo; duplicates are a no-op and do not move existing cables. Requires fresh music and layout revisions.", PORT_PAIR, tuple(PORT_PAIR), True),
+    tool("reconnect_ports", "reconnect_ports", "Replace one existing cable using its complete logical connectionID and two explicit endpoints. Preserves edge ID and gain; rejects cross-graph moves, cycles and duplicates atomically. Composition sequence cables cannot be reconnected.", {**PORT_PAIR, "connectionID": CONNECTION_ID}, (*PORT_PAIR, "connectionID"), True),
+    tool("disconnect_ports", "disconnect_ports", "Disconnect the exact logical cable. One Undo; other section uses stay unchanged. Composition sequence cables cannot be disconnected.", {**LAYOUT_REVISION, "connectionID": CONNECTION_ID}, ("expectedLayoutRevision", "connectionID"), True),
+    tool("move_ports", "move_ports", "Atomically place 1–128 distinct existing cables in eight directions. One layout Undo; changes layoutRevision only, preserving music and audio. Unchanged placements are a no-op.", {**LAYOUT_REVISION, "moves": {"type": "array", "items": PLACED_CONNECTION, "minItems": 1, "maxItems": 128}}, ("expectedLayoutRevision", "moves"), True),
     tool("apply", "apply", "Atomically apply 1–128 edits as one Undo action. set_notes/generate_midi replace notes unless append=true. Stable IDs are required; stale revisions fail without changes.", {"operations": {"type": "array", "items": OPERATION, "minItems": 1, "maxItems": 128}}, ("operations",), True),
     tool("bounce", "bounce", "Start an asynchronous section track bounce including its internal effects and sidechain. Originals remain restorable; audio replaces output inputs. Read job until terminal state.", {**SCOPE, "trackID": STRING}, ("useID", "trackID"), True),
     tool("restore_bounce", "restore_bounce", "Restore a bounced circle's original inputs; keep rendered audio as a disconnected archive.", {**SCOPE, "nodeID": STRING}, ("useID", "nodeID"), True),
     tool("export", "export", "Start asynchronous master WAV export, 48 kHz stereo 24-bit. Requires a NEW absolute .wav path. No file overwrite. Read job for completion.", {"path": STRING}, ("path",), True),
     tool("save", "save", "Save the current project, embedding assets. Optional absolute .circlr path. Cannot overwrite a different project.", {"path": STRING}, (), True),
     tool("open", "open", "Start asynchronous local .circlr open. Read job to completion, then snapshot for the new project. Rejects unsaved edits. macOS may require the user to allow first file access.", {"path": STRING}, ("path",), True),
-    tool("undo", "undo", "Undo one whole edit. Requires current project ID and revision.", write=True),
+    tool("undo", "undo", "Undo one whole edit. Requires current project ID and revision. Also supply expectedLayoutRevision from ports/snapshot to protect against concurrent layout edits.", LAYOUT_REVISION, write=True),
     tool("job", "job", "Read one job's running/completed/failed/cancelled state and output path or bounced node ID.", {"jobID": STRING}, ("jobID",)),
     tool("events", "events", "Read actual app/agent activity after a sequence cursor. Last 500 events retained. No polling faster than once per second.", {"afterSequence": {"type": "integer", "minimum": 0}}),
     tool("play", "play", "Prepare and play the album through the Mac audio output."),
@@ -81,10 +99,20 @@ TOOLS = [
     tool("focus", "focus", "Optionally show a circle; omit useID for the album. With minimized=true/false, only minimize/restore the app window. With follow=true/false alone, resume/disable playback camera follow. Editing and rendering never require focus.", {**SCOPE, "compositionID": STRING, "nodeID": STRING, "detail": {"type": "boolean"}, "minimized": {"type": "boolean"}, "follow": {"type": "boolean"}}),
 ]
 BY_NAME = {entry["name"]: entry for entry in TOOLS}
-READ_METHODS = frozenset({"snapshot", "inspect", "events", "job"})
+READ_METHODS = frozenset({"snapshot", "inspect", "ports", "events", "job"})
 
 
 def validate(value, spec, path="arguments"):
+    if "oneOf" in spec:
+        matches = 0
+        for variant in spec["oneOf"]:
+            try:
+                validate(value, variant, path)
+                matches += 1
+            except ValueError:
+                pass
+        if matches != 1:
+            raise ValueError(f"{path}: expected exactly one supported address shape")
     kind = spec.get("type")
     valid = {"object": isinstance(value, dict), "array": isinstance(value, list), "string": isinstance(value, str),
              "integer": isinstance(value, int) and not isinstance(value, bool), "number": isinstance(value, (int, float)) and not isinstance(value, bool),
@@ -107,6 +135,9 @@ def validate(value, spec, path="arguments"):
             raise ValueError(f"{path}: item count out of range")
         for item in value:
             validate(item, spec.get("items", {}), path + "[]")
+    elif kind == "string":
+        if not spec.get("minLength", 0) <= len(value) <= spec.get("maxLength", MAX_MESSAGE):
+            raise ValueError(f"{path}: string length out of range")
     elif kind in {"number", "integer"}:
         if (isinstance(value, float) and not math.isfinite(value)) or value < spec.get("minimum", float("-inf")) or value > spec.get("maximum", float("inf")) or value <= spec.get("exclusiveMinimum", float("-inf")):
             raise ValueError(f"{path}: number out of range")

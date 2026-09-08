@@ -1,6 +1,6 @@
 # circlr operational contract
 
-Discover the actual MCP tool catalog before work. The bundled adapter has 14 tools; custom specialists use its `--read-only` mode exposing snapshot, inspect, job and events only. Runtime configuration is inherited; inspect availability instead of assuming the tools are registered in an already open session.
+Discover the actual MCP tool catalog before work. This development adapter has 19 tools; custom specialists use its `--read-only` mode exposing snapshot, inspect, ports, job and events only. Explicit port tools require a native app whose snapshot includes layoutRevision; the older installed 0.19 app does not implement them. Runtime configuration is inherited; inspect availability instead of assuming the tools are registered in an already open session.
 
 ## Time, identity and sound
 
@@ -15,6 +15,14 @@ Discover the actual MCP tool catalog before work. The bundled adapter has 14 too
 1. `circlr_snapshot` returns project/revision, tracks, assets, arrangements, selection and runtime/job state. `circlr_inspect` with useID (and arrangementID when needed) returns effective lanes, notes, graph, clocks and context.
 2. `circlr_apply` requires `projectID`, `expectedRevision`, 1–128 operations; accepted batch = one Undo. Validate against the current inputSchema. `set_notes` and `generate_midi` **replace** a lane unless append=true. Preserve unrelated notes when replacing. `generate_midi` has simple chords/arpeggio/bass/pulse patterns; nuanced music usually needs deliberate `set_notes` or `add_midi` notes.
 3. Supported operations: set_global, rename_project, set_instrument, set_track, add_section, set_section, connect_sections, add_midi, set_notes, set_step, edit_notes, generate_midi, set_node, set_effect, add_effect, connect, reorder_section, set_clip, edit_audio, set_automation. Missing imports/lyrics/plugin-parameter automation/mastering features cannot be invented as tools. Inspect complete context/instrument/effect objects before modifying them. Built-in synthVoice: 0 pad, 1 bass, 2 keys, 3 supersaw, 4 pluck, 5 lead, 6 electricPiano, 7 organ, 8 brass, 9 strings.
+
+## Explicit logical ports (development app)
+
+Call `circlr_ports(node)` with the actual Codable address from inspect: music addresses contain music: {arrangementID, useID, nodeID}; section addresses contain section: {arrangementID, useID}; signal/composition addresses contain signal/composition: {_0: ID}. Reuse returned ports and connection objects. Groups have no exposed binding yet. A connection ID includes edgeID and logical from/to addresses; edgeID alone is ambiguous across reused sections.
+
+`circlr_connect_ports` takes first/second {node, portID} and firstOctant/secondOctant, 0 N through 7 NW clockwise. Either endpoint can be an input. `circlr_reconnect_ports` additionally requires the exact original connectionID and preserves its edge ID and gain. `circlr_disconnect_ports` requires connectionID. `circlr_move_ports` takes 1–128 distinct {id, placement:{from,to}} entries; placement from/to means normalized OUT/IN, not gesture order. Honor canReconnect/canDisconnect; composition sequence edges are reordered instead.
+
+All four writes require fresh projectID, expectedRevision and expectedLayoutRevision from ports/snapshot. They commit as one Undo. A duplicate connection is changed:false and does not reposition the existing cable. Layout-only edits advance layoutRevision without changing music revision; supply expectedLayoutRevision to circlr_undo too. Never silently retry stale_revision/stale_layout. Choose actual router bus IDs explicitly rather than guessing a main bus. The legacy apply/connect is not an arbitrary multi-bus interface. Background edits preserve the musician's selection/camera. Specialist agents remain read-only and return edit proposals to the coordinator.
 
 ## Gain and pan automation (circlr 0.19)
 

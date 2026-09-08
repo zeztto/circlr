@@ -9,6 +9,14 @@ public struct AgentRequest:Codable {
     public init(method:String,id:String = newID()){self.id=id;self.method=method}
 }
 public struct AgentArguments:Codable {
+    public var node:CircleAddress?
+    public var first:CirclePortEndpoint?
+    public var second:CirclePortEndpoint?
+    public var firstOctant:PortOctant?
+    public var secondOctant:PortOctant?
+    public var connectionID:CircleConnectionID?
+    public var moves:[PlacedCircleConnection]?
+    public var expectedLayoutRevision:Int?
     public var operations:[AgentOperation]?
     public var arrangementID:ID?
     public var useID:ID?

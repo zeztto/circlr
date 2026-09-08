@@ -61,7 +61,7 @@ class MCPTests(unittest.TestCase):
         self.assertEqual(len(replies), 3)
         self.assertEqual(replies[0]["result"]["protocolVersion"], "2025-11-25")
         tools = replies[1]["result"]["tools"]
-        self.assertEqual(len(tools), 14)
+        self.assertEqual(len(tools), 19)
         self.assertTrue(all("method" not in item for item in tools))
         self.assertTrue(replies[2]["result"]["isError"])
 
@@ -76,6 +76,54 @@ class MCPTests(unittest.TestCase):
         ]:
             with self.assertRaises(ValueError):
                 server.validate(arguments, apply)
+
+    def test_port_contracts_and_revision_forwarding(self):
+        node = {"music": {"arrangementID": "a", "useID": "u", "nodeID": "n"}}
+        other = {"music": {"arrangementID": "a", "useID": "u", "nodeID": "r"}}
+        pair = {"projectID": "p", "expectedRevision": 3, "expectedLayoutRevision": 7,
+                "first": {"node": node, "portID": "out.audio.main"},
+                "second": {"node": other, "portID": "in.audio.bus2"}, "firstOctant": 2, "secondOctant": 7}
+        connection = {"edgeID": "e", "from": node, "to": other}
+        packets = {
+            "ports": {"node": node}, "connect_ports": pair,
+            "reconnect_ports": {**pair, "connectionID": connection},
+            "disconnect_ports": {**{k: pair[k] for k in ("projectID", "expectedRevision", "expectedLayoutRevision")}, "connectionID": connection},
+            "move_ports": {**{k: pair[k] for k in ("projectID", "expectedRevision", "expectedLayoutRevision")}, "moves": [{"id": connection, "placement": {"from": 0, "to": 7}}]},
+        }
+        with patch.object(server, "rpc", return_value={"ok": True}) as ipc:
+            for name, args in packets.items():
+                result = server.call_tool("/qa.sock", "circlr_" + name, args, read_only=name == "ports")
+                self.assertFalse(result["isError"])
+                request = ipc.call_args.args[1]
+                self.assertEqual(request["method"], name)
+                if name != "ports":
+                    self.assertEqual(request["expectedRevision"], 3)
+                    self.assertEqual(request["arguments"]["expectedLayoutRevision"], 7)
+                    self.assertNotIn("projectID", request["arguments"])
+        for key in pair:
+            with self.subTest(missing=key), patch.object(server, "rpc") as ipc, self.assertRaises(ValueError):
+                server.call_tool("/unused.sock", "circlr_connect_ports", {k: v for k, v in pair.items() if k != key})
+            ipc.assert_not_called()
+        for key, value in [("firstOctant", 8), ("secondOctant", True), ("expectedLayoutRevision", -1), ("expectedLayoutRevision", True), ("expectedLayoutRevision", 10**400), ("first", {"node": node, "portID": ""})]:
+            with self.subTest(key=key, value=value), patch.object(server, "rpc") as ipc, self.assertRaises(ValueError):
+                server.call_tool("/unused.sock", "circlr_connect_ports", {**pair, key: value})
+            ipc.assert_not_called()
+
+    def test_port_addresses_are_exact_and_bounded(self):
+        for node in [{"signal": {"_0": "s"}}, {"composition": {"_0": "c"}},
+                     {"section": {"arrangementID": "a", "useID": "u"}},
+                     {"music": {"arrangementID": "a", "useID": "u", "nodeID": "n"}}]:
+            server.validate(node, server.PORT_ADDRESS)
+        for node in [{}, {"group": {}}, {"album": {}}, {"signal": {"_0": ""}},
+                     {"signal": {"_0": "s"}, "composition": {"_0": "c"}},
+                     {"signal": {"_0": "s", "extra": 1}}, {"signal": {"_0": "s" * 1025}},
+                     {"music": {"useID": "u", "nodeID": "n"}}]:
+            with self.subTest(node=node), self.assertRaises(ValueError):
+                server.validate(node, server.PORT_ADDRESS)
+        move = {"id": {"edgeID": "e", "from": {"signal": {"_0": "s"}}, "to": {"signal": {"_0": "t"}}}, "placement": {"from": 0, "to": 7}}
+        for moves in [[], [move] * 129, [{**move, "placement": {"from": 0, "to": -1}}]]:
+            with self.subTest(count=len(moves)), self.assertRaises(ValueError):
+                server.validate({"projectID": "p", "expectedRevision": 0, "expectedLayoutRevision": 0, "moves": moves}, server.BY_NAME["circlr_move_ports"]["inputSchema"])
 
     def test_finite_edit_packet_is_accepted(self):
         server.validate({"projectID": "p", "expectedRevision": 2, "operations": [{"kind": "set_notes", "useID": "u", "laneID": "l", "notes": [{"beat": 0, "length": 1, "pitch": 66, "velocity": 90}]}]}, server.BY_NAME["circlr_apply"]["inputSchema"])

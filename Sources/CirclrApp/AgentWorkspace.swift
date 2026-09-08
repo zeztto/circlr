@@ -38,7 +38,7 @@ extension AppStore {
     }
     func json<T:Encodable>(_ value:T)->Any {((try? JSONSerialization.jsonObject(with:JSONEncoder().encode(value))) ?? NSNull())}
     func agentState()->[String:Any] {
-        ["projectID":project.id,"revision":project.musicRevision,"name":project.name,"dirty":dirty,"path":projectURL?.path ?? "","global":json(project.global),
+        ["projectID":project.id,"revision":project.musicRevision,"layoutRevision":project.portLayout?.revision ?? 0,"name":project.name,"dirty":dirty,"path":projectURL?.path ?? "","global":json(project.global),
          "tracks":json(project.tracks),"assets":json(project.assets),"album":json(project.album),"patterns":json(project.patterns),"activeArrangementID":project.activeArrangementID,
          "arrangements":project.arrangements.map{["id":$0.id,"name":$0.name,"uses":$0.uses.map{["id":$0.id,"sectionID":$0.sectionID,"name":$0.name]}]},
          "selection":json(hierarchySelection),"selectedNoteIDs":json(selectedMIDIIDs.sorted()),
@@ -58,8 +58,8 @@ extension AppStore {
             }
             let result: [String:Any]
             do {result=["ok":true,"requestID":request.id,"result":try executeAgent(request,source:source)]}
-            catch {recordActivity(source,"실패 · \(request.method) · \(error.localizedDescription)");result=["ok":false,"requestID":request.id,"error":error.localizedDescription,"projectID":project.id,"revision":project.musicRevision]}
-            if !["snapshot","inspect","events","job"].contains(request.method) {
+            catch {recordActivity(source,"실패 · \(request.method) · \(error.localizedDescription)");result=["ok":false,"requestID":request.id,"error":error.localizedDescription,"projectID":project.id,"revision":project.musicRevision,"layoutRevision":project.portLayout?.revision ?? 0]}
+            if !["snapshot","inspect","ports","events","job"].contains(request.method) {
                 agentReplies[request.id]=(fingerprint,result);agentReplyOrder.append(request.id)
                 if agentReplyOrder.count>256 {agentReplies.removeValue(forKey:agentReplyOrder.removeFirst())}
             }
@@ -70,6 +70,10 @@ extension AppStore {
         let args=request.arguments ?? AgentArguments()
         switch request.method {
         case "snapshot":return agentState()
+        case "ports":
+            guard let node=args.node else {throw CirclrError("조회할 node 주소가 필요합니다")}
+            guard let result=json(try AgentPortEditing.snapshot(at:node,in:project)) as? [String:Any] else {throw CirclrError("포트 응답을 인코딩할 수 없습니다")}
+            return result
         case "inspect":
             guard let id=args.useID,let arrangement=project.arrangements.first(where:{$0.id==(args.arrangementID ?? project.activeArrangementID)}),let use=arrangement.uses.first(where:{$0.id==id}),let section=project.sections.first(where:{$0.id==use.sectionID}) else {throw CirclrError("arrangementID와 useID를 확인하세요")}
             let (_,context,clock)=try ArrangementCompiler.context(project:project,use:use,arrangementID:arrangement.id)
@@ -101,11 +105,20 @@ extension AppStore {
         guard !midiRecording,!audioRecording else {throw CirclrError("녹음 중에는 에이전트 편집을 적용하지 않습니다")}
         recordActivity(source,"실행 · \(request.method)")
         switch request.method {
+        case "connect_ports","reconnect_ports","disconnect_ports","move_ports":
+            let edit=try AgentPortEditing.apply(request,to:project),changed=edit.project != project
+            let layoutOnly=request.method=="move_ports"
+            mutate(layoutOnly ? "에이전트 연결 위치 이동":"에이전트 포트 편집",musical:!layoutOnly,portLayoutOnly:layoutOnly){$0=edit.project}
+            if changed && !layoutOnly {cancelAudition();normalizeHierarchySelection()}
+            var result=agentState();result["changed"]=changed;result["connectionID"]=json(edit.connectionID)
+            return result
         case "apply":
             let candidate=try AgentProjectEditing.apply(request,to:project)
             mutate("에이전트 편집 · \(args.operations?.count ?? 0)개"){$0=candidate}
             cancelAudition();normalizeHierarchySelection();return agentState()
-        case "undo":guard undoCount>0 else {throw CirclrError("취소할 편집이 없습니다")};undo();return agentState()
+        case "undo":
+            if let expected=args.expectedLayoutRevision {try AgentPortEditing.checkLayout(expected,project:project)}
+            guard undoCount>0 else {throw CirclrError("취소할 편집이 없습니다")};undo();return agentState()
         case "save":
             guard let path=args.path ?? projectURL?.path,path.hasSuffix(".circlr") else {throw CirclrError("저장할 .circlr 절대 경로가 필요합니다")}
             let url=try agentPath(path)

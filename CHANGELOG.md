@@ -2,6 +2,13 @@
 
 0.1–0.3은 설계 문서 revision이며, 0.4.0부터 로컬 실행 프로토타입을 포함한다.
 
+## 개발 중 — 명시적 포트 MCP D1 단계
+
+- 포트 descriptor·논리 주소·연결·배치를 읽는 `ports`와 `connect_ports`·`reconnect_ports`·`disconnect_ports`·`move_ports`를 추가했다. MCP 도구는 19개이며 읽기 전용 specialist는 ports 조회만 추가로 사용할 수 있다.
+- project/music/layout revision을 함께 검사하고 GUI와 동일한 Core 명령·Undo를 사용한다. 양방향 시작·명시적 router bus·케이블 ID/gain 보존을 지원한다. 배치-only 명령은 음악 revision을 유지하고 중복/no-op는 Undo를 쌓지 않는다. undo에도 선택적 layout 충돌 검사를 추가했다.
+- Swift 202개·Python 24개와 release build 통과. 전용 QA 앱의 최소화 상태에서 29개 기록 단계의 편집·오류 거절·Undo·저장/재열기를 확인했고 MCP 배치 변경을 앱의 ⌘Z 한 번으로 복원했다. [D1 QA](qa/ports-mcp-review.md).
+- 내장 에이전트 키트의 adapter·사용 계약을 동기화했다. 그룹 노출 binding·실제 VoiceOver 발화와 전체 신호 조합·녹음 branch 통합·사용 앱 출고는 남아 있다.
+
 ## 개발 중 — 포트 가독성 C3c 단계
 
 - 서클 선택만으로 모든 포트의 8방향이 반복되던 표시를 줄였다. 대표 지점과 실제 연결 위치를 유지하고, 클릭/P로 선택한 논리 포트와 가까운 호환 드래그 대상의 상세 방향을 펼친다.
