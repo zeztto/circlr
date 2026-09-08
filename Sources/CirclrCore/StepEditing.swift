@@ -14,6 +14,11 @@ public struct StepGrid:Equatable {
         self.subdivisions=subdivisions;self.beats=beats
     }
     public func start(_ index:Int)->Double {Double(index)*stepLength}
+    /// Shares the onset tolerance used by contains; never maps a note past the final cell.
+    public func index(at beat:Double)->Int? {
+        guard beat.isFinite,beat>=0,beat<beats-1e-9 else{return nil}
+        return min(stepCount-1,Int(floor((beat+1e-9)*Double(subdivisions))))
+    }
     public func contains(_ beat:Double,in index:Int)->Bool {
         guard beat.isFinite,(0..<stepCount).contains(index) else{return false}
         return beat>=start(index)-1e-9 && beat<min(beats,start(index+1))-1e-9

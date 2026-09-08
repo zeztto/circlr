@@ -2,6 +2,18 @@ import XCTest
 @testable import CirclrCore
 
 final class StepEditingTests:XCTestCase {
+    func testSelectedOnsetAddressMatchesOffGridAndFinalPageCells()throws {
+        for division in StepGrid.resolutions {
+            let grid=try StepGrid(subdivisions:division,beats:9.5)
+            for beat in [0,0.03,0.2499999995,4.07,8.5,9.49] {
+                let index=try XCTUnwrap(grid.index(at:beat))
+                XCTAssertTrue(grid.contains(beat,in:index))
+                XCTAssertLessThan(index/16,grid.pageCount)
+                XCTAssertLessThan(index%16,16)
+            }
+            for beat in [-0.1,9.5,.infinity,.nan] {XCTAssertNil(grid.index(at:beat))}
+        }
+    }
     func testDrumAndPolyphonicSynthUseOrdinaryNotesWithoutDuplication()throws {
         let grid=try StepGrid(beats:4);var lane=Lane(trackID:"synth")
         for pitch in [60,64,67] {lane=try StepEditing.set(lane,grid:grid,index:0,pitch:pitch,enabled:true,velocity:102,gate:4)}

@@ -25,7 +25,7 @@ enum OrbitDrawing {
 struct OrbitMIDIEditor:NSViewRepresentable {
     @ObservedObject var store:AppStore
     let viewport:MIDIOrbitViewport
-    let focusTarget:MIDIOrbitFocus
+    let focusTarget:MIDIEditorFocus
     @Environment(\.isEnabled) private var enabled
     func makeNSView(context:Context)->OrbitMIDIView {let view=OrbitMIDIView(store:store);focusTarget.view=view;return view}
     func updateNSView(_ view:OrbitMIDIView,context:Context) {

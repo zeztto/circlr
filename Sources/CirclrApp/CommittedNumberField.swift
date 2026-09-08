@@ -30,12 +30,28 @@ struct NumberEditingContext {
     var snapshot: NumberEditIdentity?
     var current: () -> NumberEditIdentity? = {nil}
     var focusCanvas: () -> Void = {}
+    var fieldFocus:NumberFieldFocus?
     // Numeric bindings read the live model. Adopt a newer revision only before typing,
     // while preserving the displayed field's project, session and target identity.
     func beforeTyping() -> NumberEditIdentity? {
         guard var expected=snapshot,let actual=current() else {return snapshot}
         expected.revision=actual.revision
         return expected == actual ? actual:snapshot
+    }
+}
+
+/// Optional explicit order for related fields beside other numeric controls.
+@MainActor final class NumberFieldFocus {
+    private final class WeakField {weak var value:NSTextField?;init(_ value:NSTextField){self.value=value}}
+    let order:[String]
+    private var fields:[String:WeakField]=[:]
+    init(_ order:[String]){self.order=order}
+    func register(_ field:NSTextField,title:String){fields[title]=WeakField(field)}
+    func move(from title:String,forward:Bool,in window:NSWindow?)->Bool {
+        guard let index=order.firstIndex(of:title),order.indices.contains(index+(forward ? 1:-1)),
+              let next=fields[order[index+(forward ? 1:-1)]]?.value,next.window===window,next.isEnabled,
+              window?.makeFirstResponder(next)==true else{return false}
+        next.selectText(nil);return true
     }
 }
 private struct NumberEditingKey: EnvironmentKey {
@@ -121,6 +137,7 @@ private struct NativeNumberField: NSViewRepresentable {
         field.setAccessibilityLabel(title)
         field.setAccessibilityHelp(error.isEmpty ? "Return으로 적용 · Esc로 취소":error)
         field.toolTip=error.isEmpty ? "Return으로 적용 · Esc로 취소":error
+        self.context.fieldFocus?.register(field,title:title)
     }
     final class Coordinator:NSObject,NSTextFieldDelegate {
         var parent:NativeNumberField
@@ -153,10 +170,14 @@ private struct NativeNumberField: NSViewRepresentable {
                 if commit() {finishFocus(control)}
                 return true
             }
+            if let chain=parent.context.fieldFocus,command == #selector(NSResponder.insertTab(_:)) || command == #selector(NSResponder.insertBacktab(_:)) {
+                guard commit() else{return true}
+                if chain.move(from:parent.title,forward:command == #selector(NSResponder.insertTab(_:)),in:control.window){return true}
+            }
             return false
         }
         private func finishFocus(_ control:NSControl) {
-            // Explicit Return/Esc leaves the field; Tab still follows AppKit's field order.
+            // Return/Esc leaves the field; ungrouped Tab follows AppKit's field order.
             // Do not transfer a separate editor/dialog's focus into another window.
             control.window?.makeFirstResponder(nil)
             if control.window?.identifier?.rawValue == "main" {parent.context.focusCanvas()}

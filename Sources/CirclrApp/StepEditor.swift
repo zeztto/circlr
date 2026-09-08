@@ -4,6 +4,11 @@ import Combine
 import CirclrCore
 
 extension AppStore {
+    func playingStep(in grid:StepGrid)->Int? {
+        guard playback.playing,!hasPendingMusic,let plan=prepared?.plan,let node=selectedCircle,let clock=node.clock,
+              let seconds=PlaybackPosition.localSeconds(for:node,at:meter.seconds,plan:plan,album:nil,albumID:project.album?.id) else{return nil}
+        return Int(clock.beat(atSeconds:seconds)*Double(grid.subdivisions))
+    }
     func openStepEditor() {
         midiStepMode=true
         if let music=selectedMusic,case .midi=music.content,let address=hierarchySelection {focusHierarchy(address,detail:true);return}
@@ -24,57 +29,82 @@ extension AppStore {
 struct StepEditor:View {
     @ObservedObject var store:AppStore
     let topPitch:Int
-    @State private var subdivisions=4
-    @State private var page=0
-    @State private var drumMode=false
-    @State private var extraPitches:Set<Int>=[]
-    @State private var newPitch=36
-    var grid:StepGrid? {try? StepGrid(subdivisions:subdivisions,beats:store.editorBeats)}
+    @Binding var state:StepEditorState
+    let focusTarget:MIDIEditorFocus
+    var grid:StepGrid? {try? StepGrid(subdivisions:state.subdivisions,beats:store.editorBeats)}
+    var selected:Note? {store.currentLane?.notes.first{$0.id==store.selectedNoteID}}
     var pitches:[Int] {
-        if !drumMode {return (0..<12).map{max(0,min(127,topPitch-1-$0))}.reduce(into:[Int]()){if !$0.contains($1){$0.append($1)}}}
+        if !state.drumMode {return (0..<12).map{max(0,min(127,topPitch-1-$0))}.reduce(into:[Int]()){if !$0.contains($1){$0.append($1)}}}
         let observed=Set((store.currentLane?.notes ?? []).map(\.pitch))
         let mapped=Set(store.selectedTrack?.instrument.sample?.zones?.map(\.pitch) ?? [])
-        var result=observed.union(mapped).union(extraPitches)
+        var result=observed.union(mapped).union(state.extraPitches)
         if result.isEmpty {result.insert(store.selectedTrack?.instrument.sample?.rootPitch ?? 36)}
         return result.sorted()
     }
     var body:some View {
         if let grid {
             VStack(spacing:8) {
-                HStack(spacing:10) {
-                    Picker("행",selection:$drumMode){Text("드럼").tag(true);Text("음정").tag(false)}.pickerStyle(.segmented).labelsHidden().frame(width:126)
-                    Menu {ForEach(StepGrid.resolutions,id:\.self){value in Button(resolution(value)){subdivisions=value;page=0}}}label:{Text(resolution(subdivisions))}
+                HStack(spacing:8) {
+                    Picker("스텝 행",selection:$state.drumMode){Text("드럼").tag(true);Text("음정").tag(false)}.pickerStyle(.segmented).labelsHidden().frame(width:110)
+                    Menu(resolution(state.subdivisions)) {ForEach(StepGrid.resolutions,id:\.self){value in Button(resolution(value)){state.subdivisions=value;state.page=0;reveal();focusTarget.focus()}}}
                         .accessibilityLabel("스텝 분할").help("표시 격자만 바꿉니다. 기존 노트의 타이밍은 유지됩니다")
-                    Spacer(minLength:4)
-                    CountControl(title:"페이지",value:Binding(get:{min(page,grid.pageCount-1)+1},set:{page=$0-1}),range:1...grid.pageCount,suffix:"/ \(grid.pageCount)")
+                    Button{page(-1,grid:grid)}label:{Image(systemName:"chevron.left")}.accessibilityLabel("이전 스텝 페이지").disabled(state.page<=0)
+                    CommittedNumberField(title:"스텝 페이지",value:Binding(get:{Double(min(state.page,grid.pageCount-1)+1)},set:{state.page=Int($0)-1;store.selectedNoteID=nil}),range:1...Double(grid.pageCount),integerOnly:true,width:48)
+                    Text("/ \(grid.pageCount)").monospacedDigit().foregroundStyle(StudioTheme.secondary)
+                    Button{page(1,grid:grid)}label:{Image(systemName:"chevron.right")}.accessibilityLabel("다음 스텝 페이지").disabled(state.page+1>=grid.pageCount)
                     Menu("페이지") {
-                        Button("다음 페이지로 복제") {editPage(grid,copy:true)}.disabled(page+1>=grid.pageCount)
+                        Button("다음 페이지로 복제") {editPage(grid,copy:true)}.disabled(state.page+1>=grid.pageCount)
                         Button("이 페이지 비우기") {editPage(grid,copy:false)}
                     }
+                    Spacer(minLength:0)
+                    if state.drumMode {
+                        CommittedNumberField(title:"드럼 행 MIDI 음높이",value:Binding(get:{Double(state.newPitch)},set:{state.newPitch=Int($0)}),range:0...127,integerOnly:true,width:48)
+                        Button{state.extraPitches.insert(state.newPitch);focusTarget.focus()}label:{Image(systemName:"plus")}.accessibilityLabel("드럼 행 추가")
+                    }
                 }
-                if drumMode {
-                    HStack {CountControl(title:"MIDI 음높이",value:$newPitch,range:0...127);Button("행 추가"){extraPitches.insert(newPitch)};Spacer();Text("각 행은 실제 악기의 MIDI 음높이입니다").font(.system(size:11)).foregroundStyle(StudioTheme.secondary)}
-                }
-                ScrollView(.vertical) {
-                    StepGridCanvas(store:store,grid:grid,page:min(page,grid.pageCount-1),pitches:pitches)
-                        .frame(height:CGFloat(pitches.count*28+32))
-                }.frame(minHeight:80,maxHeight:.infinity)
-                Text("← ↑ ↓ → 셀 선택 · Return 켜기/끄기 · Delete 지우기 · 노트 선택 후 아래에서 길이·세기 편집")
-                    .font(.system(size:11)).foregroundStyle(StudioTheme.secondary).lineLimit(2)
+                VStack(spacing:0) {
+                    StepColumnHeader(store:store,meter:store.meter,grid:grid,page:min(state.page,grid.pageCount-1))
+                    ScrollView(.vertical) {
+                        StepGridCanvas(store:store,grid:grid,page:min(state.page,grid.pageCount-1),pitches:pitches,focusTarget:focusTarget)
+                            .frame(height:CGFloat(pitches.count*28))
+                    }
+                }.frame(minHeight:100,maxHeight:.infinity)
             }
-            .onAppear{drumMode=store.selectedTrack?.instrument.drums==true;newPitch=store.selectedTrack?.instrument.sample?.rootPitch ?? 36}
-            .onChange(of:page){_,_ in store.selectedNoteID=nil}
-            .onChange(of:store.editorBeats){_,_ in page=min(page,(self.grid?.pageCount ?? 1)-1)}
+            .onAppear{reveal()}
+            .onChange(of:selected){_,_ in reveal()}
+            .onChange(of:store.editorBeats){_,_ in state.page=min(state.page,(self.grid?.pageCount ?? 1)-1)}
         } else {Text("스텝 편집은 131,072박 이하의 음악 서클에서 사용할 수 있습니다").foregroundStyle(StudioTheme.secondary)}
     }
     func resolution(_ value:Int)->String {[1:"1/4",2:"1/8",3:"1/8 셋잇단",4:"1/16",6:"1/16 셋잇단",8:"1/32"][value] ?? "1/16"}
+    func reveal(){if let selected,let grid,let index=grid.index(at:selected.beat){state.page=index/16}}
+    func page(_ delta:Int,grid:StepGrid){state.page=max(0,min(grid.pageCount-1,state.page+delta));store.selectedNoteID=nil;focusTarget.focus()}
     func editPage(_ grid:StepGrid,copy:Bool) {
         guard let lane=store.currentLane else{return}
         do {
-            let next=copy ? try StepEditing.copyPage(lane,grid:grid,from:page,to:page+1):try StepEditing.clearPage(lane,grid:grid,page:page)
+            let next=copy ? try StepEditing.copyPage(lane,grid:grid,from:state.page,to:state.page+1):try StepEditing.clearPage(lane,grid:grid,page:state.page)
             store.setLane(next);store.selectedNoteID=nil
-            if copy {page+=1}
+            if copy {state.page+=1};focusTarget.focus()
         }catch{store.fail(error)}
+    }
+}
+
+struct StepColumnHeader:View {
+    @ObservedObject var store:AppStore
+    @ObservedObject var meter:TransportMeter
+    let grid:StepGrid
+    let page:Int
+    var body:some View {
+        GeometryReader { geometry in
+            HStack(spacing:0) {
+                Text("음높이").frame(width:112,alignment:.leading)
+                ForEach(0..<16,id:\.self){column in
+                    let index=page*16+column
+                    Text(index<grid.stepCount ? String(index+1):"")
+                        .foregroundStyle(store.playingStep(in:grid)==index ? StudioTheme.accent:StudioTheme.secondary)
+                        .frame(width:max(1,(geometry.size.width-116)/16))
+                }
+            }.font(.system(size:11)).monospacedDigit().foregroundStyle(StudioTheme.secondary)
+        }.frame(height:24).accessibilityElement(children:.ignore).accessibilityLabel("스텝 번호 \(page*16+1)–\(min(grid.stepCount,(page+1)*16))")
     }
 }
 
@@ -83,9 +113,19 @@ struct StepGridCanvas:NSViewRepresentable {
     let grid:StepGrid
     let page:Int
     let pitches:[Int]
-    func makeNSView(context:Context)->StepGridView {StepGridView(store:store,grid:grid,page:page,pitches:pitches)}
+    let focusTarget:MIDIEditorFocus
+    @Environment(\.isEnabled) private var enabled
+    func makeNSView(context:Context)->StepGridView {let view=StepGridView(store:store,grid:grid,page:page,pitches:pitches);focusTarget.view=view;return view}
     func updateNSView(_ view:StepGridView,context:Context) {
-        view.grid=grid;view.page=page;view.pitches=pitches;view.row=min(view.row,max(0,pitches.count-1));view.column=min(view.column,max(0,view.columns-1));view.needsDisplay=true
+        let note=store.currentLane?.notes.first{$0.id==store.selectedNoteID}
+        let changed=view.grid != grid || view.page != page || view.pitches != pitches || view.lastSelection != note
+        view.grid=grid;view.page=page;view.pitches=pitches;view.allowsEditing=enabled
+        view.row=min(view.row,max(0,pitches.count-1));view.column=min(view.column,max(0,view.columns-1))
+        if changed,let note,let index=grid.index(at:note.beat),index/16==page,let row=pitches.firstIndex(of:note.pitch) {
+            view.row=row;view.column=index%16
+            DispatchQueue.main.async{[weak view] in guard let view else{return};view.scrollToVisible(view.rect(row:view.row,column:view.column))}
+        }
+        view.lastSelection=note;view.needsDisplay=true
     }
 }
 @MainActor final class StepGridView:NSView {
@@ -94,6 +134,8 @@ struct StepGridCanvas:NSViewRepresentable {
     var page:Int
     var pitches:[Int]
     var row=0,column=0
+    var lastSelection:Note?
+    var allowsEditing=true
     var meterSubscription:AnyCancellable?
     var accessibilityKey=""
     var cellCacheKey=""
@@ -112,11 +154,11 @@ struct StepGridCanvas:NSViewRepresentable {
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         DispatchQueue.main.async{[weak self] in
-            guard let self,let window=self.window,!(window.firstResponder is NSTextView) else{return}
+            guard let self,self.allowsEditing,let window=self.window,!(window.firstResponder is NSTextView) else{return}
             window.makeFirstResponder(self)
         }
     }
-    func rect(row:Int,column:Int)->CGRect {CGRect(x:112+Double(column)*cellWidth+2,y:28+Double(row)*28+2,width:max(1,cellWidth-4),height:24)}
+    func rect(row:Int,column:Int)->CGRect {CGRect(x:112+Double(column)*cellWidth+2,y:Double(row)*28+2,width:max(1,cellWidth-4),height:24)}
     func label(_ pitch:Int)->String {
         if let instrument=store.selectedTrack?.instrument {
             if let zone=instrument.sample?.zones?.first(where:{$0.pitch==pitch}),let asset=store.project.assets.first(where:{$0.id==zone.assetID}) {return "\(pitch) · \(asset.name)"}
@@ -125,12 +167,10 @@ struct StepGridCanvas:NSViewRepresentable {
         return "\(pitch) · \(Scale.roots[pitch%12])\(pitch/12-1)"
     }
     var playingStep:Int? {
-        guard store.playback.playing,!store.hasPendingMusic,let plan=store.prepared?.plan,let node=store.selectedCircle,let clock=node.clock,
-              let seconds=PlaybackPosition.localSeconds(for:node,at:store.meter.seconds,plan:plan,album:nil,albumID:store.project.album?.id) else{return nil}
-        return Int(clock.beat(atSeconds:seconds)*Double(grid.subdivisions))
+        store.playingStep(in:grid)
     }
     func refreshCells() {
-        let key="\(store.project.id):\(store.project.musicRevision):\(store.selectedLaneID ?? store.editPatternID ?? ""):\(page):\(grid):\(pitches)"
+        let key="\(store.project.id):\(store.mediaImportGeneration):\(store.project.musicRevision):\(String(describing:store.hierarchySelection)):\(store.editOriginal):\(store.selectedLaneID ?? store.editPatternID ?? ""):\(page):\(grid):\(pitches)"
         guard key != cellCacheKey else{return};cellCacheKey=key;cellNotes=[:];heldCells=[]
         let rows=Dictionary(uniqueKeysWithValues:pitches.enumerated().map{($0.element,$0.offset)})
         let start=grid.start(page*16),end=min(grid.beats,grid.start(page*16+columns))
@@ -147,8 +187,7 @@ struct StepGridCanvas:NSViewRepresentable {
         StudioTheme.canvasNS.setFill();bounds.fill()
         refreshCells();let playing=playingStep,selectedIDs=store.selectedMIDIIDs
         for col in 0..<columns {
-            let index=page*16+col,r=rect(row:0,column:col)
-            OrbitDrawing.text(String(index+1),at:CGPoint(x:r.midX,y:13),size:11,color:playing==index ? StudioTheme.accentNS:StudioTheme.secondaryNS)
+            let index=page*16+col
             for row in pitches.indices {
                 let rect=rect(row:row,column:col),onsets=cellNotes[row*16+col] ?? [],path=NSBezierPath(roundedRect:rect,xRadius:4,yRadius:4)
                 let focused=(self.row==row && self.column==col) || onsets.contains{selectedIDs.contains($0.id)}
@@ -162,7 +201,7 @@ struct StepGridCanvas:NSViewRepresentable {
             }
         }
         let paragraph=NSMutableParagraphStyle();paragraph.lineBreakMode = .byTruncatingTail
-        for (i,pitch) in pitches.enumerated() {(label(pitch) as NSString).draw(in:CGRect(x:4,y:34+i*28,width:102,height:20),withAttributes:[.font:NSFont.systemFont(ofSize:12,weight:.medium),.foregroundColor:StudioTheme.textNS,.paragraphStyle:paragraph])}
+        for (i,pitch) in pitches.enumerated() {(label(pitch) as NSString).draw(in:CGRect(x:4,y:6+i*28,width:102,height:20),withAttributes:[.font:NSFont.systemFont(ofSize:12,weight:.medium),.foregroundColor:StudioTheme.textNS,.paragraphStyle:paragraph])}
         updateAccessibility()
     }
     func choose(row:Int,column:Int) {
@@ -173,10 +212,11 @@ struct StepGridCanvas:NSViewRepresentable {
         scrollToVisible(rect(row:row,column:column));needsDisplay=true
     }
     override func mouseDown(with event:NSEvent) {
+        guard allowsEditing else{return}
         window?.makeFirstResponder(self)
         let point=convert(event.locationInWindow,from:nil)
-        guard point.x>=112,point.y>=28 else{return}
-        let row=Int((point.y-28)/28),col=Int((point.x-112)/cellWidth)
+        guard point.x>=112,point.y>=0 else{return}
+        let row=Int(point.y/28),col=Int((point.x-112)/cellWidth)
         guard pitches.indices.contains(row),(0..<columns).contains(col) else{return}
         if event.modifierFlags.contains(.shift) {
             if let note=store.currentLane.flatMap({grid.onsets(in:$0,pitch:pitches[row],index:page*16+col).first}) {store.toggleMIDISelection(note.id)}
@@ -187,10 +227,11 @@ struct StepGridCanvas:NSViewRepresentable {
         needsDisplay=true
     }
     override func performKeyEquivalent(with event:NSEvent)->Bool {
-        if window?.firstResponder===self,event.modifierFlags.contains(.command),store.handleMIDIBatchKey(event){needsDisplay=true;return true}
+        if allowsEditing,window?.firstResponder===self,event.modifierFlags.contains(.command),store.handleMIDIBatchKey(event){needsDisplay=true;return true}
         return super.performKeyEquivalent(with:event)
     }
     override func keyDown(with event:NSEvent) {
+        guard allowsEditing else{super.keyDown(with:event);return}
         if store.handleMIDIBatchKey(event){needsDisplay=true;return}
         guard !event.modifierFlags.contains(.command),!event.modifierFlags.contains(.control),!pitches.isEmpty else{super.keyDown(with:event);return}
         switch event.keyCode {
@@ -204,6 +245,7 @@ struct StepGridCanvas:NSViewRepresentable {
         case 51,117:
             if store.selectedMIDIIDs.count>1 {store.removeNote()}else{store.editStep(grid:grid,index:page*16+column,pitch:pitches[row],enabled:false)};needsDisplay=true
         case 49:store.play()
+        case 53:store.focusCanvas?();store.hierarchyParent()
         default:super.keyDown(with:event)
         }
     }
@@ -215,7 +257,7 @@ struct StepGridCanvas:NSViewRepresentable {
         for (row,pitch) in pitches.enumerated() {for col in 0..<columns {
             let cell=StepCellAccessibility(parent:self,row:row,column:col)
             cell.setAccessibilityLabel(label(pitch)+" · \(page*16+col+1)스텝")
-            cell.setAccessibilityValue(cellNotes[row*16+col]?.isEmpty==false ? "켜짐":"꺼짐")
+            cell.setAccessibilityValue(cellNotes[row*16+col]?.isEmpty==false ? "켜짐":heldCells.contains(row*16+col) ? "이전 스텝에서 이어짐":"꺼짐")
             cell.setAccessibilityFrame(window.convertToScreen(convert(rect(row:row,column:col),to:nil)));children.append(cell)
         }}
         setAccessibilityChildren(children)
@@ -226,7 +268,7 @@ struct StepGridCanvas:NSViewRepresentable {
     let row:Int,column:Int
     init(parent:StepGridView,row:Int,column:Int) {self.grid=parent;self.row=row;self.column=column;super.init();setAccessibilityParent(parent);setAccessibilityRole(.button);setAccessibilityEnabled(true)}
     override func accessibilityPerformPress()->Bool {
-        guard let grid,grid.pitches.indices.contains(row),(0..<grid.columns).contains(column) else{return false}
+        guard let grid,grid.window != nil,grid.allowsEditing,grid.pitches.indices.contains(row),(0..<grid.columns).contains(column) else{return false}
         grid.window?.makeFirstResponder(grid);grid.choose(row:row,column:column);grid.store.editStep(grid:grid.grid,index:grid.page*16+column,pitch:grid.pitches[row]);grid.needsDisplay=true;return true
     }
 }

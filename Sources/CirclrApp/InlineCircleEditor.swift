@@ -7,6 +7,7 @@ struct InlineCircleEditor: View {
     @ObservedObject var store: AppStore
     @State private var topPitch = 72
     @State private var orbitViewport = MIDIOrbitViewport()
+    @State private var stepState = StepEditorState()
     @FocusState private var nameFocused:Bool
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -91,6 +92,8 @@ struct InlineCircleEditor: View {
         .onAppear {
             topPitch = store.currentLane?.notes.map(\.pitch).max().map { min(128,max(12,$0+1)) } ?? (store.selectedTrack?.instrument.drums == true ? 48 : 72)
             orbitViewport.fitPitches(store.currentLane?.notes ?? [])
+            stepState.drumMode=store.selectedTrack?.instrument.drums==true
+            stepState.newPitch=store.selectedTrack?.instrument.sample?.rootPitch ?? 36
             // A false FocusState write can clear focus already assigned by the connection editor.
             if store.hierarchySettingsOpen { nameFocused = true }
         }
@@ -98,43 +101,7 @@ struct InlineCircleEditor: View {
         .onChange(of:store.editOriginal){_,_ in orbitViewport=MIDIOrbitViewport();orbitViewport.fitPitches(store.currentLane?.notes ?? [])}
     }
     @ViewBuilder private var midi:some View {
-        if store.project.usesOrbits && !store.midiStepMode {MIDIOrbitWorkspace(store:store,viewport:$orbitViewport)}else{legacyMIDI}
-    }
-    private var legacyMIDI: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 8) {
-                Picker("MIDI 편집 방식",selection:$store.midiStepMode){Text(store.project.usesOrbits ? "궤도":"피아노 롤").tag(false);Text("스텝").tag(true)}.pickerStyle(.segmented).labelsHidden().frame(width:110)
-                Text("\(store.currentLane?.notes.count ?? 0)개 노트").foregroundStyle(StudioTheme.secondary)
-                Menu("MIDI"){Button("MIDI 파일 가져오기"){store.chooseMIDIImport()};Divider();Button("노트 전체 선택 · ⌘A"){store.selectMIDINotes(Set((store.currentLane?.notes ?? []).map(\.id)))};Button("선택 해제"){store.selectedNoteID=nil};Divider();Menu("패턴 추가"){ForEach(MIDIPattern.allCases,id:\.self){pattern in Button(pattern.label){store.generateMIDI(pattern)}}};Button("MIDI 저장"){store.exportMIDI()}}
-                Button("바운스"){store.bounceTrack()}.disabled(store.preparing).help("이 트랙의 섹션 출력을 이펙트와 함께 오디오로 변환")
-                Spacer()
-                Button { topPitch = max(12, topPitch-12) } label: { Image(systemName: "minus") }.help("한 옥타브 아래")
-                Text("\(Scale.roots[(topPitch-1)%12])\((topPitch-1)/12-1)").monospacedDigit().help("표시 범위의 가장 높은 음")
-                Button { topPitch = min(128, topPitch+12) } label: { Image(systemName: "plus") }.help("한 옥타브 위")
-                Button { store.startMIDIRecording() } label: { Label(store.midiRecording ? "녹음 정지" : "MIDI 녹음", systemImage: "record.circle") }.disabled(store.editPatternID != nil)
-            }
-            if store.midiStepMode {StepEditor(store:store,topPitch:topPitch)} else { GeometryReader { geometry in
-                ScrollView([.horizontal, .vertical]) {
-                    PianoRoll(store: store, topPitch: topPitch-1).frame(width: max(geometry.size.width, store.editorBeats*48+64), height: 452)
-                }.background(StudioTheme.canvas)
-            } }
-            if !store.selectedMIDIIDs.isEmpty {MIDISelectionControls(store:store)}
-            if store.selectedMIDIIDs.count==1,let id = store.selectedNoteID, let note = store.currentLane?.notes.first(where: { $0.id == id }) {
-                HStack(spacing: 10) {
-                    Text("\(Scale.roots[note.pitch%12])\(note.pitch/12-1)").monospacedDigit().accessibilityLabel("음높이 \(note.pitch)")
-                    ValueField(title: "시작 박", value: noteBinding(id, \.beat, note.beat), range: 0...max(0,store.editorBeats-note.length))
-                    ValueField(title: "길이", value: noteBinding(id, \.length, note.length), range: 0.03125...max(0.03125,store.editorBeats-note.beat))
-                    ValueField(title: "세기", value: Binding(get: { Double(store.currentLane?.notes.first{$0.id==id}?.velocity ?? note.velocity) }, set: { value in guard var lane=store.currentLane,let i=lane.notes.firstIndex(where:{$0.id==id}) else{return};lane.notes[i].velocity=Int(value);store.setLane(lane) }), range: 1...127, integerOnly:true)
-                    Button { store.removeNote() } label: { Image(systemName: "trash") }.help("선택 노트 삭제")
-                }
-            } else if store.selectedMIDIIDs.isEmpty { Text(store.midiStepMode ? "셀 클릭으로 입력 · ⌥ 클릭으로 선택 · Tab으로 입력 필드 이동" : store.project.usesOrbits ? "원호에 노트 입력 · 각도로 시간 이동 · 반경으로 음높이 · 끝 점으로 길이 조절":"빈 칸에 노트 입력 · 드래그로 이동 · 오른쪽 끝으로 길이 조절").font(.system(size: 11)).foregroundStyle(StudioTheme.secondary) }
-        }
-    }
-    func noteBinding(_ id: ID, _ key: WritableKeyPath<Note, Double>, _ fallback: Double) -> Binding<Double> {
-        Binding(get: { store.currentLane?.notes.first { $0.id == id }?[keyPath: key] ?? fallback }, set: { value in
-            guard var lane = store.currentLane, let i = lane.notes.firstIndex(where: { $0.id == id }) else { return }
-            lane.notes[i][keyPath: key] = value; store.setLane(lane)
-        })
+        if store.project.usesOrbits && !store.midiStepMode {MIDIOrbitWorkspace(store:store,viewport:$orbitViewport)}else{MIDIGridWorkspace(store:store,topPitch:$topPitch,steps:$stepState)}
     }
     @ViewBuilder private var audio: some View {
         if case .audio(_,let clipID) = store.selectedMusic?.content,
