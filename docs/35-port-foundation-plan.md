@@ -94,3 +94,14 @@ C3a 결과: 전체 Swift 190개와 release build를 통과했다. 전용 native 
 C3b 결과: 케이블·논리 포트 순환, 선택 대상 prefill, 편집기 내부 Tab/방향키/Return 재연결, 포트 Delete 보호, 케이블 Delete/Undo, 양 끝 16회 방향 이동의 음악 불변과 같은 파일 재열기 상태 초기화를 실제 QA 앱에서 확인했다. 확대 중 초기 검색 포커스가 빠지는 결함은 컨트롤 준비와 카메라 완료를 연결해 수정했다. canvas 1080×673에서도 편집 적용 버튼과 스크롤을 확인했다. [C3b QA와 빌드별 근거](../qa/ports-keyboard-review.md).
 
 다음 실행은 C3의 남은 밀집 배치/시간 손잡이/신호 종류/그룹 조합과 실제 VoiceOver 발화, D의 typed-port MCP·배치 revision 계약 및 group binding, E의 녹음 branch 통합과 앱 출고 회귀다. C3b 소스 checkpoint를 C3/D/E 전체 완료로 취급하지 않는다. 현재 런타임의 추가 spawn도 한도 오류로 거절됐으므로 이번 리뷰는 같은 실행자의 역할 전환이며 독립 서브 에이전트 검토가 아니다.
+
+## C3c 실행 계약 · 포트 밀도와 직접 선택
+
+- 기준 `1d3e0ae`, 동일 private worktree. development-lead → UX → native Swift utility → read-only review → QA. 독립 검토 spawn은 실제 `agent thread limit reached`로 거절되어 delegation none이다.
+- 선택 서클은 논리 포트마다 대표 지점과 기존 케이블 위치를 표시한다. 포트를 클릭하거나 P로 선택하면 그 포트만 8방향을 펼친다. 실제 8방향 연결·배치 저장과 MIDI/audio/sidechain/flow 의미는 유지한다. 짧은 클릭은 선택이며 음악을 바꾸지 않는다.
+- 새 연결/재연결 중에는 같은 신호·반대 방향·같은 graph의 후보를 표시한다. 가까운 대상 서클에서 상세 방향을 펼치고 멀리 있는 모든 포트의 반복 표시는 만들지 않는다. 선택 끝점의 배치 모드는 원래 포트의 8방향을 제공한다. 무효 드롭은 기존 연결을 보존한다.
+- 이름은 논리 포트마다 한 번, 선택 끝점 우선으로 겹치지 않는 위치에 표시한다. 화면·편집기·도구막대·서클 이름·실제 포트 점·시간 손잡이의 영역을 피한다. 실제로 보이지 않는 포트는 hit/AX에 노출하지 않는다. 같은 draw/hit geometry를 유지한다.
+- 소유: Core 신규 `CirclePortPresentation.swift`와 관련 XCTest(표시·라벨 배치만), App `CanvasPorts.swift`, 신규 `CanvasPortLabels.swift`, `AlbumCanvas.swift`, `CanvasCableEditing.swift`, 필요 시 `CanvasConnectionNavigation.swift`. 프로젝트 음악 schema·renderer·MCP 쓰기 명령·사용 앱은 변경하지 않는다. README/CHANGELOG와 QA 문서를 갱신한다.
+- 검사: 표시 상태별 4→11개 방향, 기존 비기본 연결 위치 보존, 근접 후보·작은 확대·시간 손잡이/라벨 충돌과 draw/hit 일치. 전체 offline Swift와 release build. 전용 QA 앱에서 클릭/P 선택·방향 드래그·음악 불변·Undo·키보드 prefill/포커스·저장 복원과 실제 전후 화면을 확인한다. native로 확인하지 못한 모든 종류/그룹/밀집 조합은 남은 범위로 명시한다.
+
+C3c 결과: 라우터의 실제 기본 handle 4개·한 포트 선택 11개와 음악 불변을 확인했다. 대각선 IN에서 OUT으로 연결, 도구막대에 가려진 대상 연결, 궤도 시작 0.5 beat 이동과 각각의 Undo를 실제 앱에서 검증했다. 라벨의 중복/교차/viewport와 시간 손잡이 거리, 같은 파일 재열기 복원을 저장 증거와 대조했다. 전체 Swift 194개와 release build 통과. [C3c QA](../qa/ports-density-review.md). 다음은 D의 백그라운드 포트 MCP 계약 구현을 우선하고 C3의 미검증 VoiceOver·전체 조합 검증을 병행한다. 이 상태는 C3/D/E 전체 완료나 사용 앱 출고가 아니다.

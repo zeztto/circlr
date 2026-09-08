@@ -41,6 +41,8 @@ extension AlbumCanvasView {
          "editorIntent":store.json(store.connectionEditorIntent),"mode":cableMode.rawValue,"dragging":cableDrag != nil,
          "toolsFrame":cableTools.map{[$0.frame.minX,$0.frame.minY,$0.frame.width,$0.frame.height]} ?? [],
          "portToolsFrame":portTools.map{[$0.frame.minX,$0.frame.minY,$0.frame.width,$0.frame.height]} ?? [],
+         "portLabels":portLabelPlacements().map{["endpoint":store.json($0.endpoint),"rect":[$0.rect.minX,$0.rect.minY,$0.rect.width,$0.rect.height]]},
+         "timeHandle":store.selectedCircle.flatMap{visibleTimeHandle($0)}.map{[$0.x,$0.y]} ?? [],
          "handles":visiblePortHandles().map{["endpoint":store.json($0.endpoint),"octant":$0.octant.rawValue,"point":[$0.point.x,$0.point.y]]},
          "endpoints":cableEndpointHandles().map{["direction":$0.0.rawValue,"point":[$0.1.point.x,$0.1.point.y]]},
          "cables":(scene?.edges ?? []).compactMap{edge -> [String:Any]? in
@@ -94,7 +96,7 @@ extension AlbumCanvasView {
     func cablePointAvailable(_ point:Point,labels:Bool=true)->Bool {
         let p=NSPoint(x:point.x,y:point.y)
         return workspaceViewport.contains(p) && editor?.frame.contains(p) != true && !(cableTools?.isHidden == false && cableTools?.frame.contains(p) == true) &&
-            portTools?.frame.contains(p) != true &&
+            !(portTools?.isHidden == false && portTools?.frame.contains(p) == true) &&
             (!labels || !labelPlacements.contains{$0.rect.insetBy(dx:-3,dy:-3).contains(p)})
     }
     func hitCable(_ point:NSPoint)->CircleSceneEdge? {
@@ -108,8 +110,11 @@ extension AlbumCanvasView {
     func cableEndpointHandles()->[(CirclePortDirection,CirclePortHandle)] {
         guard let edge=selectedSceneCable,let id=edge.connectionID,edge.from==id.from,edge.to==id.to,
               let curve=connectionCurve(edge),cableTools != nil else{return []}
+        let time = store.selectedCircle.flatMap { visibleTimeHandle($0) }
         return [(CirclePortDirection.output,CirclePortHandle(endpoint:.init(node:id.from,portID:edge.fromPortID),octant:edge.placement.from,point:curve.from)),
-                (.input,CirclePortHandle(endpoint:.init(node:id.to,portID:edge.toPortID),octant:edge.placement.to,point:curve.to))].filter {cablePointAvailable($0.1.point)}
+                (.input,CirclePortHandle(endpoint:.init(node:id.to,portID:edge.toPortID),octant:edge.placement.to,point:curve.to))].filter {
+                    let p=$0.1.point; return cablePointAvailable(p) && (time.map{hypot($0.x-p.x,$0.y-p.y)>23} ?? true)
+                }
     }
     func beginCableDrag(at point:NSPoint)->Bool {
         guard let hit=cableEndpointHandles().first(where:{hypot($0.1.point.x-point.x,$0.1.point.y-point.y)<=12}),let id=selectedCable else{return false}
@@ -164,10 +169,6 @@ extension AlbumCanvasView {
             let p=NSPoint(x:handle.point.x,y:handle.point.y)
             StudioTheme.canvasNS.setFill();NSBezierPath(ovalIn:NSRect(x:p.x-10,y:p.y-10,width:20,height:20)).fill()
             StudioTheme.accentNS.setStroke();let ring=NSBezierPath(ovalIn:NSRect(x:p.x-10,y:p.y-10,width:20,height:20));ring.lineWidth=direction == selectedCableEnd ? 3.5:1.5;ring.stroke()
-            let descriptor=scene?.node(handle.endpoint.node)?.ports.first{$0.id==handle.endpoint.portID}
-            let label=descriptor.map(shortPortLabel) ?? (direction == .output ? "OUT":"IN")
-            let horizontal=abs(CirclePortGeometry.normal(handle.octant).x)>0.7
-            drawText(label,x:p.x,y:p.y+(horizontal && direction == .output ? 14:-26),size:10,color:StudioTheme.accentNS,maxWidth:44)
         }
         guard let gesture=cableDrag,let edge=selectedSceneCable,let curve=connectionCurve(edge) else{return}
         let fixedPoint=gesture.direction == .output ? curve.to:curve.from

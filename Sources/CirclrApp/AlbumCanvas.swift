@@ -127,9 +127,13 @@ struct AlbumCanvas: NSViewRepresentable {
         addTrackingArea(area);tracking=area
     }
     override func mouseMoved(with event:NSEvent) {
-        let node=hit(convert(event.locationInWindow,from:nil))
+        let point=convert(event.locationInWindow,from:nil)
+        let port=CirclePortGeometry.hit(Point(point.x,point.y),visibleHandles:visiblePortHandles())
+        let node=port.flatMap{scene?.node($0.endpoint.node)} ?? hit(point)
         if hoverAddress != node?.id {hoverAddress=node?.id;needsDisplay=true}
-        toolTip=node.map{$0.title+" · "+$0.subtitle+" · 두 번 클릭해 확대"}
+        if let port,let descriptor=node?.ports.first(where:{$0.id==port.endpoint.portID}) {
+            toolTip=(node?.title ?? "")+" · "+descriptor.name+" · 클릭으로 8방향 선택 · 끌어서 연결"
+        } else {toolTip=node.map{$0.title+" · "+$0.subtitle+" · 두 번 클릭해 확대"}}
     }
     func update() {
         if visualSelection != store.hierarchySelection {
@@ -290,6 +294,7 @@ struct AlbumCanvas: NSViewRepresentable {
         drawReadableLabels()
         drawPortHandles()
         drawCableEditing()
+        drawPortLabels()
         drawPlaybackCaption()
         if let handle = connecting, let node = scene.node(handle.endpoint.node) {
             let target=CirclePortGeometry.hit(Point(connectionPoint.x,connectionPoint.y),visibleHandles:visiblePortHandles()) ??
@@ -332,7 +337,7 @@ struct AlbumCanvas: NSViewRepresentable {
             color(node).withAlphaComponent(store.hierarchySelection==node.id ? 0.7:0.3).setStroke();arc.lineWidth=2;arc.stroke()
             OrbitDrawing.dot(OrbitDrawing.point(center,radius:radius,phase:interval.start/orbit.timeline.duration),radius:2,color:color(node))
         }
-        if store.hierarchySelection==node.id,let handle=timeHandle(node) {
+        if store.hierarchySelection==node.id,let handle=visibleTimeHandle(node) {
             OrbitDrawing.dot(handle,radius:6,color:StudioTheme.textNS)
             OrbitDrawing.text(node.role == .music ? "시작 시간":"순서 이동",at:NSPoint(x:handle.x,y:handle.y-16),size:10)
         }
@@ -431,13 +436,13 @@ struct AlbumCanvas: NSViewRepresentable {
         panning=store.panMode || event.buttonNumber==2
         if panning{return}
         let labelHit=labelPlacements.contains{$0.rect.contains(down)}
-        if !labelHit,let node=store.hierarchySelection.flatMap({scene?.node($0)}),let handle=timeHandle(node),hypot(handle.x-down.x,handle.y-down.y)<13,let orbit=node.orbit,let owner=scene?.node(orbit.owner) {
+        if !labelHit,let node=store.hierarchySelection.flatMap({scene?.node($0)}),let handle=visibleTimeHandle(node),hypot(handle.x-down.x,handle.y-down.y)<13,let orbit=node.orbit,let owner=scene?.node(orbit.owner) {
             orbitDrag=node;orbitSeconds=orbit.anchor;orbitTravel=0;orbitRevision=store.project.musicRevision
             let center=screen(owner);orbitPhase=OrbitTimeline.phase(Point(down.x-center.x,down.y-center.y));return
         }
         if beginCableDrag(at:down) {return}
         if let handle=CirclePortGeometry.hit(Point(down.x,down.y),visibleHandles:visiblePortHandles()) {
-            connecting=handle;connectionToken=UUID();connectionPoint=down;connectionRevision=store.project.musicRevision;connectionLayoutRevision=store.project.portLayout?.revision ?? 0;connectionProjectID=store.project.id;needsDisplay=true;return
+            connecting=handle;connectionToken=UUID();connectionPoint=down;connectionRevision=store.project.musicRevision;connectionLayoutRevision=store.project.portLayout?.revision ?? 0;connectionProjectID=store.project.id;portTools?.isHidden=true;needsDisplay=true;return
         }
         if !labelHit,let cable=hitCable(down) {selectCable(cable);return}
         clearCableSelection()
@@ -481,12 +486,17 @@ struct AlbumCanvas: NSViewRepresentable {
         }
         orbitDrag=nil
         if cableDrag != nil {finishCableDrag(at:convert(event.locationInWindow,from:nil));cableDrag=nil;refreshCableTools()}
-        if let from=connecting { finishPortConnection(from,at:convert(event.locationInWindow,from:nil)) }
+        if let from=connecting {
+            let point=convert(event.locationInWindow,from:nil)
+            if hypot(point.x-down.x,point.y-down.y) < 3, connectionProjectID == store.project.id, connectionRevision == store.project.musicRevision {
+                connecting=nil; selectCanvasPort(from.endpoint)
+            } else { finishPortConnection(from,at:point) }
+        }
         if dragNode != nil,var p=dragPreview {
             if store.project.album?.layout.snap != false {let spacing=store.project.album?.layout.spacing ?? 32;p=Point((p.x/spacing).rounded()*spacing,(p.y/spacing).rounded()*spacing)}
             store.moveHierarchySelection(dragPositions,delta:Point(p.x-dragOrigin.x,p.y-dragOrigin.y))
         }
-        dragNode=nil;dragPreview=nil;dragPositions=[:];panning=false;connecting=nil;connectionToken=nil;needsDisplay=true
+        dragNode=nil;dragPreview=nil;dragPositions=[:];panning=false;connecting=nil;connectionToken=nil;refreshPortTools();needsDisplay=true
     }
     override func otherMouseUp(with event:NSEvent){mouseUp(with:event)}
     override func scrollWheel(with event:NSEvent) {
@@ -562,7 +572,7 @@ struct AlbumCanvas: NSViewRepresentable {
         var accessible: [Any] = children + connectionAccessibilityChildren()
         if let editor { accessible.append(editor) }
         if let cableTools, !cableTools.isHidden { accessible.append(cableTools) }
-        if let portTools { accessible.append(portTools) }
+        if let portTools, !portTools.isHidden { accessible.append(portTools) }
         setAccessibilityChildren(accessible)
     }
 }

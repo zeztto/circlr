@@ -7,23 +7,37 @@ extension AlbumCanvasView {
     func visiblePortHandles() -> [CirclePortHandle] {
         guard let scene else { return [] }
         var result: [CirclePortHandle] = []
+        let fixed = cableDrag?.mode == .reconnect ? cableDrag?.fixed : connecting?.endpoint
+        let fixedPort = fixed.flatMap { endpoint in scene.node(endpoint.node)?.ports.first { $0.id == endpoint.portID } }
+        let time = store.selectedCircle.flatMap { visibleTimeHandle($0) }
         for node in scene.nodes where isVisible(node) && node.radius*camera.zoom > 45 && !node.ports.isEmpty {
-            let center = screen(node), detailed = node.id == store.hierarchySelection || connecting != nil || cableDrag != nil
+            let center = screen(node)
             for port in node.ports {
-                var directions = Set<PortOctant>()
-                if detailed { directions.formUnion(node.radius*camera.zoom >= 90 ? PortOctant.allCases : [port.defaultOctant]) }
-                for edge in scene.edges {
-                    if edge.from == node.id && edge.fromPortID == port.id { directions.insert(edge.placement.from) }
-                    if edge.to == node.id && edge.toPortID == port.id { directions.insert(edge.placement.to) }
+                let endpoint = CirclePortEndpoint(node:node.id,portID:port.id)
+                var engaged = node.id == store.hierarchySelection || node.id == hoverAddress
+                var expanded = endpoint == selectedCanvasPort
+                if let fixed, let fixedPort {
+                    if endpoint != fixed {
+                        guard port.direction != fixedPort.direction, port.signal == fixedPort.signal,
+                              (try? CirclePortCatalog.normalize(fixed,endpoint,in:store.project)) != nil else { continue }
+                    }
+                    engaged = true
+                    expanded = endpoint != fixed && hypot(connectionPoint.x-center.x,connectionPoint.y-center.y) <= node.outerRadius*camera.zoom+115
+                } else if let gesture = cableDrag, gesture.mode == .placement {
+                    engaged = endpoint == gesture.moving; expanded = engaged
                 }
-                for direction in directions.sorted(by: { $0.rawValue < $1.rawValue }) {
+                var connected = Set<PortOctant>()
+                for edge in scene.edges {
+                    if edge.from == node.id && edge.fromPortID == port.id { connected.insert(edge.placement.from) }
+                    if edge.to == node.id && edge.toPortID == port.id { connected.insert(edge.placement.to) }
+                }
+                let directions = CirclePortPresentation.octants(for:port,radius:node.radius*camera.zoom,engaged:engaged,expanded:expanded,connected:connected)
+                for direction in directions {
                     guard let point = try? CirclePortGeometry.anchor(center:Point(center.x,center.y),radius:node.outerRadius*camera.zoom,port:port,octant:direction),
-                          workspaceViewport.contains(CGPoint(x:point.x,y:point.y)),
-                          editor?.frame.contains(NSPoint(x:point.x,y:point.y)) != true,
-                          !(cableTools?.isHidden == false && cableTools?.frame.contains(NSPoint(x:point.x,y:point.y)) == true),
-                          portTools?.frame.contains(NSPoint(x:point.x,y:point.y)) != true,
+                          cablePointAvailable(point, labels:false),
+                          time.map({ hypot($0.x-point.x,$0.y-point.y) > 23 }) ?? true,
                           !labelPlacements.contains(where: { $0.rect.insetBy(dx:-9,dy:-9).contains(NSPoint(x:point.x,y:point.y)) }) else { continue }
-                    result.append(.init(endpoint:.init(node:node.id,portID:port.id),octant:direction,point:point))
+                    result.append(.init(endpoint:endpoint,octant:direction,point:point))
                 }
             }
         }
@@ -36,11 +50,6 @@ extension AlbumCanvasView {
             guard let node=scene?.node(handle.endpoint.node),let descriptor=node.ports.first(where:{$0.id==handle.endpoint.portID}) else { continue }
             let p=NSPoint(x:handle.point.x,y:handle.point.y),isOut=descriptor.direction == .output
             port(at:p,color:color(node),filled:isOut)
-            let label = shortPortLabel(descriptor)
-            if node.radius*camera.zoom > 45 {
-                let horizontal=abs(CirclePortGeometry.normal(handle.octant).x)>0.7
-                drawText(label,x:p.x,y:p.y+(horizontal && isOut ? 10:-20),size:9,color:StudioTheme.textNS,maxWidth:42)
-            }
         }
         if let handle=selectedPortHandle() {
             let ring=NSBezierPath(ovalIn:NSRect(x:handle.point.x-10,y:handle.point.y-10,width:20,height:20))

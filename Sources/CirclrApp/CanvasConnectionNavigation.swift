@@ -9,7 +9,7 @@ struct PortToolsView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack { Text(title).lineLimit(1); Spacer(); Button("연결 편집", action: edit); Button("닫기", action: close) }
-            Text("Tab / P 포트 선택 · Return 연결 편집 · K 케이블 선택 · Esc 해제")
+            Text("클릭 / P 포트 선택 · 끌어서 연결 · Return 편집 · K 케이블 · Esc 해제")
                 .foregroundStyle(StudioTheme.secondary).fixedSize(horizontal: false, vertical: true)
         }.font(.system(size: 12)).buttonStyle(.plain).padding(12)
             .background(StudioTheme.surface).clipShape(RoundedRectangle(cornerRadius: 8))
@@ -157,6 +157,7 @@ extension AlbumCanvasView {
         if let portTools { portTools.rootView = view } else { let host = NSHostingView(rootView: view); addSubview(host); portTools = host }
         let width = min(650, workspaceViewport.width-16), height = width < 560 ? 86.0 : 72.0
         portTools?.frame = NSRect(x: workspaceViewport.midX-width/2, y: workspaceViewport.minY+8, width: width, height: height)
+        portTools?.isHidden = connecting != nil || cableDrag != nil
     }
 
     func selectedPortHandle() -> CirclePortHandle? {
