@@ -6,7 +6,9 @@ macOS용 앨범·송폼 궤도 편집기. **앨범 → 곡·악장 → 섹션 �
 
 연결 UI는 [서클 둘레 8방향 IN/OUT과 다중 입출력](docs/22-eight-direction-ports.md)으로 확장 중이다. 포트의 신호 의미와 연결점 배치를 분리한다. 아래 일반 사용법은 배포된 0.19 앱 기준이며 새 포트 기능은 독립 개발 브랜치에서 검증한다.
 
-현재 **`codex/daw-integration`의 0.20.0 build 39**에 녹음 lifecycle과 8방향·다중 bus·그룹 포트를 통합했다. 같은 캔버스의 연결 편집·녹음 상태·스텝·오토메이션이 공존하며, 녹음 시작·정리 중 음악 편집과 Undo의 경쟁을 차단한다. build 23의 실제 편집·바운스·Undo·저장/재열기·닫기 최소화 및 출력별 모션 검증은 [통합 QA](qa/daw-integration-review.md)에 기록했다.
+현재 **`codex/daw-integration`의 0.20.0 build 40**에 녹음 lifecycle과 8방향·다중 bus·그룹 포트를 통합했다. 같은 캔버스의 연결 편집·녹음 상태·스텝·오토메이션이 공존하며, 녹음 시작·정리 중 음악 편집과 Undo의 경쟁을 차단한다. build 23의 실제 편집·바운스·Undo·저장/재열기·닫기 최소화 및 출력별 모션 검증은 [통합 QA](qa/daw-integration-review.md)에 기록했다.
+
+build 40은 **섹션 전환의 앞·뒤 대상, 마디/초 기준, 실제 시간과 다음 섹션 시작 변화를 같은 화면에 표시**한다. 전역·서클·전환 효과는 dB/ms/% 등 실제 단위와 공통 Tab/Shift-Tab 입력을 사용한다. 작동하지 않는 전환 효과 항목을 숨기고 연결 편집 왕복 시 전환을 유지한다. Swift **330개**·Python **26개**, 실제 수치/충돌·정밀도·저장 복원과 73초 오프라인 WAV export를 검증했다. 물리 출력·녹음 검증과 사용자 앱 교체는 남아 있다. [편집 계약](docs/54-transition-effect-workspace.md) · [검증과 제한](qa/transition-effects-review.md).
 
 build 39는 **선택과 편집 방식이 바뀌어도 제목·트랙 경로·본문 시작 위치를 유지**한다. 같은 캔버스 상단의 MIDI/오디오·연결·오토메이션·설정으로 바로 전환하며 현재 작업을 강조한다. 긴 속성은 본문 안에서 스크롤하고 녹음 테이크는 상단에서 선택한다. Swift **325개**·Python **26개**, 작은 창의 선택·Tab 입력·작업 왕복·콘솔 접기·Undo·저장/재열기와 최종 패키지를 검증했다. [편집 계약](docs/53-editor-workspace-shell.md) · [검증과 제한](qa/editor-shell-review.md).
 

@@ -8,6 +8,7 @@ struct InlineEditorHeader:View {
     enum Page {case content,connections,automation,settings}
     var page:Page {store.connectionsOpen ? .connections:store.hierarchySettingsOpen && store.selectedMusic != nil ? .settings:store.automationVisible ? .automation:.content}
     var contentName:String {
+        if store.hierarchyTransitionID != nil {return "전환"}
         guard let node=store.selectedMusic else{return "편집"}
         switch node.content {
         case .midi,.rhythmMIDI:return "MIDI"
@@ -25,9 +26,11 @@ struct InlineEditorHeader:View {
     }
     var body:some View {
         HStack(spacing:8) {
-            TextField("서클 이름",text:Binding(get:{store.selectedCircle?.title ?? ""},set:{store.renameHierarchy($0)}))
+            if store.hierarchyTransitionID != nil {
+                Text("섹션 전환").font(.system(size:17,weight:.semibold)).frame(minWidth:80,alignment:.leading)
+            } else {TextField("서클 이름",text:Binding(get:{store.selectedCircle?.title ?? ""},set:{store.renameHierarchy($0)}))
                 .textFieldStyle(.plain).font(.system(size:17,weight:.semibold)).focused(nameFocus)
-                .disabled(store.midiImportDraft != nil).frame(minWidth:80)
+                .disabled(store.midiImportDraft != nil).frame(minWidth:80)}
             Spacer(minLength:8)
             HStack(spacing:2) {
                 if store.selectedMusic != nil || store.canEditCirclePorts {mode(contentName,page:.content,help:store.selectedMusic==nil ? "이 서클의 편집으로 돌아가기":"이 서클의 "+contentName+" 편집으로 돌아가기")}
@@ -54,7 +57,9 @@ struct InlineEditorHeader:View {
     func select(_ target:Page) {
         guard store.midiImportDraft==nil else{return}
         switch target {
-        case .content:store.connectionsOpen=false;store.hierarchySettingsOpen=store.selectedMusic==nil;store.automationOpen=false;store.embeddedPlugin=nil
+        case .content:
+            store.connectionsOpen=false;store.hierarchySettingsOpen=store.selectedMusic==nil;store.automationOpen=false;store.embeddedPlugin=nil
+            if let edge=store.hierarchyTransitionID {store.edgeSelection=edge}
         case .connections:store.hierarchySettingsOpen=false;store.automationOpen=false;store.showConnections()
         case .automation:store.connectionsOpen=false;store.hierarchySettingsOpen=false;store.showAutomation()
         case .settings:store.connectionsOpen=false;store.automationOpen=false;store.embeddedPlugin=nil;store.hierarchySettingsOpen=true

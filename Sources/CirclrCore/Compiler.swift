@@ -197,28 +197,9 @@ public enum ArrangementCompiler {
                 occurrence.signalPlan = signalPlan
                 if iteration == 0, let (edge, source) = pending {
                     let t = edge.transition
-                    guard t.length.isFinite, t.length >= 0 else { throw CirclrError("전환 길이를 확인하세요") }
-                    var duration: Double
-                    switch t.anchor {
-                    case .seconds: duration = t.length
-                    case .sourceBars:
-                        guard t.length <= Double(source.clock.meters.count) else { throw CirclrError("전환 길이가 출발 섹션보다 깁니다") }
-                        duration = source.duration - source.clock.seconds(at: source.clock.beatAtBar(Double(source.clock.meters.count) - t.length))
-                    case .targetBars:
-                        guard t.length <= Double(clock.meters.count) else { throw CirclrError("전환 길이가 도착 섹션보다 깁니다") }
-                        duration = clock.seconds(at: clock.beatAtBar(t.length))
-                    }
-                    guard duration.isFinite else { throw CirclrError("전환 시간을 계산할 수 없습니다") }
-                    let start: Double
-                    switch t.mode {
-                    case .within:
-                        guard duration <= source.duration else { throw CirclrError("전환이 출발 섹션 범위를 넘습니다") }
-                        start = source.end - duration
-                    case .insert: start = source.end; occurrence.start += duration
-                    case .overlap:
-                        guard duration < min(source.duration, occurrence.duration) else { throw CirclrError("겹침은 두 섹션보다 짧아야 합니다") }
-                        occurrence.start -= duration; start = occurrence.start
-                    }
+                    let timing=try TransitionTiming(t,source:source.clock,target:clock)
+                    let duration=timing.duration, start=source.end+timing.startOffset
+                    occurrence.start += timing.targetOffset
                     if let p = t.patternID {
                         guard let pattern = project.patterns.first(where: { $0.id == p }) else { throw CirclrError("전환 패턴을 찾을 수 없습니다") }
                         try validatePattern(pattern, project: project)

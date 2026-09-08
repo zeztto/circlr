@@ -6,22 +6,12 @@ struct InspectorView:View {
     var body:some View { EmptyView() }
     @ViewBuilder func signal(_ n:SignalNode)->some View {
         let projectID=store.project.id
-        if n.kind == .effect {EffectControls(effect:Binding(get:{store.selectedSignal?.effect ?? n.effect},set:{v in store.updateSignal("이펙트 편집"){$0.effect=v}}),allowsAU:true,isCurrent:{store.project.id==projectID && store.selectedSignal?.id==n.id});if n.effect.kind == .audioUnit {Picker("Audio Unit",selection:Binding(get:{n.effect.plugin?.id ?? ""},set:{id in store.updateSignal("Audio Unit"){$0.effect.plugin=store.effects.first{$0.id==id}}})){Text("선택").tag("");ForEach(store.effects){Text($0.name).tag($0.id)}};Button("Plugin 화면"){store.showPluginEditor(effect:true)}.disabled(n.effect.plugin==nil)}}
+        if n.kind == .effect {EffectControls(effect:Binding(get:{store.selectedSignal?.effect ?? n.effect},set:{v in store.updateSignal("이펙트 편집"){$0.effect=v}}),allowsAU:true,isCurrent:{store.project.id==projectID && store.selectedSignal?.id==n.id});if n.effect.kind == .audioUnit {Picker("Audio Unit",selection:Binding(get:{store.selectedSignal?.effect.plugin?.id ?? ""},set:{id in store.updateSignal("Audio Unit"){$0.effect.plugin=store.effects.first{$0.id==id}}})){Text("선택").tag("");ForEach(store.effects){Text($0.name).tag($0.id)}};Button("플러그인 편집"){store.showPluginEditor(effect:true)}.disabled(n.effect.plugin==nil)}}
         Menu("출력 연결"){ForEach(store.project.signal.nodes.filter{$0.id != n.id && $0.kind != .source}){target in Button(target.name){store.connect(n.id,target.id)}}}.disabled(n.kind == .master)
         if n.kind == .effect || n.kind == .bus {Button("노드 삭제",role:.destructive){store.removeSelection()}}
     }
     @ViewBuilder func signalEdge(_ id:ID)->some View {if let e=store.project.signal.edges.first(where:{$0.id==id}) {Text("사운드 연결").font(.headline);CompactNumber("Gain",value:Binding(get:{store.project.signal.edges.first{$0.id==id}?.gain ?? e.gain},set:{v in store.mutate("연결 Gain"){p in if let i=p.signal.edges.firstIndex(where:{$0.id==id}){p.signal.edges[i].gain=max(0,min(4,v))}}}),range:0...4);Text(e.sidechain ? "Sidechain 입력":"Audio 입력");Button("연결 삭제",role:.destructive){store.removeSelection()}}}
-    @ViewBuilder func transition(_ e:FlowEdge)->some View {
-        let projectID=store.project.id
-        StudioChoice("방식",selection:Binding(get:{e.transition.mode},set:{v in store.updateEdge{$0.transition.mode=v}}),options:[(.within,"끝부분 안에서"),(.insert,"사이에 삽입"),(.overlap,"겹치기")])
-        StudioChoice("길이 기준",selection:Binding(get:{e.transition.anchor},set:{v in store.updateEdge{$0.transition.anchor=v}}),options:[(.sourceBars,"앞 서클 마디"),(.targetBars,"뒤 서클 마디"),(.seconds,"초")])
-        CompactNumber("길이",value:Binding(get:{store.project.active.edges.first{$0.id==e.id}?.transition.length ?? e.transition.length},set:{v in store.updateEdge{$0.transition.length=max(0,v)}}),range:0...Double.greatestFiniteMagnitude)
-        EffectControls(effect:Binding(get:{store.project.active.edges.first{$0.id==e.id}?.transition.effect ?? e.transition.effect},set:{v in store.updateEdge{$0.transition.effect=v}}),isCurrent:{store.project.id==projectID && store.edgeSelection==e.id})
-        StudioChoice("전환 리듬",selection:Binding(get:{e.transition.patternID ?? ""},set:{v in store.updateEdge{$0.transition.patternID=v.isEmpty ? nil:v}}),options:[("","없음")]+store.project.patterns.map{($0.id,$0.name)})
-        StudioChoice("대체할 트랙",selection:Binding(get:{e.transition.replaceTrackID ?? ""},set:{v in store.updateEdge{$0.transition.replaceTrackID=v.isEmpty ? nil:v}}),options:[("","대체 없이 합치기")]+store.project.tracks.map{($0.id,$0.name)})
-        Text("겹치기는 앞 서클 fade-out과 뒤 서클 fade-in으로 연결합니다.").font(.caption).foregroundStyle(.secondary)
-        Button("연결 삭제",role:.destructive){store.removeSelection()}
-    }
+
 }
 struct ContextInspector:View {
     @ObservedObject var store:AppStore;let use:SectionUse

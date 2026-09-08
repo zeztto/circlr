@@ -34,17 +34,20 @@ struct InlineCircleEditor: View {
             stepState.drumMode=store.selectedTrack?.instrument.drums==true
             stepState.newPitch=store.selectedTrack?.instrument.sample?.rootPitch ?? 36
             // A false FocusState write can clear focus already assigned by the connection editor.
-            if store.hierarchySettingsOpen { nameFocused = true }
+            if store.hierarchySettingsOpen && store.hierarchyTransitionID==nil { nameFocused = true }
         }
-        .onChange(of:store.hierarchySettingsOpen){_,value in if value || nameFocused { nameFocused=value } }
+        .onChange(of:store.hierarchySettingsOpen){_,value in
+            let shouldFocus=value && store.hierarchyTransitionID==nil
+            if shouldFocus || nameFocused {nameFocused=shouldFocus}
+        }
+        .onChange(of:store.hierarchyTransitionID){_,id in if id != nil && nameFocused {nameFocused=false}}
         .onChange(of:store.editOriginal){_,_ in orbitViewport=MIDIOrbitViewport();orbitViewport.fitPitches(store.currentLane?.notes ?? [])}
     }
     @ViewBuilder private var editorContent:some View {
         VStack(alignment:.leading,spacing:12) {
             if store.connectionsOpen { PortConnectionsEditor(store: store).id(store.hierarchySelection) }
             else if let draft=store.midiImportDraft {MIDIImportView(store:store,draft:draft)} else if let id=store.hierarchyTransitionID,let edge=store.project.active.edges.first(where:{$0.id==id}) {
-                HStack{Text("섹션 사이 전환");Spacer();Button("서클 설정"){store.hierarchyTransitionID=nil}}
-                ScrollView{VStack(alignment:.leading,spacing:18){InspectorView(store:store).transition(edge)}}
+                TransitionWorkspace(store:store,edgeID:edge.id)
             } else if let plugin = store.embeddedPlugin {
                 HStack { Text("Audio Unit"); Spacer(); Button("서클로 돌아가기") { store.embeddedPlugin = nil } }
                 EmbeddedPlugin(controller: plugin)

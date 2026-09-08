@@ -50,7 +50,8 @@ struct CircleWorkspace:View {
         case .signal:
             scroller { if let n=store.selectedSignal { InspectorView(store:store).signal(n); if let track=store.selectedTrack,n.kind == .source { Divider();TrackInspector(store:store,track:track) } } }
         case .edge(let id):
-            scroller { if store.soundView {InspectorView(store:store).signalEdge(id)} else if let e=store.project.active.edges.first(where:{$0.id==id}){InspectorView(store:store).transition(e)} }
+            if store.soundView {scroller {InspectorView(store:store).signalEdge(id)}}
+            else {TransitionWorkspace(store:store,edgeID:id).padding(26)}
         case .track(let id):
             scroller { if let t=store.project.tracks.first(where:{$0.id==id}) { TextField("트랙 이름",text:Binding(get:{t.name},set:{v in store.updateTrack("트랙 이름"){$0.name=v}})).textFieldStyle(StudioFieldStyle());TrackInspector(store:store,track:t) } }
         case .group(let id):scroller{groupSettings(id)}

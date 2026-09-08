@@ -52,6 +52,15 @@ final class NumberEditSessionTests: XCTestCase {
         edit.type("0.8",value:1,context:2)
         XCTAssertEqual(try edit.resolve(value:1,context:2,range:0...4),0.8)
     }
+    func testEffectDisplayKeepsRawPrecisionAndReportsPhysicalUnit()throws {
+        let raw=516.15161661234
+        var edit=NumberEditSession<Int>(presentation:.effectValue(unit:"ms"));edit.begin(value:raw,context:1)
+        XCTAssertEqual(edit.text,"516.152");XCTAssertNil(try edit.resolve(value:raw,context:1,range:30...1000))
+        edit.text="400.123456789";XCTAssertEqual(try edit.resolve(value:raw,context:1,range:30...1000),400.123456789)
+        edit.text="2000"
+        XCTAssertThrowsError(try edit.resolve(value:raw,context:1,range:30...1000)){XCTAssertTrue($0.localizedDescription.contains("30–1000 ms"))}
+        edit.reset(value:raw);XCTAssertNil(try edit.resolve(value:raw,context:2,range:30...1000))
+    }
     func testRoundedSourceTimeDisplayPreservesRawValueAndAcceptsPreciseInput()throws {
         for (presentation,text,unit) in [(NumberEditPresentation.sourceSeconds,"9.032","초"),(.sourceMilliseconds,"9.0","ms")] {
             let raw=9.031723050019

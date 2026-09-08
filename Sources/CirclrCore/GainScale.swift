@@ -29,12 +29,18 @@ public enum GainScale {
 
 public enum NumberEditPresentation:Hashable {
     case number,gainDecibels,panPercent,sourceSeconds,sourceMilliseconds
+    case effectValue(unit:String)
     func text(_ value:Double)->String {
         switch self {
         case .gainDecibels:return GainScale.text(value)
         case .panPercent:return String(format:"%.2f",locale:Locale(identifier:"en_US_POSIX"),value*100)
         case .sourceSeconds:return String(format:"%.3f",locale:Locale(identifier:"en_US_POSIX"),value)
         case .sourceMilliseconds:return String(format:"%.1f",locale:Locale(identifier:"en_US_POSIX"),value)
+        case .effectValue:
+            var text=String(format:"%.3f",locale:Locale(identifier:"en_US_POSIX"),value)
+            while text.last == "0" {text.removeLast()}
+            if text.last == "." {text.removeLast()}
+            return text == "-0" ? "0":text
         case .number:return String(format:"%.10g",locale:Locale(identifier:"en_US_POSIX"),value)
         }
     }

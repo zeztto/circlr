@@ -7,79 +7,56 @@ struct EffectControls: View {
     var allowsAU = false
     var isCurrent: () -> Bool = {true}
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 14) {
             StudioChoice("효과", selection: Binding(get: {effect.kind}, set: {kind in
                 guard isCurrent() else {return}; var next=effect; next.kind=kind; effect=next
             }), options: EffectKind.allCases.filter {allowsAU || $0 != .audioUnit}.map {($0,AppStore.effectName($0))})
-            ForEach(EffectParameter.all(for: effect.kind)) {parameter in
-                EffectParameterRow(effect: effect, parameter: parameter) {expected,next in
-                    guard isCurrent(),effect == expected else {return false}
-                    if next != effect {effect=next}
-                    return effect == next
-                }
-            }
-        }.id(effect.kind).frame(maxWidth: 660, alignment: .leading)
+            EffectParameterFields(effect:$effect) {expected,next in
+                guard isCurrent(),effect==expected else{return false}
+                if next != effect {effect=next}
+                return effect==next
+            }.id(effect.kind)
+        }.frame(maxWidth:660,alignment:.leading)
     }
 }
 
-private struct EffectParameterRow: View {
-    let effect: Effect
-    let parameter: EffectParameter
-    let apply: (Effect,Effect) -> Bool
-    @State private var text = ""
-    @State private var baseline: Effect?
-    @State private var error = ""
-    @FocusState private var editing: Bool
-    private var current: Double {parameter.value(in: effect)}
-    private func format(_ value: Double) -> String {
-        var text=String(format:"%.3f",locale:Locale(identifier:"en_US_POSIX"),value)
-        while text.last == "0" {text.removeLast()}
-        if text.last == "." {text.removeLast()}
-        return text == "-0" ? "0":text
+private extension EffectParameter {
+    func presentation(in effect:Effect)->NumberEditPresentation {kind == .gain && effect.amount>=0 ? .gainDecibels:.effectValue(unit:unit)}
+    func displayUnit(in effect:Effect)->String {presentation(in:effect) == .gainDecibels ? "dB":unit}
+    func displayHint(in effect:Effect)->String {kind == .gain ? (effect.amount<0 ? "기존 음수 게인 · 위상이 반전됩니다":"0 dB는 원래 레벨 · −∞는 무음"):hint}
+    func fieldTitle(in effect:Effect)->String {title+" · "+displayUnit(in:effect)}
+}
+
+private struct EffectParameterFields:View {
+    @Binding var effect:Effect
+    let apply:(Effect,Effect)->Bool
+    @Environment(\.numberEditing) private var context
+    @State private var fieldFocus:NumberFieldFocus
+    init(effect:Binding<Effect>,apply:@escaping(Effect,Effect)->Bool) {
+        _effect=effect;self.apply=apply
+        _fieldFocus=State(initialValue:NumberFieldFocus(EffectParameter.all(for:effect.wrappedValue.kind).map{$0.fieldTitle(in:effect.wrappedValue)}))
     }
-    var body: some View {
-        VStack(alignment: .leading, spacing: 5) {
-            HStack(spacing: 14) {
-                Text(parameter.title).frame(width: 76, alignment: .leading)
-                EffectSlider(effect: effect, parameter: parameter) {expected,value in
-                    commit(value, expected: expected)
-                }.frame(minWidth: 100, maxWidth: .infinity).frame(height: 28)
-                TextField(parameter.title, text: $text)
-                    .textFieldStyle(StudioFieldStyle()).multilineTextAlignment(.trailing).monospacedDigit()
-                    .frame(width: 98).focused($editing).foregroundStyle(error.isEmpty ? StudioTheme.text : Color.red)
-                    .accessibilityLabel(parameter.title+" · "+parameter.unit)
-                    .help("Return으로 적용 · Esc로 취소")
-                    .onSubmit {if commitText() {editing=false}}
-                    .onExitCommand {reset();editing=false}
-                Text(parameter.unit).foregroundStyle(StudioTheme.secondary).frame(width: 28, alignment: .leading)
-            }
-            if !error.isEmpty {Text(error).foregroundStyle(Color.red).accessibilityLabel(error)}
-            else if !parameter.hint.isEmpty {Text(parameter.hint).foregroundStyle(StudioTheme.secondary)}
-        }.font(.system(size: 13))
-            .onAppear {reset()}
-            .onChange(of: effect) {_,_ in
-                if !editing {reset()}
-                else if let baseline,text == format(parameter.value(in:baseline)),error.isEmpty {
-                    // Tab focuses the next field before the previous field commits its value.
-                    self.baseline=effect;text=format(current)
+    var body:some View {
+        VStack(alignment:.leading,spacing:12) {
+            ForEach(EffectParameter.all(for:effect.kind)) {parameter in
+                VStack(alignment:.leading,spacing:4) {
+                    HStack(spacing:12) {
+                        Text(parameter.title).frame(width:76,alignment:.leading)
+                        EffectSlider(effect:effect,parameter:parameter) {expected,value in
+                            guard let next=try? parameter.applying(value,to:expected) else{return false}
+                            return apply(expected,next)
+                        }.frame(minWidth:72,maxWidth:.infinity).frame(height:28)
+                        CommittedNumberField(title:parameter.fieldTitle(in:effect),value:Binding(
+                            get:{parameter.value(in:effect)},set:{value in
+                                let expected=effect
+                                if let next=try? parameter.applying(value,to:expected){_=apply(expected,next)}
+                            }),range:parameter.range,width:110,presentation:parameter.presentation(in:effect))
+                        Text(parameter.displayUnit(in:effect)).foregroundStyle(StudioTheme.secondary).frame(width:28,alignment:.leading)
+                    }
+                    if !parameter.displayHint(in:effect).isEmpty {Text(parameter.displayHint(in:effect)).font(.system(size:12)).foregroundStyle(StudioTheme.secondary)}
                 }
             }
-            .onChange(of: editing) {_,focused in if focused {baseline=effect;error=""} else {_=commitText()} }
-    }
-    private func reset() {text=format(current);baseline=nil;error=""}
-    @discardableResult private func commitText() -> Bool {
-        guard let expected=baseline else {return true}
-        if text == format(parameter.value(in:expected)) {reset();return true}
-        guard let value=Double(text.trimmingCharacters(in:.whitespacesAndNewlines)) else {error="숫자를 입력하세요";return false}
-        guard commit(value,expected:expected) else {return false}
-        baseline=nil;return true
-    }
-    @discardableResult private func commit(_ value: Double, expected: Effect) -> Bool {
-        do {
-            let next=try parameter.applying(value,to:expected)
-            guard apply(expected,next) else {error="효과가 변경되었습니다. 다시 선택해 입력하세요";return false}
-            text=format(parameter.value(in:next));error="";return true
-        } catch {self.error=error.localizedDescription;return false}
+        }.environment(\.numberEditing,NumberEditingContext(snapshot:context.snapshot,current:context.current,focusCanvas:context.focusCanvas,fieldFocus:fieldFocus))
     }
 }
 
@@ -99,8 +76,9 @@ private struct EffectSlider: NSViewRepresentable {
     func updateNSView(_ slider: Control, context: Context) {
         context.coordinator.parent=self
         if !slider.tracking {slider.doubleValue=parameter.sliderPosition(in:effect)}
-        slider.setAccessibilityLabel(parameter.title+" 슬라이더 · "+parameter.unit)
-        slider.setAccessibilityValueDescription(parameter.value(in:effect).formatted(.number.precision(.fractionLength(0...3)))+" "+parameter.unit)
+        slider.setAccessibilityLabel(parameter.title+" 슬라이더 · "+parameter.displayUnit(in:effect))
+        let display=parameter.presentation(in:effect) == .gainDecibels ? GainScale.text(parameter.value(in:effect)):parameter.value(in:effect).formatted(.number.precision(.fractionLength(0...3)))
+        slider.setAccessibilityValueDescription(display+" "+parameter.displayUnit(in:effect))
         slider.toolTip="좌우 방향키로 조절 · 드래그를 놓으면 적용"
     }
     final class Coordinator: NSObject {
