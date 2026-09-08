@@ -528,6 +528,7 @@ struct AlbumCanvas: NSViewRepresentable {
     }
     override func magnify(with event:NSEvent){let p=convert(event.locationInWindow,from:nil);setCamera(camera.zoomed(to:camera.zoom*exp(event.magnification),around:Point(p.x,p.y)))}
     override func keyDown(with event:NSEvent) {
+        if store.libraryOpen {return}
         if event.modifierFlags.contains(.command) || event.modifierFlags.contains(.control) {super.keyDown(with:event);return}
         if handleConnectionKey(event) { return }
         if event.modifierFlags.contains([.option,.shift]),[123,124,125,126].contains(event.keyCode),!store.project.usesOrbits {

@@ -14,7 +14,7 @@ extension AppStore {
         return studioRoutes.first{$0.id == .section(arrangementID:project.activeArrangementID,useID:use.id)}
     }
     var currentStudioTrack:StudioTrackRoute? {currentStudioSection?.tracks.first{$0.id==selectedTrackID}}
-    func showNavigation(){commandPalette=nil;keyboardHelp=false;navigationOpen=true}
+    func showNavigation(){libraryOpen=false;commandPalette=nil;keyboardHelp=false;navigationOpen=true}
     func navigateStudio(_ destination:CircleAddress,track:ID?=nil) {
         do {
             var revealed=project;try StudioNavigation.reveal(destination,in:&revealed)

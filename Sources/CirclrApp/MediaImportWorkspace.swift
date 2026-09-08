@@ -25,8 +25,9 @@ extension AppStore {
         if mediaImportTask != nil {preparing=false}
         mediaImportTask?.cancel();mediaImportWorker?.cancel();mediaImportTask=nil;mediaImportWorker=nil
     }
-    func beginAudioImport(_ urls:[URL],request:MediaImportRequest) {
+    func beginAudioImport(_ urls:[URL],request:MediaImportRequest,retaining access:LibraryAccess?=nil) {
         guard canStartMediaImport,request.projectID==project.id,request.revision==project.musicRevision,request.generation==mediaImportGeneration else {status="대상이 변경됐거나 다른 작업 중입니다. 파일을 다시 가져오세요";return}
+        library.stopPreview()
         mediaImportGeneration+=1;let generation=mediaImportGeneration
         let scoped=urls.filter{$0.startAccessingSecurityScopedResource()}
         let root=productionMediaRoot.deletingLastPathComponent().appendingPathComponent("Imports")
@@ -41,7 +42,7 @@ extension AppStore {
         }
         mediaImportWorker=worker
         mediaImportTask=Task { [weak self] in
-            defer{scoped.forEach{$0.stopAccessingSecurityScopedResource()}}
+            defer{scoped.forEach{$0.stopAccessingSecurityScopedResource()};withExtendedLifetime(access){}}
             do {
                 let staged=try await worker.value
                 var retained=false;defer{if !retained{staged.discard()}}

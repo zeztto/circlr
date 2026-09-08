@@ -21,6 +21,7 @@ extension AppStore {
         hierarchyTransitionID=nil;focusHierarchy(address,detail:true);hierarchySettingsOpen=true
     }
     func showCommands() {
+        libraryOpen=false
         navigationOpen=false
         var commands=canvasCommands?() ?? []
         func add(_ id:String,_ title:String,_ shortcut:String="",_ run:@escaping()->Void) {
@@ -39,6 +40,7 @@ extension AppStore {
         add("stems","트랙별 stems 내보내기…"){[weak self] in self?.export(stems:true)}
         if undoCount>0 {add("undo","실행 취소","⌘Z"){[weak self] in self?.undo()}}
         if redoCount>0 {add("redo","다시 실행","⇧⌘Z"){[weak self] in self?.redo()}}
+        add("media-library","샘플 라이브러리 검색·미리 듣기","⌥⌘L"){[weak self] in self?.showMediaLibrary()}
         add("global","글로벌 템포·박자·스케일 설정"){[weak self] in self?.focusHierarchy(.album,detail:true);self?.hierarchySettingsOpen=true}
         add("settings","선택 서클 이름·음악 설정","R"){[weak self] in self?.openCircleSettings()}
         add("navigation","섹션·트랙으로 바로 이동","⌘J"){[weak self] in self?.showNavigation()}
@@ -273,7 +275,7 @@ struct CommandSearchField:NSViewRepresentable {
 struct KeyboardHelpView:View {
     @ObservedObject var store:AppStore
     private let rows:[(String,String)] = [
-        ("⌘4","MIDI 스텝 편집"),("⌘J","섹션·트랙 바로 이동"),("⌘1 / ⌘2 / ⌘3","같은 트랙의 MIDI·오디오 / 음색 / 이펙터"),("⇧⌘P","명령·서클 검색"),("⌥⌘0","캔버스로 포커스 이동"),("A / C","서클 생성 / 선택 서클 메뉴"),("L","IN/OUT·대상·8방향 연결 편집"),
+        ("⌥⌘L","로컬 샘플 라이브러리"),("⌘4","MIDI 스텝 편집"),("⌘J","섹션·트랙 바로 이동"),("⌘1 / ⌘2 / ⌘3","같은 트랙의 MIDI·오디오 / 음색 / 이펙터"),("⇧⌘P","명령·서클 검색"),("⌥⌘0","캔버스로 포커스 이동"),("A / C","서클 생성 / 선택 서클 메뉴"),("L","IN/OUT·대상·8방향 연결 편집"),
         ("Tab · ← → ↑ ↓","다음·이전 서클 선택"),("⇧ 방향키","여러 서클 선택"),("Return / Esc","서클 안으로 / 상위 서클"),
         ("K / ⇧K · P / ⇧P","다음·이전 케이블 · IN/OUT 포트 선택"),
         ("케이블 · Tab / ← →","OUT·IN 끝점 선택 / 둘레 8방향 위치 이동"),

@@ -20,6 +20,8 @@
 
 **build 30에서 주 캔버스의 음악 설정 전체 적용 draft를 제거했다.** 현재 유효값과 출처를 함께 보여주며 항목별 즉시 확정·Undo, 보관된 개별값 복원, 엄격한 강세 입력을 지원한다. 공유 원본은 원본 settings만 부분 수정한다. Swift 272개·Python 26개, 실제 설정·리듬·충돌·저장 복원과 최종 패키지를 검증했다. legacy 전체 draft와 공유 원본/곡/악장의 Native 전체 조합은 남아 있다. [계약](44-direct-music-context.md) · [QA](../qa/context-editing-review.md).
 
+**build 31에서 다운로드한 샘플의 로컬 검색→가져오기를 연결했다.** 여러 폴더의 read-only bookmark, 파일명/하위 경로/형식 검색, MIDI 선택 화면, 오디오 미리 듣기·취소와 대상 revision 보호를 구현했다. 작은 창의 상단과 검색 접근성도 정리했다. 실제 폴더 등록/재실행/제거·오디오/MIDI import·Undo/Redo·저장 복원을 확인했다. HAL의 장치 시작 지연을 재현했고 player 호출을 모두 백그라운드로 이동했다. [계약](45-local-media-library.md) · [QA 및 출력 제한](../qa/library-review.md).
+
 다음 실행 순서는 다음과 같다. (1) 궤도 배치·다수 섹션 전환·펼친 그룹·긴 이름·시간 손잡이·VoiceOver 조합을 점검한다. 이름표/포트 hit와 그려진 위치가 일치하고 키보드로 편집/복귀가 가능해야 한다. (2) file-URL drop의 실제 제스처·orbit 위치·overlay 거절을 먼저 검증하고 file promise와 로컬 라이브러리를 연결해 import→섹션 배치→편집→바운스→저장 복원의 작업 깊이를 줄인다. 원본 참조·중복 자산·Undo 계약을 먼저 정한다. (3) 새 출력 telemetry로 장치별 cold/warm 연결 시간을 수집해 HAL 대기와 engine 시작/정지의 원인을 분리하고, 연속 render graph/PDC 전에 장치 변경·복구 수명을 확정한다. 마이크 입력의 별도 실행 조건과 E 출고 gate는 유지한다.
 
 0.14에서 10음색 engine 3와 15트랙의 f0r h3r v4를 추가했고, 0.15에서 B의 탐색 깊이·라벨 가독성·작은 창 편집을 개선했다. 배포용 v4는 FreePats CC0 bank를 사용한다. 기존 버전·원본 곡은 보존한다. [음질·음악 검증](../qa/0.14-review.md)과 [UI 검증](../qa/0.15-review.md)을 분리한다.
@@ -33,7 +35,7 @@
 | C | 캡처·코덱 경로 구현 | Scarlett 실제 출력·MP4 동기/최소화 |
 | D | engine 3·v4 MIDI/CC0/WAV·native bounce | 아티스트 청취 피드백 |
 | E | stable ports·8방향·독립 bus·MCP·그룹 및 녹음 branch 통합 | 전체 신호/밀집 조합·native 입력·사용 앱 출고 |
-| Import | CC0 대체·MIDI 노트·비동기 오디오 배치·소스별 생성/탐색·세션 미디어 참조·file-URL drop 코드 | Finder/Splice promise 실제 드롭, CC/tempo map, 중복 자산·GC |
+| Import | CC0 대체·MIDI 노트·비동기 오디오 배치·소스별 생성/탐색·세션 미디어 참조·file-URL drop 코드·로컬 샘플 검색 | Finder/Splice promise 실제 드롭, 로컬 폴더 자동 감시·대규모 검색 검증, CC/tempo map, 중복 자산·GC |
 | F | prepared PCM 기반 | 장치 lifecycle 후 연속 render graph/PDC |
 | G | 공식 계정 콘솔 설계·전문 kit/MCP 구현 | App Server adapter·권한/취소·대화 UI |
 | H | 아티스트 세계관 설계 | catalog/schema·파일 참조·복원 |

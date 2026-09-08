@@ -40,8 +40,8 @@ CC0는 저작권·관련 권리를 가능한 범위에서 포기하고 복제·�
 
 | 경로 | 공식 제공 범위 | 현재 써클러 상태 |
 |---|---|---|
-| 로컬 Splice 폴더에서 가져오기 | 다운로드한 샘플은 실제 로컬 파일 | 섹션 선택 → ⌘I → 샘플 파일 선택 가능 |
-| Splice Desktop에서 파일 드래그 | 다른 DAW로 drag/drop 지원 | 캔버스의 외부 파일 drop 수신은 아직 없음 |
+| 로컬 Splice 폴더에서 가져오기 | 다운로드한 샘플은 실제 로컬 파일 | ⌘I 파일 선택 또는 build 31 샘플 / ⌥⌘L에서 사용자가 등록한 다운로드 폴더 검색 |
+| Splice Desktop에서 파일 드래그 | 다른 DAW로 drag/drop 지원 | build 26 file-URL 수신 구현, 실제 Splice gesture/file promise는 미검증 |
 | Splice Sounds AU | 앱 안 검색·라이선스·라이브러리·파일 drag/copy | AU 검색·instantiate·로그인 화면 표시까지 실제 확인 |
 | Splice Bridge AU | DAW의 key/tempo에 맞춘 미리 듣기 | 호환 후보, 현재 Mac에 Bridge는 설치되지 않았고 실시간 동기 미검증 |
 | DAW 자체 브라우저 통합 | Ableton/Studio Pro/Pro Tools의 공식 통합 사례 | 써클러용 공개 SDK/API 또는 제휴 권한은 확인되지 않음 |
@@ -71,3 +71,8 @@ CC0는 저작권·관련 권리를 가능한 범위에서 포기하고 복제·�
 `circlr-studio make-demo`의 기본 소스를 CC0 세트로 변경했다. v1/v2는 기존 로컬 파일로 남아 있고 새 기본 출력은 [v3](../music/f0r-h3r/v3/README.md)다. 앱 바이너리 버전은 0.13.0 그대로이며 이번 변경은 제작 CLI·샘플 산출물·문서에 한정한다.
 
 배포용 프로젝트 안의 미디어 전부가 고정 CC0 hash 목록과 일치하고, 추가 파일·외부 절대 경로·이전 Splice hash가 없음을 `qa/verify-demo-license.py`로 확인한다. 실제 앱 열기/export와 샘플 정책 검증 기록은 [QA](../qa/0.13-license-review.md)에 있다.
+
+
+## 2026-09-09 로컬 라이브러리 구현 상태
+
+build 31 개발 앱은 사용자가 직접 선택한 여러 다운로드 폴더의 읽기 전용 bookmark·비동기 검색·파일 정보·오디오/MIDI 가져오기를 구현했다. Splice 계정·사설 DB·클라우드 API는 사용하지 않는다. 폴더 추가/새로고침/다시 열기 때 검색 결과를 갱신하며 자동 파일 변경 감시는 후속 범위다. 구매한 샘플 원본을 Git 또는 배포 데모에 추가하지 않았다. 이는 로컬 파일 경로의 구현 갱신이며 위의 2026-09-08 라이선스 검토를 새로 판정한 것이 아니다. [실행 계약](45-local-media-library.md) · [QA](../qa/library-review.md).

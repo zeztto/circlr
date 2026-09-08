@@ -5,7 +5,7 @@ import CirclrCore
 extension AppStore {
     var currentAudioClip:AudioClip? {guard case .audio(_,let id)=selectedMusic?.content else{return nil};return currentLane?.audio.first{$0.id==id}}
     var audioEditorHasFocus:Bool {NSApp.keyWindow?.firstResponder is OrbitAudioView}
-    var audioCommandAvailable:Bool {currentAudioClip != nil && !automationVisible && !(NSApp.keyWindow?.firstResponder is NSTextView) && !navigationOpen && commandPalette==nil && !keyboardHelp && !hierarchySettingsOpen}
+    var audioCommandAvailable:Bool {currentAudioClip != nil && !automationVisible && !(NSApp.keyWindow?.firstResponder is NSTextView) && !libraryOpen && !navigationOpen && commandPalette==nil && !keyboardHelp && !hierarchySettingsOpen}
     var audioCutOffset:Double {guard let clip=currentAudioClip else{return 0};return min(clip.duration,max(0,audioSplitOffset ?? clip.duration/2))}
     func splitAudio(){applyAudioEdit(.split(sourceOffset:audioCutOffset),label:"오디오 분할")}
     func duplicateAudio(){applyAudioEdit(.duplicate(beatOffset:nil),label:"오디오 복제")}

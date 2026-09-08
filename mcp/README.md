@@ -90,3 +90,8 @@ Python 표준 라이브러리만 사용하는 로컬 stdio MCP 서버다. 음악
 그룹 포트는 `circlr_set_group_port`/`circlr_remove_group_port`로 관리한다. node는 group 주소, target은 내부 실제 endpoint다. 두 명령 모두 project/music/layout revision을 요구하며 음악은 유지한다. 반환 portID를 connect/reconnect에 사용하고, 기존 ID의 target을 바꿀 수는 없다. [정확한 요청·Undo·미해결 대상 계약](../docs/36-group-ports.md#mcp). `circlr_focus`의 node 주소로 그룹을 바로 보여줄 수도 있다.
 
 0.20의 `circlr_record`는 현재 선택한 섹션·트랙의 실제 오디오 녹음을 시작한다. 사용자가 입력 녹음을 요청했을 때만 사용하며 `projectID`·`expectedRevision`이 필요하다. macOS 마이크 권한 선택은 사용자에게 맡긴다. snapshot.recording의 phase/busy/seconds/peak/format/message/recoveryPath로 실제 상태를 확인한다. STOP 뒤에도 파일 마무리는 비동기이므로 busy=false와 실제 새 take를 확인하기 전 재시도하지 않는다. 장치의 첫 두 채널(모노는 1채널)을 기록하며, 반주 transport 동기·latency 보정·장치 채널 선택은 후속 범위다. read-only 전문 역할에는 이 도구가 노출되지 않는다. 통합 개발 adapter의 전체 catalog는 22개다.
+
+
+### 로컬 라이브러리 상태 (build 31 개발 앱)
+
+`snapshot.library`의 `open`, `folders`, `files`, `scanning`, `searching`은 검색 화면 상태다. `previewPreparing`, `previewPlaying`, `previewSeconds`는 미리 듣기이며 `previewPending`은 아직 종료되지 않은 출력 작업을 나타낸다. 취소 직후 preparing/playing이 false여도 device 호출이 끝날 때까지 pending은 true일 수 있다. `stop`은 미리 듣기도 취소한다. 폴더 경로·bookmark는 응답에 포함하지 않는다. 폴더 등록·검색·가져오기 전용 MCP 명령은 이번 추가 범위가 아니다.

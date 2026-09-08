@@ -16,6 +16,7 @@ struct RootView: View {
                 .coordinateSpace(name:"albumCanvas")
                 .onPreferenceChange(AgentConsoleBoundsKey.self){if store.consoleBounds != $0 {store.consoleBounds=$0}}
         }
+        .accessibilityHidden(store.libraryOpen)
         .overlay(alignment:.top) {
             if let palette=store.commandPalette {
                 ZStack(alignment:.top) {
@@ -40,19 +41,30 @@ struct RootView: View {
                 }
             }
         }
+        .overlay(alignment:.top) {
+            if store.libraryOpen {
+                ZStack(alignment:.top) {
+                    Color.black.opacity(0.3).contentShape(Rectangle()).onTapGesture{store.closeMediaLibrary()}
+                    MediaLibraryView(store:store).padding(.top,85)
+                }
+            }
+        }
         .frame(minWidth:1024,minHeight:740).background(StudioTheme.canvas)
         .font(.system(size:12)).foregroundStyle(StudioTheme.text).buttonStyle(CanvasButtonStyle())
         .numberEditing(in:store)
-        .onExitCommand{if store.connectionsOpen {store.connectionsOpen=false;store.focusCanvas?()} else if store.navigationOpen {store.navigationOpen=false;store.focusCanvas?()} else if store.commandPalette != nil {store.commandPalette=nil;store.focusCanvas?()} else if store.keyboardHelp {store.keyboardHelp=false} else {store.hierarchySettingsOpen=false;store.hierarchyParent()}}
+        .onExitCommand{if store.libraryOpen {store.closeMediaLibrary()} else if store.connectionsOpen {store.connectionsOpen=false;store.focusCanvas?()} else if store.navigationOpen {store.navigationOpen=false;store.focusCanvas?()} else if store.commandPalette != nil {store.commandPalette=nil;store.focusCanvas?()} else if store.keyboardHelp {store.keyboardHelp=false} else {store.hierarchySettingsOpen=false;store.hierarchyParent()}}
         .alert("작업을 완료하지 못했습니다",isPresented:Binding(get:{store.errorMessage != nil},set:{if !$0{store.errorMessage=nil}})){Button("확인"){store.errorMessage=nil}}message:{Text(store.errorMessage ?? "")}
     }
     private var header:some View {
-        HStack(spacing:14) {
+        GeometryReader { geometry in headerRow(compact:geometry.size.width<1180) }.frame(height:66)
+    }
+    private func headerRow(compact:Bool)->some View {
+        HStack(spacing:compact ? 10:14) {
             Text("circlr").font(.system(size:25,weight:.semibold)).tracking(-1)
             Menu {
                 Button("새 앨범"){store.newProject()};Button("열기…"){store.open()};Button("저장"){store.save()};Button("다른 이름으로 저장…"){store.save(as:true)}
                 Divider();Button("앨범 WAV 내보내기…"){store.export()};Button("트랙별 stems 내보내기…"){store.export(stems:true)}
-            }label:{HStack(spacing:7){Text(store.project.name).lineLimit(1);if store.dirty{Circle().fill(StudioTheme.accent).frame(width:4,height:4)}}.frame(maxWidth:170,alignment:.leading)}
+            }label:{HStack(spacing:7){Text(store.project.name).lineLimit(1);if store.dirty{Circle().fill(StudioTheme.accent).frame(width:4,height:4)}}.frame(maxWidth:compact ? 110:170,alignment:.leading)}
             Rectangle().fill(StudioTheme.line).frame(width:1,height:24)
             TransportControls(store:store,meter:store.meter)
             Button{store.toggleMovieRecording()}label:{
@@ -62,11 +74,12 @@ struct RootView: View {
                 .accessibilityLabel(store.movieWriter != nil ? "영상 녹화 마치기":"영상 녹화 시작")
                 .disabled(store.movieFinalizing != nil)
             Spacer(minLength:8)
-            Button{store.showNavigation()}label:{Label("작업 이동",systemImage:"arrow.left.arrow.right")}.help("섹션·트랙·음색·이펙트로 바로 이동 · ⌘J")
+            Button{store.showMediaLibrary()}label:{Label("샘플",systemImage:"waveform")}.help("로컬 샘플 검색·미리 듣기 · ⌥⌘L")
+            Button{store.showNavigation()}label:{HStack(spacing:6){Image(systemName:"arrow.left.arrow.right");if !compact{Text("작업 이동")}}}.help("섹션·트랙·음색·이펙트로 바로 이동 · ⌘J").accessibilityLabel("작업 이동")
             Button{store.showCommands()}label:{Image(systemName:"command")}.help("명령 검색 · ⇧⌘P")
             Button{store.focusHierarchy(.album,detail:true);store.hierarchySettingsOpen=true}label:{
-                HStack(spacing:12){Text("\(store.project.global.tempo.formatted())").font(.system(size:18,weight:.medium,design:.rounded)).monospacedDigit();Text("BPM").font(.system(size:9)).foregroundStyle(StudioTheme.secondary);Text(store.project.global.meter.label);Text(store.project.global.scale.label).foregroundStyle(StudioTheme.secondary)}
-            }.help("앨범의 글로벌 음악 설정")
+                HStack(spacing:compact ? 7:12){Text("\(store.project.global.tempo.formatted())").font(.system(size:18,weight:.medium,design:.rounded)).monospacedDigit();Text("BPM").font(.system(size:9)).foregroundStyle(StudioTheme.secondary);Text(store.project.global.meter.label);Text(store.project.global.scale.label).foregroundStyle(StudioTheme.secondary)}
+            }.fixedSize(horizontal:true,vertical:false).help("앨범의 글로벌 음악 설정")
             Menu {
                 Button("곡 서클"){store.addComposition(.song)}
                 Button("악장 서클"){store.addComposition(.movement)}.disabled(store.selectedCompositionID==nil)
