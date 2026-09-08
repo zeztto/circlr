@@ -6,6 +6,7 @@ import CirclrAudio
 struct InlineCircleEditor: View {
     @ObservedObject var store: AppStore
     @State private var topPitch = 72
+    @State private var orbitViewport = MIDIOrbitViewport()
     @FocusState private var nameFocused:Bool
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -89,12 +90,17 @@ struct InlineCircleEditor: View {
         .onExitCommand { store.hierarchySettingsOpen = false; store.hierarchyParent() }
         .onAppear {
             topPitch = store.currentLane?.notes.map(\.pitch).max().map { min(128,max(12,$0+1)) } ?? (store.selectedTrack?.instrument.drums == true ? 48 : 72)
+            orbitViewport.fitPitches(store.currentLane?.notes ?? [])
             // A false FocusState write can clear focus already assigned by the connection editor.
             if store.hierarchySettingsOpen { nameFocused = true }
         }
         .onChange(of:store.hierarchySettingsOpen){_,value in if value || nameFocused { nameFocused=value } }
+        .onChange(of:store.editOriginal){_,_ in orbitViewport=MIDIOrbitViewport();orbitViewport.fitPitches(store.currentLane?.notes ?? [])}
     }
-    private var midi: some View {
+    @ViewBuilder private var midi:some View {
+        if store.project.usesOrbits && !store.midiStepMode {MIDIOrbitWorkspace(store:store,viewport:$orbitViewport)}else{legacyMIDI}
+    }
+    private var legacyMIDI: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
                 Picker("MIDI 편집 방식",selection:$store.midiStepMode){Text(store.project.usesOrbits ? "궤도":"피아노 롤").tag(false);Text("스텝").tag(true)}.pickerStyle(.segmented).labelsHidden().frame(width:110)
@@ -107,9 +113,7 @@ struct InlineCircleEditor: View {
                 Button { topPitch = min(128, topPitch+12) } label: { Image(systemName: "plus") }.help("한 옥타브 위")
                 Button { store.startMIDIRecording() } label: { Label(store.midiRecording ? "녹음 정지" : "MIDI 녹음", systemImage: "record.circle") }.disabled(store.editPatternID != nil)
             }
-            if store.midiStepMode {StepEditor(store:store,topPitch:topPitch)} else if store.project.usesOrbits {
-                OrbitMIDIEditor(store:store,topPitch:topPitch-1).frame(minHeight:120,maxHeight:.infinity)
-            } else { GeometryReader { geometry in
+            if store.midiStepMode {StepEditor(store:store,topPitch:topPitch)} else { GeometryReader { geometry in
                 ScrollView([.horizontal, .vertical]) {
                     PianoRoll(store: store, topPitch: topPitch-1).frame(width: max(geometry.size.width, store.editorBeats*48+64), height: 452)
                 }.background(StudioTheme.canvas)
