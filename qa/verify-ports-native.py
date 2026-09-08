@@ -12,7 +12,7 @@ from mcp.server import call_tool
 
 SOCKET = Path.home() / 'Library/Application Support/circlr-ports-qa/Agent/agent.sock'
 PROJECT = Path.home() / 'Library/Application Support/circlr-ports-qa/fixtures/ports.circlr'
-PROJECTS = {str(PROJECT), str(PROJECT.with_name('ports-gesture.circlr'))}
+PROJECTS = {str(PROJECT), str(PROJECT.with_name('ports-gesture.circlr')), str(PROJECT.with_name('ports-playback.circlr'))}
 OUT = ROOT / 'qa/generated/ports-ui'
 
 def call(name, args=None):

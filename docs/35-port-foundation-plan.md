@@ -68,3 +68,16 @@ C2 시작 시 현재 새 연결 gesture의 빌드된 기반을 재사용한다. 
 C2 결과: 케이블 선택·OUT/IN 재연결·위치-only drag·Delete를 구현했고, 실제 OUT/IN 각각 8방향 이동·저장값·음악 불변, IN 시작 분기와 단일 Undo, 오류/메뉴 Esc, 같은 파일 재열기 뒤 늦은 포트 선택의 거절을 검증했다. 중앙 drop·도구막대 가림·중간 확대의 bus 식별·주변 연결 숨김을 수정했다. 전체 Swift 182개/Python 22개와 최종 release build가 통과했다. [C2 QA와 빌드별 근거](../qa/ports-cable-review.md).
 
 다음 소유는 C3의 UI/접근성·시각화다. 작은 창·고밀도 궤도의 겹침과 포트 표시, 시간 손잡이 충돌, 개별 케이블/포트 키보드 선택과 VoiceOver, bus별 envelope를 우선한다. MIDI/sidechain/송폼·그룹의 모든 pointer 조합 및 마우스를 누른 채 삭제/수정하는 확대 회귀를 함께 마친다. D/E를 완료하기 전에는 전체 8방향 기능 완료나 사용 앱 출고로 보고하지 않는다.
+
+## C3a 작업 계약 · 실제 출력별 시각화
+
+- 역할: development-lead 계약 → native Swift/audio utility 구현 → read-only 검토 → QA. 사용자 안내 후 키보드 접근성의 독립 검토를 다시 요청했지만 실제 도구가 `agent thread limit reached`를 반환했다. 이번 실행의 delegation은 none이며 병렬 검토가 수행되었다고 보고하지 않는다.
+- 소유 파일: Audio `PlaybackAnalysis.swift`, `SectionGraphRenderer.swift`, `Renderer.swift`; App `PlaybackVisualization.swift`; Audio의 관련 검사와 신규 `PortPlaybackAnalysisTests.swift`; README/CHANGELOG와 QA 기록. 키보드·VoiceOver는 후속 C3b로 남긴다.
+- 각 OUT의 node gain·automation 적용 후 PCM을 60 Hz envelope로 요약한다. router의 독립 출력을 합쳐 케이블 신호로 사용하지 않는다. 노드의 밝기는 활성 출력별 peak의 최댓값으로 표현해 역상 출력 간 상쇄를 피한다. 원본 PCM은 시각화 데이터에 보관하지 않는다.
+- 활성 경로는 음소거되지 않고 gain이 양수인 트랙 출력에서 입력 포트별로 역추적한다. router는 실제 matrix의 해당 OUT→IN 경로만 통과한다. 신호가 다른 bus·gain 0 route·음소거 분기에는 전파되지 않아야 한다. MIDI는 실제 예약된 note velocity와 길이를 표시한다. 이 값은 섹션 내부 신호이며 master 이후의 청감 레벨을 대신하지 않는다.
+- 케이블은 화면에 투영된 그룹 주소 대신 원래 logical connection ID로 조회한다. 출발 OUT envelope에 해당 edge gain과 section use gain을 각각 한 번 적용한다. 여러 occurrence가 겹치면 기존 peak-max 표시 정책을 유지한다. 실제 연주의 PCM·프로젝트 schema·MCP 쓰기 계약은 바꾸지 않는다.
+- 메모리 사전 검사에 occurrence별 node/port envelope와 전체 signal envelope를 포함한다. 시각화 off에서는 데이터나 추가 callback을 생성하지 않는다.
+- 검증: 서로 다른 stereo 출력의 envelope, 역상 출력, 한 bus만 연결/활성인 matrix, mute·gain 0, fan-out gain·sidechain·MIDI, 관측 on/off의 정확한 PCM 일치와 metadata 크기 추정. 전체 offline Swift 검사와 release build를 통과한 뒤 전용 QA 앱만 교체해 실제 화면 연결 경로를 확인한다. 하드웨어 출력·화면 모션은 실제 확인 범위와 offline 근거를 분리한다.
+- Git: `f3b2ba2`부터 같은 private 개발 branch에 검증된 source checkpoint를 남긴다. C3 전체 완료·녹음 branch 통합·사용 앱 출고는 별도 gate다.
+
+C3a 결과: 전체 Swift 190개와 release build를 통과했다. 전용 native 앱의 출력별 케이블을 10회 확인했고 H.264/AAC 30.755초·919프레임·누락 0의 실제 캔버스 녹화에서 두 출력의 구분을 확인했다. 가려진 일반 창의 애니메이션 중단과 녹화 중 계속 진행하는 기존 정책을 구분한다. 검증 프로젝트 생성기와 helper의 정확한 허용 경로를 추가했다. [C3a QA](../qa/ports-playback-review.md). 다음은 C3b의 개별 케이블/포트 키보드·VoiceOver와 작은 화면 밀집 배치다.

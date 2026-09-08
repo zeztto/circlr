@@ -126,6 +126,8 @@ struct PlaybackVisualFrame {
                           }) {
                     frame.edgeLevels[edge.id] = 0.6
                 }
+            } else if let connection = edge.connectionID, case .music = connection.from {
+                frame.edgeLevels[edge.id] = prepared.visualization?.edgeLevel(connection, at: seconds, plan: plan, tail: prepared.tailSeconds) ?? 0
             } else if frame.levels[edge.to] != nil {
                 frame.edgeLevels[edge.id] = (frame.levels[edge.from] ?? 0)*edge.gain
             }

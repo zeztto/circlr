@@ -8,7 +8,9 @@ macOS용 앨범·송폼 궤도 편집기. **앨범 → 곡·악장 → 섹션 �
 
 `codex/eight-direction-ports` 브랜치에는 실제 포트 ID·형식·수용 정책, 8방향 geometry, 음악과 분리된 배치 revision·Undo·저장 계약을 추가했다. 독립 스테레오 **2 IN / 2 OUT 라우터**는 port별 PCM과 2×2 전송량을 사용한다. 서클 선택 후 **연결 / L**을 누르면 같은 캔버스에서 포트 검색·연결·재연결·해제와 양 끝의 8방향 배치를 편집한다. 라우터 전송량은 슬라이더나 숫자로 조절하며 숫자는 Return 또는 포커스 이동으로 한 번 적용한다.
 
-개발 브랜치에서는 **케이블 클릭 → 재연결 / 위치 이동 → OUT·IN 끝점 드래그**로 직접 편집한다. 중앙에 놓으면 포트를 선택하고 기존 방향을 유지하며, 둘레에 놓으면 가까운 8방향을 사용한다. **Delete**는 선택 케이블 하나만 해제한다. 드래그 중 도구막대를 숨기고 중간 확대에서도 IN/OUT·bus 번호를 읽을 수 있게 했다. 실제 앱의 양 끝 16회 방향 이동·재연결·IN 시작 분기·해제·Undo·저장 복원을 확인했고 전체 offline Swift **182개**, Python **22개**, release build가 통과했다. 작은 창·시간 손잡이 간섭·VoiceOver의 확대 검증, 포트별 시각화·MCP·그룹 binding과 앱 통합은 남아 있다. [케이블 드래그 검증](qa/ports-cable-review.md) · [직접 연결 UI 검증](qa/ports-ui-review.md) · [다중 bus 검증](qa/ports-bus-review.md) · [후속 구현 단계](docs/35-port-foundation-plan.md).
+개발 브랜치에서는 **케이블 클릭 → 재연결 / 위치 이동 → OUT·IN 끝점 드래그**로 직접 편집한다. 중앙에 놓으면 포트를 선택하고 기존 방향을 유지하며, 둘레에 놓으면 가까운 8방향을 사용한다. **Delete**는 선택 케이블 하나만 해제한다. 드래그 중 도구막대를 숨기고 중간 확대에서도 IN/OUT·bus 번호를 읽을 수 있게 했다. 실제 앱의 양 끝 16회 방향 이동·재연결·IN 시작 분기·해제·Undo·저장 복원을 확인했다. [케이블 드래그 검증](qa/ports-cable-review.md) · [직접 연결 UI 검증](qa/ports-ui-review.md).
+
+케이블 모션은 **각 OUT의 실제 신호와 라우터 matrix**를 따른다. 조용한 출력에 다른 bus의 신호가 표시되던 문제와 독립 역상 출력의 노드 표시가 상쇄되던 문제를 수정했다. 시각화 전후 PCM 일치, 접힌 그룹·반복 섹션·MIDI·sidechain을 포함한 전체 Swift **190개**와 release build를 통과했다. 전용 QA 앱에서 번갈아 재생되는 두 출력의 케이블을 확인하고 **30.755초 H.264/AAC 영상**을 저장했다. 작은 창·시간 손잡이 간섭·키보드·VoiceOver의 확대 검증, 명시적 port MCP·그룹 binding과 앱 통합은 남아 있다. [출력별 신호 검증](qa/ports-playback-review.md) · [다중 bus 검증](qa/ports-bus-review.md) · [후속 구현 단계](docs/35-port-foundation-plan.md).
 
 현재 로컬 앱은 **0.19.0**이다. [써클러 앱](dist/써클러.app)을 열어 사용한다. 기존 실행 중인 앱은 저장하고 **⌘Q로 종료한 뒤 다시 열어야** 새 버전이 실행된다. 이전 앱은 `dist/archive/`에 보관한다. [0.19 검증·제한](qa/0.19-review.md) · [향후 상세 개발 계획](docs/25-development-roadmap.md).
 

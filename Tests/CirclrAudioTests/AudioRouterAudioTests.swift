@@ -37,10 +37,11 @@ final class AudioRouterAudioTests: XCTestCase {
         p.sections[0].graph = g; try ProjectStore.validateStructure(p)
         return .init(project: p, sources: sources, outputs: outputs, router: router.id)
     }
-    func render(_ p: Project, root: URL? = nil, observe: ((ID, PCM) -> Void)? = nil) async throws -> [ID: PCM] {
+    func render(_ p: Project, root: URL? = nil, observe: ((ID, PCM) -> Void)? = nil,
+                observeOutput: ((MusicBusEndpoint, PCM) -> Void)? = nil) async throws -> [ID: PCM] {
         let u = p.active.uses[0], (s, c, k) = try ArrangementCompiler.context(project: p, use: u)
         let plan = try XCTUnwrap(SectionGraphCompiler.compile(project: p, section: s, use: u, context: c, clock: k))
-        return try await SectionGraphRenderer.render(plan, project: p, root: root, clock: k, tail: 0, observe: observe)
+        return try await SectionGraphRenderer.render(plan, project: p, root: root, clock: k, tail: 0, observe: observe, observeOutput: observeOutput)
     }
     func direct(_ f: Fixture) throws -> Project {
         var p = f.project, g = try XCTUnwrap(p.sections[0].graph)

@@ -2,6 +2,13 @@
 
 0.1–0.3은 설계 문서 revision이며, 0.4.0부터 로컬 실행 프로토타입을 포함한다.
 
+## 개발 중 — 출력별 시각화 C3a 단계
+
+- 케이블에 출발 OUT의 실제 envelope와 해당 edge gain을 사용한다. 트랙 출력에서 포트와 router matrix별로 경로를 따라가므로 다른 bus·음소거·gain 0 분기의 신호를 섞지 않는다. 독립 역상 출력은 node meter에서 peak 최댓값으로 표시한다.
+- 접힌 그룹에서도 logical connection ID로 신호를 조회하고, 반복 occurrence의 로컬 시간과 section gain을 한 번 적용한다. 60 Hz envelope의 메모리도 오디오 준비 한도에 포함한다. 음악 schema와 실제 PCM 처리는 유지한다.
+- 전체 Swift 190개와 warning 없는 release build를 통과했다. 전용 QA 앱에서 10회 상태 확인과 30.755초 MP4를 통해 두 출력의 모션 분리를 확인했다. 가려진 일반 창에서는 기존 절전 정책이 유지되며 영상 녹화 중에는 계속 움직인다. [C3a QA와 실행 근거](qa/ports-playback-review.md).
+- 키보드·VoiceOver·밀집 화면 검증은 다음 C3b 범위다. main·사용 앱 교체와 녹음 branch 통합은 아직 수행하지 않았다.
+
 ## 개발 중 — 케이블 드래그 C2 단계
 
 - 케이블 선택과 같은 캔버스의 재연결/위치 이동/해제 도구를 추가했다. OUT 또는 IN 끝점을 끌어 편집하며 Delete는 선택 케이블 하나만 해제한다. 드래그 중 기존 연결을 보존하고 성공 시 한 번의 Undo로 적용한다.

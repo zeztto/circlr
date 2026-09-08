@@ -4,7 +4,8 @@ import CirclrCore
 public enum SectionGraphRenderer {
     public static func render(_ plan: SectionSignalPlan, project: Project, root: URL?,
                               clock: MusicClock, tail: Double, applyOutputGain: Bool = true,
-                              observe: ((ID, PCM) -> Void)? = nil) async throws -> [ID: PCM] {
+                              observe: ((ID, PCM) -> Void)? = nil,
+                              observeOutput: ((MusicBusEndpoint, PCM) -> Void)? = nil) async throws -> [ID: PCM] {
         let frames = Int(ceil((clock.seconds + tail) * PCM.rate))
         guard Double(frames) * 8 * Double(workingBufferCount(plan)) < 1_073_741_824 else {
             throw CirclrError("섹션 내부 오디오가 준비 가능한 메모리 범위를 넘습니다")
@@ -29,7 +30,7 @@ public enum SectionGraphRenderer {
                 for portID in AudioRouter.outputs {
                     try Task.checkCancellation()
                     let endpoint = MusicBusEndpoint(nodeID: node.id, portID: portID)
-                    guard consumers[endpoint, default: 0] > 0 || observe != nil else { continue }
+                    guard consumers[endpoint, default: 0] > 0 || observe != nil || observeOutput != nil else { continue }
                     var bus = PCM(frames: frames)
                     if !node.muted {
                         for route in router.routes where route.output == portID {
@@ -40,6 +41,7 @@ public enum SectionGraphRenderer {
                     }
                     // Aggregate only for the legacy node meter, never for routing.
                     visual?.mix(bus)
+                    observeOutput?(endpoint, bus)
                     if consumers[endpoint, default: 0] > 0 { buffers[endpoint] = bus }
                 }
                 if let visual { observe?(node.id, visual) }
@@ -81,6 +83,7 @@ public enum SectionGraphRenderer {
                 else { outputs[trackID]?.mix(local) }
             } else {
                 let endpoint = MusicBusEndpoint(nodeID: node.id, portID: CirclePort.audioOutput)
+                observeOutput?(endpoint, local)
                 if consumers[endpoint, default: 0] > 0 { buffers[endpoint] = local }
             }
             // A fan-out/sidechain source stays alive until its final consumer has rendered.

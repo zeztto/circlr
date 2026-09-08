@@ -26,7 +26,8 @@ public enum ArrangementRenderer {
             let bytes = localFrames * 8.0 * Double(SectionGraphRenderer.workingBufferCount(graph))
             graphEstimate = max(graphEstimate, bytes)
         }
-        guard estimate + graphEstimate < preparationByteLimit else { throw CirclrError("준비 오디오가 메모리 작업 한도를 넘습니다. 구간을 나누어 내보내세요") }
+        let visualEstimate = includeVisualization ? PlaybackAnalysis.estimatedBytes(plan: plan, signal: project.signal, tail: tailSeconds) : 0
+        guard estimate + graphEstimate + visualEstimate < preparationByteLimit else { throw CirclrError("준비 오디오가 메모리 작업 한도를 넘습니다. 구간을 나누어 내보내세요") }
         var tracks = Dictionary(uniqueKeysWithValues: project.tracks.map { ($0.id,PCM(frames: frames)) })
         var visualization = PlaybackAnalysis()
         for (index, occurrence) in plan.occurrences.enumerated() {
@@ -37,15 +38,23 @@ public enum ArrangementRenderer {
             var sectionAudio = includeVisualization ? PCM(frames: Int(ceil((occurrence.duration+tailSeconds)*PCM.rate))) : PCM(frames: 0)
             let graphAudio: [ID: PCM]?
             if let signal = occurrence.signalPlan {
-                let audible = includeVisualization && occurrence.use.gain > 0 ? PlaybackAnalysis.audibleNodes(signal, tracks: project.tracks) : []
+                let audible = includeVisualization && occurrence.use.gain > 0 ? PlaybackAnalysis.audiblePaths(signal, tracks: project.tracks) : PlaybackSignalPaths()
                 if includeVisualization {
-                    for (id, notes) in signal.midi where audible.contains(id) {
-                        visual.nodes[id] = PlaybackEnvelope(notes: notes, clock: occurrence.clock)
+                    visual.connections = audible.connections
+                    for (id, notes) in signal.midi {
+                        let endpoint = MusicBusEndpoint(nodeID: id, portID: CirclePort.midiOutput)
+                        if audible.outputs.contains(endpoint) {
+                            visual.observe(endpoint, envelope: PlaybackEnvelope(notes: notes, clock: occurrence.clock))
+                        }
                     }
                 }
+                let outputNodes = Set(signal.orderedNodes.filter { if case .output = $0.content { return true }; return false }.map(\.id))
                 graphAudio = try await SectionGraphRenderer.render(signal, project: project, root: root, clock: occurrence.clock, tail: tailSeconds,
                     observe: includeVisualization ? { id, pcm in
-                        if audible.contains(id) { visual.nodes[id] = PlaybackEnvelope(pcm) }
+                        if outputNodes.contains(id), audible.nodes.contains(id) { visual.nodes[id] = PlaybackEnvelope(pcm) }
+                    } : nil,
+                    observeOutput: includeVisualization ? { endpoint, pcm in
+                        if audible.outputs.contains(endpoint) { visual.observe(endpoint, envelope: PlaybackEnvelope(pcm)) }
                     } : nil)
             } else { graphAudio = nil }
             if graphAudio == nil, let patternID = occurrence.context.rhythm.patternID, let pattern = project.patterns.first(where: { $0.id == patternID }) {
