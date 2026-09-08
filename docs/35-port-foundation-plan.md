@@ -55,3 +55,16 @@ C1 소유: 신규 Core `CircleConnectionEditing.swift`와 검사, App의 연결 
 C1 결과: 전체 offline Swift 178개, Python 22개와 release build를 통과했다. native 직접 편집기에서 각 끝의 8방향 선택·음악 불변·배치 Undo/Redo·저장/재열기, 라우터 생성·명시적 IN/OUT 연결과 matrix 숫자 입력의 단일 적용을 확인했다. 숫자 입력이 되돌아가는 실패를 발견해 수정했으며 실패 증거도 보존한다. [C1 검증](../qa/ports-ui-review.md). 독립 리뷰 agent 호출은 다시 실제 슬롯 제한으로 거절됐으므로 같은 agent의 역할 전환 검토다.
 
 C2 시작 시 현재 새 연결 gesture의 빌드된 기반을 재사용한다. 케이블 선택·끝점 드래그 재연결·명시적 배치 이동, router의 캔버스 IN 1/2·OUT 1/2 식별과 방향에 맞는 임시 연결선, native 드래그/취소/stale 검증을 이어간다. C3의 작은 창·시간 손잡이 충돌·VoiceOver·bus별 envelope, D/E의 외부 명령·binding·녹음 통합과 사용 앱 출고 gate는 열린 상태다.
+
+## C2 작업 계약
+
+- 역할: development-lead/UX 계약 → native Swift utility 구현 → 동일 agent read-only 검토 → QA. 추가 agent slot이 직전 호출에서 거절되어 delegation은 none이다.
+- 케이블 클릭은 음악 선택을 바꾸지 않고 그 선을 강조한다. 같은 캔버스의 작은 도구막대에 실제 포트 이름, 재연결/위치 이동 모드와 해제를 제공한다. 두 끝점은 모드가 정해진 뒤 드래그하며 일반 포트의 새 분기 추가와 구분한다. 시간 손잡이는 기존 우선순위를 유지한다.
+- 재연결 preview는 원래 선과 함께 표시한다. 유효한 다른 포트에 놓을 때만 ID/gain을 보존해 적용한다. 위치 이동은 원래 서클 둘레의 octant만 바꾸며 graph/music revision은 유지한다. Esc, 잘못된 대상, project/music/layout 변경은 무변경이다. 한 drag는 하나의 Undo다.
+- 소유 경로: 신규 Core `CircleCableGesture.swift`와 geometry의 cable hit, 관련 Core 검사. App `CanvasPorts.swift`, 신규 `CanvasCableEditing.swift`, `AlbumCanvas.swift`, `CanvasCommands.swift`, 필요 시 읽기 전용 `PlaybackVisualization.swift` 진단. README/CHANGELOG와 C2 QA 기록을 갱신한다. API schema·인증·외부 plugin·배포 앱은 이번 계약의 변경 대상이 아니다.
+- 검증: Core의 양 끝 재연결/배치·stale/실패 atomic·curve hit 검사, `swift test --scratch-path .build/ports-quality --skip testArrangementRenderExportAndPlayback`, release build. 전용 port QA fixture에서 cable 선택·mode 전환·실제 drag·Esc·Undo·저장/재열기를 수행한다. 숨겨진 port hit와 router 번호·preview 방향도 확인한다.
+- Git: 기존 `codex/eight-direction-ports`의 `f7f9e50`부터 독립 source checkpoint를 만든다. C2에서 발견한 미완성 native 시나리오는 명시하고 main 통합·사용 앱 교체는 E gate에서 진행한다.
+
+C2 결과: 케이블 선택·OUT/IN 재연결·위치-only drag·Delete를 구현했고, 실제 OUT/IN 각각 8방향 이동·저장값·음악 불변, IN 시작 분기와 단일 Undo, 오류/메뉴 Esc, 같은 파일 재열기 뒤 늦은 포트 선택의 거절을 검증했다. 중앙 drop·도구막대 가림·중간 확대의 bus 식별·주변 연결 숨김을 수정했다. 전체 Swift 182개/Python 22개와 최종 release build가 통과했다. [C2 QA와 빌드별 근거](../qa/ports-cable-review.md).
+
+다음 소유는 C3의 UI/접근성·시각화다. 작은 창·고밀도 궤도의 겹침과 포트 표시, 시간 손잡이 충돌, 개별 케이블/포트 키보드 선택과 VoiceOver, bus별 envelope를 우선한다. MIDI/sidechain/송폼·그룹의 모든 pointer 조합 및 마우스를 누른 채 삭제/수정하는 확대 회귀를 함께 마친다. D/E를 완료하기 전에는 전체 8방향 기능 완료나 사용 앱 출고로 보고하지 않는다.

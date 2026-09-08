@@ -8,7 +8,7 @@ extension AlbumCanvasView {
         guard let scene else { return [] }
         var result: [CirclePortHandle] = []
         for node in scene.nodes where isVisible(node) && node.radius*camera.zoom > 45 && !node.ports.isEmpty {
-            let center = screen(node), detailed = node.id == store.hierarchySelection || connecting != nil
+            let center = screen(node), detailed = node.id == store.hierarchySelection || connecting != nil || cableDrag != nil
             for port in node.ports {
                 var directions = Set<PortOctant>()
                 if detailed { directions.formUnion(node.radius*camera.zoom >= 90 ? PortOctant.allCases : [port.defaultOctant]) }
@@ -20,6 +20,7 @@ extension AlbumCanvasView {
                     guard let point = try? CirclePortGeometry.anchor(center:Point(center.x,center.y),radius:node.outerRadius*camera.zoom,port:port,octant:direction),
                           workspaceViewport.contains(CGPoint(x:point.x,y:point.y)),
                           editor?.frame.contains(NSPoint(x:point.x,y:point.y)) != true,
+                          !(cableTools?.isHidden == false && cableTools?.frame.contains(NSPoint(x:point.x,y:point.y)) == true),
                           !labelPlacements.contains(where: { $0.rect.insetBy(dx:-9,dy:-9).contains(NSPoint(x:point.x,y:point.y)) }) else { continue }
                     result.append(.init(endpoint:.init(node:node.id,portID:port.id),octant:direction,point:point))
                 }
@@ -28,19 +29,28 @@ extension AlbumCanvasView {
         return result
     }
     func drawPortHandles() {
+        let selected=cableEndpointHandles().map{$0.1}
         for handle in visiblePortHandles() {
+            if selected.contains(where:{$0.endpoint==handle.endpoint && $0.octant==handle.octant}) {continue}
             guard let node=scene?.node(handle.endpoint.node),let descriptor=node.ports.first(where:{$0.id==handle.endpoint.portID}) else { continue }
             let p=NSPoint(x:handle.point.x,y:handle.point.y),isOut=descriptor.direction == .output
             port(at:p,color:color(node),filled:isOut)
-            let label = isOut ? "OUT" : descriptor.isSidechain ? "SC IN" : "IN"
-            if node.radius*camera.zoom >= 90 {
-                drawText(label,x:p.x,y:p.y-18,size:8,color:StudioTheme.textNS,maxWidth:34)
+            let label = shortPortLabel(descriptor)
+            if node.radius*camera.zoom > 45 {
+                let horizontal=abs(CirclePortGeometry.normal(handle.octant).x)>0.7
+                drawText(label,x:p.x,y:p.y+(horizontal && isOut ? 10:-20),size:9,color:StudioTheme.textNS,maxWidth:42)
             }
         }
     }
+    func shortPortLabel(_ port:CirclePort)->String {
+        if let index=AudioRouter.inputs.firstIndex(of:port.id) {return "IN \(index+1)"}
+        if let index=AudioRouter.outputs.firstIndex(of:port.id) {return "OUT \(index+1)"}
+        return port.direction == .output ? "OUT":port.isSidechain ? "SC IN":"IN"
+    }
     func finishPortConnection(_ first:CirclePortHandle,at point:NSPoint) {
-        let projectID=connectionProjectID,revision=connectionRevision,layoutRevision=connectionLayoutRevision,original=store.editOriginal
+        let projectID=connectionProjectID,revision=connectionRevision,layoutRevision=connectionLayoutRevision,original=store.editOriginal,token=connectionToken
         func apply(_ second:CirclePortHandle) {
+            guard token != nil,token==connectionToken else {store.status="이전 연결 조작은 취소되었습니다";return}
             guard projectID==store.project.id,revision==store.project.musicRevision,layoutRevision==(store.project.portLayout?.revision ?? 0) else {store.status="연결 중 음악·배치가 변경되었습니다. 다시 연결하세요";return}
             store.mutate("포트 연결") { p in
                 try CircleConnectionEditing.connect(first.endpoint,second.endpoint,firstOctant:first.octant,secondOctant:second.octant,original:original,in:&p)
@@ -48,10 +58,11 @@ extension AlbumCanvasView {
         }
         if let second=CirclePortGeometry.hit(Point(point.x,point.y),visibleHandles:visiblePortHandles()) { apply(second); return }
         guard let target=hit(point),target.id != first.endpoint.node else { return }
-        let center=screen(target),direction=CirclePortGeometry.nearestOctant(to:Point(point.x,point.y),center:Point(center.x,center.y)) ?? .west
+        let center=screen(target)
         let choices=target.ports.compactMap { port -> (CirclePort, CirclePortHandle)? in
             let endpoint=CirclePortEndpoint(node:target.id,portID:port.id)
             guard (try? CirclePortCatalog.normalize(first.endpoint,endpoint,in:store.project)) != nil else { return nil }
+            let direction=CirclePortGeometry.dropOctant(to:Point(point.x,point.y),center:Point(center.x,center.y),radius:target.outerRadius*camera.zoom,fallback:port.defaultOctant) ?? port.defaultOctant
             return (port,.init(endpoint:endpoint,octant:direction,point:Point(point.x,point.y)))
         }
         if choices.count==1 { apply(choices[0].1) }

@@ -34,7 +34,14 @@ struct AlbumCanvas: NSViewRepresentable {
     var connectionRevision = 0
     var connectionLayoutRevision = 0
     var connectionProjectID: ID?
+    var connectionToken: UUID?
     var connectionPoint = NSPoint.zero
+    var selectedCable: CircleConnectionID?
+    var selectedCableProjectID: ID?
+    var cableMode = CircleCableGesture.Mode.reconnect
+    var cableDrag: CircleCableGesture?
+    var cableDragOriginal = false
+    var cableTools: NSHostingView<CableToolsView>?
     var tracking: NSTrackingArea?
     var meterSubscription:AnyCancellable?
     var albumPlan:AlbumExecutionPlan?
@@ -138,6 +145,7 @@ struct AlbumCanvas: NSViewRepresentable {
                 store.selectHierarchy(parent); focus(parent)
             case .fit: store.selectHierarchy(.album); focus(.album)
             case .restore:
+                connecting=nil;orbitDrag=nil;clearCableSelection()
                 if let saved=store.project.hierarchyView,scene?.node(saved.selection) != nil,let restored=saved.restored(width:bounds.width,height:bounds.height) {
                     store.selectHierarchy(saved.selection);store.hierarchySettingsOpen=saved.settingsOpen;store.midiStepMode=saved.midiStepMode ?? false;setCamera(restored)
                 } else {store.selectHierarchy(.album);store.hierarchySettingsOpen=false;focus(.album)}
@@ -179,6 +187,7 @@ struct AlbumCanvas: NSViewRepresentable {
         } else { camera = target; placeEditor(); needsDisplay = true; store.hierarchyZoom = camera.zoom }
     }
     func placeEditor() {
+        defer { refreshCableTools() }
         if store.movieWriter != nil {editor?.removeFromSuperview();editor=nil;editorAddress=nil;return}
         if store.playback.playing, store.playbackFollow == .following {
             editor?.removeFromSuperview(); editor = nil; editorAddress = nil; return
@@ -262,9 +271,12 @@ struct AlbumCanvas: NSViewRepresentable {
         for node in scene.nodes where isVisible(node) { drawPlaybackCircle(node) }
         drawReadableLabels()
         drawPortHandles()
+        drawCableEditing()
         drawPlaybackCaption()
         if let handle = connecting, let node = scene.node(handle.endpoint.node) {
-            wire(NSPoint(x:handle.point.x,y:handle.point.y), connectionPoint, color: color(node), dashed: true)
+            let target=CirclePortGeometry.hit(Point(connectionPoint.x,connectionPoint.y),visibleHandles:visiblePortHandles()) ??
+                CirclePortHandle(endpoint:handle.endpoint,octant:PortOctant(rawValue:(handle.octant.rawValue+4)%8)!,point:Point(connectionPoint.x,connectionPoint.y))
+            if let curve=try? CirclePortGeometry.curve(from:handle,to:target) {wire(curve,color:color(node),dashed:true)}
         }
         updateAccessibility()
     }
@@ -405,9 +417,12 @@ struct AlbumCanvas: NSViewRepresentable {
             orbitDrag=node;orbitSeconds=orbit.anchor;orbitTravel=0;orbitRevision=store.project.musicRevision
             let center=screen(owner);orbitPhase=OrbitTimeline.phase(Point(down.x-center.x,down.y-center.y));return
         }
+        if beginCableDrag(at:down) {return}
         if let handle=CirclePortGeometry.hit(Point(down.x,down.y),visibleHandles:visiblePortHandles()) {
-            connecting=handle;connectionPoint=down;connectionRevision=store.project.musicRevision;connectionLayoutRevision=store.project.portLayout?.revision ?? 0;connectionProjectID=store.project.id;needsDisplay=true;return
+            connecting=handle;connectionToken=UUID();connectionPoint=down;connectionRevision=store.project.musicRevision;connectionLayoutRevision=store.project.portLayout?.revision ?? 0;connectionProjectID=store.project.id;needsDisplay=true;return
         }
+        if !labelHit,let cable=hitCable(down) {selectCable(cable);return}
+        clearCableSelection()
         guard let node=hit(down) else{panning=true;return}
         if !event.modifierFlags.contains(.shift), store.hierarchySelections.contains(node.id), store.hierarchySelections.count > 1 { store.hierarchySelection=node.id }
         else { store.selectHierarchy(node.id,additive:event.modifierFlags.contains(.shift)) }
@@ -427,6 +442,7 @@ struct AlbumCanvas: NSViewRepresentable {
             orbitSeconds=max(0,min(orbit.timeline.duration,orbit.anchor+orbitTravel*orbit.timeline.duration));needsDisplay=true;return
         }
         if connecting != nil {connectionPoint=p;needsDisplay=true;return}
+        if cableDrag != nil {connectionPoint=p;needsDisplay=true;return}
         if panning {setCamera(HierarchyCamera(pan:Point(panOrigin.x+p.x-down.x,panOrigin.y+p.y-down.y),zoom:camera.zoom));return}
         if let node=dragNode,hypot(p.x-down.x,p.y-down.y)>3 {dragPreview=Point(dragOrigin.x+(p.x-down.x)/camera.zoom/node.scale,dragOrigin.y+(p.y-down.y)/camera.zoom/node.scale);needsDisplay=true}
     }
@@ -446,12 +462,13 @@ struct AlbumCanvas: NSViewRepresentable {
             }
         }
         orbitDrag=nil
+        if cableDrag != nil {finishCableDrag(at:convert(event.locationInWindow,from:nil));cableDrag=nil;refreshCableTools()}
         if let from=connecting { finishPortConnection(from,at:convert(event.locationInWindow,from:nil)) }
         if dragNode != nil,var p=dragPreview {
             if store.project.album?.layout.snap != false {let spacing=store.project.album?.layout.spacing ?? 32;p=Point((p.x/spacing).rounded()*spacing,(p.y/spacing).rounded()*spacing)}
             store.moveHierarchySelection(dragPositions,delta:Point(p.x-dragOrigin.x,p.y-dragOrigin.y))
         }
-        dragNode=nil;dragPreview=nil;dragPositions=[:];panning=false;connecting=nil;needsDisplay=true
+        dragNode=nil;dragPreview=nil;dragPositions=[:];panning=false;connecting=nil;connectionToken=nil;needsDisplay=true
     }
     override func otherMouseUp(with event:NSEvent){mouseUp(with:event)}
     override func scrollWheel(with event:NSEvent) {
@@ -482,11 +499,14 @@ struct AlbumCanvas: NSViewRepresentable {
         }
         switch event.keyCode {
         case 53:
-            if connecting != nil { connecting=nil;needsDisplay=true;return }
+            if cableDrag != nil {cableDrag=nil;connectionToken=nil;refreshCableTools();needsDisplay=true;return}
+            if connecting != nil { connecting=nil;connectionToken=nil;needsDisplay=true;return }
+            if selectedCable != nil {clearCableSelection();return}
             if store.connectionsOpen {store.connectionsOpen=false;return}
             store.hierarchySettingsOpen=false;store.hierarchyParent()
         case 49: store.play()
-        case 51,117: store.removeHierarchy()
+        case 51,117:
+            if selectedCable != nil {disconnectSelectedCable()} else {store.removeHierarchy()}
         case 3: store.hierarchyCommand=HierarchyCommand(action:.fit)
         case 4: store.panMode=true
         case 9: store.panMode=false
@@ -517,7 +537,7 @@ struct AlbumCanvas: NSViewRepresentable {
             element.setAccessibilityLabel(node.title+" · "+node.subtitle);element.setAccessibilityFrame(rect)
             return element
         }
-        setAccessibilityChildren(children+(editor.map{[$0]} ?? []))
+        setAccessibilityChildren(children+(editor.map{[$0]} ?? [])+(cableTools.map{[$0]} ?? []))
     }
 }
 @MainActor final class CircleAccessibility:NSAccessibilityElement {

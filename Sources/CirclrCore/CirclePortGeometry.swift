@@ -8,6 +8,18 @@ public struct CirclePortHandle:Equatable,Sendable {
 }
 public struct CirclePortCurve:Equatable,Sendable {
     public var from:Point,control1:Point,control2:Point,to:Point
+    /// Screen-space distance to the drawn cubic, sampled as 64 short segments.
+    public func distance(to target: Point) -> Double? {
+        guard [from,control1,control2,to,target].allSatisfy({ $0.x.isFinite && $0.y.isFinite && abs($0.x) <= 1e12 && abs($0.y) <= 1e12 }) else { return nil }
+        var previous = from, result = Double.infinity
+        for step in 1...64 {
+            guard let next = try? point(at: Double(step)/64) else { return nil }
+            let dx = next.x-previous.x, dy = next.y-previous.y, length = dx*dx+dy*dy
+            let t = length > 0 ? min(1,max(0,((target.x-previous.x)*dx+(target.y-previous.y)*dy)/length)) : 0
+            result = min(result,hypot(target.x-previous.x-t*dx,target.y-previous.y-t*dy)); previous = next
+        }
+        return result
+    }
     public func point(at progress:Double)throws->Point {
         guard progress.isFinite else{throw CirclrError("연결선 진행 위치를 확인하세요")}
         let t=min(1,max(0,progress)),u=1-t
@@ -25,6 +37,12 @@ public enum CirclePortGeometry {
         let angle=atan2(point.y-center.y,point.x-center.x)+Double.pi/2
         let wrapped=angle<0 ? angle+2*Double.pi:angle
         return PortOctant(rawValue:Int(floor(wrapped/(Double.pi/4)+0.5))%8)
+    }
+    public static func dropOctant(to point:Point,center:Point,radius:Double,fallback:PortOctant)->PortOctant? {
+        guard valid(point),valid(center),radius.isFinite,(0...1e9).contains(radius) else{return nil}
+        // A body drop chooses a port, so subpixel offsets near its centre must not choose a new direction.
+        if hypot(point.x-center.x,point.y-center.y)<max(1,radius*0.7) {return fallback}
+        return nearestOctant(to:point,center:center)
     }
     private static func valid(_ point:Point)->Bool {point.x.isFinite && point.y.isFinite && abs(point.x)<=1e12 && abs(point.y)<=1e12}
     /// All distances are screen points; zoomed world coordinates must be converted before calling.

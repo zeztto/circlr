@@ -12,6 +12,7 @@ from mcp.server import call_tool
 
 SOCKET = Path.home() / 'Library/Application Support/circlr-ports-qa/Agent/agent.sock'
 PROJECT = Path.home() / 'Library/Application Support/circlr-ports-qa/fixtures/ports.circlr'
+PROJECTS = {str(PROJECT), str(PROJECT.with_name('ports-gesture.circlr'))}
 OUT = ROOT / 'qa/generated/ports-ui'
 
 def call(name, args=None):
@@ -22,7 +23,7 @@ def call(name, args=None):
 
 def state():
     s = call('snapshot')
-    assert s['runtime']['bundleID'] == 'com.circlr.portsqa' and s['path'] == str(PROJECT)
+    assert s['runtime']['bundleID'] == 'com.circlr.portsqa' and s['path'] in PROJECTS
     assert not s['recording']['audio'] and not s['recording']['midi']
     return s
 
@@ -39,7 +40,7 @@ def capture(save=False):
     if selected:
         result['inspection'] = call('inspect', {k: selected[k] for k in ['arrangementID', 'useID']})
     if save:
-        result['manifest'] = json.loads((PROJECT / 'manifest.json').read_text())
+        result['manifest'] = json.loads((Path(s['path']) / 'manifest.json').read_text())
     return result
 
 if __name__ == '__main__':

@@ -1,10 +1,10 @@
 # 8방향 포트와 다중 입출력
 
-작성일: 2026-09-07 · 갱신: 2026-09-08 · 상태: A/B와 직접 연결 UI C1 검증, C2/C3·D/E 후속 · 구현 기준: 0.19의 독립 개발 branch
+작성일: 2026-09-07 · 갱신: 2026-09-08 · 상태: A/B·C1과 C2 주요 native 조작 검증, C3·D/E 및 확대 회귀 후속 · 구현 기준: 0.19의 독립 개발 branch
 
 **서클 둘레의 8방향 어디에나 연결을 붙이고, 연결점에 IN·OUT을 표시한다. 서클은 여러 입력과 여러 출력을 지원한다.** 왼쪽 입력·오른쪽 출력으로 방향을 고정하지 않는다.
 
-8방향은 배치 기준이다. 포트나 케이블을 8개로 제한한다는 뜻이 아니다. 여러 케이블의 분기·합산과 서로 독립적인 여러 입출력 포트를 함께 설계한다. 독립 branch에서 실제 포트 descriptor·배치 revision·geometry, 스테레오 2 IN/2 OUT 엔진, 같은 캔버스의 직접 연결·배치·라우터 편집을 검증했다. 케이블 드래그의 전체 조작과 포트별 시각화·MCP·그룹 binding은 후속이다. 사용 앱은 0.19다. [Core 검증](../qa/ports-foundation-review.md) · [bus 검증](../qa/ports-bus-review.md) · [C1 UI 검증](../qa/ports-ui-review.md) · [단계별 실행 계획](35-port-foundation-plan.md).
+8방향은 배치 기준이다. 포트나 케이블을 8개로 제한한다는 뜻이 아니다. 여러 케이블의 분기·합산과 서로 독립적인 여러 입출력 포트를 함께 설계한다. 독립 branch에서 실제 포트 descriptor·배치 revision·geometry, 스테레오 2 IN/2 OUT 엔진, 같은 캔버스의 직접 연결·배치·라우터 편집과 끝점 드래그를 검증했다. 드래그 간섭·접근성의 확대 검증, 포트별 시각화·MCP·그룹 binding은 후속이다. 사용 앱은 0.19다. [Core 검증](../qa/ports-foundation-review.md) · [bus 검증](../qa/ports-bus-review.md) · [C1 UI 검증](../qa/ports-ui-review.md) · [C2 드래그 검증](../qa/ports-cable-review.md) · [단계별 실행 계획](35-port-foundation-plan.md).
 
 ## 1. 방향과 포트의 구분
 
@@ -134,7 +134,7 @@ compiler/renderer는 node 전체 출력이 아니라 `(nodeID, portID)`를 읽�
 | D · 그룹·에이전트 | Core/App/MCP 담당: 노출 포트 binding, `AgentProtocol.swift`, `AgentWorkspace.swift`, `mcp/server.py` | 그룹 경계 보존과 명시적 port 조회·연결·배치. legacy 모호성 오류 검증 |
 | E · 통합 QA | `Tests/CirclrCoreTests/`, `Tests/CirclrAudioTests/`, Python MCP 테스트, 향후 `qa/eight-direction-ports-review.md` | geometry·실제 신호·native gesture·기존 곡의 회귀를 별도 증거로 확보 |
 
-이 표는 전체 엔지니어링 작업 분해다. A의 공통 포트·geometry·배치 저장, B의 명시적 다중 bus edge와 renderer를 구현했다. C1의 직접 연결·배치·라우터 편집까지 전체 offline Swift 178개와 release build, 해당 native 시나리오를 검증했다. layout은 선택적 `portLayout`에 저장하며 legacy 단일 main/sidechain edge의 의미를 보존한다. C2/C3의 gesture·접근성·포트별 시각화와 D/E가 남아 있다. 내장 router 검증으로 모든 외부 plugin의 다중 bus 호환성을 주장하지 않는다.
+이 표는 전체 엔지니어링 작업 분해다. A의 공통 포트·geometry·배치 저장, B의 명시적 다중 bus edge와 renderer를 구현했다. C1 직접 편집과 C2 끝점 드래그까지 전체 offline Swift 182개와 release build, 해당 native 시나리오를 검증했다. layout은 선택적 `portLayout`에 저장하며 legacy 단일 main/sidechain edge의 의미를 보존한다. gesture 간섭·접근성·포트별 시각화와 D/E가 남아 있다. 내장 router 검증으로 모든 외부 plugin의 다중 bus 호환성을 주장하지 않는다.
 
 | 인수 시나리오 | 기대 결과 |
 |---|---|
@@ -152,4 +152,4 @@ compiler/renderer는 node 전체 출력이 아니라 `(nodeID, portID)`를 읽�
 | MIDI/audio 불일치·제한 초과·음악 cycle | GUI·MCP 모두 원인과 함께 거절. 부분 edge 적용 없음 |
 | native 키보드·VoiceOver·작은 창 | IN/OUT·역할·형식·대상 이름을 읽고 선택. 포트와 시간 손잡이 구분 |
 
-현재 확인은 Core 데이터·geometry·renderer PCM 불변, 다중 bus PCM 분리, C1의 native 직접 편집과 release build다. 전체 8방향 gesture·VoiceOver·포트별 envelope·MCP는 해당 단계 구현 후 검증한다. 직접 메뉴에서 8방향을 고른 결과와 마우스 드래그 결과를 구분한다.
+현재 확인은 Core 데이터·geometry·renderer PCM 불변, 다중 bus PCM 분리, C1의 native 직접 편집과 C2의 OUT/IN 각각 8방향 위치 drag·재연결·분기·Undo다. 모든 신호 종류와 접힌 그룹·작은 창의 gesture 조합, VoiceOver·포트별 envelope·MCP는 해당 단계 구현 후 검증한다. 직접 메뉴의 방향 선택, 케이블 끝점의 위치 drag, 다른 포트로 재연결한 결과를 구분한다.

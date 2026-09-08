@@ -7,8 +7,11 @@ extension AlbumCanvasView {
     }
     var labelContext:CircleSceneNode? {
         guard let scene else{return nil}
-        return scene.path(to:playbackVisibilityFocus ?? store.hierarchySelection ?? .album)
+        let context=scene.path(to:playbackVisibilityFocus ?? store.hierarchySelection ?? .album)
             .last(where:{$0.radius*camera.zoom>min(workspaceViewport.width,workspaceViewport.height)*0.22}) ?? scene.node(.album)
+        // Inspecting a circle's ports keeps its siblings and cables available until a precision editor opens.
+        if let context,context.role == .music,editorAddress != context.id,let parent=context.parent {return scene.node(parent)}
+        return context
     }
     func drawReadableLabels() {
         labelPlacements=[]
