@@ -1,6 +1,6 @@
 # circlr operational contract
 
-Discover the actual MCP tool catalog before work. This development adapter has 21 tools; custom specialists use its `--read-only` mode exposing snapshot, inspect, ports, job and events only. Explicit port tools require a native app whose snapshot includes layoutRevision; the older installed 0.19 app does not implement them. Runtime configuration is inherited; inspect availability instead of assuming the tools are registered in an already open session.
+Discover the actual MCP tool catalog before work. This development adapter has 22 tools; custom specialists use its `--read-only` mode exposing snapshot, inspect, ports, job and events only. Explicit port tools require a native app whose snapshot includes layoutRevision; the older installed 0.19 app does not implement them. Runtime configuration is inherited; inspect availability instead of assuming the tools are registered in an already open session.
 
 ## Time, identity and sound
 
@@ -63,3 +63,10 @@ New synth patches use engineVersion=2: mono bass, velocity-shaped harmonic keys,
 ## Selection editing (circlr 0.17)
 
 `edit_notes` takes useID, laneID, unique existing noteIDs and edit. transpose requires semitones; move and duplicate require beatOffset in quarter beats; velocity requires 1–127. quantize takes subdivisions (default 4, same supported grids as set_step) and strength 0–1 (default 1); delete needs no additional parameter. Supply the matching MIDI nodeID for a locally sized circle. Group movement preserves relative pitch/time and rejects a selection crossing the permitted boundary. Quantize changes starts and preserves length, velocity and IDs; duplicate creates new IDs. Unselected notes and audio are preserved; a no-op does not create Undo. GUI MIDI file import (format 0/1, note performances only) is available through ⌥⌘I but is not an MCP tool. snapshot includes selectedNoteIDs and recording.midi/audio/permissionPending; circlr_stop cancels a pending microphone request.
+
+
+## Audio recording (0.20)
+
+`circlr_record` starts the currently selected section/track and requires projectID plus expectedRevision. Only call it when the user requests microphone recording. First inspect the selection or focus the requested music circle; do not select an unrelated track. macOS may ask the user for microphone access. Read `snapshot.recording`: phase authorizing/starting/recording/cancelling/finishing/failed/idle, busy, seconds, peak, format (rate/channels), message and recoveryPath. A start reply is an acknowledgement, not evidence of recorded audio.
+
+`circlr_stop` cancels pending input or closes the collection gate and finalizes asynchronously. Wait until busy=false and inspect the actual assets/takes and music revision. Never retry a pending/finishing worker, start a second capture, or bypass macOS permission. The current input is the default device's first two channels (one for mono). A disconnected or stalled input finalizes received frames. Late completion cannot write into a different project or deleted destination; recoveryPath preserves that file. There is no accompaniment/latency synchronization or input channel selector in this version.

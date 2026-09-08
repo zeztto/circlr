@@ -2,6 +2,12 @@
 
 작성: 2026-09-08. 계획 시작 기준: 0.11 native 앱, 0.12 음악 에이전트 키트 소스. 현재 산출물은 0.19.0이다. 목표는 송폼 중심의 전문 음악 제작을 먼저 완성하고, 이를 아티스트의 작품·세계관 관리로 확장하는 것이다.
 
+0.20 녹음 lifecycle은 소스·전용 검증 앱과 오프라인 검사까지 진행했다. 문서 재열기·직접 녹음 버튼·단축키 안내를 확인하고 오디오 이동 메뉴의 대비를 개선했다. 실제 입력과 녹음 중 UI 검증이 남아 사용 앱은 0.19를 유지한다. [0.20 검증 상태](../qa/0.20-review.md)의 남은 acceptance를 유지한다.
+
+포트 A–D의 실제 bus·직접 연결·키보드·가독성·MCP·그룹 노출을 구현한 `1d304eb`와 녹음 `d88ea5d`를 **`codex/daw-integration`의 0.20.0 build 23**으로 통합했다. Swift 226개·Python 26개와 release build, 실제 앱의 편집/Undo/바운스/저장 복원·그룹 신호를 검증했다. [포트 실행 계획](35-port-foundation-plan.md)의 E acceptance는 마이크·VoiceOver·전체 밀집 조합이 남아 있으며 사용자 앱에 출고한 상태는 아니다. [통합 결과](../qa/daw-integration-review.md).
+
+다음 UI 우선순위는 **재생 follow에서 편집 가능한 자식 서클이 작게 모이는 문제와 라벨 겹침**이다. 실제 통합 화면에서 확인했으며, 곡의 시간·서클 위치를 바꾸지 않고 카메라의 관심 범위와 라벨 우선순위를 개선한다. 1440×900 및 작은 창·콘솔 열림/닫힘에서 선택 서클과 연결을 읽고 한 동작으로 편집에 진입하는 것을 확인한다. 상세 계약은 [통합 후속 범위](37-daw-integration.md)를 따른다.
+
 0.14에서 10음색 engine 3와 15트랙의 f0r h3r v4를 추가했고, 0.15에서 B의 탐색 깊이·라벨 가독성·작은 창 편집을 개선했다. 배포용 v4는 FreePats CC0 bank를 사용한다. 기존 버전·원본 곡은 보존한다. [음질·음악 검증](../qa/0.14-review.md)과 [UI 검증](../qa/0.15-review.md)을 분리한다.
 
 추가된 기본 DAW 요청에 따라 0.16 스텝, 0.17 MIDI 일괄 편집·노트 import와 권한 대기 guard, 0.18 오디오 split/duplicate/fade, 0.19 gain/pan automation을 구현했다. 다음 실행 순서는 장치 lifecycle → E의 endpoint 데이터·표시·hit·Undo/MCP → 공통 drop/로컬 라이브러리 → 실제 MP4 재검증과 F/G/H다. 상세 완료 조건은 [기본 DAW 확장 계획](31-daw-basics-plan.md)을 따른다. Scarlett 출력 연결과 실제 재생 녹화 검증은 남아 있으며, UI 완료가 이를 대신하지 않는다. [Splice 연동 계획](27-splice-licensing-and-integration.md)은 공통 파일 import → 로컬 라이브러리 → companion AU 순서다.
@@ -9,10 +15,10 @@
 | 단계 | 현재 상태 | 다음 확인할 결과 |
 |---|---|---|
 | A | private 소스 이력, 로컬 패키징 구현 | CI·서명 배포는 별도 범위 |
-| B | 생성/명령 검색/⌘J/트랙 전환/라벨 개선 | 8방향 연결 탐색과 통합 |
+| B | 생성/명령 검색/⌘J/트랙 전환/8방향 연결 통합 | 재생 follow 확대·밀집 라벨·VoiceOver |
 | C | 캡처·코덱 경로 구현 | Scarlett 실제 출력·MP4 동기/최소화 |
 | D | engine 3·v4 MIDI/CC0/WAV·native bounce | 아티스트 청취 피드백 |
-| E | 상세 계약 확정, 구현 전 | stable ports·8방향 cable placement·migration |
+| E | stable ports·8방향·독립 bus·MCP·그룹 및 녹음 branch 통합 | 전체 신호/밀집 조합·native 입력·사용 앱 출고 |
 | Import | 정책 조사·CC0 대체, 0.17 MIDI 노트 가져오기 완료 | CC/tempo map, 공통 drop·중복 자산 관리 |
 | F | prepared PCM 기반 | 장치 lifecycle 후 연속 render graph/PDC |
 | G | 공식 계정 콘솔 설계·전문 kit/MCP 구현 | App Server adapter·권한/취소·대화 UI |

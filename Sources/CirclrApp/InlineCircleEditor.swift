@@ -16,6 +16,7 @@ struct InlineCircleEditor: View {
                 if store.canEditCirclePorts {
                     Button(store.connectionsOpen ? "편집으로" : "연결") { if store.connectionsOpen { store.connectionsOpen = false } else { store.showConnections() } }.help("IN/OUT·대상·8방향 위치 편집 · L")
                 }
+                if store.selectedUse != nil {AudioRecordButton(store:store)}
                 if store.selectedMusic != nil {
                     Button(store.automationVisible ? "편집으로":"오토메이션") {store.connectionsOpen=false;if store.automationVisible {store.automationOpen=false}else{store.showAutomation()}}.help("이 서클의 볼륨·팬 곡선 · ⌘5")
                     Button { store.connectionsOpen=false;store.hierarchySettingsOpen.toggle() } label: { Image(systemName: "slider.horizontal.3") }.help("템포·박자·스케일·반복 설정")
@@ -23,6 +24,7 @@ struct InlineCircleEditor: View {
                 Button { store.hierarchySettingsOpen = false; store.hierarchyParent() } label: { Image(systemName: "arrow.up.left.and.arrow.down.right") }.help("상위 서클로 축소 · Esc")
             }
             if store.selectedMusic != nil {StudioRouteBar(store:store)}
+            if store.audioRecordingStatusVisible {AudioRecordingStatusView(store:store)}
             if store.connectionsOpen { PortConnectionsEditor(store: store).id(store.hierarchySelection) }
             else if let draft=store.midiImportDraft {MIDIImportView(store:store,draft:draft)} else if let id=store.hierarchyTransitionID,let edge=store.project.active.edges.first(where:{$0.id==id}) {
                 HStack{Text("섹션 사이 전환");Spacer();Button("서클 설정"){store.hierarchyTransitionID=nil}}

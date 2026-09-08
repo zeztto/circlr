@@ -10,7 +10,7 @@
 |---|---|---|
 | 스텝 | 0.16 구현·native 검증 완료 | 일반 Note/Lane을 그대로 편집하는 16-step page, 드럼/음정 row, 해상도, 세기/길이, 키보드, MCP, Undo/바운스 |
 | MIDI | 0.17 선택/quantize/transpose/복제·format 0/1 노트 import·native 검증 완료, 기존 MIDI 녹음/테이크 | CC/페달/피치 벤드·tempo map import, 다중 노트 드래그·고급 연주 편집 |
-| 오디오 녹음 | 입력 tap·ring buffer writer·CAF·테이크, 0.17 permission 대기/취소·문맥 guard | 장치 시작의 비동기화·실패 복구, 입력 상태, 실제 녹음→편집→bounce |
+| 오디오 녹음 | 0.20 소스·검증 앱: 비동기 시작/종료·취소·실패 복구·입력 상태·MCP·atomic take, 오프라인 왕복·native 재열기/대기 버튼 검사 통과 | 허용된 실제 입력·녹음 중 UI→편집→bounce·Undo·재열기와 출고 |
 | 오디오 편집 | 0.18 split/duplicate/fade/mute/delete·MCP·native PCM·Undo/저장 검증 | 전체 source로 trim 재확장, crossfade·time warp·comping·window 처리 cache |
 | 오토메이션 | 0.19 gain/pan·선형/유지·궤도/선형 편집·MCP·native WAV/Undo/저장 검증 | synth filter·plugin parameter·MIDI CC·전역 bus, 실시간 write/touch/latch |
 | 엔진 | prepared PCM, 일부 live synth/recording | 장치 lifecycle, transport/record sync, 이후 continuous render/PDC·plugin crash 격리 |
@@ -65,3 +65,7 @@
 선택 서클의 gain/pan을 같은 캔버스에서 직접 편집한다. [시간·신호·UI 계약](33-automation-plan.md)과 [148 Swift/22 Python 및 native 검증](../qa/0.19-review.md)을 연결했다. 개별 tempo의 처리 서클도 편집 좌표와 DSP가 같은 로컬 시간을 사용한다. GUI 점 드래그는 한 번의 Undo, 입력 필드는 음악 단축키와 분리된다.
 
 다음 독립 범위는 장치 lifecycle이다. `AudioRecorder.start`의 동기 장치 연결을 UI에서 분리하고 요청 세대·취소·중복 시작·종료 정리를 정의한다. 입력 tap 이후 실제 오디오 파일과 시작/끝 시간을 검사해야 한다. 기존 Scarlett 출력 준비 timeout과 혼동하지 않고, OS 기본 장치나 권한 설정을 변경하지 않는다. 8방향 포트는 별도 Core endpoint migration → hit/keyboard → MCP/Undo 순서로 진행한다.
+
+## 0.20 진행 상태
+
+[녹음 lifecycle 계약](34-recording-lifecycle.md)을 구현했다. Swift 160개와 별도의 CAF→테이크→portable 저장→바운스 통합 검사 1개, Python 23개가 통과했다. 실제 앱의 잘못된 녹음 요청 거부·문서 재열기·대기 상태 버튼/단축키 안내를 확인하고 이동 메뉴의 대비를 개선했다. 실제 입력 허용을 기다리며 [남은 native acceptance](../qa/0.20-review.md)를 유지한다. 현재 사용 앱은 0.19이며, 0.20 패키지 교체·로컬 키트 갱신은 아직 수행하지 않았다.

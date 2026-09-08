@@ -23,7 +23,7 @@
 
 ## MCP
 
-기존 explicit-port 도구 외에 `circlr_set_group_port`와 `circlr_remove_group_port`를 추가해 개발 adapter는 21개 도구를 제공한다. 사용자용 0.19 앱에는 이 API가 없다. 실행 앱과 adapter를 함께 확인한다.
+녹음 record가 포함된 통합 adapter는 기존 explicit-port 도구 외에 `circlr_set_group_port`와 `circlr_remove_group_port`를 추가해 개발 adapter는 22개 도구를 제공한다. 사용자용 0.19 앱에는 이 API가 없다. 실행 앱과 adapter를 함께 확인한다.
 
 `circlr_ports(node)`의 group 주소는 `{"group":{"parent":실제 부모 주소,"id":실제 그룹 ID}}`다. parent는 album/sound/composition/section이며, 섹션 부모는 `{"section":{"arrangementID":실제 편곡 ID,"useID":실제 use ID}}` 형태다. group ID는 inspect의 effective graph/layout이나 저장된 layout에서 읽는다. 임의 ID를 만들지 않는다.
 

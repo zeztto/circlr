@@ -2,6 +2,13 @@
 
 0.1–0.3은 설계 문서 revision이며, 0.4.0부터 로컬 실행 프로토타입을 포함한다.
 
+## 개발 중 — 0.20.0 build 23 DAW 통합
+
+- 녹음 lifecycle과 명시적 포트·독립 bus·그룹 노출을 통합했다. 연결 편집기와 녹음 상태를 같은 캔버스에서 사용하며 음악/배치 Undo를 보존한다. 녹음 시작·정리 중 음악 편집·Undo와 에이전트 쓰기를 차단하고, 재생 초기 장치 timestamp가 음수이면 시작 위치로 제한한다.
+- MCP record와 포트 명령을 합쳐 22개 도구를 제공한다. 내장 adapter·operations·25개 파일 manifest와 버전을 동기화했다.
+- Swift 226개·Python 26개, release build 및 별도 QA 앱의 MIDI 스텝·오토메이션·오디오 분할/페이드·바운스·그룹 이름·Undo·저장/재열기·닫기 최소화를 확인했다. 전면 창의 10회 관측에서 출력별 신호 모션을 확인했다. [통합 QA](qa/daw-integration-review.md).
+- 실제 마이크 입력·VoiceOver·전체 밀집 조합은 미검증이다. 재생 follow에서 작은 자식 서클과 겹치는 라벨은 다음 UI 개선으로 기록했다. 사용자 앱은 0.19를 유지한다.
+
 ## 개발 중 — 그룹 노출 포트 D2 체크포인트
 
 - 그룹 안의 실제 IN/OUT을 명시적으로 노출하고 이름 변경·노출 해제를 같은 캔버스에서 수행한다. 내부 대상과 케이블은 유지하며 metadata만 layout revision과 Undo에 저장한다. 사라진 대상은 미해결 상태로 보존하고 다른 포트로 자동 연결하지 않는다.
@@ -66,6 +73,14 @@
 - 선택적 `portLayout`과 별도 revision·atomic 배치/복원 명령, 8방향 화면 geometry·hit·곡선을 추가했다. 재사용 use와 접힌 그룹의 logical endpoint를 보존하며 음악 revision과 PCM은 유지한다.
 - 중복 배치가 scene 생성에서 충돌하는 문제를 수정했다. 13개 분기와 모든 방향의 PCM 불변을 포함해 Swift 159개 및 release build가 통과했다. [포트 기반 QA](qa/ports-foundation-review.md).
 - 독립 feature branch의 Core 단계다. native 8방향 UI·다중 bus·MCP·그룹 binding·앱 통합은 후속이며 사용 앱은 교체하지 않았다.
+
+## 0.20.0 — 검증 중 · 오디오 녹음 lifecycle
+
+- 입력 장치 시작·종료와 파일 마무리를 전용 worker로 옮기고 시작 취소·timeout·중복 시작 차단·실패 복구를 구현했다. 수집 gate를 즉시 닫으며, 응답이 없는 OS 드라이버를 강제 종료했다고 표시하지 않는다.
+- 같은 캔버스의 직접 녹음 버튼·⌥⌘R, 실제 입력 frame 기반 시간·peak·기본 첫 두 채널 표시를 연결했다. 녹음 실패 원본은 보존하고 Finder에서 찾을 수 있다.
+- 실제 길이의 반복 테이크와 기존 오디오를 보존하며 원래 project/arrangement/use/track/lane에 한 편집으로 저장한다. MCP `circlr_record`는 revision과 선택을 확인하고 비동기 상태를 snapshot으로 제공한다.
+- Swift 160개와 추가 CAF→테이크→저장/재열기→렌더/바운스 검사 1개, Python 23개가 통과했다. 실제 앱의 record 사전 조건 거부·재열기·직접 버튼·단축키 안내도 확인했다. 실제 입력과 녹음 중 UI 검증이 남아 **사용 앱은 0.19.0을 유지**한다. [0.20 검증 현황](qa/0.20-review.md).
+- 선택된 오디오 이동 메뉴의 글자가 어두운 배경에 묻히는 문제를 수정하고 선택 접근성 상태를 추가했다. 작은 창에서 GUI MIDI/오디오 이동과 데이터·revision 보존을 확인했다.
 
 ## 0.19.0 — 2026-09-08 · 볼륨·팬 오토메이션
 

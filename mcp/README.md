@@ -84,3 +84,5 @@ Python 표준 라이브러리만 사용하는 로컬 stdio MCP 서버다. 음악
 `ports`는 읽기 전용 specialist에 허용되며 네 가지 쓰기는 차단된다. 앱 최소화와 무관하게 동작하며 선택이나 카메라를 이동하지 않는다. 그룹 alias는 [그룹 노출 포트](../docs/36-group-ports.md)에 설명한다. Audio Unit의 임의 다중 bus는 아직 제공하지 않는다. composition 순서 연결은 reconnect/disconnect 대신 순서 편집을 사용한다.
 
 그룹 포트는 `circlr_set_group_port`/`circlr_remove_group_port`로 관리한다. node는 group 주소, target은 내부 실제 endpoint다. 두 명령 모두 project/music/layout revision을 요구하며 음악은 유지한다. 반환 portID를 connect/reconnect에 사용하고, 기존 ID의 target을 바꿀 수는 없다. [정확한 요청·Undo·미해결 대상 계약](../docs/36-group-ports.md#mcp). `circlr_focus`의 node 주소로 그룹을 바로 보여줄 수도 있다.
+
+0.20의 `circlr_record`는 현재 선택한 섹션·트랙의 실제 오디오 녹음을 시작한다. 사용자가 입력 녹음을 요청했을 때만 사용하며 `projectID`·`expectedRevision`이 필요하다. macOS 마이크 권한 선택은 사용자에게 맡긴다. snapshot.recording의 phase/busy/seconds/peak/format/message/recoveryPath로 실제 상태를 확인한다. STOP 뒤에도 파일 마무리는 비동기이므로 busy=false와 실제 새 take를 확인하기 전 재시도하지 않는다. 장치의 첫 두 채널(모노는 1채널)을 기록하며, 반주 transport 동기·latency 보정·장치 채널 선택은 후속 범위다. read-only 전문 역할에는 이 도구가 노출되지 않는다. 통합 개발 adapter의 전체 catalog는 22개다.

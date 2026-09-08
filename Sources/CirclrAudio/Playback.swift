@@ -38,7 +38,7 @@ import CirclrCore
     private func markConnectionReady(){connectionReady=true}
     public var seconds: Double {
         guard playing, let t = player.lastRenderTime, let p = player.playerTime(forNodeTime:t) else { return offset }
-        return offset+Double(p.sampleTime)/p.sampleRate
+        return max(offset,offset+Double(p.sampleTime)/p.sampleRate)
     }
     public func play(_ audio: PreparedAudio, from: Double = 0) async throws {
         stop(); prepared = audio; offset = max(0,min(audio.mix.duration,from))
@@ -66,8 +66,8 @@ public final class TakeWriter {
     public private(set) var frames: AVAudioFramePosition = 0
     public init(url:URL,format:AVAudioFormat) throws {
         guard format.commonFormat == .pcmFormatFloat32, !format.isInterleaved,
-              let ring = circlr_ring_create(format.channelCount,4096,64),
-              let scratch = AVAudioPCMBuffer(pcmFormat:format,frameCapacity:4096) else { throw CirclrError("녹음 입력은 Float32 non-interleaved 형식이어야 합니다") }
+              let scratch = AVAudioPCMBuffer(pcmFormat:format,frameCapacity:4096),
+              let ring = circlr_ring_create(format.channelCount,4096,64) else { throw CirclrError("녹음 입력은 Float32 non-interleaved 형식이어야 합니다") }
         self.ring = ring; self.scratch = scratch; self.url = url
         do { try FileManager.default.createDirectory(at:url.deletingLastPathComponent(),withIntermediateDirectories:true); file = try AVAudioFile(forWriting:url,settings:format.settings) }
         catch { throw error }
@@ -75,10 +75,11 @@ public final class TakeWriter {
         timer.schedule(deadline:.now(),repeating:.milliseconds(5)); timer.setEventHandler { [weak self] in self?.drain() }; timer.resume()
     }
     deinit { timer?.cancel(); circlr_ring_destroy(ring) }
-    public func append(_ buffer:AVAudioPCMBuffer) {
-        guard let channels = buffer.floatChannelData else { return }
+    public func append(_ buffer:AVAudioPCMBuffer,frames:AVAudioFrameCount?=nil) {
+        guard let channels = buffer.floatChannelData,buffer.format.channelCount>=scratch.format.channelCount else { return }
         let pointers = UnsafeRawPointer(channels).assumingMemoryBound(to:Optional<UnsafePointer<Float>>.self)
-        _ = circlr_ring_push(ring,pointers,buffer.frameLength)
+        let count=min(frames ?? buffer.frameLength,buffer.frameLength);var offset:UInt32=0
+        while offset<count {let n=min(4096,count-offset);_=circlr_ring_push_offset(ring,pointers,offset,n);offset+=n}
     }
     private func drain() {
         guard let channels = scratch.floatChannelData else { return }
@@ -91,27 +92,6 @@ public final class TakeWriter {
     public func finish() throws {
         timer?.cancel(); timer = nil
         try queue.sync { drain(); file = nil; if let failure { throw failure }; if circlr_ring_overruns(ring)>0 { throw CirclrError("녹음 쓰기가 입력을 따라가지 못했습니다. 보존된 원본: \(url.path)") } }
-    }
-}
-
-@MainActor public final class AudioRecorder {
-    private let engine = AVAudioEngine()
-    private var writer: TakeWriter?
-    public private(set) var recording = false
-    public init() {}
-    public func start(to url:URL) throws {
-        guard !recording else { return }
-        let input = engine.inputNode, format = input.outputFormat(forBus:0)
-        guard format.sampleRate > 0, format.channelCount > 0 else { throw CirclrError("사용 가능한 오디오 입력 장치가 없습니다") }
-        let writer = try TakeWriter(url:url,format:format); self.writer = writer
-        input.installTap(onBus:0,bufferSize:1024,format:format) { buffer,_ in writer.append(buffer) }
-        do { try engine.start(); recording = true }
-        catch { input.removeTap(onBus:0); self.writer = nil; throw error }
-    }
-    public func stop() throws -> URL? {
-        guard recording else { return nil }
-        engine.inputNode.removeTap(onBus:0); engine.stop(); recording = false
-        let current = writer; writer = nil; try current?.finish(); return current?.url
     }
 }
 

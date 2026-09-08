@@ -68,7 +68,7 @@ extension AppStore {
             add("section-play","선택 섹션만 재생"){[weak self] in self?.play(onlySelection:true)}
             add("midi-import","MIDI 파일 가져오기…","⌥⌘I"){[weak self] in self?.chooseMIDIImport()}
             add("record-midi","MIDI 녹음 시작 / 정지"){[weak self] in self?.startMIDIRecording()}
-            add("record-audio","오디오 녹음 시작 / 정지"){[weak self] in self?.startAudioRecording()}
+            add("record-audio","오디오 녹음 시작 / 정지","⌥⌘R"){[weak self] in self?.startAudioRecording()}
             add("rhythm","이 섹션의 리듬 패턴 만들기"){[weak self] in self?.makeHierarchyPattern()}
             if selectedTrackID != nil {
                 add("bounce","선택 트랙을 오디오로 바운스"){[weak self] in self?.bounceTrack()}
@@ -290,7 +290,7 @@ struct KeyboardHelpView:View {
         ("MIDI · ⇧← → / ⇧↑ ↓","노트 길이 변경 / 옥타브 이동"),("MIDI · ⌥↑ ↓","세기 5단계 변경"),
         ("오디오 · ← → / ⌥← →","원본 시작 / 끝 0.01초 조절 · ⇧ 0.1초"),("설정 · Tab / ⇧Tab","다음·이전 입력 항목 · Return 적용"),
         ("오디오 · ⌘T / ⌘D","커서에서 분할 / 구간 뒤에 복제"),("오디오 · Delete","선택 오디오 삭제"),
-        ("⌘5 / 오토메이션 · Return","볼륨·팬 곡선 열기 / 점 추가"),("오토메이션 · [ ] / 방향키","이전·다음 점 / 시간·값 이동"),
+        ("⌥⌘R","오디오 녹음 / 정지 · 연결 중 시작 취소"),("⌘5 / 오토메이션 · Return","볼륨·팬 곡선 열기 / 점 추가"),("오토메이션 · [ ] / 방향키","이전·다음 점 / 시간·값 이동"),
         ("⌘W / ⌘Q","최소화 / 앱 종료")
     ]
     var body:some View {

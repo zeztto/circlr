@@ -20,7 +20,7 @@ flowchart LR
 
 ## 연결 경계
 
-- `mcp/server.py`: Python 표준 라이브러리의 stdio JSON-RPC MCP adapter. 개발 브랜치는 도구 21개와 입력 schema를 제공하고 native 명령을 전달한다. 사용 앱 0.19의 기존 도구 14개와 구분한다.
+- `mcp/server.py`: Python 표준 라이브러리의 stdio JSON-RPC MCP adapter. 개발 브랜치는 도구 22개와 입력 schema를 제공하고 native 명령을 전달한다. 사용 앱 0.19의 기존 도구 14개와 구분한다.
 - `AgentSocket.swift`: 앱의 `Application Support/circlr/Agent/agent.sock`. 폴더 0700·socket 0600 및 peer UID로 현재 사용자만 연결한다. TCP 포트나 shell 명령 실행은 제공하지 않는다.
 - `AgentWorkspace.swift`: UI와 MCP 공통 dispatcher, request retry, job lifecycle, 실제 activity 기록.
 - `AgentProtocol.swift`: Codable 명령과 Core transaction. 오디오/UI를 직접 제어하는 임의의 스크립트를 모델에 저장하지 않는다.

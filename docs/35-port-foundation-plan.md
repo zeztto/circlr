@@ -130,3 +130,5 @@ D1 결과: 포트 도구 5개와 음악/배치 revision 검사를 구현했다. 
 D2 체크포인트: 그룹 alias·layout Undo·MCP와 같은 캔버스 관리 UI를 구현했다. 실제 키보드 노출/이름/연결·노출 해제/Undo, 그룹 OUT 8방향과 마우스 드래그, native 저장/재열기 및 읽기 전용 조회를 검증했다. 그룹 경계 연결이 사라지던 `CanvasPresentation`의 가시성도 수정했다. album/상위 composition/leaf composition/sound의 소유 검사를 추가해 Swift 212개, Python 25개 및 최종 release build가 통과했다. [D2 근거](../qa/ports-group-review.md).
 
 재생 시 접힌 그룹으로 logical node의 레벨을 전달하는 소스 경로를 보완했으나 최종 QA 앱에서 macOS 출력 장치 연결이 10초를 넘겨 재생이 시작되지 않았다. 이 빌드의 신호 모션·청감은 미검증이다. 다음은 장치 정상 상태의 D2 재생, C3의 남은 신호/밀집/VoiceOver, E의 녹음 branch 보존 통합이다. D2 체크포인트를 전체 포트 완료나 사용 앱 출고로 취급하지 않는다.
+
+후속 관측: 동일 D2 binary에서 장치 연결 이후 재생이 진행됐고 전면 창의 7개 표본에서 그룹 레벨과 두 출력의 모션을 확인했다. 이어 녹음과 통합한 0.20.0 build 23에서 편집/바운스/Undo/저장과 전면 10개 재생 표본을 검증했다. 이전 cold start timeout의 원인이 해결됐다고 단정하지 않는다. [통합 계약](37-daw-integration.md) · [QA](../qa/daw-integration-review.md). 남은 E gate와 재생 follow 밀집 UI 개선을 이어간다.
