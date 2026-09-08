@@ -51,13 +51,19 @@ struct InlineCircleEditor: View {
                 case .midi, .rhythmMIDI: midi
                 case .audio: audio
                 case .effect(let effect):
-                    ScrollView { VStack(spacing: 18) {
-                        EffectControls(effect: Binding(get: { effect }, set: { value in store.updateMusic("이펙트 편집") { $0.content = .effect(value) } }), allowsAU: true)
+                    let projectID=store.project.id, address=store.hierarchySelection
+                    ScrollView { VStack(alignment: .leading, spacing: 22) {
+                        EffectControls(effect: Binding(get: {if case .effect(let value)=store.selectedMusic?.content {return value};return effect}, set: { value in store.updateMusic("이펙트 편집") { $0.content = .effect(value) } }), allowsAU: true,isCurrent:{store.project.id==projectID && store.hierarchySelection==address})
                         if effect.kind == .audioUnit {
                             StudioChoice("Audio Unit", selection: Binding(get: { effect.plugin?.id ?? "" }, set: { id in store.updateMusic("Audio Unit 선택") { var value = effect; value.plugin = store.effects.first { $0.id == id }; $0.content = .effect(value) } }), options: [("", "선택")]+store.effects.map { ($0.id, $0.name) })
                             Button("플러그인 편집") { store.showMusicPluginEditor() }.disabled(effect.plugin == nil)
                         }
-                        signalControls(node)
+                        HStack(spacing: 22) {
+                            Toggle("음소거",isOn:Binding(get:{node.muted},set:{value in store.updateMusic("음소거"){$0.muted=value}}))
+                            ValueField(title:"출력 볼륨",value:Binding(get:{node.gain},set:{value in store.updateMusic("출력 볼륨"){$0.gain=value}}),range:0...4)
+                            Spacer(minLength:8)
+                            Button("트랙 바운스"){store.bounceTrack()}.disabled(store.preparing || store.selectedTrack == nil)
+                        }.frame(maxWidth:660,alignment:.leading)
                     }.padding(.trailing, 8) }
                 case .instrument, .output:
                     if let track = store.selectedTrack { ScrollView { TrackInspector(store: store, track: track) } }

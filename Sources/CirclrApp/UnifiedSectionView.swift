@@ -148,10 +148,9 @@ struct SectionEffectsRow:View {
                 Menu {ForEach(EffectKind.allCases.filter{$0 != .audioUnit},id:\.self){kind in Button(AppStore.effectName(kind)){store.updateUse("Effect 추가"){$0.effects.append(Effect(kind,amount:kind == .gain ? 1:0.5))}}}} label:{Label("이펙트 추가",systemImage:"plus")}.menuStyle(.borderlessButton).fixedSize()
             }
             ForEach(Array(use.effects.enumerated()),id:\.offset){i,effect in
-                HStack(spacing:20) {
-                    CompactChoice(selection:Binding(get:{effect.kind},set:{v in store.updateUse("Effect 종류"){$0.effects[i].kind=v}}),options:EffectKind.allCases.filter{$0 != .audioUnit}.map{($0,AppStore.effectName($0))},label:"이펙트 종류").frame(width:125,alignment:.leading)
-                    ValueField(title:effect.kind == .gain ? "배율":effect.kind == .pan ? "좌우":"양",value:Binding(get:{effect.amount},set:{v in store.updateUse("Effect 양"){$0.effects[i].amount=v}}),range:effect.kind == .gain ? 0...4:effect.kind == .pan ? -1...1:0...1)
-                    if [.delay,.reverb,.compressor].contains(effect.kind) {ValueField(title:"Mix / Ratio",value:Binding(get:{effect.secondary},set:{v in store.updateUse("Effect Mix"){$0.effects[i].secondary=v}}),range:0...0.95)}
+                let projectID=store.project.id
+                HStack(alignment:.top,spacing:20) {
+                    EffectControls(effect:Binding(get:{guard let effects=store.selectedUse?.effects,effects.indices.contains(i) else{return effect};return effects[i]},set:{v in store.updateUse("이펙트 편집"){$0.effects[i]=v}}),isCurrent:{store.project.id==projectID && store.selectedUse?.id==use.id && store.selectedUse?.effects==use.effects})
                     Spacer();Button {store.updateUse("Effect 제거"){$0.effects.remove(at:i)}} label:{Image(systemName:"xmark")}.help("이 이펙트 제거")
                 }
             }
