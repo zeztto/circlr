@@ -10,23 +10,37 @@ struct InlineCircleEditor: View {
     @State private var stepState = StepEditorState()
     @FocusState private var nameFocused:Bool
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                TextField("서클 이름", text: Binding(get: { store.selectedCircle?.title ?? "" }, set: { store.renameHierarchy($0) }))
-                    .textFieldStyle(.plain).font(.system(size: 17, weight: .semibold)).focused($nameFocused).disabled(store.midiImportDraft != nil)
-                Spacer()
-                if store.canEditCirclePorts {
-                    Button(store.connectionsOpen ? "편집으로" : "연결") { if store.connectionsOpen { store.connectionsOpen = false } else { store.showConnections() } }.help("IN/OUT·대상·8방향 위치 편집 · L")
-                }
-                if store.selectedUse != nil {AudioRecordButton(store:store)}
-                if store.selectedMusic != nil {
-                    Button(store.automationVisible ? "편집으로":"오토메이션") {store.connectionsOpen=false;if store.automationVisible {store.automationOpen=false}else{store.showAutomation()}}.help("이 서클의 볼륨·팬 곡선 · ⌘5")
-                    Button { store.connectionsOpen=false;store.hierarchySettingsOpen.toggle() } label: { Image(systemName: "slider.horizontal.3") }.help("템포·박자·스케일·반복 설정")
-                }
-                Button { store.hierarchySettingsOpen = false; store.hierarchyParent() } label: { Image(systemName: "arrow.up.left.and.arrow.down.right") }.help("상위 서클로 축소 · Esc")
-            }
+        VStack(alignment: .leading, spacing: 8) {
+            InlineEditorHeader(store:store,nameFocus:$nameFocused)
+                .fixedSize(horizontal:false,vertical:true)
             if store.selectedMusic != nil {StudioRouteBar(store:store)}
             if store.audioRecordingStatusVisible {AudioRecordingStatusView(store:store)}
+            // The flexible body cannot renegotiate the title/route/footer positions.
+            GeometryReader { geometry in
+                editorContent.frame(width:geometry.size.width,height:geometry.size.height,alignment:.topLeading)
+            }.clipped()
+            HStack { Text("휠로 확대·축소 · ⇧ 휠로 편집 영역 이동"); Spacer(); Text("⌘S 저장") }
+                .font(.system(size: 11)).foregroundStyle(StudioTheme.secondary)
+        }
+        .frame(maxWidth:.infinity,maxHeight:.infinity,alignment:.topLeading)
+        .padding(14).background(store.project.usesOrbits && !store.hierarchySettingsOpen && store.midiImportDraft==nil ? Color.clear:StudioTheme.surface).foregroundStyle(StudioTheme.text)
+        .font(.system(size: 13)).buttonStyle(CanvasButtonStyle()).controlSize(.regular)
+        .tint(StudioTheme.accent).preferredColorScheme(.dark)
+        .numberEditing(in:store)
+        .onExitCommand { store.hierarchySettingsOpen = false; store.hierarchyParent() }
+        .onAppear {
+            topPitch = store.currentLane?.notes.map(\.pitch).max().map { min(128,max(12,$0+1)) } ?? (store.selectedTrack?.instrument.drums == true ? 48 : 72)
+            orbitViewport.fitPitches(store.currentLane?.notes ?? [])
+            stepState.drumMode=store.selectedTrack?.instrument.drums==true
+            stepState.newPitch=store.selectedTrack?.instrument.sample?.rootPitch ?? 36
+            // A false FocusState write can clear focus already assigned by the connection editor.
+            if store.hierarchySettingsOpen { nameFocused = true }
+        }
+        .onChange(of:store.hierarchySettingsOpen){_,value in if value || nameFocused { nameFocused=value } }
+        .onChange(of:store.editOriginal){_,_ in orbitViewport=MIDIOrbitViewport();orbitViewport.fitPitches(store.currentLane?.notes ?? [])}
+    }
+    @ViewBuilder private var editorContent:some View {
+        VStack(alignment:.leading,spacing:12) {
             if store.connectionsOpen { PortConnectionsEditor(store: store).id(store.hierarchySelection) }
             else if let draft=store.midiImportDraft {MIDIImportView(store:store,draft:draft)} else if let id=store.hierarchyTransitionID,let edge=store.project.active.edges.first(where:{$0.id==id}) {
                 HStack{Text("섹션 사이 전환");Spacer();Button("서클 설정"){store.hierarchyTransitionID=nil}}
@@ -76,29 +90,7 @@ struct InlineCircleEditor: View {
                 case .rhythmAudio: Text("리듬 패턴의 오디오 클립"); AudioLane(store: store); Spacer()
                 }
             }
-            if let use=store.selectedUse,let track=store.selectedTrackID,store.selectedMusic != nil {
-                let takes=(store.project.takes ?? []).filter{$0.useID==use.id && $0.lane.trackID==track && ($0.targetLaneID == nil || $0.targetLaneID==store.selectedLaneID)}
-                if !takes.isEmpty {Menu("녹음 테이크 선택"){ForEach(takes){take in Button(take.name){store.activateTake(take)}}}}
-            }
-            HStack { Text("휠로 확대·축소 · ⇧ 휠로 편집 영역 이동"); Spacer(); Text("⌘S 저장") }
-                .font(.system(size: 11)).foregroundStyle(StudioTheme.secondary)
-        }
-        .frame(maxWidth:.infinity,maxHeight:.infinity,alignment:.topLeading)
-        .padding(14).background(store.project.usesOrbits && !store.hierarchySettingsOpen && store.midiImportDraft==nil ? Color.clear:StudioTheme.surface).foregroundStyle(StudioTheme.text)
-        .font(.system(size: 13)).buttonStyle(CanvasButtonStyle()).controlSize(.regular)
-        .tint(StudioTheme.accent).preferredColorScheme(.dark)
-        .numberEditing(in:store)
-        .onExitCommand { store.hierarchySettingsOpen = false; store.hierarchyParent() }
-        .onAppear {
-            topPitch = store.currentLane?.notes.map(\.pitch).max().map { min(128,max(12,$0+1)) } ?? (store.selectedTrack?.instrument.drums == true ? 48 : 72)
-            orbitViewport.fitPitches(store.currentLane?.notes ?? [])
-            stepState.drumMode=store.selectedTrack?.instrument.drums==true
-            stepState.newPitch=store.selectedTrack?.instrument.sample?.rootPitch ?? 36
-            // A false FocusState write can clear focus already assigned by the connection editor.
-            if store.hierarchySettingsOpen { nameFocused = true }
-        }
-        .onChange(of:store.hierarchySettingsOpen){_,value in if value || nameFocused { nameFocused=value } }
-        .onChange(of:store.editOriginal){_,_ in orbitViewport=MIDIOrbitViewport();orbitViewport.fitPitches(store.currentLane?.notes ?? [])}
+        }.frame(maxWidth:.infinity,maxHeight:.infinity,alignment:.topLeading)
     }
     @ViewBuilder private var midi:some View {
         if store.project.usesOrbits && !store.midiStepMode {MIDIOrbitWorkspace(store:store,viewport:$orbitViewport)}else{MIDIGridWorkspace(store:store,topPitch:$topPitch,steps:$stepState)}

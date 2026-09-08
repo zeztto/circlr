@@ -86,6 +86,7 @@ struct AutomationEditor:View {
     }
     var orbital:some View {
         HStack(alignment:.top,spacing:20) {
+            ScrollView {
             VStack(alignment:.leading,spacing:12) {
                 parameterControls
                 pointActions
@@ -93,14 +94,15 @@ struct AutomationEditor:View {
                 scopeText.font(.system(size:12)).foregroundStyle(StudioTheme.secondary)
                 rangeButton
                 Text("각도는 시간 · 반경은 "+store.automationParameter.label).font(.system(size:12)).foregroundStyle(StudioTheme.secondary)
-                Spacer(minLength:0)
+            }.frame(maxWidth:.infinity,alignment:.leading).padding(.trailing,6)
             }.frame(width:225,alignment:.leading)
             plot.frame(minWidth:100,maxWidth:.infinity,maxHeight:.infinity)
+            ScrollView {
             VStack(alignment:.leading,spacing:12) {
                 navigation
                 if let point=store.selectedAutomationPoint {timeControl(point);valueControl(point);shapeControl(point)}else{emptyHint}
                 valueHint.font(.system(size:12)).foregroundStyle(StudioTheme.secondary)
-                Spacer(minLength:0)
+            }.frame(maxWidth:.infinity,alignment:.leading).padding(.trailing,6)
             }.frame(width:250,alignment:.leading)
         }
     }

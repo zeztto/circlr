@@ -81,8 +81,11 @@ struct AudioWorkspaceView:View {
                 Button("복제"){act{store.duplicateAudio()}}.help("구간 뒤로 복제 · ⌘D")
                 Button("트랙 바운스"){store.bounceTrack()}.disabled(store.preparing || store.selectedTrack == nil)
                 if store.selectedMusic?.bounce != nil {Button("원본 복원"){act{store.restoreBounce()}}}
+                Toggle("음소거",isOn:Binding(get:{store.selectedMusic?.muted ?? false},set:{v in store.updateMusic("오디오 음소거"){$0.muted=v}}))
+                Button("삭제"){act{store.applyAudioEdit(.delete,label:"오디오 삭제")}}
             }
             HStack(alignment:.top,spacing:16) {
+                ScrollView {
                 VStack(alignment:.leading,spacing:8) {
                     field("배치",unit:"박",value:binding(\.beat),range:0...131072)
                     field("원본 시작",unit:"초",value:trimBinding(end:false),range:trim.start)
@@ -90,7 +93,7 @@ struct AudioWorkspaceView:View {
                     field("분할 위치",unit:"초",value:Binding(get:{store.audioCutOffset},set:{store.audioSplitOffset=$0}),range:0...liveClip.duration)
                     HStack {Button("분할"){act{store.splitAudio()}}.disabled(store.audioCutOffset<=0 || store.audioCutOffset>=liveClip.duration).help("커서에서 두 서클로 분할 · ⌘T");Text("선택 시작 기준").foregroundStyle(StudioTheme.secondary)}
                     Text("← → 시작 · ⌥ 끝\n⇧ 0.1초 · 기본 0.01초").font(.system(size:11)).foregroundStyle(StudioTheme.secondary)
-                    Spacer(minLength:0)
+                }.frame(maxWidth:.infinity,alignment:.leading).padding(.trailing,4)
                 }.frame(width:204,alignment:.leading)
                 VStack(spacing:6) {
                     OrbitAudioEditor(store:store,clip:liveClip,asset:asset,viewport:viewport,focusTarget:focusTarget)
@@ -99,19 +102,16 @@ struct AudioWorkspaceView:View {
                         .font(.system(size:11)).monospacedDigit().foregroundStyle(StudioTheme.secondary)
                     if selectionOutside {Text("화면 밖 구간 · 선택 구간으로 다시 맞춤").font(.system(size:11)).foregroundStyle(StudioTheme.secondary)}
                 }.frame(maxWidth:.infinity,maxHeight:.infinity)
+                ScrollView {
                 VStack(alignment:.leading,spacing:8) {
                     field("볼륨",unit:"dB",value:binding(\.gain),range:0...4,presentation:.gainDecibels)
                     field("페이드 인",unit:"ms",value:fadeBinding(input:true),range:0...max(0,(liveClip.duration-fadeOut)*1000))
                     field("페이드 아웃",unit:"ms",value:fadeBinding(input:false),range:0...max(0,(liveClip.duration-fadeIn)*1000))
                     Toggle("템포 추종",isOn:Binding(get:{liveClip.followsTempo},set:{value in store.editAudioClip(liveClip){$0.followsTempo=value}}))
                     field("원본",unit:"BPM",value:binding(\.sourceBPM),range:1...999)
-                    HStack(spacing:16) {
-                        Toggle("음소거",isOn:Binding(get:{store.selectedMusic?.muted ?? false},set:{v in store.updateMusic("오디오 음소거"){$0.muted=v}}))
-                        Button("삭제"){act{store.applyAudioEdit(.delete,label:"오디오 삭제")}}
-                    }
                     Text(liveClip.renderWindow?.envelopes.isEmpty==false ? "원본 시간의 페이드 · 이전 페이드도 유지":"페이드는 원본 시간 기준")
                         .font(.system(size:11)).foregroundStyle(StudioTheme.secondary)
-                    Spacer(minLength:0)
+                }.frame(maxWidth:.infinity,alignment:.leading).padding(.trailing,4)
                 }.frame(width:220,alignment:.leading)
             }.frame(maxHeight:.infinity)
         }

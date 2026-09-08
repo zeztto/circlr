@@ -77,7 +77,7 @@ struct StudioRouteBar:View {
                         ForEach(EffectKind.allCases,id:\.self) {kind in Button(AppStore.effectName(kind)){store.addMusicEffect(kind)}}
                     }.menuStyle(.borderlessButton).fixedSize().help("선택한 오디오 경로에 이펙터 추가")
                 }
-            }.padding(.vertical,4)
+            }.padding(.vertical,2)
         }
     }
 }

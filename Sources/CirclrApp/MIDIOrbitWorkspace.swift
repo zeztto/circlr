@@ -21,6 +21,7 @@ struct MIDIOrbitWorkspace:View {
     private let keyHelp="Tab 노트 선택 · 방향키 이동 · ⇧ 좌우 길이 · ⌥ 상하 세기 · Return 입력 · Delete 삭제"
     var body:some View {
         HStack(alignment:.top,spacing:20) {
+            ScrollView {
             VStack(alignment:.leading,spacing:8) {
                 HStack {
                     Picker("MIDI 편집 방식",selection:$store.midiStepMode){Text("궤도").tag(false);Text("스텝").tag(true)}.pickerStyle(.segmented).labelsHidden().frame(width:110)
@@ -66,7 +67,7 @@ struct MIDIOrbitWorkspace:View {
                     Button("바운스"){store.bounceTrack()}.disabled(store.preparing)
                     Button{store.startMIDIRecording()}label:{Image(systemName:store.midiRecording ? "stop.circle":"record.circle")}.accessibilityLabel(store.midiRecording ? "MIDI 녹음 정지":"MIDI 녹음").disabled(store.editPatternID != nil)
                 }
-                Spacer(minLength:0)
+            }.frame(maxWidth:.infinity,alignment:.leading).padding(.trailing,6)
             }.frame(width:228,alignment:.leading)
             OrbitMIDIEditor(store:store,viewport:viewport,focusTarget:focusTarget).frame(minWidth:180,maxWidth:.infinity,maxHeight:.infinity).help(keyHelp)
             MIDINoteInspector(store:store,focusTarget:focusTarget,hint:"Tab 선택 · 방향키 편집",keyHelp:keyHelp)
