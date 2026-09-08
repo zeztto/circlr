@@ -1,5 +1,7 @@
 # DAW 통합 · 실행 계약
 
+후속 체크포인트: build 24에서 섹션 내용 framing·이름표 간섭·재생 중 편집 진입을 개선하고 native 창/콘솔 네 조합을 검증했다. [실행 계약](38-playback-framing.md) · [결과와 남은 조건](../qa/playback-framing-review.md). 아래 build 23 통합 계약과 미완료 출고 gate는 유지한다.
+
 2026-09-08. 포트/UI 개발 `1d304eb`와 녹음 수명 주기 `d88ea5d`를 `codex/daw-integration`의 별도 worktree에서 통합한다. 기존 두 작업 디렉터리와 사용자용 0.19 앱은 보존한다. 이전 목표 턴은 D2 구현·native 편집 검증·private push로 progress였다.
 
 ## 소유와 범위

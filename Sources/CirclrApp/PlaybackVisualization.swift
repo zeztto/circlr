@@ -63,6 +63,9 @@ struct PlaybackVisualFrame {
     func interruptPlaybackFollow() {
         let mode = store.playbackFollow.interrupted(playing: store.playback.playing)
         if mode != store.playbackFollow {
+            // Consume our own mode change before a click starts its manual focus animation.
+            // A later SwiftUI update must not mistake that animation for the old follow transition.
+            lastFollowMode = mode
             store.playbackFollow = mode
             animation?.invalidate(); animation = nil
             followedSection = nil
@@ -146,16 +149,13 @@ struct PlaybackVisualFrame {
     func followPlaybackSection() {
         guard store.playbackFollow == .following, !visualFrame.stale,
               let target = visualFrame.focus,
-              let node = scene?.node(target), bounds.width > 100 else { return }
-        let top = 95.0, bottom = store.consoleOpen ? max(75, bounds.height-store.consoleBounds.minY+12) : 75
-        let usableHeight = max(160, bounds.height-top-bottom)
-        let viewport = CGRect(x: 0, y: top, width: bounds.width, height: usableHeight)
+              let scene,let node = scene.node(target), bounds.width > 100 else { return }
+        let viewport = workspaceViewport
         guard target != followedSection || viewport != playbackFollowViewport else { return }
+        guard let next=PlaybackFraming.camera(for:node,in:scene,viewport:viewport) else{return}
         followedSection = target
         playbackVisibilityFocus = target
         playbackFollowViewport = viewport
-        var next = camera.focused(on: node, width: bounds.width, height: usableHeight)
-        next.pan.y += top
         setCamera(next, animated: !reducePlaybackMotion, manual: false)
     }
 
@@ -236,6 +236,7 @@ struct PlaybackVisualFrame {
          "editorAddress":store.json(editorAddress), "editorFrame":editor.map{[$0.frame.minX,$0.frame.minY,$0.frame.width,$0.frame.height]} ?? [],
          "workspaceViewport":[workspaceViewport.minX,workspaceViewport.minY,workspaceViewport.width,workspaceViewport.height],
          "labels":labelPlacements.map{["address":store.json($0.id),"rect":[$0.rect.minX,$0.rect.minY,$0.rect.width,$0.rect.height]]},
+         "labelCircles":labelCircles.map{["address":store.json($0.id),"center":[$0.center.x,$0.center.y],"radius":$0.radius]},
          "followViewport": [playbackFollowViewport.minX, playbackFollowViewport.minY, playbackFollowViewport.width, playbackFollowViewport.height],
          "nodes": visualFrame.levels.filter { $0.value > 0.0001 }.map { ["address": store.json($0.key), "level": $0.value] },
          "edges": visualFrame.edgeLevels.filter { $0.value > 0.0001 },

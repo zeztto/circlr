@@ -172,6 +172,10 @@ struct AlbumCanvas: NSViewRepresentable {
     }
     func focus(_ address: CircleAddress, detail: Bool = false) {
         guard let node = scene?.node(address), bounds.width > 100 else { return }
+        if !detail,node.role == .section,let scene,
+           let target=PlaybackFraming.camera(for:node,in:scene,viewport:workspaceViewport) {
+            setCamera(target,animated:true);return
+        }
         var target=camera.focused(on:node,width:workspaceViewport.width,height:workspaceViewport.height,detail:detail)
         if detail {
             let r=max(360,min(620,workspaceViewport.width*0.52))
