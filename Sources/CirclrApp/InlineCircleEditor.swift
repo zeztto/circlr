@@ -185,32 +185,20 @@ struct AudioTrimView: View {
 
 struct HierarchySettingsEditor: View {
     @ObservedObject var store: AppStore
-    @State private var settings=ContextSettings()
-    @State private var global=MusicContext()
-    private var context: MusicContext { store.selectedCircle?.context ?? store.project.global }
-    func value<T>(_ key:WritableKeyPath<ContextSettings,Setting<T>>,_ fallback:T)->Binding<T> {Binding(get:{settings[keyPath:key].value ?? fallback},set:{settings[keyPath:key] = .local($0)})}
     var body: some View {
         VStack(alignment:.leading,spacing:18) {
             if let group=store.selectedHierarchyGroup {
                 Text("\(group.members.count)개 서클 · 음악과 연결을 유지하는 배치 그룹")
                 Button(group.collapsed ? "그룹 펼치기" : "그룹 접기") {store.updateHierarchyGroup{$0.collapsed.toggle()};store.hierarchySettingsOpen=false;store.hierarchyCommand=HierarchyCommand(action:.focus(store.hierarchySelection ?? .album,false))}
                 Button("그룹 해제"){store.ungroupHierarchy()}
-            } else if store.hierarchySelection == .album {
-                CompactNumber("템포 · BPM",value:$global.tempo,range:1...999);MeterEditor(meter:$global.meter);ScaleEditor(scale:$global.scale)
-                BeatEditor(grid:$global.beatGrid);PatternPicker(project:store.project,assignment:$global.rhythm)
-                Button("앨범에 적용") {do{try ContextResolver.validate(global);store.mutate("앨범 음악 설정"){$0.global=global}}catch{store.fail(error)}}
-            } else {
-                SourcePicker(title:"템포",setting:$settings.tempo,fallback:context.tempo)
-                if settings.tempo.source == .local {CompactNumber("BPM",value:value(\.tempo,context.tempo),range:1...999)}
-                SourcePicker(title:"박자",setting:$settings.meter,fallback:context.meter)
-                if settings.meter.source == .local {MeterEditor(meter:value(\.meter,context.meter))}
-                SourcePicker(title:"스케일",setting:$settings.scale,fallback:context.scale)
-                if settings.scale.source == .local {ScaleEditor(scale:value(\.scale,context.scale))}
-                SourcePicker(title:"박 분할·강세",setting:$settings.beatGrid,fallback:context.beatGrid)
-                if settings.beatGrid.source == .local {BeatEditor(grid:value(\.beatGrid,context.beatGrid))}
-                SourcePicker(title:"리듬 패턴",setting:$settings.rhythm,fallback:context.rhythm)
-                if settings.rhythm.source == .local {PatternPicker(project:store.project,assignment:value(\.rhythm,context.rhythm))}
-                Button("서클에 적용") {store.updateHierarchySettings(settings)}
+            } else if let address=store.hierarchySelection {
+                if store.selectedMusic != nil {
+                    HStack(spacing:12) {
+                        Toggle("공유 원본 편집",isOn:$store.editOriginal)
+                        Text(store.editOriginal ? "같은 원본을 사용하는 서클에 반영":"이번 사용에만 반영").font(.system(size:11)).foregroundStyle(StudioTheme.secondary)
+                    }
+                }
+                MusicContextEditor(store:store,address:address,projectID:store.project.id,generation:store.mediaImportGeneration,original:store.selectedMusic != nil && store.editOriginal)
             }
             if let use=store.selectedUse,store.selectedMusic == nil,store.selectedHierarchyGroup == nil {
                 CountControl(title:"마디",value:Binding(get:{store.selectedUse?.barsOverride ?? store.project.sections.first{$0.id==use.sectionID}?.bars ?? 8},set:{v in store.updateUse("섹션 길이"){$0.barsOverride=v}}),range:1...1024)
@@ -223,7 +211,6 @@ struct HierarchySettingsEditor: View {
                 }
             }
             if let music=store.selectedMusic {
-                Toggle("공유 원본 편집",isOn:$store.editOriginal)
                 Toggle("음소거",isOn:Binding(get:{music.muted},set:{v in store.updateMusic("음소거"){$0.muted=v}}))
                 if music.content.input == nil {
                     ValueField(title:"부모 안 시작 박",value:Binding(get:{store.selectedMusic?.startBeat ?? music.startBeat},set:{v in store.updateMusic("시작 박"){$0.startBeat=v}}),range:0...131072)
@@ -240,7 +227,6 @@ struct HierarchySettingsEditor: View {
                 Button("악장 추가"){store.addComposition(.movement)}
             }
             if store.selectedUse != nil,store.selectedHierarchyGroup == nil { Button("리듬 패턴 만들기") { store.makeHierarchyPattern() } }
-        }.onAppear{settings=store.hierarchySettings;global=store.project.global}
-        .id(store.hierarchySelection)
+        }.id(store.hierarchySelection)
     }
 }

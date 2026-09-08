@@ -6,7 +6,9 @@ macOS용 앨범·송폼 궤도 편집기. **앨범 → 곡·악장 → 섹션 �
 
 연결 UI는 [서클 둘레 8방향 IN/OUT과 다중 입출력](docs/22-eight-direction-ports.md)으로 확장 중이다. 포트의 신호 의미와 연결점 배치를 분리한다. 아래 일반 사용법은 배포된 0.19 앱 기준이며 새 포트 기능은 독립 개발 브랜치에서 검증한다.
 
-현재 **`codex/daw-integration`의 0.20.0 build 29**에 녹음 lifecycle과 8방향·다중 bus·그룹 포트를 통합했다. 같은 캔버스의 연결 편집·녹음 상태·스텝·오토메이션이 공존하며, 녹음 시작·정리 중 음악 편집과 Undo의 경쟁을 차단한다. build 23의 실제 편집·바운스·Undo·저장/재열기·닫기 최소화 및 출력별 모션 검증은 [통합 QA](qa/daw-integration-review.md)에 기록했다.
+현재 **`codex/daw-integration`의 0.20.0 build 30**에 녹음 lifecycle과 8방향·다중 bus·그룹 포트를 통합했다. 같은 캔버스의 연결 편집·녹음 상태·스텝·오토메이션이 공존하며, 녹음 시작·정리 중 음악 편집과 Undo의 경쟁을 차단한다. build 23의 실제 편집·바운스·Undo·저장/재열기·닫기 최소화 및 출력별 모션 검증은 [통합 QA](qa/daw-integration-review.md)에 기록했다.
+
+build 30은 같은 캔버스의 **템포·박자·스케일·박 분할/강세·리듬을 현재 값에서 바로 편집**한다. 기본값/앨범/개별 출처를 함께 표시하며 상속 중 값을 바꾸면 해당 항목만 개별 설정이 된다. 전체 적용 버튼 없이 Return/Tab으로 확정하고 ⌘Z로 한 항목씩 복원한다. 강세는 `2+2+3`처럼 입력해 Return 또는 행의 적용 버튼으로 확정한다. Swift **272개**·Python **26개**, 실제 상속 전환·연속 입력·잘못된 강세·MCP 충돌·리듬 연결·Undo·저장/재열기와 최종 패키지를 검증했다. [편집 계약](docs/44-direct-music-context.md) · [build 30 QA](qa/context-editing-review.md).
 
 build 29는 신스·오디오·MIDI·출력 볼륨·반복·템포의 숫자 입력을 통일한다. **Return 또는 Tab으로 확정, Esc로 취소**하며 입력 중에는 음악을 바꾸지 않는다. 범위·정수 오류는 필드에 표시하고, 이미 입력하던 대상이 외부에서 바뀌면 덮어쓰지 않는다. Native Tab의 포커스 순서와 현재 모델 Binding을 함께 수정해 빠른 연속 입력을 검증했다. Swift **265개**·Python **26개**, 실제 앱의 개별 Undo·정밀도 보존·저장/재열기와 패키지 일치를 확인했다. [입력 계약](docs/43-number-editing.md) · [build 29 검증과 남은 범위](qa/number-editing-review.md).
 

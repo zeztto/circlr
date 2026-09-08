@@ -217,23 +217,6 @@ extension AppStore {
         case .group: updateHierarchyGroup { $0.name = name }
         }
     }
-    func updateHierarchySettings(_ settings: ContextSettings) {
-        guard let address = hierarchySelection else { return }
-        switch address {
-        case .composition(let id): mutate("곡·악장 음악 설정") { p in if let i = p.album?.compositions.firstIndex(where: { $0.id == id }) { p.album?.compositions[i].settings = settings }; _ = try AlbumCompiler.compile(p) }
-        case .section: updateUse("섹션 음악 설정") { $0.settings = settings }
-        case .music: updateMusic("음악 서클 설정") { $0.settings = settings }
-        case .album, .group, .sound, .signal: break
-        }
-    }
-    var hierarchySettings: ContextSettings {
-        switch hierarchySelection {
-        case .composition(let id): return project.album?.composition(id)?.settings ?? ContextSettings()
-        case .section: return selectedUse?.settings ?? ContextSettings()
-        case .music: return selectedMusic?.settings ?? ContextSettings()
-        default: return ContextSettings()
-        }
-    }
     func requestWaveform(_ asset: Asset) {
         guard waveforms[asset.id] == nil, !waveformLoading.contains(asset.id) else { return }
         let root = mediaRoot, generation = waveformGeneration
