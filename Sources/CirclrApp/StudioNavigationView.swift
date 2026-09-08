@@ -37,7 +37,7 @@ struct StudioRouteButtons:View {
     let route:StudioTrackRoute
     var body:some View {
         HStack(spacing:4) {
-            ForEach(["MIDI","오디오","악기","이펙터","믹스","출력"],id:\.self) { role in
+            ForEach(["MIDI","오디오","악기","이펙터","오디오 라우터","믹스","출력"],id:\.self) { role in
                 let items=route.destinations.filter{$0.role==role}
                 if let first=items.first {
                     if items.count==1 {
@@ -54,12 +54,13 @@ struct StudioRouteButtons:View {
             }
         }
     }
-    func displayName(_ role:String)->String {role=="악기" ? "음색":role=="이펙터" ? "이펙트":role}
+    func displayName(_ role:String)->String {role=="악기" ? "음색":role=="이펙터" ? "이펙트":role=="오디오 라우터" ? "라우터":role}
     func title(_ role:String,selected:Bool)->some View {
         Text(displayName(role)).font(.system(size:12,weight:selected ? .semibold:.medium))
-            .foregroundStyle(selected ? StudioTheme.canvas:StudioTheme.text)
+            .foregroundStyle(selected ? StudioTheme.accent:StudioTheme.text)
             .padding(.horizontal,9).padding(.vertical,7)
-            .background(selected ? StudioTheme.accent:StudioTheme.raised,in:RoundedRectangle(cornerRadius:5))
+            .background(StudioTheme.raised,in:RoundedRectangle(cornerRadius:5))
+            .accessibilityAddTraits(selected ? .isSelected : [])
     }
 }
 struct StudioRouteBar:View {

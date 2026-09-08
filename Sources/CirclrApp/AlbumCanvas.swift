@@ -30,7 +30,10 @@ struct AlbumCanvas: NSViewRepresentable {
     var dragPreview: Point?
     var panOrigin = Point()
     var panning = false
-    var connecting: CircleAddress?
+    var connecting: CirclePortHandle?
+    var connectionRevision = 0
+    var connectionLayoutRevision = 0
+    var connectionProjectID: ID?
     var connectionPoint = NSPoint.zero
     var tracking: NSTrackingArea?
     var meterSubscription:AnyCancellable?
@@ -180,7 +183,7 @@ struct AlbumCanvas: NSViewRepresentable {
         if store.playback.playing, store.playbackFollow == .following {
             editor?.removeFromSuperview(); editor = nil; editorAddress = nil; return
         }
-        guard let address = store.hierarchySelection, let node = scene?.node(address), (node.role == .music || store.hierarchySettingsOpen || store.midiImportDraft != nil),
+        guard let address = store.hierarchySelection, let node = scene?.node(address), (node.role == .music || store.hierarchySettingsOpen || store.midiImportDraft != nil || store.connectionsOpen),
               node.radius*camera.zoom >= 325, isVisible(node) else {
             editor?.removeFromSuperview(); editor = nil; editorAddress = nil; return
         }
@@ -255,16 +258,13 @@ struct AlbumCanvas: NSViewRepresentable {
             if radius<22 {continue}
             let isEditor = editorAddress == node.id
             if node.role == .music, !isEditor, radius > 65 { drawMusic(node, center: center, radius: radius) }
-            if radius > 45, node.role != .album, node.role != .group {
-                if node.acceptsInput { port(at: NSPoint(x: center.x-node.outerRadius*camera.zoom, y: center.y), color: color(node), filled: false) }
-                if node.providesOutput { port(at: NSPoint(x: center.x+node.outerRadius*camera.zoom, y: center.y), color: color(node), filled: true) }
-            }
         }
         for node in scene.nodes where isVisible(node) { drawPlaybackCircle(node) }
         drawReadableLabels()
+        drawPortHandles()
         drawPlaybackCaption()
-        if let address = connecting, let node = scene.node(address) {
-            let center = screen(node); wire(NSPoint(x: center.x+node.outerRadius*camera.zoom,y:center.y), connectionPoint, color: color(node), dashed: true)
+        if let handle = connecting, let node = scene.node(handle.endpoint.node) {
+            wire(NSPoint(x:handle.point.x,y:handle.point.y), connectionPoint, color: color(node), dashed: true)
         }
         updateAccessibility()
     }
@@ -314,10 +314,15 @@ struct AlbumCanvas: NSViewRepresentable {
     }
     func drawEdge(_ edge: CircleSceneEdge, scene: HierarchyScene) {
         guard let a=scene.node(edge.from), let b=scene.node(edge.to), isVisible(a), isVisible(b) else { return }
-        let ac=screen(a),bc=screen(b),from=NSPoint(x:ac.x+a.outerRadius*camera.zoom,y:ac.y),to=NSPoint(x:bc.x-b.outerRadius*camera.zoom,y:bc.y)
+        guard let curve = connectionCurve(edge) else { return }
         let tint: NSColor = edge.kind == .midi ? StudioTheme.accentNS : edge.kind == .flow ? StudioTheme.secondaryNS : NSColor(srgbRed:0.62,green:0.75,blue:0.94,alpha:1)
-        wire(from,to,color:tint.withAlphaComponent(0.55),dashed:edge.kind == .sidechain)
-        drawPlaybackEdge(edge, from: from, to: to, tint: tint)
+        wire(curve,color:tint.withAlphaComponent(0.55),dashed:edge.kind == .sidechain)
+        if let before = try? curve.point(at: 0.48), let tip = try? curve.point(at: 0.52) {
+            let angle = atan2(tip.y-before.y, tip.x-before.x), path = NSBezierPath()
+            for offset in [-0.5, 0.5] { path.move(to: NSPoint(x: tip.x-7*cos(angle+offset), y: tip.y-7*sin(angle+offset))); path.line(to: NSPoint(x:tip.x,y:tip.y)) }
+            tint.setStroke(); path.lineWidth=1.5; path.stroke()
+        }
+        drawPlaybackEdge(edge, curve: curve, tint: tint)
     }
     func wire(_ from:NSPoint,_ to:NSPoint,color:NSColor,dashed:Bool=false) {
         let width=max(30,abs(to.x-from.x)*0.45),path=NSBezierPath()
@@ -378,15 +383,14 @@ struct AlbumCanvas: NSViewRepresentable {
         default: break
         }
     }
-    func hit(_ point:NSPoint,portOnly:Bool=false) -> CircleSceneNode? {
+    func hit(_ point:NSPoint) -> CircleSceneNode? {
         guard let scene else{return nil}
-        if !portOnly,let label=labelPlacements.reversed().first(where:{$0.rect.contains(point)}),let node=scene.node(label.id) {return node}
+        if let label=labelPlacements.reversed().first(where:{$0.rect.contains(point)}),let node=scene.node(label.id) {return node}
         // Rings remain selectable even when a child is under their centre.
         return scene.nodes.reversed().first { node in
             let p=screen(node),r=node.outerRadius*camera.zoom
             guard isVisible(node) else{return false}
-            if portOnly, node.radius*camera.zoom<=45 {return false}
-            return portOnly ? hypot(point.x-(p.x+r),point.y-p.y)<12 : hypot(point.x-p.x,point.y-p.y)<=r+7
+            return hypot(point.x-p.x,point.y-p.y)<=r+7
         }
     }
     override func mouseDown(with event:NSEvent) {
@@ -401,7 +405,9 @@ struct AlbumCanvas: NSViewRepresentable {
             orbitDrag=node;orbitSeconds=orbit.anchor;orbitTravel=0;orbitRevision=store.project.musicRevision
             let center=screen(owner);orbitPhase=OrbitTimeline.phase(Point(down.x-center.x,down.y-center.y));return
         }
-        if !labelHit,let node=hit(down,portOnly:true),node.providesOutput {connecting=node.id;connectionPoint=down;return}
+        if let handle=CirclePortGeometry.hit(Point(down.x,down.y),visibleHandles:visiblePortHandles()) {
+            connecting=handle;connectionPoint=down;connectionRevision=store.project.musicRevision;connectionLayoutRevision=store.project.portLayout?.revision ?? 0;connectionProjectID=store.project.id;needsDisplay=true;return
+        }
         guard let node=hit(down) else{panning=true;return}
         if !event.modifierFlags.contains(.shift), store.hierarchySelections.contains(node.id), store.hierarchySelections.count > 1 { store.hierarchySelection=node.id }
         else { store.selectHierarchy(node.id,additive:event.modifierFlags.contains(.shift)) }
@@ -440,7 +446,7 @@ struct AlbumCanvas: NSViewRepresentable {
             }
         }
         orbitDrag=nil
-        if let from=connecting,let target=hit(convert(event.locationInWindow,from:nil)),target.id != from {store.connectHierarchy(from,target.id,sidechain:event.modifierFlags.contains(.option))}
+        if let from=connecting { finishPortConnection(from,at:convert(event.locationInWindow,from:nil)) }
         if dragNode != nil,var p=dragPreview {
             if store.project.album?.layout.snap != false {let spacing=store.project.album?.layout.spacing ?? 32;p=Point((p.x/spacing).rounded()*spacing,(p.y/spacing).rounded()*spacing)}
             store.moveHierarchySelection(dragPositions,delta:Point(p.x-dragOrigin.x,p.y-dragOrigin.y))
@@ -475,7 +481,10 @@ struct AlbumCanvas: NSViewRepresentable {
             setCamera(HierarchyCamera(pan:Point(camera.pan.x+x,camera.pan.y+y),zoom:camera.zoom));return
         }
         switch event.keyCode {
-        case 53: store.hierarchySettingsOpen=false;store.hierarchyParent()
+        case 53:
+            if connecting != nil { connecting=nil;needsDisplay=true;return }
+            if store.connectionsOpen {store.connectionsOpen=false;return}
+            store.hierarchySettingsOpen=false;store.hierarchyParent()
         case 49: store.play()
         case 51,117: store.removeHierarchy()
         case 3: store.hierarchyCommand=HierarchyCommand(action:.fit)
@@ -488,6 +497,7 @@ struct AlbumCanvas: NSViewRepresentable {
         case 0: creationMenu(at:NSPoint(x:bounds.midX,y:bounds.midY),selected:store.hierarchySelection).popUp(positioning:nil,at:NSPoint(x:bounds.midX,y:bounds.midY),in:self)
         case 8: circleMenu(at:NSPoint(x:bounds.midX,y:bounds.midY),selected:store.selectedCircle).popUp(positioning:nil,at:NSPoint(x:bounds.midX,y:bounds.midY),in:self)
         case 15: store.openCircleSettings()
+        case 37: store.showConnections()
         case 24,69: store.hierarchyCommand=HierarchyCommand(action:.zoom(1.25))
         case 27,78: store.hierarchyCommand=HierarchyCommand(action:.zoom(0.8))
         default: super.keyDown(with:event)

@@ -189,16 +189,14 @@ struct PlaybackVisualFrame {
         drawPlayhead(node)
     }
 
-    func drawPlaybackEdge(_ edge: CircleSceneEdge, from: NSPoint, to: NSPoint, tint: NSColor) {
+    func drawPlaybackEdge(_ edge: CircleSceneEdge, curve: CirclePortCurve, tint: NSColor) {
         let strength = displayStrength(visualFrame.edgeLevels[edge.id] ?? 0)
         guard strength > 0, !visualFrame.stale, store.playback.playing else { return }
-        wire(from, to, color: tint.withAlphaComponent(0.3+strength*0.55), dashed: edge.kind == .sidechain)
+        wire(curve, color: tint.withAlphaComponent(0.3+strength*0.55), dashed: edge.kind == .sidechain)
         guard !reducePlaybackMotion else { return }
-        let width = max(30, abs(to.x-from.x)*0.45)
         func point(_ t: Double) -> NSPoint {
-            let s = 1-t
-            return NSPoint(x: s*s*s*from.x+3*s*s*t*(from.x+width)+3*s*t*t*(to.x-width)+t*t*t*to.x,
-                           y: s*s*s*from.y+3*s*s*t*from.y+3*s*t*t*to.y+t*t*t*to.y)
+            let p = (try? curve.point(at: t)) ?? curve.from
+            return NSPoint(x: p.x, y: p.y)
         }
         for index in 0..<3 {
             let phase = (visualFrame.seconds*0.65+Double(index)/3).truncatingRemainder(dividingBy: 1)

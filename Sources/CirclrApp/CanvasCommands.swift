@@ -17,6 +17,7 @@ struct StudioPalette: Identifiable {
 extension AppStore {
     func openCircleSettings() {
         guard let address=hierarchySelection else{return}
+        connectionsOpen=false
         hierarchyTransitionID=nil;focusHierarchy(address,detail:true);hierarchySettingsOpen=true
     }
     func showCommands() {
@@ -31,6 +32,8 @@ extension AppStore {
         add("save-as","다른 이름으로 저장…","⇧⌘S"){[weak self] in self?.save(as:true)}
         add("play","재생 / 정지","Space"){[weak self] in self?.play()}
         add("stop","모든 재생·렌더 정지"){[weak self] in self?.stop()}
+        if selectedCircle?.ports.isEmpty == false { add("ports", "서클 연결 편집", "L") { [weak self] in self?.showConnections() } }
+        if selectedUse != nil { add("router", "오디오 라우터 서클 만들기") { [weak self] in self?.addMusicRouter() } }
         add("movie","영상 녹화 시작 / 마치기…","⇧⌘R"){[weak self] in self?.toggleMovieRecording()}
         add("wav","앨범 WAV 내보내기…","⌘E"){[weak self] in self?.export()}
         add("stems","트랙별 stems 내보내기…"){[weak self] in self?.export(stems:true)}
@@ -129,6 +132,7 @@ extension AlbumCanvasView {
             add("곡 서클 만들기",owner:.album){ $0.addComposition(.song,at:$1) }
         case .section:
             add("MIDI 서클 만들기"){ $0.addMIDICircle(at:$1) }
+            add("오디오 라우터 서클 만들기"){ $0.addMusicRouter(at:$1) }
             add("오디오 파일로 서클 만들기…"){ store,point in
                 if store.selectedTrackID==nil {store.selectedTrackID=store.project.tracks.first?.id}
                 store.importAudio(at:point)
@@ -264,7 +268,7 @@ struct CommandSearchField:NSViewRepresentable {
 struct KeyboardHelpView:View {
     @ObservedObject var store:AppStore
     private let rows:[(String,String)] = [
-        ("⌘4","MIDI 스텝 편집"),("⌘J","섹션·트랙 바로 이동"),("⌘1 / ⌘2 / ⌘3","같은 트랙의 MIDI·오디오 / 음색 / 이펙터"),("⇧⌘P","명령·서클 검색"),("⌥⌘0","캔버스로 포커스 이동"),("A / C","서클 생성 / 선택 서클 메뉴"),
+        ("⌘4","MIDI 스텝 편집"),("⌘J","섹션·트랙 바로 이동"),("⌘1 / ⌘2 / ⌘3","같은 트랙의 MIDI·오디오 / 음색 / 이펙터"),("⇧⌘P","명령·서클 검색"),("⌥⌘0","캔버스로 포커스 이동"),("A / C","서클 생성 / 선택 서클 메뉴"),("L","IN/OUT·대상·8방향 연결 편집"),
         ("Tab · ← → ↑ ↓","다음·이전 서클 선택"),("⇧ 방향키","여러 서클 선택"),("Return / Esc","서클 안으로 / 상위 서클"),
         ("R","이름·음악 설정"),("+ − / F","확대·축소 / 전체 앨범"),("⌥ 방향키","화면 이동"),
         ("⇧⌥ 방향키","자유 배치에서 선택 서클 이동"),

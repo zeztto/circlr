@@ -43,3 +43,15 @@ A 결과: 신규 Core 10/Audio 1개를 포함한 전체 오프라인 Swift 159�
 - 전체 8방향 UI·group binding·Audio Unit 다중 bus 호스팅은 이 slice의 완료 판정에 포함시키지 않는다. B 완료 후에도 C/D/E를 이어간다.
 
 B 결과: 신규 Core 5개/Audio 8개를 포함한 전체 offline Swift 172개와 warning 없는 release build를 통과했다. 2×2 matrix, port별 PCM·fan-in/fan-out·sidechain·MIDI 합류, 두 트랙 바운스/embedded 저장/원본 복원을 확인했다. [B 검증과 native 후속 범위](../qa/ports-bus-review.md). 다음 C에서는 router의 생성·matrix/port 선택과 연결선별 bus envelope도 UI 계약에 포함한다.
+
+## C 실행 순서 · 직접 연결 편집과 gesture
+
+C1은 같은 캔버스의 연결 편집기에 선택 서클의 IN/OUT·대상·각 끝점의 8방향·기존 연결 목록을 모은다. 이름 검색과 키보드 접근으로 우클릭 하위 메뉴를 줄인다. explicit Core 연결 명령과 layout 전용 Undo를 먼저 연결하고 케이블/재생 모션이 동일한 곡선을 사용하게 한다. router 생성·2×2 matrix 조절도 이 편집 경로에서 제공한다.
+
+C2는 이 명령에 8방향 드래그·둘레 drop의 포트 선택·케이블 선택·끝점 재연결·위치 이동 gesture를 붙인다. hidden hit 제거, 시간 손잡이 우선순위, Esc/무효/삭제/stale 대상의 원상 유지, 한 gesture 한 Undo를 검증한다. C3에서 native 작은 창·키보드/VoiceOver·저장 복원·포트별 envelope를 검사한다. C1만 통과한 경우 C 전체 완료로 보고하지 않는다.
+
+C1 소유: 신규 Core `CircleConnectionEditing.swift`와 검사, App의 연결 편집기·AppStore Undo entry·AlbumCanvas 곡선·PlaybackVisualization. 전용 포트 QA bundle은 녹음 QA와 별도 저장/agent socket을 사용하며 실행 중인 두 기존 앱을 건드리지 않는다. native 검증 가능한 상태가 되기 전에는 사용 앱에 배포하지 않는다.
+
+C1 결과: 전체 offline Swift 178개, Python 22개와 release build를 통과했다. native 직접 편집기에서 각 끝의 8방향 선택·음악 불변·배치 Undo/Redo·저장/재열기, 라우터 생성·명시적 IN/OUT 연결과 matrix 숫자 입력의 단일 적용을 확인했다. 숫자 입력이 되돌아가는 실패를 발견해 수정했으며 실패 증거도 보존한다. [C1 검증](../qa/ports-ui-review.md). 독립 리뷰 agent 호출은 다시 실제 슬롯 제한으로 거절됐으므로 같은 agent의 역할 전환 검토다.
+
+C2 시작 시 현재 새 연결 gesture의 빌드된 기반을 재사용한다. 케이블 선택·끝점 드래그 재연결·명시적 배치 이동, router의 캔버스 IN 1/2·OUT 1/2 식별과 방향에 맞는 임시 연결선, native 드래그/취소/stale 검증을 이어간다. C3의 작은 창·시간 손잡이 충돌·VoiceOver·bus별 envelope, D/E의 외부 명령·binding·녹음 통합과 사용 앱 출고 gate는 열린 상태다.

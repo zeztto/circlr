@@ -4,9 +4,9 @@ macOS용 앨범·송폼 궤도 편집기. **앨범 → 곡·악장 → 섹션 �
 
 최종 목표는 **아티스트 프로필을 선택하고 작품·세계관·자료·창작 이력을 함께 관리하는 도구**다. 음악 제작 기능을 바탕으로 텍스트·이미지·영상까지 연결하는 [아티스트 창작 세계 설계](docs/21-artist-universe.md)를 정리했다. 프로필과 통합 생성물 관리는 향후 범위다.
 
-연결 UI의 다음 설계는 [서클 둘레 8방향 IN/OUT과 다중 입출력](docs/22-eight-direction-ports.md)이다. 포트의 신호 의미와 연결점 배치를 분리한다. 현재 앱의 좌우 포트 방식은 아래 사용법에 해당하며 8방향 조작은 아직 구현 전이다.
+연결 UI는 [서클 둘레 8방향 IN/OUT과 다중 입출력](docs/22-eight-direction-ports.md)으로 확장 중이다. 포트의 신호 의미와 연결점 배치를 분리한다. 아래 일반 사용법은 배포된 0.19 앱 기준이며 새 포트 기능은 독립 개발 브랜치에서 검증한다.
 
-`codex/eight-direction-ports` 브랜치에는 실제 포트 ID·형식·수용 정책, 8방향 geometry, 음악과 분리된 배치 revision·Core Undo·저장 계약을 추가했다. 이어서 독립 스테레오 **2 IN / 2 OUT 라우터**와 port별 PCM 처리·명시적 연결·bus별 효과 삽입을 구현했다. 전체 오프라인 Swift 172개와 release 빌드가 통과했다. **App의 8방향 조작과 라우터 편집 UI·MCP는 후속 단계다.** [포트 기반 검증](qa/ports-foundation-review.md) · [다중 bus 검증](qa/ports-bus-review.md) · [후속 구현 단계](docs/35-port-foundation-plan.md).
+`codex/eight-direction-ports` 브랜치에는 실제 포트 ID·형식·수용 정책, 8방향 geometry, 음악과 분리된 배치 revision·Undo·저장 계약을 추가했다. 독립 스테레오 **2 IN / 2 OUT 라우터**는 port별 PCM과 2×2 전송량을 사용한다. 서클 선택 후 **연결 / L**을 누르면 같은 캔버스에서 포트 검색·연결·재연결·해제와 양 끝의 8방향 배치를 편집한다. 라우터 전송량은 슬라이더나 숫자로 조절하며 숫자는 Return 또는 포커스 이동으로 한 번 적용한다. 실제 QA 앱의 배치 Undo·저장 복원·라우터 생성과 숫자 입력을 확인했고 전체 offline Swift **178개**, Python **22개**, release build가 통과했다. 케이블 끝점 드래그 재연결·위치 이동, native drag 검증, 포트별 시각화·MCP·그룹 binding과 앱 통합은 남아 있다. [직접 연결 UI 검증](qa/ports-ui-review.md) · [포트 기반 검증](qa/ports-foundation-review.md) · [다중 bus 검증](qa/ports-bus-review.md) · [후속 구현 단계](docs/35-port-foundation-plan.md).
 
 현재 로컬 앱은 **0.19.0**이다. [써클러 앱](dist/써클러.app)을 열어 사용한다. 기존 실행 중인 앱은 저장하고 **⌘Q로 종료한 뒤 다시 열어야** 새 버전이 실행된다. 이전 앱은 `dist/archive/`에 보관한다. [0.19 검증·제한](qa/0.19-review.md) · [향후 상세 개발 계획](docs/25-development-roadmap.md).
 

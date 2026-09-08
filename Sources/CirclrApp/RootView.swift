@@ -42,7 +42,7 @@ struct RootView: View {
         }
         .frame(minWidth:1024,minHeight:740).background(StudioTheme.canvas)
         .font(.system(size:12)).foregroundStyle(StudioTheme.text).buttonStyle(CanvasButtonStyle())
-        .onExitCommand{if store.navigationOpen {store.navigationOpen=false;store.focusCanvas?()} else if store.commandPalette != nil {store.commandPalette=nil;store.focusCanvas?()} else if store.keyboardHelp {store.keyboardHelp=false} else {store.hierarchySettingsOpen=false;store.hierarchyParent()}}
+        .onExitCommand{if store.connectionsOpen {store.connectionsOpen=false;store.focusCanvas?()} else if store.navigationOpen {store.navigationOpen=false;store.focusCanvas?()} else if store.commandPalette != nil {store.commandPalette=nil;store.focusCanvas?()} else if store.keyboardHelp {store.keyboardHelp=false} else {store.hierarchySettingsOpen=false;store.hierarchyParent()}}
         .alert("작업을 완료하지 못했습니다",isPresented:Binding(get:{store.errorMessage != nil},set:{if !$0{store.errorMessage=nil}})){Button("확인"){store.errorMessage=nil}}message:{Text(store.errorMessage ?? "")}
     }
     private var header:some View {
@@ -76,6 +76,7 @@ struct RootView: View {
                 Menu("전역 이펙터 서클"){ForEach(EffectKind.allCases,id:\.self){kind in Button(AppStore.effectName(kind)){store.addHierarchySignalEffect(kind)}}}
                 Divider()
                 Button("MIDI 서클"){store.addMIDICircle()}.disabled(store.selectedUse==nil)
+                Button("오디오 라우터 서클"){store.addMusicRouter()}.disabled(store.selectedUse==nil)
                 Button("오디오 가져오기…"){store.importAudio()}.disabled(store.selectedUse==nil)
                 Button("오디오 녹음"){store.startAudioRecording()}.disabled(store.selectedUse==nil)
                 Menu("이펙터 서클"){ForEach(EffectKind.allCases,id:\.self){kind in Button(AppStore.effectName(kind)){store.addMusicEffect(kind)}}}.disabled(store.selectedUse==nil)
@@ -104,7 +105,8 @@ struct RootView: View {
     private var actions:some View {
         HStack(spacing:5) {
             if let address=store.hierarchySelection {
-                Button{store.hierarchyTransitionID=nil;store.focusHierarchy(address,detail:true);store.hierarchySettingsOpen=true}label:{Image(systemName:"slider.horizontal.3")}.help("선택 서클의 이름·음악 설정")
+                if store.selectedCircle?.ports.isEmpty == false { Button("연결") { store.showConnections() }.help("IN/OUT·대상·8방향 위치 편집 · L") }
+                Button{store.connectionsOpen=false;store.hierarchyTransitionID=nil;store.focusHierarchy(address,detail:true);store.hierarchySettingsOpen=true}label:{Image(systemName:"slider.horizontal.3")}.help("선택 서클의 이름·음악 설정")
                 if store.selectedUse != nil {
                     Button{store.play(onlySelection:true)}label:{Image(systemName:"play.circle")}.help("선택 섹션 듣기")
                     Button{store.reuse()}label:{Image(systemName:"plus.square.on.square")}.help("섹션 재사용")

@@ -110,8 +110,9 @@ import CirclrAudio
     var productionMediaRoot:URL {storageRoot.appendingPathComponent("Bounces")}
     private var liveTask: Task<Void,Never>?
     private var recordRepeats = 1
-    private var undoStack: [(String,Project)] = []
-    private var redoStack: [(String,Project)] = []
+    private var undoStack: [(String,Project,Bool)] = []
+    private var redoStack: [(String,Project,Bool)] = []
+    @Published var connectionsOpen = false
     private var timer: Timer?
     private var midiInput: MIDIInput?
     private var liveSynth: LiveSynth?
@@ -138,7 +139,7 @@ import CirclrAudio
     private var contextKey = ""
     private var contexts: [ID:(CirclrCore.Section,MusicContext,MusicClock)] = [:]
     private var recoveryTask: Task<Void,Never>?
-    private let storageRoot = FileManager.default.urls(for:.applicationSupportDirectory,in:.userDomainMask)[0].appendingPathComponent(Bundle.main.bundleIdentifier == "com.circlr.hierarchyqa" ? "circlr-hierarchy-qa" : "circlr")
+    private let storageRoot = FileManager.default.urls(for:.applicationSupportDirectory,in:.userDomainMask)[0].appendingPathComponent(Bundle.main.bundleIdentifier == "com.circlr.portsqa" ? "circlr-ports-qa" : Bundle.main.bundleIdentifier == "com.circlr.hierarchyqa" ? "circlr-hierarchy-qa" : "circlr")
     private var recoveryURL:URL { storageRoot.appendingPathComponent("recovery.json") }
     struct Recovery: Codable { var project: Project; var root: URL?; var date: Date }
     init() {
@@ -200,13 +201,13 @@ import CirclrAudio
         if midiRecording,let clock = recordClock,ProcessInfo.processInfo.systemUptime-recordStart >= clock.seconds*Double(recordRepeats) { stopRecording() }
         if audioRecording,let clock = recordClock,ProcessInfo.processInfo.systemUptime-recordStart >= clock.seconds*Double(recordRepeats) { stopRecording() }
     }
-    func mutate(_ name: String, musical: Bool = true, _ action: (inout Project) throws -> Void) {
+    func mutate(_ name: String, musical: Bool = true, portLayoutOnly: Bool = false, _ action: (inout Project) throws -> Void) {
         if musical && audioRecordPending {cancelRecordingRequest()}
         if musical && (midiRecording || audioRecording) { status = "녹음을 정지한 뒤 음악을 편집하세요"; return }
         do {
             var candidate = project; try action(&candidate)
             if candidate == project { return }
-            undoStack.append((name,project)); if undoStack.count > 80 { undoStack.removeFirst() }; redoStack = []
+            undoStack.append((name,project,portLayoutOnly)); if undoStack.count > 80 { undoStack.removeFirst() }; redoStack = []
             if musical { candidate.musicRevision += 1 }
             project = candidate; dirty = true; undoCount = undoStack.count; redoCount = 0
             if musical { status = playback.playing ? "편집 내용은 다음 재생에 반영됩니다" : "\(name) 완료" }
@@ -214,13 +215,19 @@ import CirclrAudio
         } catch { fail(error) }
     }
     func undo() {
-        guard let (name,previous) = undoStack.popLast() else { return }
-        redoStack.append((name,project)); var p = previous; p.musicRevision = project.musicRevision+1; project = p
+        guard let (name,previous,layoutOnly) = undoStack.last else { return }
+        do {
+            let restored = try CircleHistory.restore(previous, layoutOnly: layoutOnly, current: project)
+            undoStack.removeLast(); redoStack.append((name,project,layoutOnly)); project = restored
+        } catch { fail(error); return }
         undoCount = undoStack.count; redoCount = redoStack.count; dirty = true; status = "\(name) 실행 취소"; normalizeHierarchySelection(); scheduleRecovery()
     }
     func redo() {
-        guard let (name,next) = redoStack.popLast() else { return }
-        undoStack.append((name,project)); var p = next; p.musicRevision = project.musicRevision+1; project = p
+        guard let (name,next,layoutOnly) = redoStack.last else { return }
+        do {
+            let restored = try CircleHistory.restore(next, layoutOnly: layoutOnly, current: project)
+            redoStack.removeLast(); undoStack.append((name,project,layoutOnly)); project = restored
+        } catch { fail(error); return }
         undoCount = undoStack.count; redoCount = redoStack.count; dirty = true; status = "\(name) 다시 실행"; normalizeHierarchySelection(); scheduleRecovery()
     }
     func fail(_ error:Error) { if moviePreparing {movieGeneration+=1;moviePreparing=false}; errorMessage = error.localizedDescription; status = error.localizedDescription }
@@ -438,7 +445,7 @@ import CirclrAudio
         do { let loaded = try ProjectStore.load(target); stop(); var migrated = loaded.project; migrated.enableAlbum(); migrated = try SectionGraphMigration.migrate(migrated); project = migrated; projectURL = migrated == loaded.project ? target : nil; mediaRoot = target; selectedTrackID = project.tracks.first?.id; resetSession(); dirty = migrated != loaded.project; status = dirty ? "앨범으로 확장했습니다 · 새 위치에 저장하세요" : "\(project.name) 열기 완료" }
         catch { fail(error) }
     }
-    func resetSession() { automationOpen=false;selectedAutomationPointID=nil;cancelRecordingRequest(); audioSplitOffset=nil;midiImportDraft=nil;selectedNoteID=nil; navigationOpen=false; commandPalette=nil; soundView=false; hierarchyTransitionID=nil; hierarchySelection = .album; hierarchySelections = [.album]; hierarchySettingsOpen = false; hierarchyCommand = HierarchyCommand(action: .restore); waveformGeneration += 1; waveforms = [:]; waveformLoading = []; focus = nil; embeddedPlugin = nil; recoveryTask?.cancel(); recoveryTask = nil; try? FileManager.default.removeItem(at:recoveryURL); selection = []; edgeSelection = nil; editPatternID = nil; prepared = nil; preparedKey = ""; dirty = false; undoStack = []; redoStack = []; undoCount = 0; redoCount = 0 }
+    func resetSession() { connectionsOpen=false;automationOpen=false;selectedAutomationPointID=nil;cancelRecordingRequest(); audioSplitOffset=nil;midiImportDraft=nil;selectedNoteID=nil; navigationOpen=false; commandPalette=nil; soundView=false; hierarchyTransitionID=nil; hierarchySelection = .album; hierarchySelections = [.album]; hierarchySettingsOpen = false; hierarchyCommand = HierarchyCommand(action: .restore); waveformGeneration += 1; waveforms = [:]; waveformLoading = []; focus = nil; embeddedPlugin = nil; recoveryTask?.cancel(); recoveryTask = nil; try? FileManager.default.removeItem(at:recoveryURL); selection = []; edgeSelection = nil; editPatternID = nil; prepared = nil; preparedKey = ""; dirty = false; undoStack = []; redoStack = []; undoCount = 0; redoCount = 0 }
     func scheduleViewportRecovery() { captureViewport(); scheduleRecovery() }
     private func scheduleRecovery() {
         recoveryTask?.cancel(); let snapshot = project,root = mediaRoot,url = recoveryURL
