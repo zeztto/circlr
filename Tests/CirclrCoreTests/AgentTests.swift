@@ -46,4 +46,21 @@ final class AgentTests:XCTestCase {
         trim.duration=8
         XCTAssertThrowsError(try AgentProjectEditing.apply(request(p,[reorder,trim]),to:p));XCTAssertEqual(p.active.startID,first)
     }
+    func testStepCommandsShareNotesAndRejectInvalidBatchOrMismatchedNode()throws {
+        let p=try project(),lane=p.sections[0].lanes[0]
+        var op=AgentOperation("set_step");op.useID=p.active.uses[0].id;op.laneID=lane.id;op.nodeID="midi:\(lane.id)";op.stepIndex=4;op.pitch=36;op.enabled=true;op.subdivisions=4;op.velocity=108
+        let first=try AgentProjectEditing.apply(request(p,[op]),to:p)
+        let notes=try ArrangementCompiler.effectiveLanes(section:first.sections[0],use:first.active.uses[0])[0].notes
+        XCTAssertEqual(notes.count,1);XCTAssertEqual(notes[0].beat,1);XCTAssertEqual(notes[0].velocity,108)
+        let again=try AgentProjectEditing.apply(request(first,[op]),to:first)
+        XCTAssertEqual(again,first)
+        var invalid=op;invalid.pitch=200
+        XCTAssertThrowsError(try AgentProjectEditing.apply(request(p,[op,invalid]),to:p));XCTAssertTrue(p.sections[0].lanes[0].notes.isEmpty)
+        invalid=op;invalid.nodeID="instrument:\(p.tracks[0].id)"
+        XCTAssertThrowsError(try AgentProjectEditing.apply(request(p,[invalid]),to:p))
+        invalid=op;invalid.enabled=nil;XCTAssertThrowsError(try AgentProjectEditing.apply(request(p,[invalid]),to:p))
+        op.enabled=false;let cleared=try AgentProjectEditing.apply(request(first,[op]),to:first)
+        XCTAssertTrue(try ArrangementCompiler.effectiveLanes(section:cleared.sections[0],use:cleared.active.uses[0])[0].notes.isEmpty)
+    }
+
 }

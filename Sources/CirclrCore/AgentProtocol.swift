@@ -48,6 +48,12 @@ public struct AgentOperation:Codable {
     public var to:ID?
     public var sidechain:Bool?
     public var bars:Int?
+    public var stepIndex:Int?
+    public var subdivisions:Int?
+    public var pitch:Int?
+    public var velocity:Int?
+    public var gate:Double?
+    public var enabled:Bool?
     public var clipID:ID?
     public var sourceStart:Double?
     public var duration:Double?
@@ -97,6 +103,20 @@ public enum AgentProjectEditing {
                 guard let id=op.useID,let i=p.arrangements[p.activeIndex].uses.firstIndex(where:{$0.id==id}) else {throw CirclrError("useID가 필요합니다")}
                 if let name=op.name{p.arrangements[p.activeIndex].uses[i].name=name};if let bars=op.bars{p.arrangements[p.activeIndex].uses[i].barsOverride=bars}
                 if let repeats=op.repeatCount{p.arrangements[p.activeIndex].uses[i].repeatCount=repeats};if let settings=op.settings{p.arrangements[p.activeIndex].uses[i].settings=settings}
+            case "set_step":
+                guard let id=op.useID,let use=p.active.uses.first(where:{$0.id==id}),let section=p.sections.first(where:{$0.id==use.sectionID}),
+                      let laneID=op.laneID,let lane=try ArrangementCompiler.effectiveLanes(section:section,use:use).first(where:{$0.id==laneID}),
+                      let index=op.stepIndex,let pitch=op.pitch,let enabled=op.enabled else{throw CirclrError("useID·laneID·stepIndex·pitch·enabled가 필요합니다")}
+                let (_,_,clock)=try ArrangementCompiler.context(project:p,use:use,arrangementID:p.activeArrangementID)
+                var beats=clock.beats
+                if let nodeID=op.nodeID {
+                    guard let graph=try SectionGraphEditing.effective(section:section,use:use),let node=graph.nodes.first(where:{$0.id==nodeID}),
+                          case .midi(let owner)=node.content,owner==laneID else{throw CirclrError("nodeID가 선택한 MIDI lane을 참조하지 않습니다")}
+                    beats=node.lengthBeats ?? beats
+                }
+                let grid=try StepGrid(subdivisions:op.subdivisions ?? 4,beats:beats)
+                let next=try StepEditing.set(lane,grid:grid,index:index,pitch:pitch,enabled:enabled,velocity:op.velocity,gate:op.gate)
+                if next != lane {try ProjectEditing.setLane(next,for:id,original:false,in:&p)}
             case "set_notes","generate_midi","add_midi":
                 guard let id=op.useID,let use=p.active.uses.first(where:{$0.id==id}),let section=p.sections.first(where:{$0.id==use.sectionID}) else {throw CirclrError("useID가 필요합니다")}
                 var lane:Lane

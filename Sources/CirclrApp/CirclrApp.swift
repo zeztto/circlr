@@ -22,6 +22,7 @@ import OSLog
                 Button("작업 이동…"){store.showNavigation()}.keyboardShortcut("j")
                 Button("이 트랙의 MIDI·오디오"){store.openTrackComponent(0)}.keyboardShortcut("1").disabled(store.currentStudioTrack==nil)
                 Button("이 트랙의 음색"){store.openTrackComponent(1)}.keyboardShortcut("2").disabled(store.currentStudioTrack==nil)
+                Button("MIDI 스텝 편집"){store.openStepEditor()}.keyboardShortcut("4").disabled(store.currentStudioTrack?.destinations.contains{$0.role=="MIDI"} != true)
                 Button("이 트랙의 이펙트"){store.openTrackComponent(2)}.keyboardShortcut("3").disabled(store.currentStudioTrack==nil)
                 Divider()
                 Button("명령 검색…"){store.showCommands()}.keyboardShortcut("p",modifiers:[.command,.shift])

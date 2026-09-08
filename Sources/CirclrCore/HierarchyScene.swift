@@ -314,8 +314,9 @@ public struct HierarchyViewport: Codable, Equatable {
     public var height: Double
     public var selection: CircleAddress
     public var settingsOpen: Bool
-    public init(camera: HierarchyCamera, width: Double, height: Double, selection: CircleAddress, settingsOpen: Bool = false) {
-        self.camera=camera;self.width=width;self.height=height;self.selection=selection;self.settingsOpen=settingsOpen
+    public var midiStepMode:Bool?
+    public init(camera: HierarchyCamera, width: Double, height: Double, selection: CircleAddress, settingsOpen: Bool = false, midiStepMode:Bool = false) {
+        self.camera=camera;self.width=width;self.height=height;self.selection=selection;self.settingsOpen=settingsOpen;self.midiStepMode=midiStepMode
     }
     public func restored(width: Double, height: Double) -> HierarchyCamera? {
         guard camera.zoom.isFinite, (1e-6...1e12).contains(camera.zoom), camera.pan.x.isFinite, camera.pan.y.isFinite,

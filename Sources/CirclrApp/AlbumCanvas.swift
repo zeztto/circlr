@@ -57,7 +57,7 @@ struct AlbumCanvas: NSViewRepresentable {
         self.store = store; super.init(frame: .zero)
         store.captureHierarchyViewport = { [weak self] in
             guard let self,self.initialized,self.bounds.width>0 else{return nil}
-            return HierarchyViewport(camera:self.camera,width:self.bounds.width,height:self.bounds.height,selection:self.store.hierarchySelection ?? .album,settingsOpen:self.store.hierarchySettingsOpen)
+            return HierarchyViewport(camera:self.camera,width:self.bounds.width,height:self.bounds.height,selection:self.store.hierarchySelection ?? .album,settingsOpen:self.store.hierarchySettingsOpen,midiStepMode:self.store.midiStepMode)
         }
         store.captureMovieFrame = { [weak self] in
             guard let self,self.bounds.width>=64,self.bounds.height>=64 else{return nil}
@@ -136,7 +136,7 @@ struct AlbumCanvas: NSViewRepresentable {
             case .fit: store.selectHierarchy(.album); focus(.album)
             case .restore:
                 if let saved=store.project.hierarchyView,scene?.node(saved.selection) != nil,let restored=saved.restored(width:bounds.width,height:bounds.height) {
-                    store.selectHierarchy(saved.selection);store.hierarchySettingsOpen=saved.settingsOpen;setCamera(restored)
+                    store.selectHierarchy(saved.selection);store.hierarchySettingsOpen=saved.settingsOpen;store.midiStepMode=saved.midiStepMode ?? false;setCamera(restored)
                 } else {store.selectHierarchy(.album);store.hierarchySettingsOpen=false;focus(.album)}
             case .zoom(let factor): setCamera(camera.zoomed(to: camera.zoom*factor, around: Point(bounds.midX, bounds.midY)), animated: true)
             }

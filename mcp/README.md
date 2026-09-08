@@ -21,6 +21,8 @@ Python 표준 라이브러리만 사용하는 로컬 stdio MCP 서버다. 음악
 
 `apply`의 `generate_midi` 및 `set_notes`는 기본적으로 해당 lane의 노트를 교체한다. 추가하려면 `append: true`를 지정한다. GUI 콘솔의 `midi arpeggio` 명령은 안전하게 추가 모드를 사용한다. MIDI 노트 JSON에는 beat, length, pitch, velocity가 필요하며 ID를 생략하면 새 ID가 발급된다.
 
+`set_step`은 `useID`, `laneID`, `stepIndex`(0부터), `pitch`, `enabled`로 일반 MIDI 노트를 편집한다. `subdivisions`는 4분음표당 1/2/3/4/6/8칸이며 기본 4다. `velocity` 1–127, `gate` 0.01–16칸은 선택 항목이다. 이미 켜진 셀을 다시 켜면 ID·타이밍·길이를 유지하고 지정한 값만 바꾼다. `nodeID`를 넣으면 그 MIDI 서클의 개별 길이를 사용하며 lane이 일치해야 한다. 같은 칸에서 시작한 같은 음높이 노트들은 함께 편집하고, 이전 칸에서 시작해 유지되는 노트는 지우지 않는다. MCP는 현재 use의 변형을 편집한다. 공유 원본 편집은 GUI 설정에서 선택한다.
+
 `set_instrument`는 `synthVoice` 정수로 내장 음색을 선택할 수 있다: 0 pad, 1 bass, 2 keys, 3 supersaw, 4 pluck, 5 lead, 6 electricPiano, 7 organ, 8 brass, 9 strings. `add_effect`는 오디오 `from` 서클 뒤에 이펙터를 삽입한다. `connect`는 MIDI/audio 연결, `connect_sections`는 송폼 재생 연결이다. 로컬 tempo/meter 등은 `set_node`/`set_section`의 `settings`로 지정한다.
 
 창을 숨기고 작업하려면 `circlr_focus`에 `minimized: true`, 다시 표시하려면 `minimized: false`를 보낸다. 이 경우에는 창 상태만 바뀐다. `snapshot.runtime.windows`로 실제 최소화 상태를 확인할 수 있다.

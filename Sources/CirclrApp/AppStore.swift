@@ -30,6 +30,7 @@ import CirclrAudio
     @Published var keyboardHelp=false
     @Published var commandPalette: StudioPalette?
     @Published var navigationOpen=false
+    @Published var midiStepMode=false
     var navigationCacheRevision = -1
     var navigationCache:[StudioSectionRoute]=[]
     var canvasCommands: (() -> [StudioCommand])?

@@ -96,6 +96,15 @@ class MCPTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 server.validate({'projectID':'p','expectedRevision':0,'operations':[{'kind':'set_instrument','trackID':'t','synthVoice':voice}]},schema)
 
+    def test_step_grid_types_are_checked_before_ipc(self):
+        spec=server.BY_NAME['circlr_apply']['inputSchema']
+        op={'kind':'set_step','useID':'u','laneID':'l','stepIndex':4,'subdivisions':4,'pitch':36,'velocity':110,'gate':.9,'enabled':True}
+        packet={'projectID':'p','expectedRevision':0,'operations':[op]}
+        server.validate(packet,spec)
+        for key,value in [('stepIndex',-1),('stepIndex',True),('subdivisions',5),('pitch',128),('velocity',0),('gate',float('nan')),('enabled',1)]:
+            with self.subTest(key=key,value=value),self.assertRaises(ValueError):
+                server.validate({**packet,'operations':[{**op,key:value}]},spec)
+
 
 if __name__ == "__main__":
     unittest.main()
