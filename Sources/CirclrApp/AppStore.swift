@@ -38,6 +38,7 @@ import CirclrAudio
     var navigationCache:[StudioSectionRoute]=[]
     var canvasCommands: (() -> [StudioCommand])?
     var focusCanvas: (() -> Void)?
+    let nameEditing=NameEditingRegistry()
     @Published var hierarchyZoom = 1.0
     @Published var hierarchySettingsOpen = false
     @Published var hierarchyTransitionID: ID?
@@ -445,6 +446,7 @@ import CirclrAudio
         }
     }
     func save(as saveAs:Bool = false) {
+        guard nameEditing.resolve() else{return}
         captureViewport()
         var target = projectURL
         if saveAs || target == nil { let panel = NSSavePanel(); panel.nameFieldStringValue = project.name+".circlr"; panel.title = "앨범 저장"; guard panel.runModal() == .OK else { return }; target = panel.url }
@@ -454,6 +456,7 @@ import CirclrAudio
     }
     func clearSavedRecovery(){recoveryTask?.cancel();recoveryTask=nil;try? FileManager.default.removeItem(at:recoveryURL)}
     func confirmDiscard() -> Bool {
+        guard nameEditing.resolve() else{return false}
         guard dirty else { return true }; let a = NSAlert(); a.messageText = "저장하지 않은 변경이 있습니다"; a.informativeText = "현재 곡을 저장한 뒤 계속하거나 변경을 버릴 수 있습니다."; a.addButton(withTitle:"저장"); a.addButton(withTitle:"취소"); a.addButton(withTitle:"변경 버리기")
         let r = a.runModal(); if r == .alertFirstButtonReturn { save(); return !dirty }; return r == .alertThirdButtonReturn
     }

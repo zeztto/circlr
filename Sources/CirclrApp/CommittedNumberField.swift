@@ -31,6 +31,7 @@ struct NumberEditingContext {
     var current: () -> NumberEditIdentity? = {nil}
     var focusCanvas: () -> Void = {}
     var fieldFocus:NumberFieldFocus?
+    var names:NameEditingRegistry?
     // Numeric bindings read the live model. Adopt a newer revision only before typing,
     // while preserving the displayed field's project, session and target identity.
     func beforeTyping() -> NumberEditIdentity? {
@@ -75,7 +76,7 @@ extension AppStore {
 }
 extension View {
     @MainActor func numberEditing(in store: AppStore) -> some View {
-        environment(\.numberEditing,NumberEditingContext(snapshot:store.numberEditIdentity,current:{store.numberEditIdentity},focusCanvas:{store.focusCanvas?()}))
+        environment(\.numberEditing,NumberEditingContext(snapshot:store.numberEditIdentity,current:{store.numberEditIdentity},focusCanvas:{store.focusCanvas?()},names:store.nameEditing))
     }
 }
 

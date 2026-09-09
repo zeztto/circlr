@@ -63,7 +63,7 @@ struct SectionEditor:View {
     @ViewBuilder private var trackControls:some View {
         if let track=store.selectedTrack {
             HStack(spacing:16) {
-                TextField("트랙 이름",text:Binding(get:{track.name},set:{v in store.updateTrack("트랙 이름"){$0.name=v}})).textFieldStyle(.plain).font(.system(size:12,weight:.medium)).frame(width:130)
+                CommittedNameField(title:"트랙 이름",value:Binding(get:{store.project.tracks.first{$0.id==track.id}?.name ?? track.name},set:{v in store.updateTrack("트랙 이름"){$0.name=v}}),fontSize:12,weight:.medium,message:{store.status=$0}).frame(width:130).numberEditing(in:store)
                 Menu {
                     Button("기본 Sound Bank"){store.updateTrack("악기"){$0.instrument.kind = .soundBank}}
                     ForEach(store.instruments){plugin in Button(plugin.name){store.updateTrack("악기"){$0.instrument.kind = .audioUnit;$0.instrument.plugin=plugin}}}

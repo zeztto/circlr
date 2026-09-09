@@ -4,7 +4,7 @@ import CirclrCore
 /// Named workspace modes, kept in the same row when selection details change.
 struct InlineEditorHeader:View {
     @ObservedObject var store:AppStore
-    var nameFocus:FocusState<Bool>.Binding
+    var nameFocus:Binding<Bool>
     enum Page {case content,connections,automation,settings}
     var page:Page {store.connectionsOpen ? .connections:store.hierarchySettingsOpen && store.selectedMusic != nil ? .settings:store.automationVisible ? .automation:.content}
     var contentName:String {
@@ -28,8 +28,9 @@ struct InlineEditorHeader:View {
         HStack(spacing:8) {
             if store.hierarchyTransitionID != nil {
                 Text("섹션 전환").font(.system(size:17,weight:.semibold)).frame(minWidth:80,alignment:.leading)
-            } else {TextField("서클 이름",text:Binding(get:{store.selectedCircle?.title ?? ""},set:{store.renameHierarchy($0)}))
-                .textFieldStyle(.plain).font(.system(size:17,weight:.semibold)).focused(nameFocus)
+            } else if store.hierarchySelection == .sound {
+                Text(store.selectedCircle?.title ?? "앨범 사운드").font(.system(size:17,weight:.semibold)).frame(minWidth:80,alignment:.leading)
+            } else {CommittedNameField(title:"서클 이름",value:Binding(get:{store.selectedCircle?.title ?? ""},set:{store.renameHierarchy($0)}),focus:nameFocus,message:{store.status=$0})
                 .disabled(store.midiImportDraft != nil).frame(minWidth:80)}
             Spacer(minLength:8)
             HStack(spacing:2) {

@@ -8,7 +8,7 @@ struct InlineCircleEditor: View {
     @State private var topPitch = 72
     @State private var orbitViewport = MIDIOrbitViewport()
     @State private var stepState = StepEditorState()
-    @FocusState private var nameFocused:Bool
+    @State private var nameFocused=false
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             InlineEditorHeader(store:store,nameFocus:$nameFocused)
