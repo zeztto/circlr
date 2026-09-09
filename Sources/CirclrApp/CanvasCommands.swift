@@ -40,6 +40,13 @@ extension AppStore {
            let context=trackBounceRecoveryContext,!trackBounceRecoveryLocked {
             add("bounce-output-connections","바운스 출력 연결 보기"){[weak self] in self?.recoverTrackBounce(context)}
         }
+        if selectedUse != nil,selectedTrack != nil,!trackBounceRecoveryLocked {
+            let identity=numberEditIdentity
+            add("bounce-tail-settings","바운스 여운 설정"){[weak self] in self?.beginBounceTailEditing(identity:identity)}
+            if trackBounceIssue==nil,bounceTailAssessment != nil,!bounceTailEditing {
+                add("bounce-current-track","현재 트랙 바운스"){[weak self] in self?.runCurrentTrackBounce(identity:identity)}
+            }
+        }
         if selectedUse != nil { add("router", "오디오 라우터 서클 만들기") { [weak self] in self?.addMusicRouter() } }
         add("movie","영상 녹화 시작 / 마치기…","⇧⌘R"){[weak self] in self?.toggleMovieRecording()}
         add("wav","앨범 WAV 내보내기…","⌘E"){[weak self] in self?.export()}

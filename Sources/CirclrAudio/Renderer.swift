@@ -7,6 +7,7 @@ public struct PreparedAudio {
     public var mix: PCM
     public var stems: [ID: PCM]
     public var tailSeconds: Double
+    public var tailPlan: TailPlan? = nil
     public var visualization: PlaybackAnalysis? = nil
     public var peak: Float { mix.peak }
 }
@@ -14,20 +15,12 @@ public enum ArrangementRenderer {
     /// Bound whole-song preparation to at most a quarter of RAM, capped at 2 GiB.
     /// 15-track club arrangements need more than the previous fixed 1 GiB allowance.
     static var preparationByteLimit:Double {min(2_147_483_648,Double(ProcessInfo.processInfo.physicalMemory)/4)}
-    public static func render(project: Project, root: URL?, plan: ExecutionPlan, tailSeconds: Double = 2, includeStems: Bool = true, includeVisualization: Bool = false, progress: @escaping (String, Double) -> Void = { _,_ in }) async throws -> PreparedAudio {
+    public static func render(project: Project, root: URL?, plan: ExecutionPlan, tailSeconds: Double? = nil, includeStems: Bool = true, includeVisualization: Bool = false, progress: @escaping (String, Double) -> Void = { _,_ in }) async throws -> PreparedAudio {
         guard plan.duration > 0 else { throw CirclrError("먼저 섹션을 만들고 시작 서클을 지정하세요") }
-        guard tailSeconds.isFinite, (0...30).contains(tailSeconds) else { throw CirclrError("잔향 길이를 확인하세요") }
-        let frames = Int(ceil((plan.duration + tailSeconds)*PCM.rate))
-        let estimate = Double(frames) * 8 * Double(project.tracks.count * (includeStems ? 2 : 1) + project.signal.nodes.filter { $0.kind != .source }.count + 5)
-        var graphEstimate = 0.0
-        for occurrence in plan.occurrences {
-            guard let graph = occurrence.signalPlan else { continue }
-            let localFrames = (occurrence.duration + tailSeconds) * PCM.rate
-            let bytes = localFrames * 8.0 * Double(SectionGraphRenderer.workingBufferCount(graph))
-            graphEstimate = max(graphEstimate, bytes)
-        }
-        let visualEstimate = includeVisualization ? PlaybackAnalysis.estimatedBytes(plan: plan, signal: project.signal, tail: tailSeconds) : 0
-        guard estimate + graphEstimate + visualEstimate < preparationByteLimit else { throw CirclrError("준비 오디오가 메모리 작업 한도를 넘습니다. 구간을 나누어 내보내세요") }
+        let tailPlan = try RenderTailPlanner.arrangement(project:project,plan:plan,requestedSeconds:tailSeconds,
+                                                        includeStems:includeStems,includeVisualization:includeVisualization)
+        let tailSeconds = tailPlan.effectiveSeconds
+        let frames = try RenderTailPlanner.frameCount(bodySeconds:plan.duration,tailSeconds:tailSeconds)
         var tracks = Dictionary(uniqueKeysWithValues: project.tracks.map { ($0.id,PCM(frames: frames)) })
         var visualization = PlaybackAnalysis()
         for (index, occurrence) in plan.occurrences.enumerated() {
@@ -72,7 +65,7 @@ public enum ArrangementRenderer {
                     if notes.isEmpty && clips.isEmpty { continue }
                     local = try await ProductionInstrument.render(notes, instrument: track.instrument, project: project, root: root, clock: occurrence.clock, tail: tailSeconds)
                     for clip in clips {
-                        let audio = try loadClip(clip, project: project, root: root, clock: occurrence.clock)
+                        let audio = try loadClip(clip, project: project, root: root, clock: occurrence.clock, tailSeconds: tailSeconds)
                         local.mix(audio,at:Int((occurrence.clock.seconds(at:clip.beat)*PCM.rate).rounded()),gain:clip.gain)
                     }
                 }
@@ -132,7 +125,24 @@ public enum ArrangementRenderer {
         }
         guard mix.left.allSatisfy(\.isFinite),mix.right.allSatisfy(\.isFinite) else { throw CirclrError("유효하지 않은 오디오 출력입니다") }
         progress("재생 준비 완료",1)
-        return PreparedAudio(plan:plan,mix:mix,stems:stems,tailSeconds:tailSeconds,visualization:includeVisualization ? visualization : nil)
+        return PreparedAudio(plan:plan,mix:mix,stems:stems,tailSeconds:tailSeconds,tailPlan:tailPlan,visualization:includeVisualization ? visualization : nil)
+    }
+    /// Shared by render and preflight, before jobs or PCM allocations begin.
+    static func preparationFrames(project: Project, plan: ExecutionPlan, tailSeconds: Double,
+                                  includeStems: Bool, includeVisualization: Bool) throws -> Int {
+        let frames = try RenderTailPlanner.frameCount(bodySeconds: plan.duration, tailSeconds: tailSeconds)
+        let estimate = Double(frames) * 8 * Double(project.tracks.count * (includeStems ? 2 : 1) + project.signal.nodes.filter { $0.kind != .source }.count + 5)
+        var graphEstimate = 0.0
+        for occurrence in plan.occurrences {
+            let localFrames = try RenderTailPlanner.frameCount(bodySeconds: occurrence.duration, tailSeconds: tailSeconds)
+            guard let graph = occurrence.signalPlan else { continue }
+            let bytes = Double(localFrames) * 8 * Double(SectionGraphRenderer.workingBufferCount(graph))
+            guard bytes < 1_073_741_824 else { throw CirclrError("섹션 내부 오디오가 준비 가능한 메모리 범위를 넘습니다") }
+            graphEstimate = max(graphEstimate, bytes)
+        }
+        let visualEstimate = includeVisualization ? PlaybackAnalysis.estimatedBytes(plan: plan, signal: project.signal, tail: tailSeconds) : 0
+        guard estimate + graphEstimate + visualEstimate < preparationByteLimit else { throw CirclrError("준비 오디오가 메모리 작업 한도를 넘습니다. 구간을 나누어 내보내세요") }
+        return frames
     }
     public static func expandPattern(_ pattern: RhythmPattern, length: Double, grid: BeatGrid) -> Lane {
         var lane = Lane(trackID:pattern.trackID), offset = 0.0
@@ -150,11 +160,11 @@ public enum ArrangementRenderer {
         }
         return lane
     }
-    static func loadClip(_ clip: AudioClip, project: Project, root: URL?, clock: MusicClock) throws -> PCM {
+    static func loadClip(_ clip: AudioClip, project: Project, root: URL?, clock: MusicClock, tailSeconds: Double = 0) throws -> PCM {
         guard let asset = project.assets.first(where: { $0.id == clip.assetID }) else { throw CirclrError("오디오 원본을 찾을 수 없습니다") }
         let url = try ProjectStore.assetURL(asset,root:root)
         guard FileManager.default.fileExists(atPath:url.path) else { throw CirclrError("\(asset.name)을 다시 연결하세요") }
-        let remaining = max(0,clock.seconds-clock.seconds(at:clip.beat))
+        let remaining = max(0,clock.seconds+(clip.preservesTail == true ? tailSeconds:0)-clock.seconds(at:clip.beat))
         if remaining == 0 { return PCM(frames:0) }
         if clip.followsTempo {
             guard clock.tempos.count == 1 else { throw CirclrError("Tempo map이 변하는 오디오 clip은 구간을 나누어 tempo 추종을 적용하세요") }

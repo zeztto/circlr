@@ -31,6 +31,7 @@ public struct AgentArguments:Codable {
     public var arrangementID:ID?
     public var useID:ID?
     public var trackID:ID?
+    public var tailSeconds:Double?
     public var nodeID:ID?
     public var jobID:ID?
     public var path:String?

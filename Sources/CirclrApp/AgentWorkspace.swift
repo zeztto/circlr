@@ -19,6 +19,12 @@ struct AgentJob:Codable {
     var message:String
     var path:String?
     var nodeID:ID?
+    var tail:TailPlan?
+    var renderedSeconds:Double?
+    var endWindowSeconds:Double?
+    var endWindowPeak:Double?
+    var endWindowRMS:Double?
+    var endWindowHasSignal:Bool?
 }
 extension AppStore {
     func recordActivity(_ source:String,_ message:String) {
@@ -193,36 +199,66 @@ extension AppStore {
         let file:URL?
         if isBounce{file=nil}else{guard let path=args.path,path.hasSuffix(".wav") else {throw CirclrError(".wav 절대 경로가 필요합니다")};file=try agentPath(path);guard !FileManager.default.fileExists(atPath:file!.path) else {throw CirclrError("기존 파일을 보존하려면 새 WAV 이름을 사용하세요")}}
         let use=project.arrangements.first{$0.id==arrangementID}?.uses.first{$0.id==args.useID}
+        // Resolve once before allocating a job, then render and persist that exact policy.
+        // In particular, an omitted MCP value never reads the UI session preference.
+        let tail:TailPlan
+        let sectionRender:(plan:SectionSignalPlan,clock:MusicClock)?
+        let albumRender:ExecutionPlan?
+        if let seconds=args.tailSeconds {
+            guard seconds.isFinite,(0...RenderTailPlanner.maximumTailSeconds).contains(seconds) else {
+                throw CirclrError("tailSeconds는 0–120초의 유한한 숫자여야 합니다")
+            }
+        }
         if isBounce {
             guard let use,let trackID=args.trackID else {throw CirclrError("바운스에는 useID와 trackID가 필요합니다")}
-            _=try BounceEditing.target(trackID:trackID,useID:use.id,arrangementID:arrangementID,in:project)
+            _=try BounceEditing.target(trackID:trackID,useID:use.id,arrangementID:arrangementID,in:snapshot)
+            let (section,context,clock)=try ArrangementCompiler.context(project:snapshot,use:use,arrangementID:arrangementID)
+            guard let plan=try SectionGraphCompiler.compile(project:snapshot,section:section,use:use,context:context,clock:clock) else {throw CirclrError("음악 그래프가 없습니다")}
+            tail=try RenderTailPlanner.section(plan,project:snapshot,clock:clock,trackID:trackID,requestedSeconds:args.tailSeconds)
+            sectionRender=(plan,clock);albumRender=nil
+        }else{
+            let plan=try AlbumCompiler.executionPlan(snapshot)
+            tail=try RenderTailPlanner.arrangement(project:snapshot,plan:plan,requestedSeconds:args.tailSeconds,includeStems:false)
+            sectionRender=nil;albumRender=plan
         }
         productionGeneration+=1;let generation=productionGeneration,jobID=newID()
-        agentJob=AgentJob(id:jobID,kind:request.method,state:"running",message:isBounce ? "이펙트 포함 바운스":"앨범 WAV 렌더")
+        let renderTitle=(isBounce ? "이펙트 포함 바운스":"앨범 WAV 렌더")+String(format:" · 여운 %.2f초",tail.effectiveSeconds)
+        agentJob=AgentJob(id:jobID,kind:request.method,state:"running",message:([renderTitle]+tail.notices).joined(separator:" · "),tail:tail)
         preparing=true;progress=0;status=agentJob!.message
         productionTask=Task { [weak self] in
             guard let self else{return}
             do {
-                var body=0.0
+                let body=sectionRender?.clock.seconds ?? 0
                 let worker:Task<PCM,Error>
-                if isBounce,let use,let trackID=args.trackID {
-                    let (section,context,clock)=try ArrangementCompiler.context(project:snapshot,use:use,arrangementID:arrangementID);body=clock.seconds
-                    guard let plan=try SectionGraphCompiler.compile(project:snapshot,section:section,use:use,context:context,clock:clock) else {throw CirclrError("음악 그래프가 없습니다")}
-                    worker=Task.detached(priority:.userInitiated){let buffers=try await SectionGraphRenderer.render(plan,project:snapshot,root:root,clock:clock,tail:2,applyOutputGain:false);guard let pcm=buffers[trackID] else {throw CirclrError("트랙 출력을 찾을 수 없습니다")};return pcm}
-                }else{
-                    let plan=try AlbumCompiler.executionPlan(snapshot)
-                    worker=Task.detached(priority:.userInitiated){try await ArrangementRenderer.render(project:snapshot,root:root,plan:plan,includeStems:false){message,value in DispatchQueue.main.async{[weak self] in guard let self,self.productionGeneration==generation else{return};self.progress=value;self.agentJob?.progress=value;self.agentJob?.message=message;self.status=message}}.mix}
-                }
+                if let sectionRender,let trackID=args.trackID {
+                    worker=Task.detached(priority:.userInitiated){let buffers=try await SectionGraphRenderer.render(sectionRender.plan,project:snapshot,root:root,clock:sectionRender.clock,tail:tail.effectiveSeconds,applyOutputGain:false);guard let pcm=buffers[trackID] else {throw CirclrError("트랙 출력을 찾을 수 없습니다")};return pcm}
+                }else if let plan=albumRender {
+                    worker=Task.detached(priority:.userInitiated){try await ArrangementRenderer.render(project:snapshot,root:root,plan:plan,tailSeconds:tail.effectiveSeconds,includeStems:false){message,value in DispatchQueue.main.async{[weak self] in guard let self,self.productionGeneration==generation else{return};self.progress=value;self.agentJob?.progress=value;self.agentJob?.message=message;self.status=message}}.mix}
+                }else{throw CirclrError("렌더 계획이 없습니다")}
                 self.productionWorker=worker;let pcm=try await worker.value
                 guard !Task.isCancelled,self.productionGeneration==generation else{return}
                 try AgentProjectEditing.check(request,project:self.project)
                 guard pcm.peak<=1 else {throw CirclrError("출력이 0 dBFS를 넘습니다. Gain을 낮추세요")}
+                let endFrames=min(pcm.count,Int(PCM.rate*0.1))
+                var endPeak=0.0,endSquares=0.0
+                if endFrames>0 {
+                    for i in (pcm.count-endFrames)..<pcm.count {
+                        let left=Double(pcm.left[i]),right=Double(pcm.right[i])
+                        guard left.isFinite,right.isFinite else {throw CirclrError("렌더 끝부분에 유효하지 않은 오디오 값이 있습니다")}
+                        endPeak=max(endPeak,abs(left),abs(right));endSquares+=left*left+right*right
+                    }
+                    self.agentJob?.endWindowSeconds=Double(endFrames)/PCM.rate
+                    self.agentJob?.endWindowPeak=endPeak
+                    self.agentJob?.endWindowRMS=sqrt(endSquares/Double(endFrames*2))
+                    self.agentJob?.endWindowHasSignal=endPeak>0.0001
+                }
+                self.agentJob?.renderedSeconds=pcm.duration
                 if isBounce,let use,let trackID=args.trackID {
                     let url=self.productionMediaRoot.appendingPathComponent(newID()+".wav");try pcm.writeWAV(url)
                     do {
                         let name=(snapshot.tracks.first{$0.id==trackID}?.name ?? "트랙")+" 바운스"
                         var candidate=self.project;candidate.activeArrangementID=arrangementID
-                        let id=try BounceEditing.apply(asset:Asset(name:name,path:url.path,duration:pcm.duration,sampleRate:PCM.rate),trackID:trackID,useID:use.id,bodySeconds:body,tailSeconds:2,in:&candidate)
+                        let id=try BounceEditing.apply(asset:Asset(name:name,path:url.path,duration:pcm.duration,sampleRate:PCM.rate),trackID:trackID,useID:use.id,bodySeconds:body,tailSeconds:tail.effectiveSeconds,in:&candidate)
                         candidate.activeArrangementID=self.project.activeArrangementID
                         self.mutate("\(source) 오디오 바운스"){$0=candidate};self.agentJob?.nodeID=id
                         if source=="콘솔" || source=="사용자" {self.focusHierarchy(.music(arrangementID:arrangementID,useID:use.id,nodeID:id),detail:true)}
@@ -234,10 +270,10 @@ extension AppStore {
                     do {try pcm.writeWAV(stage);try FileManager.default.moveItem(at:stage,to:file)}catch{try? FileManager.default.removeItem(at:stage);throw error}
                     self.agentJob?.path=file.path
                 }
-                self.preparing=false;self.progress=1;self.agentJob?.state="completed";self.agentJob?.progress=1;self.agentJob?.message="완료"
+                self.preparing=false;self.progress=1;self.agentJob?.state="completed";self.agentJob?.progress=1;self.agentJob?.message=self.agentJob?.endWindowHasSignal == true ? "완료 · 마지막 0.1초에 신호가 남아 있습니다. 여운 길이를 확인하세요":"완료"
                 self.status="\(request.method) 완료";self.recordActivity(source,"완료 · \(request.method) · \(jobID)")
             }catch{guard self.productionGeneration==generation else{return};self.preparing=false;self.agentJob?.state=error is CancellationError ? "cancelled":"failed";self.agentJob?.message=error.localizedDescription;self.status=error.localizedDescription;self.recordActivity(source,"실패 · \(request.method) · \(error.localizedDescription)")}
         }
-        return ["jobID":jobID,"state":"running"]
+        return ["jobID":jobID,"state":"running","tail":json(tail)]
     }
 }

@@ -194,7 +194,7 @@ struct RootView: View {
     }
     private var status:some View {
         VStack(alignment:.leading,spacing:7) {
-            HStack{if store.preparing{ProgressView(value:store.progress).frame(width:65)};Text(store.status).lineLimit(1)}
+            HStack{if store.preparing{if store.agentJob?.kind=="bounce" {ProgressView().controlSize(.small)}else{ProgressView(value:store.progress).frame(width:65)}};Text(store.status).lineLimit(1)}
             if store.hierarchySelections.count>1 { Text("\(store.hierarchySelections.count)개 서클 선택 · ⌘G 그룹") }
             Text("휠 ↑ 확대 · ↓ 축소     두 번 클릭해 들어가기     Esc 상위 서클")
         }.font(.system(size:10)).foregroundStyle(StudioTheme.secondary).frame(maxWidth:560,alignment:.leading).allowsHitTesting(false)
@@ -215,8 +215,8 @@ struct TransportControls:View {
     var body:some View {
         HStack(spacing:12) {
             Button {store.play()} label:{Image(systemName:meter.playing || store.preparing || store.auditionStatus.pending || store.moviePreparing || store.midiRecording || store.audioRecording || store.audioRecordingBusy ? "stop.fill":"play.fill").font(.system(size:13)).foregroundStyle(StudioTheme.accent).frame(width:24,height:26)}
-                .background(StudioTheme.raised,in:Circle()).help("재생 / 정지 · Space")
-                .accessibilityLabel(store.auditionStatus.pending ? "미리 듣기 취소":store.preparing || store.moviePreparing ? "재생 준비 취소":store.midiRecording || store.audioRecordingBusy ? "녹음 정지":meter.playing ? "재생 정지":"재생")
+                .background(StudioTheme.raised,in:Circle()).help(store.agentJob?.kind=="bounce" && store.agentJob?.state=="running" ? "바운스 취소 · Space":"재생 / 정지 · Space")
+                .accessibilityLabel(store.agentJob?.kind=="bounce" && store.agentJob?.state=="running" ? "바운스 취소":store.auditionStatus.pending ? "미리 듣기 취소":store.preparing || store.moviePreparing ? "재생 준비 취소":store.midiRecording || store.audioRecordingBusy ? "녹음 정지":meter.playing ? "재생 정지":"재생")
             VStack(alignment:.leading,spacing:3) {
                 Text(time).font(.system(size:13,design:.monospaced)).foregroundStyle(StudioTheme.text)
                 if let label=store.outputLabel {

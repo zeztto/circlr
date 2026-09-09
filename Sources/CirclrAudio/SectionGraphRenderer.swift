@@ -6,7 +6,7 @@ public enum SectionGraphRenderer {
                               clock: MusicClock, tail: Double, applyOutputGain: Bool = true,
                               observe: ((ID, PCM) -> Void)? = nil,
                               observeOutput: ((MusicBusEndpoint, PCM) -> Void)? = nil) async throws -> [ID: PCM] {
-        let frames = Int(ceil((clock.seconds + tail) * PCM.rate))
+        let frames = try RenderTailPlanner.frameCount(bodySeconds: clock.seconds, tailSeconds: tail)
         guard Double(frames) * 8 * Double(workingBufferCount(plan)) < 1_073_741_824 else {
             throw CirclrError("섹션 내부 오디오가 준비 가능한 메모리 범위를 넘습니다")
         }

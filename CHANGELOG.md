@@ -1,5 +1,13 @@
 # 변경 이력
 
+## 개발 중 — 0.20.0 build87 렌더 잔향 길이
+
+- 공통 `RenderTailPlanner`로 자동 감쇠 추정·직접0–120초·상한/AU 미확정 안내·메모리 사전 거절. 보존 클립 실제 끝을 반영하며 section 시각 유지.
+- 기존 줄의 설정과 job 끝 구간 측정, MCP 선택 인자 `tailSeconds` 추가. 생략 자동·null 금지·GUI 설정 독립.
+- Audio30개·Core3개·MCP22개·kit9개·Release52.98초 통과. 실제 자동74초/직접34초의 앞34초 PCM 일치, 바운스/export74초의 재열기 전후 바이트 일치 확인.
+- 실제1020×768 설정·121 거절·자동42초/직접2초·상한120·끝 신호 경고·파형85px, direct RPC 사전 거절·STOP 취소 후 안정 상태 확인. QA checker22개 문서 캡처·RPC 오류/취소 기록 대조 통과. [QA](qa/render-tail-review.md).
+- UI running 스피너 캡처는 미확보, AU는 단위 metadata만 검증. 실제 출력0회·사용자 앱 유지·검증 앱 종료. 자동 추정은 무손실·청취 보장 아님.
+
 ## 개발 중 — 0.20.0 build86 오디오 범위·바운스 음소거
 
 - 기존 줄에 공유 원본/이번 사용 범위와 전용 클립 복귀 표시. 첫 후보의 Return 무응답을 native에서 발견해 `AlbumCanvas` dispatch 수정 후 복귀·도움말 차단 확인.

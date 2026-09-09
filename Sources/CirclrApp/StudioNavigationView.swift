@@ -89,7 +89,7 @@ struct StudioRouteButtons:View {
 struct StudioRouteBar:View {
     @ObservedObject var store:AppStore
     private var showsBounceStatus:Bool {
-        store.trackBounceAssessment.map{store.trackBounceStatus($0) != nil} ?? false
+        (store.trackBounceAssessment.map{store.trackBounceStatus($0) != nil} ?? false) || store.bounceTailNotice != nil
     }
     var body:some View {
         if let route=store.currentStudioTrack {

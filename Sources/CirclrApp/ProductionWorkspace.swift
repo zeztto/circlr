@@ -35,7 +35,7 @@ extension AppStore {
     func bounceTrack() {
         guard let use=selectedUse,let track=selectedTrack else{return}
         var request=AgentRequest(method:"bounce");request.projectID=project.id;request.expectedRevision=project.musicRevision
-        var args=AgentArguments();args.arrangementID=project.activeArrangementID;args.useID=use.id;args.trackID=track.id;request.arguments=args
+        var args=AgentArguments();args.arrangementID=project.activeArrangementID;args.useID=use.id;args.trackID=track.id;args.tailSeconds=bounceTailSeconds;request.arguments=args
         do {_ = try executeAgent(request,source:"사용자")}catch{fail(error)}
     }
     func restoreBounce() {

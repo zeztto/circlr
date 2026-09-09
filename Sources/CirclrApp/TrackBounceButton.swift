@@ -83,6 +83,16 @@ struct TrackBounceStatus:View {
                     .fixedSize().disabled(store.trackBounceRecoveryLocked)
                     .help("명령 검색 ⇧⌘P · 바운스 출력 연결 보기")
             }.accessibilityElement(children:.contain)
+        }else if let notice=store.bounceTailNotice {
+            let identity=store.numberEditIdentity
+            HStack(alignment:.center,spacing:8) {
+                Text(notice).font(.system(size:12)).foregroundStyle(StudioTheme.secondary)
+                    .lineLimit(2).fixedSize(horizontal:false,vertical:true).frame(maxWidth:.infinity,alignment:.leading)
+                    .help((store.bounceTailAssessment?.notices ?? [notice]).joined(separator:" · "))
+                Button("여운 설정"){store.beginBounceTailEditing(identity:identity)}
+                    .fixedSize().disabled(!store.bounceTailUIAvailable)
+                    .help("명령 검색 ⇧⌘P · 바운스 여운 설정")
+            }.accessibilityElement(children:.contain)
         }
     }
 }
@@ -92,10 +102,13 @@ struct TrackBounceButton:View {
     var body:some View {
         let issue=store.trackBounceIssue
         let title=store.selectedTrack.map{"바운스 · \($0.name)"} ?? "바운스 · 트랙 선택"
-        Button {store.bounceTrack()} label:{Text(issue==nil || store.selectedTrack==nil ? title:"바운스 · 연결 확인").lineLimit(1).truncationMode(.middle)}
-            .frame(maxWidth:170)
-            .disabled(store.trackBounceRecoveryLocked || issue != nil)
-            .accessibilityLabel(title)
-            .help(issue ?? "\(store.selectedTrack?.name ?? "트랙") · 이번 섹션 사용의 출력 앞 경로와 이펙트를 오디오로 만듭니다. 출력 볼륨·오토메이션과 전역 처리는 유지하며 원본 복원으로 되돌릴 수 있습니다.")
+        let identity=store.numberEditIdentity
+        HStack(spacing:4) {
+            Button {store.runCurrentTrackBounce(identity:identity)}label:{Text("바운스").lineLimit(1)}
+                .disabled(store.trackBounceRecoveryLocked || issue != nil || store.bounceTailEditing || store.bounceTailAssessment==nil)
+                .accessibilityLabel(title)
+                .help(issue ?? "\(store.selectedTrack?.name ?? "트랙") · 이번 섹션 사용의 출력 앞 경로와 이펙트를 오디오로 만듭니다. 출력 볼륨·오토메이션과 전역 처리는 유지하며 원본 복원으로 되돌릴 수 있습니다.")
+            BounceTailControl(store:store)
+        }.frame(width:170)
     }
 }

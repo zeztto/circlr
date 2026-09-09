@@ -23,6 +23,7 @@ public final class SynthEngine {
 
 public enum ProductionInstrument {
     public static func render(_ notes:[Note], instrument:Instrument, project:Project, root:URL?, clock:MusicClock, tail:Double, hostContext:MusicContext? = nil) async throws -> PCM {
+        _ = try frameCount(clock:clock,tail:tail)
         if instrument.kind == .synthesizer {return try synth(notes,patch:instrument.synth ?? SynthPatch(),clock:clock,tail:tail)}
         if instrument.kind == .sampler {
             guard let sample=instrument.sample else {throw CirclrError("샘플 악기의 원본을 선택하세요")}
@@ -79,8 +80,9 @@ public enum ProductionInstrument {
         return result
     }
     static func frameCount(clock:MusicClock,tail:Double) throws -> Int {
-        guard tail.isFinite,(0...30).contains(tail),clock.seconds+tail<1800 else {throw CirclrError("악기의 렌더 길이를 확인하세요")}
-        return Int(ceil((clock.seconds+tail)*PCM.rate))
+        let frames=try RenderTailPlanner.frameCount(bodySeconds:clock.seconds,tailSeconds:tail)
+        guard clock.seconds+tail<1800 else {throw CirclrError("악기의 렌더 길이를 확인하세요")}
+        return frames
     }
 }
 

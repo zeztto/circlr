@@ -13,6 +13,24 @@ SPEC.loader.exec_module(server)
 
 
 class MCPTests(unittest.TestCase):
+    def test_render_tail_is_optional_bounded_and_forwarded_without_ui_defaults(self):
+        for method, scope in [('bounce', {'useID': 'use', 'trackID': 'track'}),
+                              ('export', {'path': '/tmp/new-tail.wav'})]:
+            base = {'projectID': 'p', 'expectedRevision': 1, **scope}
+            for extra in ({}, {'tailSeconds': 0}, {'tailSeconds': 12.5}, {'tailSeconds': 120}):
+                with self.subTest(method=method, extra=extra), patch.object(server, 'rpc', return_value={'ok': True}) as ipc:
+                    server.call_tool('/qa.sock', 'circlr_' + method, {**base, **extra})
+                    forwarded = ipc.call_args.args[1]['arguments']
+                    if extra:
+                        self.assertEqual(forwarded['tailSeconds'], extra['tailSeconds'])
+                    else:
+                        self.assertNotIn('tailSeconds', forwarded)
+            for invalid in (-0.001, 120.001, float('nan'), float('inf'), float('-inf'), True, '2', None):
+                with self.subTest(method=method, invalid=invalid), patch.object(server, 'rpc') as ipc:
+                    with self.assertRaises(ValueError):
+                        server.call_tool('/unused.sock', 'circlr_' + method, {**base, 'tailSeconds': invalid})
+                    ipc.assert_not_called()
+
     def test_arrangement_apply_requires_explicit_target_and_forwards_atomic_batch(self):
         operations = [
             {'kind': 'duplicate_arrangement', 'compositionID': 'owner', 'arrangementID': 'source', 'name': '  대안  '},

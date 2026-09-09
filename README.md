@@ -6,7 +6,9 @@ macOS용 앨범·송폼 궤도 편집기. **앨범 → 곡·악장 → 섹션 �
 
 연결 UI는 [서클 둘레 8방향 IN/OUT과 다중 입출력](docs/22-eight-direction-ports.md)으로 확장 중이다. 포트의 신호 의미와 연결점 배치를 분리한다. 아래 일반 사용법은 배포된 0.19 앱 기준이며 새 포트 기능은 독립 개발 브랜치에서 검증한다.
 
-현재 **`codex/daw-integration`의 0.20.0 build 86**에 녹음 lifecycle과 8방향·다중 bus·그룹 포트를 통합했다. 같은 캔버스의 연결 편집·녹음 상태·스텝·오토메이션이 공존하며, 녹음 시작·정리 중 음악 편집과 Undo의 경쟁을 차단한다. build 23의 실제 편집·바운스·Undo·저장/재열기·닫기 최소화 및 출력별 모션 검증은 [통합 QA](qa/daw-integration-review.md)에 기록했다.
+현재 **`codex/daw-integration`의 0.20.0 build 87**에 녹음 lifecycle과 8방향·다중 bus·그룹 포트를 통합했다. 같은 캔버스의 연결 편집·녹음 상태·스텝·오토메이션이 공존하며, 녹음 시작·정리 중 음악 편집과 Undo의 경쟁을 차단한다. build 23의 실제 편집·바운스·Undo·저장/재열기·닫기 최소화 및 출력별 모션 검증은 [통합 QA](qa/daw-integration-review.md)에 기록했다.
+
+**build87은 바운스·export의 잔향 길이를 자동 추정하거나0–120초로 지정한다.** 상한·미확정 안내와 끝 구간 측정을 제공하고 긴 보존 클립의 끝을 유지한다. Audio30개·Core3개·MCP22개·kit9개·Release52.98초를 통과했다. 실제 자동74초/직접34초 렌더의 앞34초 PCM 일치와 바운스·export의 재열기 전후 바이트 일치, 입력 거절·취소를 확인했다. QA checker22개 문서 캡처와 RPC 오류·취소 기록 대조도 통과했다. 자동 추정은 무손실 보장이 아니며 실제 청취는 미검증이다. [계약](docs/101-render-tail-policy.md) · [QA](qa/render-tail-review.md).
 
 **build86은 오디오의 공유 원본·이번 사용 범위를 표시하고 전용 클립으로 복귀한다.** 파형 높이를 유지하며 Return으로 빈 범위에서 클립 편집으로 돌아온다. 출력 음소거 상태에서도 pre-output 바운스가 음악을 포함하도록 수정했다. Audio21개·최종 Release41.19초와 실제 범위별 트림/Undo·바운스·클립 복귀·저장 재열기를 확인했으며 QA checker28개 상태·자산2개·바운스1개와 WAV PCM/checksum 대조도 통과했다. 실제 출력·audition은0회로 사용자 앱을 유지한다. [계약](docs/100-audio-scope-and-bounce-mute.md) · [QA](qa/audio-scope-review.md).
 
