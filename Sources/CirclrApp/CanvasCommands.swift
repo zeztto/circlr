@@ -209,14 +209,24 @@ struct StudioCommandPalette:View {
     let palette:StudioPalette
     @State private var query=""
     @State private var selection=0
-    private var results:[StudioCommand] {
+    private var results:[StudioCommand] {matching(query)}
+    private func matching(_ text:String)->[StudioCommand] {
+        let query=text.trimmingCharacters(in:.whitespacesAndNewlines).lowercased()
         let terms=query.split(whereSeparator:{$0.isWhitespace}).map(String.init)
-        return palette.commands.filter{command in terms.allSatisfy{(command.title+" "+command.detail).localizedCaseInsensitiveContains($0)}}
+        guard !terms.isEmpty else{return palette.commands}
+        func rank(_ command:StudioCommand)->Int {
+            let title=command.title.lowercased()
+            if title==query || command.shortcut.lowercased()==query {return 0}
+            if title.hasPrefix(query) {return 1}
+            if terms.allSatisfy({title.contains($0)}) {return 2}
+            return 3
+        }
+        return palette.commands.enumerated().filter{_,command in terms.allSatisfy{(command.title+" "+command.detail+" "+command.shortcut).localizedCaseInsensitiveContains($0)}}
+            .sorted{a,b in let x=rank(a.element),y=rank(b.element);return x==y ? a.offset<b.offset:x<y}.map(\.element)
     }
     var body:some View {
         VStack(spacing:0) {
             HStack(spacing:10) {
-                Image(systemName:"magnifyingglass").foregroundStyle(StudioTheme.secondary)
                 CommandSearchField(text:$query,onMove:{delta in selection=max(0,min(results.count-1,selection+delta))},onSubmit:execute,onCancel:{store.commandPalette=nil;store.focusCanvas?()})
                 Text("Esc").font(.system(size:10,design:.monospaced)).foregroundStyle(StudioTheme.secondary)
             }.padding(17)
@@ -283,6 +293,10 @@ struct CommandSearchField:NSViewRepresentable {
 
 struct KeyboardHelpView:View {
     @ObservedObject var store:AppStore
+    @State private var query=""
+    @State private var category="전체"
+    @State private var focusedRow=0
+    private let categories=["전체","공통","캔버스","MIDI","오디오","오토메이션"]
     private let rows:[(String,String)] = [
         ("⌥⌘J","이 곡·악장의 편곡안 찾기"),
         ("⌥⌘L","로컬 샘플 라이브러리"),("⌘4","MIDI 스텝 편집"),("⌘J","섹션·트랙 바로 이동"),("⌘1 / ⌘2 / ⌘3","같은 트랙의 MIDI·오디오 / 음색 / 이펙터"),("⇧⌘P","명령·서클 검색"),("⌥⌘0","캔버스로 포커스 이동"),("A / C","서클 생성 / 선택 서클 메뉴"),("L","IN/OUT·대상·8방향 연결 편집"),
@@ -295,7 +309,7 @@ struct KeyboardHelpView:View {
         ("R","이름·음악 설정"),("+ − / F","확대·축소 / 전체 앨범"),("⌥ 방향키","화면 이동"),
         ("⇧⌥ 방향키","자유 배치에서 선택 서클 이동"),
         ("Space","재생·정지"),("⇧⌘R","영상 녹화 시작·마치기"),("⌘K / ⌘D / ⌘G","섹션 추가 / 재사용 / 그룹"),("Delete","선택 서클·노트 삭제"),
-        ("⌘N O S / ⇧⌘S","새 앨범·열기·저장 / 다른 이름으로 저장"),("⌘Z / ⇧⌘Z","실행 취소 / 다시 실행"),
+        ("⌘N / ⌘O / ⌘S / ⇧⌘S","새 앨범·열기·저장 / 다른 이름으로 저장"),("⌘Z / ⇧⌘Z","실행 취소 / 다시 실행"),
         ("⌘I / ⌘E","오디오 가져오기 / WAV 내보내기"),("파일 드롭","섹션 위에 오디오 여러 개 또는 MIDI 한 개 놓기"),("⌃`","콘솔 접기·펼치기"),
         ("MIDI · ⌘A / ⇧클릭","노트 전체 선택 / 선택 추가·제외"),("MIDI · Q / ⌘D","선택 퀀타이즈 / 선택 구간 뒤 복제"),("⌥⌘I","MIDI 파일 가져오기"),
         ("MIDI · ⌥P / ⌥T","같은 음높이 / 같은 시작 박 선택"),("MIDI · ⌥I / ⇧⌘A","선택 반전 / 전체 해제"),
@@ -305,15 +319,60 @@ struct KeyboardHelpView:View {
         ("오디오 · ⌘T / ⌘D","커서에서 분할 / 구간 뒤에 복제"),("오디오 · Delete","선택 오디오 삭제"),
         ("오디오 · 휠 / ⇧휠","파형 확대·축소 / 원본 시간 이동"),("오디오 · − + / Page ↑↓","확대·축소 / 반 화면 이동 · Home/End 처음/끝"),
         ("오디오 · 0 / F / C","전체 파일 / 선택 구간 / 분할 커서 보기"),
+        ("오디오 · Tab / ⇧Tab","파형에서 첫 수치 / 마지막 수치 입력"),
+        ("수치 · Return / Esc","값 적용 / 취소 후 편집기로 복귀"),
+        ("피아노 롤 · F","선택 노트 보기 · 넓은 선택은 기준 노트"),
         ("MIDI · 선택 노트 드래그","선택 전체 이동 · 끝 손잡이로 공통 길이 조절"),
         ("⌥⌘R","오디오 녹음 / 정지 · 연결 중 시작 취소"),("⌘5 / 오토메이션 · Return","볼륨·팬 곡선 열기 / 점 추가"),("오토메이션 · [ ] / 방향키","이전·다음 점 / 시간·값 이동"),
         ("⌘W / ⌘Q","최소화 / 앱 종료")
     ]
+    private func group(_ row:(String,String))->String {
+        if row.0.hasPrefix("MIDI") || row.0.hasPrefix("피아노 롤") || row.0=="⌥⌘I" || row.0=="⌘4" {return "MIDI"}
+        if row.0.hasPrefix("오디오") || row.0=="⌥⌘R" {return "오디오"}
+        if row.0.contains("오토메이션") {return "오토메이션"}
+        if row.0.hasPrefix("케이블") || row.0.hasPrefix("포트") || ["A / C","L","Tab · ← → ↑ ↓","⇧ 방향키","Return / Esc","K / ⇧K · P / ⇧P","R","+ − / F","⌥ 방향키","⇧⌥ 방향키"].contains(row.0) {return "캔버스"}
+        return "공통"
+    }
+    private var filtered:[Int] {
+        let terms=query.split(whereSeparator:{$0.isWhitespace}).map(String.init)
+        return rows.indices.filter{i in
+            (category=="전체" || group(rows[i])==category || (category != "캔버스" && category != "공통" && rows[i].0.hasPrefix("수치"))) &&
+            terms.allSatisfy{(rows[i].0+" "+rows[i].1).localizedCaseInsensitiveContains($0)}
+        }
+    }
     var body:some View {
-        VStack(alignment:.leading,spacing:14) {
+        VStack(alignment:.leading,spacing:12) {
             HStack{Text("키보드로 작업하기").font(.system(size:18,weight:.semibold));Spacer();Button("닫기"){store.keyboardHelp=false;store.focusCanvas?()}.keyboardShortcut(.escape,modifiers:[])}
-            Text("텍스트 입력 중에는 캔버스 문자 핫키를 실행하지 않습니다").foregroundStyle(StudioTheme.secondary)
-            ScrollView {VStack(spacing:0){ForEach(rows.indices,id:\.self){i in HStack{Text(rows[i].0).font(.system(size:11,design:.monospaced)).frame(width:190,alignment:.leading);Text(rows[i].1).frame(maxWidth:.infinity,alignment:.leading)}.padding(.vertical,8);Divider().overlay(StudioTheme.line)}}}.frame(maxHeight:480)
+            HStack(spacing:8) {
+                CommandSearchField(text:$query,onMove:{delta in focusedRow=max(0,min(filtered.count-1,focusedRow+delta))},onSubmit:{},onCancel:{store.keyboardHelp=false;store.focusCanvas?()},placeholder:"조작 또는 단축키 검색")
+                    .accessibilityLabel("키보드 도움말 검색")
+            }.padding(10).background(StudioTheme.raised,in:RoundedRectangle(cornerRadius:5))
+            Picker("도움말 범위",selection:$category){ForEach(categories,id:\.self){Text($0).tag($0)}}.pickerStyle(.segmented)
+            Text("텍스트 입력 중에는 캔버스 문자 핫키를 실행하지 않습니다").font(.system(size:12)).foregroundStyle(StudioTheme.secondary)
+            ScrollViewReader {proxy in
+                ScrollView {
+                    VStack(spacing:0) {
+                        if filtered.isEmpty {
+                            Text("일치하는 조작이 없습니다").foregroundStyle(StudioTheme.secondary).padding(.top,20)
+                            if category != "전체" {Button("전체 범위에서 찾기"){category="전체"}.padding(.bottom,20)}
+                        }
+                        ForEach(filtered,id:\.self){i in
+                            HStack{Text(rows[i].0).font(.system(size:12,design:.monospaced)).frame(width:210,alignment:.leading);Text(rows[i].1).font(.system(size:13)).frame(maxWidth:.infinity,alignment:.leading)}.padding(.vertical,8).background(filtered.indices.contains(focusedRow) && filtered[focusedRow]==i ? StudioTheme.raised:Color.clear).accessibilityElement(children:.combine).id(i)
+                            Divider().overlay(StudioTheme.line)
+                        }
+                    }
+                }.frame(maxHeight:360)
+                .onChange(of:query){_,_ in focusedRow=0;if let first=filtered.first{proxy.scrollTo(first,anchor:.top)}}
+                .onChange(of:category){_,_ in focusedRow=0;if let first=filtered.first{proxy.scrollTo(first,anchor:.top)}}
+                .onChange(of:focusedRow){_,value in if filtered.indices.contains(value){proxy.scrollTo(filtered[value],anchor:.center)}}
+            }
+            Text("\(category) · \(filtered.count)개 조작 · ↑ ↓ 목록 이동 · Esc 닫기").font(.system(size:11)).foregroundStyle(StudioTheme.secondary)
         }.padding(22).frame(width:650).background(StudioTheme.surface,in:RoundedRectangle(cornerRadius:10)).overlay(RoundedRectangle(cornerRadius:10).strokeBorder(StudioTheme.line))
+        .onAppear {
+            if store.automationVisible {category="오토메이션"}
+            else if store.currentAudioClip != nil {category="오디오"}
+            else if let content=store.selectedMusic?.content {switch content {case .midi,.rhythmMIDI:category="MIDI";default:category="전체"}}
+            else {category="캔버스"}
+        }
     }
 }

@@ -6,7 +6,9 @@ macOS용 앨범·송폼 궤도 편집기. **앨범 → 곡·악장 → 섹션 �
 
 연결 UI는 [서클 둘레 8방향 IN/OUT과 다중 입출력](docs/22-eight-direction-ports.md)으로 확장 중이다. 포트의 신호 의미와 연결점 배치를 분리한다. 아래 일반 사용법은 배포된 0.19 앱 기준이며 새 포트 기능은 독립 개발 브랜치에서 검증한다.
 
-현재 **`codex/daw-integration`의 0.20.0 build 74**에 녹음 lifecycle과 8방향·다중 bus·그룹 포트를 통합했다. 같은 캔버스의 연결 편집·녹음 상태·스텝·오토메이션이 공존하며, 녹음 시작·정리 중 음악 편집과 Undo의 경쟁을 차단한다. build 23의 실제 편집·바운스·Undo·저장/재열기·닫기 최소화 및 출력별 모션 검증은 [통합 QA](qa/daw-integration-review.md)에 기록했다.
+현재 **`codex/daw-integration`의 0.20.0 build 75**에 녹음 lifecycle과 8방향·다중 bus·그룹 포트를 통합했다. 같은 캔버스의 연결 편집·녹음 상태·스텝·오토메이션이 공존하며, 녹음 시작·정리 중 음악 편집과 Undo의 경쟁을 차단한다. build 23의 실제 편집·바운스·Undo·저장/재열기·닫기 최소화 및 출력별 모션 검증은 [통합 QA](qa/daw-integration-review.md)에 기록했다.
+
+**build 75에서 키보드 사용법을 검색한다.** 현재 작업의 조작을 먼저 보여주고 전체/MIDI/오디오/오토메이션 등으로 좁힌다. 명령 검색은 단축키도 찾고 제목 일치를 우선 표시한다. [계약](docs/89-searchable-shortcuts.md) · [QA](qa/shortcut-search-review.md).
 
 **build 74에서 오디오 수치를 키보드로 바로 편집한다.** 파형의 Tab/Shift+Tab과 수치 입력 버튼으로 진입하고 Return/Esc로 복귀한다. 복제 공간이 부족하면 실행 전에 이유를 표시한다. [계약](docs/88-audio-keyboard-preflight.md) · [QA](qa/audio-keyboard-review.md).
 
