@@ -19,7 +19,7 @@ struct InlineCircleEditor: View {
             GeometryReader { geometry in
                 editorContent.frame(width:geometry.size.width,height:geometry.size.height,alignment:.topLeading)
             }.clipped()
-            HStack { Text("휠로 확대·축소 · ⇧ 휠로 편집 영역 이동"); Spacer(); Text("⌘S 저장") }
+            HStack { Text(store.currentAudioClip != nil && !store.automationVisible && !store.hierarchySettingsOpen && !store.connectionsOpen && store.midiImportDraft==nil ? "파형 위 휠로 확대·축소 · ⇧ 휠로 원본 시간 이동":"휠로 확대·축소 · ⇧ 휠로 편집 영역 이동"); Spacer(); Text("⌘S 저장") }
                 .font(.system(size: 11)).foregroundStyle(StudioTheme.secondary)
         }
         .frame(maxWidth:.infinity,maxHeight:.infinity,alignment:.topLeading)

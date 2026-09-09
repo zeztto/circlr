@@ -70,14 +70,17 @@ struct AudioWorkspaceView:View {
     var fadeOut:Double {liveClip.explicitEnvelope?.fadeOut ?? defaultFade}
     var trim:AudioTrimBounds {AudioTrimBounds(clip:liveClip,asset:asset)}
     var selectionOutside:Bool {!viewport.contains(liveClip.sourceStart,assetDuration:asset.duration) || !viewport.contains(liveClip.sourceStart+liveClip.duration,assetDuration:asset.duration)}
+    var sourceCursor:Double {liveClip.sourceStart+store.audioCutOffset}
+    var cursorOutside:Bool {!viewport.contains(sourceCursor,assetDuration:asset.duration)}
     var body:some View {
         VStack(alignment:.leading,spacing:10) {
             HStack(spacing:12) {
                 Text(asset.name).foregroundStyle(StudioTheme.secondary).lineLimit(1).help(asset.name)
                 Spacer(minLength:12)
                 Button("전체 파일"){viewport.showAll();focusTarget.focus()}.disabled(viewport.fitted==nil)
+                    .help("전체 원본 시간 표시 · 파형에서 0")
                 Button("선택 구간"){viewport.fit(liveClip,assetDuration:asset.duration);focusTarget.focus()}
-                    .help(selectionOutside ? "화면 밖 구간까지 다시 맞춤":"현재 구간을 확대 · 편집 중 표시 범위 유지")
+                    .help((selectionOutside ? "화면 밖 선택 구간까지 다시 맞춤":"현재 구간을 확대 · 편집 중 표시 범위 유지")+" · 파형에서 F")
                 Button("복제"){act{store.duplicateAudio()}}.help("구간 뒤로 복제 · ⌘D")
                 Button("트랙 바운스"){store.bounceTrack()}.disabled(store.preparing || store.selectedTrack == nil)
                 if store.selectedMusic?.bounce != nil {Button("원본 복원"){act{store.restoreBounce()}}}
@@ -93,14 +96,22 @@ struct AudioWorkspaceView:View {
                     field("분할 위치",unit:"초",value:Binding(get:{store.audioCutOffset},set:{store.audioSplitOffset=$0}),range:0...liveClip.duration)
                     HStack {Button("분할"){act{store.splitAudio()}}.disabled(store.audioCutOffset<=0 || store.audioCutOffset>=liveClip.duration).help("커서에서 두 서클로 분할 · ⌘T");Text("선택 시작 기준").foregroundStyle(StudioTheme.secondary)}
                     Text("← → 시작 · ⌥ 끝\n⇧ 0.1초 · 기본 0.01초").font(.system(size:11)).foregroundStyle(StudioTheme.secondary)
+                    Text("− + 확대 · Page ↑↓ 이동\n0 전체 · F 선택 · C 커서").font(.system(size:11)).foregroundStyle(StudioTheme.secondary)
                 }.frame(maxWidth:.infinity,alignment:.leading).padding(.trailing,4)
                 }.frame(width:204,alignment:.leading)
                 VStack(spacing:6) {
-                    OrbitAudioEditor(store:store,clip:liveClip,asset:asset,viewport:viewport,focusTarget:focusTarget)
+                    OrbitAudioEditor(store:store,clip:liveClip,asset:asset,viewport:$viewport,focusTarget:focusTarget)
                         .frame(maxWidth:.infinity,maxHeight:.infinity)
-                    Text(String(format:"원본 %.3f초 · 재생 %.3f초",liveClip.duration,liveClip.duration/max(1e-9,rate)))
-                        .font(.system(size:11)).monospacedDigit().foregroundStyle(StudioTheme.secondary)
-                    if selectionOutside {Text("화면 밖 구간 · 선택 구간으로 다시 맞춤").font(.system(size:11)).foregroundStyle(StudioTheme.secondary)}
+                    HStack(spacing:8) {
+                        Button {zoom(0.5)} label:{Image(systemName:"minus")}.accessibilityLabel("오디오 파형 축소").help("파형 축소 · −")
+                        Button {zoom(2)} label:{Image(systemName:"plus")}.accessibilityLabel("오디오 파형 확대").help("파형 확대 · +")
+                        Spacer(minLength:0)
+                        Text(String(format:"원본 %.3f초 · 재생 %.3f초",liveClip.duration,liveClip.duration/max(1e-9,rate)))
+                            .font(.system(size:11)).monospacedDigit().foregroundStyle(StudioTheme.secondary)
+                        Spacer(minLength:0)
+                        Button("커서 보기"){viewport.reveal(sourceCursor,assetDuration:asset.duration);focusTarget.focus()}
+                            .disabled(!cursorOutside).help("화면 밖 분할 커서를 현재 배율로 찾기 · C")
+                    }
                 }.frame(maxWidth:.infinity,maxHeight:.infinity)
                 ScrollView {
                 VStack(alignment:.leading,spacing:8) {
@@ -130,6 +141,11 @@ struct AudioWorkspaceView:View {
         }
     }
     func act(_ action:()->Void){action();focusTarget.focus()}
+    func zoom(_ factor:Double) {
+        let range=viewport.range(assetDuration:asset.duration)
+        viewport.zoom(by:factor,around:cursorOutside ? (range.lowerBound+range.upperBound)/2:sourceCursor,assetDuration:asset.duration)
+        focusTarget.focus()
+    }
     func guarded(_ get:@escaping()->Double,_ set:@escaping(Double)->Void)->Binding<Double> {
         let identity=store.numberEditIdentity,clipID=clip.id,assetID=asset.id
         return Binding(get:get,set:{value in

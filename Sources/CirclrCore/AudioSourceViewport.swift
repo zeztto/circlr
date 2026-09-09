@@ -15,6 +15,32 @@ public struct AudioSourceViewport:Equatable {
         fitted=max(0,clip.sourceStart-padding)...min(max(0.001,assetDuration),clip.sourceStart+clip.duration+padding)
     }
     public mutating func showAll(){fitted=nil}
+    /// Keep the time under the pointer fixed while changing the displayed duration.
+    public mutating func zoom(by factor:Double,around source:Double,assetDuration:Double) {
+        guard factor.isFinite,factor>0,source.isFinite,assetDuration.isFinite,assetDuration>0 else{return}
+        let current=range(assetDuration:assetDuration),width=current.upperBound-current.lowerBound
+        let anchor=min(current.upperBound,max(current.lowerBound,source))
+        let next=min(assetDuration,max(min(0.01,assetDuration),width/factor))
+        setRange(start:anchor-(anchor-current.lowerBound)/width*next,width:next,assetDuration:assetDuration)
+    }
+    public mutating func pan(by seconds:Double,assetDuration:Double) {
+        guard seconds.isFinite,assetDuration.isFinite,assetDuration>0 else{return}
+        let current=range(assetDuration:assetDuration)
+        setRange(start:current.lowerBound+seconds,width:current.upperBound-current.lowerBound,assetDuration:assetDuration)
+    }
+    /// Finding a hidden cursor keeps the current zoom and does not follow later edits.
+    public mutating func reveal(_ source:Double,assetDuration:Double) {
+        guard source.isFinite,assetDuration.isFinite,assetDuration>0,source>=0,source<=assetDuration,
+              !contains(source,assetDuration:assetDuration) else{return}
+        let current=range(assetDuration:assetDuration),width=current.upperBound-current.lowerBound
+        setRange(start:source-width/2,width:width,assetDuration:assetDuration)
+    }
+    private mutating func setRange(start:Double,width:Double,assetDuration:Double) {
+        let width=min(assetDuration,width)
+        if width>=assetDuration {fitted=nil;return}
+        let lower=min(assetDuration-width,max(0,start))
+        fitted=lower...(lower+width)
+    }
     public func source(at phase:Double,assetDuration:Double)->Double {
         let r=range(assetDuration:assetDuration);return r.lowerBound+min(1,max(0,phase))*(r.upperBound-r.lowerBound)
     }

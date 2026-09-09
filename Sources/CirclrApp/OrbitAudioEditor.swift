@@ -6,7 +6,7 @@ struct OrbitAudioEditor:NSViewRepresentable {
     @ObservedObject var store:AppStore
     let clip:AudioClip
     let asset:Asset
-    var viewport=AudioSourceViewport()
+    @Binding var viewport:AudioSourceViewport
     let focusTarget:AudioEditorFocus
     @Environment(\.isEnabled) private var enabled
     func makeNSView(context:Context)->OrbitAudioView {
@@ -15,6 +15,9 @@ struct OrbitAudioEditor:NSViewRepresentable {
     func updateNSView(_ view:OrbitAudioView,context:Context) {
         if !enabled || view.clip.id != clip.id || view.asset.id != asset.id || view.viewport != viewport || (view.dragIdentity != nil && !view.dragIsCurrent) {view.cancelDrag()}
         view.clip=clip;view.asset=asset;view.viewport=viewport;view.allowsEditing=enabled;view.needsDisplay=true
+        let identity=store.numberEditIdentity
+        view.editIdentity=identity
+        view.viewportChanged={value in guard store.numberEditIdentity==identity else{return};viewport=value}
         let range=viewport.range(assetDuration:asset.duration)
         view.setAccessibilityLabel(store.project.usesOrbits ? "오디오 궤도 편집기":"오디오 파형 편집기")
         view.setAccessibilityValueDescription(String(format:"원본 표시 %.3f부터 %.3f초 · 선택 %.3f부터 %.3f초 · 분할 %.3f초",range.lowerBound,range.upperBound,clip.sourceStart,clip.sourceStart+clip.duration,store.audioCutOffset))
@@ -24,6 +27,8 @@ struct OrbitAudioEditor:NSViewRepresentable {
     let store:AppStore
     var clip:AudioClip,asset:Asset
     var viewport=AudioSourceViewport()
+    var editIdentity:NumberEditIdentity?
+    var viewportChanged:(AudioSourceViewport)->Void={_ in}
     var original:AudioClip?,preview:AudioClip?
     var editingEnd=false,previousPhase=0.0,travel=0.0,allowsEditing=true
     var dragIdentity:NumberEditIdentity?,dragViewport:AudioSourceViewport?,dragOrbital:Bool?,dragBounds:NSRect?
@@ -36,12 +41,13 @@ struct OrbitAudioEditor:NSViewRepresentable {
     var span:Double {sourceRange.upperBound-sourceRange.lowerBound}
     var plot:NSRect {bounds.insetBy(dx:12,dy:22)}
     var orbital:Bool {store.project.usesOrbits}
-    var isCurrent:Bool {allowsEditing && window != nil && store.currentAudioClip?.id==clip.id && store.currentAudioClip?.assetID==asset.id}
+    var isCurrent:Bool {allowsEditing && window != nil && editIdentity==store.numberEditIdentity && store.currentAudioClip?.id==clip.id && store.currentAudioClip?.assetID==asset.id}
     var dragIsCurrent:Bool {isCurrent && dragIdentity==store.numberEditIdentity && dragViewport==viewport && dragOrbital==orbital && dragBounds==bounds}
     init(store:AppStore,clip:AudioClip,asset:Asset) {
         self.store=store;self.clip=clip;self.asset=asset;super.init(frame:.zero)
         setAccessibilityElement(true);setAccessibilityRole(.group)
-        toolTip="파형 클릭: 분할 위치 · 시작/끝 드래그: trim · ← → 시작 · ⌥← → 끝 · ⇧ 0.1초 · ⌘T 분할 · ⌘D 복제"
+        toolTip="휠: 확대·축소 · 가로 휠/⇧휠: 시간 이동 · −/+: 확대·축소 · Page Up/Down: 이동 · Home/End: 파일 처음/끝 · 0: 전체 · F: 선택 · C: 커서 보기 · 파형 클릭: 분할 위치 · ← →: 시작 trim · ⌥← →: 끝 trim · ⇧: 0.1초 · ⌘T: 분할 · ⌘D: 복제"
+        setAccessibilityHelp(toolTip)
     }
     required init?(coder:NSCoder){fatalError()}
     override func viewDidMoveToWindow() {
@@ -88,7 +94,7 @@ struct OrbitAudioEditor:NSViewRepresentable {
         if visible(cut) {let cursor=OrbitDrawing.point(center,radius:waveRadius,phase:viewport.phase(at:cut,assetDuration:asset.duration));OrbitDrawing.dot(cursor,radius:4,color:StudioTheme.textNS)}
         if outer>55 {
             OrbitDrawing.text("원본 초",at:NSPoint(x:center.x,y:center.y-10),size:11)
-            OrbitDrawing.text(String(format:"%.2f–%.2f",sourceRange.lowerBound,sourceRange.upperBound),at:NSPoint(x:center.x,y:center.y+8),size:11,color:StudioTheme.textNS)
+            OrbitDrawing.text(String(format:span<1 ? "%.3f–%.3f":"%.2f–%.2f",sourceRange.lowerBound,sourceRange.upperBound),at:NSPoint(x:center.x,y:center.y+8),size:11,color:StudioTheme.textNS)
         }
         OrbitDrawing.text("바깥 궤도 · 섹션 내 첫 재생",at:NSPoint(x:center.x,y:bounds.maxY-10),size:10)
     }
@@ -103,7 +109,9 @@ struct OrbitAudioEditor:NSViewRepresentable {
         for i in 0...ticks {
             let phase=Double(i)/Double(ticks),x=plot.minX+phase*plot.width
             let line=NSBezierPath();line.move(to:NSPoint(x:x,y:plot.minY));line.line(to:NSPoint(x:x,y:plot.maxY));StudioTheme.lineNS.setStroke();line.stroke()
-            OrbitDrawing.text(String(format:"%.2f",viewport.source(at:phase,assetDuration:asset.duration)),at:NSPoint(x:min(bounds.maxX-20,max(20,x)),y:10),size:10)
+            let label=String(format:span<1 ? "%.3f":"%.2f",viewport.source(at:phase,assetDuration:asset.duration))
+            let half=(label as NSString).size(withAttributes:[.font:NSFont.monospacedSystemFont(ofSize:10,weight:.regular)]).width/2+2
+            OrbitDrawing.text(label,at:NSPoint(x:min(bounds.maxX-half,max(half,x)),y:10),size:10)
         }
         if let wave=store.waveforms[asset.id] {
             let scale=min(64,1/max(0.001,Double(wave.peaks.max() ?? 0)))
@@ -153,10 +161,51 @@ struct OrbitAudioEditor:NSViewRepresentable {
         if isCurrent,window?.firstResponder===self,event.modifierFlags.contains(.command),store.handleAudioEditKey(event){needsDisplay=true;return true}
         return super.performKeyEquivalent(with:event)
     }
+    func changeViewport(_ edit:(inout AudioSourceViewport)->Void) {
+        guard isCurrent else{return}
+        cancelDrag();edit(&viewport);viewportChanged(viewport);needsDisplay=true
+    }
+    func zoom(_ factor:Double) {
+        let cursor=clip.sourceStart+store.audioCutOffset,anchor=visible(cursor) ? cursor:(sourceRange.lowerBound+sourceRange.upperBound)/2
+        changeViewport{$0.zoom(by:factor,around:anchor,assetDuration:asset.duration)}
+    }
+    override func scrollWheel(with event:NSEvent) {
+        guard isCurrent else{return}
+        guard !event.modifierFlags.contains(.command),!event.modifierFlags.contains(.control),!event.modifierFlags.contains(.option) else {super.scrollWheel(with:event);return}
+        if !(window?.firstResponder is NSTextView){window?.makeFirstResponder(self)}
+        let horizontal=abs(event.scrollingDeltaX)>abs(event.scrollingDeltaY),shift=event.modifierFlags.contains(.shift)
+        if horizontal || shift {
+            let delta=horizontal ? event.scrollingDeltaX:event.scrollingDeltaY
+            let seconds = -delta*span*(event.hasPreciseScrollingDeltas ? 0.002:0.05)
+            changeViewport{$0.pan(by:seconds,assetDuration:asset.duration)}
+        } else {
+            let power=max(-1,min(1,event.scrollingDeltaY*(event.hasPreciseScrollingDeltas ? 0.01:0.15)))
+            let anchor=viewport.source(at:phase(convert(event.locationInWindow,from:nil)),assetDuration:asset.duration)
+            changeViewport{$0.zoom(by:pow(2,power),around:anchor,assetDuration:asset.duration)}
+        }
+    }
+    func handleViewportKey(_ event:NSEvent)->Bool {
+        guard !event.modifierFlags.contains(.option) else{return false}
+        let halfSpan=span/2
+        switch event.keyCode {
+        case 27,78:zoom(0.5)
+        case 24,69:zoom(2)
+        case 116:changeViewport{$0.pan(by:-halfSpan,assetDuration:asset.duration)}
+        case 121:changeViewport{$0.pan(by:halfSpan,assetDuration:asset.duration)}
+        case 115:changeViewport{$0.pan(by:-asset.duration,assetDuration:asset.duration)}
+        case 119:changeViewport{$0.pan(by:asset.duration,assetDuration:asset.duration)}
+        case 29,82:changeViewport{$0.showAll()}
+        case 3:changeViewport{$0.fit(clip,assetDuration:asset.duration)}
+        case 8:changeViewport{$0.reveal(clip.sourceStart+store.audioCutOffset,assetDuration:asset.duration)}
+        default:return false
+        }
+        return true
+    }
     override func keyDown(with event:NSEvent) {
         guard isCurrent else{return}
         if store.handleAudioEditKey(event){needsDisplay=true;return}
         if event.modifierFlags.contains(.command) || event.modifierFlags.contains(.control) {super.keyDown(with:event);return}
+        if handleViewportKey(event){return}
         if store.handleAudioTrimKey(event,clipID:clip.id){needsDisplay=true;return}
         if event.keyCode==53 {cancelDrag();store.focusCanvas?();store.hierarchyParent()}
         else if event.keyCode==49 {store.play()}

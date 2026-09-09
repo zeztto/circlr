@@ -106,8 +106,15 @@ struct AlbumCanvas: NSViewRepresentable {
             scrollMonitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { [weak self] event in
                 guard let self, event.window === self.window, self.bounds.contains(self.convert(event.locationInWindow, from: nil)) else { return event }
                 if self.store.consoleBounds.contains(self.convert(event.locationInWindow,from:nil)){return event}
-                if let content=self.window?.contentView,let hit=content.hitTest(content.convert(event.locationInWindow,from:nil)),hit !== self,!hit.isDescendant(of:self) {return event}
-                // Shift keeps precision-editor scroll available. Plain wheel always controls this camera.
+                if let content=self.window?.contentView,let hit=content.hitTest(content.convert(event.locationInWindow,from:nil)) {
+                    if hit !== self,!hit.isDescendant(of:self){return event}
+                    var candidate:NSView?=hit
+                    while let view=candidate,view !== self {
+                        if view is OrbitAudioView {return event}
+                        candidate=view.superview
+                    }
+                }
+                // Audio owns source-time navigation; elsewhere Shift keeps editor scroll available.
                 if event.modifierFlags.contains(.shift), let editor = self.editor, editor.frame.contains(self.convert(event.locationInWindow, from: nil)) { return event }
                 self.scrollWheel(with: event); return nil
             }
