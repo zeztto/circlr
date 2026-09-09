@@ -71,9 +71,9 @@ final class AutomationDisplayTests:XCTestCase {
     }
     func testDisplayedTimeUsesLocalTempoMap()throws {
         let c=MusicContext(),clock=try MusicClock(bars:2,context:c,tempoChanges:[.init(beat:2,bpm:60)])
-        XCTAssertEqual(AutomationDisplay.time(3,clock:clock),"3.000박 · 2.00초")
+        XCTAssertEqual(AutomationDisplay.time(3,clock:clock),"4박 · 2.00초")
         var localContext=MusicContext();localContext.tempo=240
         let local=try MusicClock(beats:8,context:localContext)
-        XCTAssertEqual(AutomationDisplay.time(3,clock:local),"3.000박 · 0.75초")
+        XCTAssertEqual(AutomationDisplay.time(3,clock:local),"4박 · 0.75초")
     }
 }

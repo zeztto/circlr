@@ -181,7 +181,7 @@ struct HierarchySettingsEditor: View {
             if let music=store.selectedMusic {
                 Toggle("음소거",isOn:Binding(get:{music.muted},set:{v in store.updateMusic("음소거"){$0.muted=v}}))
                 if music.content.input == nil {
-                    ValueField(title:"부모 안 시작 박",value:Binding(get:{store.selectedMusic?.startBeat ?? music.startBeat},set:{v in store.updateMusic("시작 박"){$0.startBeat=v}}),range:0...131072)
+                    ValueField(title:"부모 안 시작 박",value:Binding(get:{store.selectedMusic?.startBeat ?? music.startBeat},set:{v in store.updateMusic("시작 박"){$0.startBeat=v}}),range:0...131072,presentation:.beatPosition)
                     ValueField(title:"길이 박",value:Binding(get:{store.selectedMusic?.lengthBeats ?? store.currentClock?.beats ?? 32},set:{v in store.updateMusic("길이"){$0.lengthBeats=v}}),range:0.03125...131072)
                     CountControl(title:"반복",value:Binding(get:{store.selectedMusic?.repeatCount ?? music.repeatCount},set:{v in store.updateMusic("반복"){$0.repeatCount=v}}),range:1...256)
                 }

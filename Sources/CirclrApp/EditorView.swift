@@ -86,7 +86,7 @@ struct AudioClipFields:View {
     var body:some View {
         HStack(spacing:12) {
             CompactChoice(selection:Binding(get:{clip.id},set:{store.selectedClipID=$0}),options:(store.currentLane?.audio ?? []).map{c in(c.id,store.project.assets.first{$0.id==c.assetID}?.name ?? "미디어 없음")},label:"오디오 클립").frame(maxWidth:150,alignment:.leading)
-            ValueField(title:"시작 박",value:Binding(get:{store.currentLane?.audio.first{$0.id==clip.id}?.beat ?? clip.beat},set:{v in edit{$0.beat=v}}),width:48,range:0...131072)
+            ValueField(title:"시작 박",value:Binding(get:{store.currentLane?.audio.first{$0.id==clip.id}?.beat ?? clip.beat},set:{v in edit{$0.beat=v}}),width:48,range:0...131072,presentation:.beatPosition)
             ValueField(title:"원본 초",value:Binding(get:{store.currentLane?.audio.first{$0.id==clip.id}?.sourceStart ?? clip.sourceStart},set:{v in edit{$0.sourceStart=v}}),width:48,range:0...Double.greatestFiniteMagnitude)
             ValueField(title:"길이 초",value:Binding(get:{store.currentLane?.audio.first{$0.id==clip.id}?.duration ?? clip.duration},set:{v in edit{$0.duration=v}}),width:48,range:0.01...Double.greatestFiniteMagnitude)
             ValueField(title:"볼륨",value:Binding(get:{store.currentLane?.audio.first{$0.id==clip.id}?.gain ?? clip.gain},set:{v in edit{$0.gain=v}}),width:44,range:0...4)
@@ -175,7 +175,7 @@ struct PianoRoll:NSViewRepresentable {
             let ids=Set(visible.map(\.id));accessibilityNotes=accessibilityNotes.filter{ids.contains($0.key)}
             setAccessibilityChildren(MIDIOrbitViewport.ordered(visible).map{note -> NSAccessibilityElement in
                 let child=accessibilityNotes[note.id] ?? PianoNoteAccessibility(parent:self,id:note.id);accessibilityNotes[note.id]=child
-                child.setAccessibilityLabel("\(Scale.roots[note.pitch%12])\(note.pitch/12-1) · \(note.beat.formatted(.number.precision(.fractionLength(0...3))))박 · 길이 \(note.length.formatted(.number.precision(.fractionLength(0...3))))박 · 세기 \(note.velocity)")
+                child.setAccessibilityLabel("\(Scale.roots[note.pitch%12])\(note.pitch/12-1) · \(BeatPosition.text(note.beat))박 · 길이 \(note.length.formatted(.number.precision(.fractionLength(0...3))))박 · 세기 \(note.velocity)")
                 child.setAccessibilityValue(selectedIDs.contains(note.id) ? "선택됨":"")
                 child.setAccessibilityFrame(window.convertToScreen(convert(rect(note),to:nil)));return child
             })

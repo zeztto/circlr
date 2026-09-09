@@ -24,7 +24,7 @@ struct MIDINoteInspector:View {
             MIDINoteSelectionMenu(store:store,focusTarget:focusTarget)
             if let note=selected,store.selectedMIDIIDs.count==1 {
                 HStack(spacing:8){Text("음높이").foregroundStyle(StudioTheme.secondary);CommittedNumberField(title:"MIDI 음높이",value:integer(note,\.pitch),range:0...127,integerOnly:true,width:64);Text(name(note.pitch)).monospacedDigit()}
-                field("시작 박",value:number(note,\.beat),range:0...max(0,store.editorBeats-note.length))
+                field("시작 박",value:number(note,\.beat),range:0...max(0,store.editorBeats-note.length),presentation:.beatPosition)
                 field("길이 박",value:number(note,\.length),range:0.03125...max(0.03125,store.editorBeats-note.beat))
                 field("세기",value:integer(note,\.velocity),range:1...127,integer:true)
             }
@@ -48,8 +48,8 @@ struct MIDINoteInspector:View {
         }.frame(width:252,alignment:.leading)
         .environment(\.numberEditing,NumberEditingContext(snapshot:store.numberEditIdentity,current:{store.numberEditIdentity},focusCanvas:{focusTarget.focus()},fieldFocus:fieldFocus))
     }
-    func field(_ title:String,value:Binding<Double>,range:ClosedRange<Double>,integer:Bool=false)->some View {
-        HStack(spacing:12){Text(title).foregroundStyle(StudioTheme.secondary).frame(width:58,alignment:.leading);CommittedNumberField(title:"MIDI "+title,value:value,range:range,integerOnly:integer,width:88)}
+    func field(_ title:String,value:Binding<Double>,range:ClosedRange<Double>,integer:Bool=false,presentation:NumberEditPresentation = .number)->some View {
+        HStack(spacing:12){Text(title).foregroundStyle(StudioTheme.secondary).frame(width:58,alignment:.leading);CommittedNumberField(title:"MIDI "+title,value:value,range:range,integerOnly:integer,width:88,presentation:presentation)}
     }
     func act(_ action:()->Void){action();focusTarget.focus()}
     func edit(_ note:Note,_ change:@escaping(inout Note)->Void) {

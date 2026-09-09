@@ -90,7 +90,7 @@ struct AudioWorkspaceView:View {
             HStack(alignment:.top,spacing:16) {
                 ScrollView {
                 VStack(alignment:.leading,spacing:8) {
-                    field("배치",unit:"박",value:binding(\.beat),range:0...131072)
+                    field("배치",unit:"박",value:binding(\.beat),range:0...131072,presentation:.beatPosition)
                     field("원본 시작",unit:"초",value:trimBinding(end:false),range:trim.start)
                     field("원본 끝",unit:"초",value:trimBinding(end:true),range:trim.end)
                     field("분할 위치",unit:"초",value:Binding(get:{store.audioCutOffset},set:{store.audioSplitOffset=$0}),range:0...liveClip.duration)

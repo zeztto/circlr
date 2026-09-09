@@ -20,11 +20,11 @@ extension AppStore {
     var libraryDestinationText:String {
         guard let target=libraryDestination else{return "가져올 섹션을 선택하세요"}
         switch target.destination {
-        case .pattern(let id,let beat):return "\(project.patterns.first{$0.id==id}?.name ?? "리듬") · \((beat+1).formatted())박"
+        case .pattern(let id,let beat):return "\(project.patterns.first{$0.id==id}?.name ?? "리듬") · \(BeatPosition.text(beat))박"
         case .section(let a,let u,let track,let beat,_,let original):
             let name=studioRoutes.first{$0.id == .section(arrangementID:a,useID:u)}.map{$0.path+" › "+$0.name} ?? project.arrangements.first{$0.id==a}?.uses.first{$0.id==u}?.name ?? "섹션"
             let lane=library.chosen.count==1 && library.chosen.first?.kind == .midi ? "새 MIDI 트랙":library.chosenIDs.count>1 ? "새 트랙 \(library.chosenIDs.count)개":project.tracks.first{$0.id==track}?.name ?? "새 트랙"
-            return "\(name) › \(lane) · \((beat+1).formatted())박"+(original ? " · 공유 원본":"")
+            return "\(name) › \(lane) · \(BeatPosition.text(beat))박"+(original ? " · 공유 원본":"")
         }
     }
     func importLibrarySelection() {

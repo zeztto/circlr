@@ -64,25 +64,25 @@ struct MIDIImportView:View {
     @State private var selected:Set<String>=[]
     @State private var extend=true
     @State private var start:Double
-    init(store:AppStore,draft:MIDIImportDraft) {self.store=store;self.draft=draft;_start=State(initialValue:draft.beat+1)}
+    init(store:AppStore,draft:MIDIImportDraft) {self.store=store;self.draft=draft;_start=State(initialValue:draft.beat)}
     private var beats:Double {draft.sectionBeats}
-    private var end:Double {start-1+(draft.document.tracks.filter{selected.contains($0.id)}.flatMap(\.notes).map{$0.beat+$0.length}.max() ?? 0)}
+    private var end:Double {start+(draft.document.tracks.filter{selected.contains($0.id)}.flatMap(\.notes).map{$0.beat+$0.length}.max() ?? 0)}
     private var exceeds:Bool {end>beats+1e-8}
     private var current:Bool {store.project.id==draft.projectID && store.project.musicRevision==draft.revision && store.mediaImportGeneration==draft.generation}
     private var ready:Bool {!selected.isEmpty && (!exceeds || extend) && store.canStartMediaImport && current}
     var body:some View {
         VStack(alignment:.leading,spacing:10) {
-            HStack {Text("MIDI 노트 가져오기").font(.system(size:16,weight:.semibold));Spacer();Button("취소"){store.midiImportDraft=nil};Button("\(selected.count)개 서클 가져오기"){store.commitMIDIImport(draft,selected:selected,extend:extend,beat:start-1)}.disabled(!ready)}
+            HStack {Text("MIDI 노트 가져오기").font(.system(size:16,weight:.semibold));Spacer();Button("취소"){store.midiImportDraft=nil};Button("\(selected.count)개 서클 가져오기"){store.commitMIDIImport(draft,selected:selected,extend:extend,beat:start)}.disabled(!ready)}
             HStack {Text(draft.fileName).lineLimit(1).help(draft.fileName);Spacer();Text("이번 섹션에 새 트랙").foregroundStyle(StudioTheme.secondary)}
             HStack(spacing:10) {
                 Text("시작 위치")
-                CommittedNumberField(title:"MIDI 가져오기 시작 박",value:$start,range:1...max(1,beats+1-0.001),width:80)
+                CommittedNumberField(title:"MIDI 가져오기 시작 박",value:$start,range:0...beats,width:80,presentation:.beatPosition,validate:{value in guard value<beats else{throw CirclrError("MIDI 시작 위치는 현재 섹션 안으로 지정하세요")}})
                 Text("박 · 4분음표 기준").foregroundStyle(StudioTheme.secondary)
-                Button("섹션 처음"){start=1}
+                Button("섹션 처음"){start=0}
                 Spacer(minLength:0)
                 Toggle("필요하면 길이 늘리기",isOn:$extend)
             }
-            HStack {Text("끝 위치 \((end+1).formatted(.number.precision(.fractionLength(0...3))))박 · 현재 \(beats.formatted())박 길이"+(exceeds ? (extend ? " · 이번 섹션 연장":" · 길이 초과"):""));Spacer();Text("섹션 \(store.currentContext.tempo.formatted()) BPM")}.foregroundStyle(exceeds && !extend ? Color.orange:StudioTheme.secondary)
+            HStack {Text("끝 위치 \(BeatPosition.text(end))박 · 현재 \(beats.formatted())박 길이"+(exceeds ? (extend ? " · 이번 섹션 연장":" · 길이 초과"):""));Spacer();Text("섹션 \(store.currentContext.tempo.formatted()) BPM")}.foregroundStyle(exceeds && !extend ? Color.orange:StudioTheme.secondary)
             Text("파일의 선행 쉼표·노트 간격을 유지합니다. 섹션의 템포·박자를 사용합니다.").foregroundStyle(StudioTheme.secondary)
             if let tempo=draft.document.tempo,abs(tempo-store.currentContext.tempo)>0.01 {Text("파일의 첫 템포 \(tempo,format:.number.precision(.fractionLength(1))) BPM").foregroundStyle(StudioTheme.secondary)}
             if draft.document.ignoredPerformanceEvents>0 {Text("CC·프로그램 변경 등 \(draft.document.ignoredPerformanceEvents)개 이벤트 제외 · 페달·피치 벤드 연주는 확인하세요").foregroundStyle(StudioTheme.secondary)}

@@ -138,8 +138,9 @@ private struct NativeNumberField: NSViewRepresentable {
         field.isEnabled=isEnabled
         field.textColor = error.isEmpty ? StudioTheme.textNS:.systemRed
         field.setAccessibilityLabel(title)
-        field.setAccessibilityHelp(error.isEmpty ? "Return으로 적용 · Esc로 취소":error)
-        field.toolTip=error.isEmpty ? "Return으로 적용 · Esc로 취소":error
+        let help=(presentation == .beatPosition ? "첫 위치는 1박 · 4분음표 기준 · ":"")+"Return으로 적용 · Esc로 취소"
+        field.setAccessibilityHelp(error.isEmpty ? help:error)
+        field.toolTip=error.isEmpty ? help:error
         self.context.fieldFocus?.register(field,title:title)
     }
     final class Coordinator:NSObject,NSTextFieldDelegate {

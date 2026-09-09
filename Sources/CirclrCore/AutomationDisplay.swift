@@ -23,7 +23,7 @@ public enum AutomationDisplay {
         return max(-1,min(1,value+sign*step))
     }
     public static func time(_ beat:Double,clock:MusicClock?)->String {
-        let position=String(format:"%.3f박",locale:Locale(identifier:"en_US_POSIX"),beat)
+        let position=BeatPosition.text(beat)+"박"
         guard let clock else{return position}
         return position+String(format:" · %.2f초",locale:Locale(identifier:"en_US_POSIX"),clock.seconds(at:beat))
     }

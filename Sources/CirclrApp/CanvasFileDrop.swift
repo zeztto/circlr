@@ -54,7 +54,7 @@ extension AlbumCanvasView {
         let center=screen(drop.section),radius=drop.section.radius*camera.zoom
         StudioTheme.accentNS.setStroke()
         let ring=NSBezierPath(ovalIn:NSRect(x:center.x-radius,y:center.y-radius,width:radius*2,height:radius*2));ring.lineWidth=2;ring.stroke()
-        let title="\(drop.section.title) · "+(drop.midi ? "MIDI 트랙 선택":"오디오 \(drop.urls.count)개")+" · \(String(format:"%.2f",drop.beat+1))박"
+        let title="\(drop.section.title) · "+(drop.midi ? "MIDI 트랙 선택":"오디오 \(drop.urls.count)개")+" · \(BeatPosition.text(drop.beat))박"
         let attrs:[NSAttributedString.Key:Any]=[.font:NSFont.systemFont(ofSize:13,weight:.semibold),.foregroundColor:NSColor.white]
         let width=min(workspaceViewport.width-16,(title as NSString).size(withAttributes:attrs).width+24)
         let rect=NSRect(x:max(workspaceViewport.minX+8,min(drop.cursor.x+16,workspaceViewport.maxX-width-8)),y:max(workspaceViewport.minY+8,min(drop.cursor.y+18,workspaceViewport.maxY-40)),width:width,height:32)

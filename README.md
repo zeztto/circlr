@@ -6,7 +6,9 @@ macOS용 앨범·송폼 궤도 편집기. **앨범 → 곡·악장 → 섹션 �
 
 연결 UI는 [서클 둘레 8방향 IN/OUT과 다중 입출력](docs/22-eight-direction-ports.md)으로 확장 중이다. 포트의 신호 의미와 연결점 배치를 분리한다. 아래 일반 사용법은 배포된 0.19 앱 기준이며 새 포트 기능은 독립 개발 브랜치에서 검증한다.
 
-현재 **`codex/daw-integration`의 0.20.0 build 54**에 녹음 lifecycle과 8방향·다중 bus·그룹 포트를 통합했다. 같은 캔버스의 연결 편집·녹음 상태·스텝·오토메이션이 공존하며, 녹음 시작·정리 중 음악 편집과 Undo의 경쟁을 차단한다. build 23의 실제 편집·바운스·Undo·저장/재열기·닫기 최소화 및 출력별 모션 검증은 [통합 QA](qa/daw-integration-review.md)에 기록했다.
+현재 **`codex/daw-integration`의 0.20.0 build 55**에 녹음 lifecycle과 8방향·다중 bus·그룹 포트를 통합했다. 같은 캔버스의 연결 편집·녹음 상태·스텝·오토메이션이 공존하며, 녹음 시작·정리 중 음악 편집과 Undo의 경쟁을 차단한다. build 23의 실제 편집·바운스·Undo·저장/재열기·닫기 최소화 및 출력별 모션 검증은 [통합 QA](qa/daw-integration-review.md)에 기록했다.
+
+build 55는 **가져오기와 오디오·MIDI·오토메이션·서클 설정의 시작 위치를 1 기반 박으로 통일**한다. 9.5박에 넣은 음악은 편집기에서도 9.5박이며 길이·원본 초·저장 좌표는 그대로다. Swift **406개**·Python **26개**, 실제 입력·편집 방식 왕복·경계/충돌·가져오기·Undo·저장 복원과 작은 창 표시를 확인했다. [사용법](docs/69-beat-position-display.md) · [QA와 남은 Undo 사용성](qa/beat-position-review.md).
 
 build 54는 **샘플을 넣을 섹션·트랙·시작 박을 같은 라이브러리 화면에서 정한다.** 곡·섹션 검색과 ↑↓/Return으로 대상을 고르고, 시작 박 옆에서 마디·초를 확인한다. 대상 선택은 캔버스와 음악을 이동시키지 않는다. Swift **401개**·Python **26개**, 다른 섹션의 실제 오디오/MIDI 배치·일괄 배치·입력 충돌·한 번 Undo·저장 복원과 최종 앱을 확인했다. [사용법](docs/68-library-import-placement.md) · [QA](qa/library-placement-review.md).
 

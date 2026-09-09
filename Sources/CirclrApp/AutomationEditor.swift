@@ -158,7 +158,7 @@ struct AutomationEditor:View {
     func timeControl(_ point:AutomationPoint)->some View {
         HStack(spacing:10) {
             Text("위치").foregroundStyle(StudioTheme.secondary)
-            CommittedNumberField(title:"오토메이션 위치 박",value:pointValue(point,\.beat),range:0...1_048_576,width:80)
+            CommittedNumberField(title:"오토메이션 위치 박",value:pointValue(point,\.beat),range:0...1_048_576,width:80,presentation:.beatPosition)
             Text("박").foregroundStyle(StudioTheme.secondary)
         }
     }
@@ -280,7 +280,7 @@ struct AutomationPlot:NSViewRepresentable {
             OrbitDrawing.text(text,at:at,size:11,color:StudioTheme.secondaryNS)
         }
         if !orbital {
-            let end=String(format:"%.2f박",displayBeats),at=NSPoint(x:rect.maxX-12,y:bounds.height-12)
+            let end=BeatPosition.text(displayBeats)+"박",at=NSPoint(x:rect.maxX-12,y:bounds.height-12)
             occupied.append(labelRect(end,at:at,size:11));OrbitDrawing.text(end,at:at,size:11)
         }
         let barLabels=drawBarRuler(avoiding:occupied)
@@ -296,11 +296,11 @@ struct AutomationPlot:NSViewRepresentable {
             OrbitDrawing.dot(position(p),radius:selected ? 6:4,color:selected ? StudioTheme.textNS:StudioTheme.accentNS)
         }
         if orbital {
-            if radius>70 {OrbitDrawing.text(String(format:"%.2f박",displayBeats),at:center,size:12,color:StudioTheme.textNS)}
+            if radius>70 {OrbitDrawing.text(String(format:"길이 %.2f박",displayBeats),at:center,size:12,color:StudioTheme.textNS)}
         } else {
-            if plotClock==nil {OrbitDrawing.text("0",at:NSPoint(x:rect.minX,y:bounds.height-9),size:11)}
+            if plotClock==nil {OrbitDrawing.text("1",at:NSPoint(x:rect.minX,y:bounds.height-9),size:11)}
         }
-        let help=String(format:"표시 범위 0–%.2f박",displayBeats)+" · 마디 눈금 "+barLabels.joined(separator:", ")+" · 길이 밖은 마지막 박자 기준 · 겹친 점은 Option 클릭으로 순환 선택"
+        let help="표시 위치 1–"+BeatPosition.text(displayBeats)+"박"+" · 마디 눈금 "+barLabels.joined(separator:", ")+" · 길이 밖은 마지막 박자 기준 · 겹친 점은 Option 클릭으로 순환 선택"
         setAccessibilityHelp(help);if toolTip != help {toolTip=help}
         setAccessibilityValue(store.selectedAutomationPoint.map{pointDescription($0)} ?? "선택한 점 없음")
         if let window {

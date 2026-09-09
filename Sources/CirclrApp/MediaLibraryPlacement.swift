@@ -52,7 +52,7 @@ struct LibraryPlacementControls:View {
             let beat=AudioImportPlacement.beat(request.destination)
             HStack(spacing:10) {
                 Text("시작")
-                CommittedNumberField(title:"라이브러리 가져오기 시작 박",value:Binding(get:{AudioImportPlacement.beat(request.destination)+1},set:{value in store.changeLibraryPlacement(request){try AudioImportPlacement.start(value-1,of:$0,in:store.project)}}),range:1...(clock.beats+1),width:85,validate:{value in _=try AudioImportPlacement.start(value-1,of:request.destination,in:store.project)})
+                CommittedNumberField(title:"라이브러리 가져오기 시작 박",value:Binding(get:{AudioImportPlacement.beat(request.destination)},set:{value in store.changeLibraryPlacement(request){try AudioImportPlacement.start(value,of:$0,in:store.project)}}),range:0...clock.beats,width:85,presentation:.beatPosition,validate:{value in _=try AudioImportPlacement.start(value,of:request.destination,in:store.project)})
                     .environment(\.numberEditing,NumberEditingContext(snapshot:store.libraryNumberIdentity,current:{store.libraryNumberIdentity},focusCanvas:{library.searchFocus=UUID()}))
                     .disabled(!store.libraryDestinationCurrent || !store.canStartMediaImport)
                 Text("박 · 4분음표").foregroundStyle(StudioTheme.secondary)

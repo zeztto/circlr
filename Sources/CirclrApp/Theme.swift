@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import CirclrCore
 
 /// A shared palette keeps AppKit drawing and SwiftUI controls in the same dark workspace.
 enum StudioTheme {
@@ -84,10 +85,11 @@ struct ValueField:View {
     var showsLabel=true
     var range:ClosedRange<Double> = -Double.greatestFiniteMagnitude...Double.greatestFiniteMagnitude
     var integerOnly=false
+    var presentation:NumberEditPresentation = .number
     var body:some View {
         HStack(spacing:7) {
             if showsLabel && !title.isEmpty {Text(title).foregroundStyle(StudioTheme.secondary)}
-            CommittedNumberField(title:title,value:$value,range:range,integerOnly:integerOnly,width:width)
+            CommittedNumberField(title:title,value:$value,range:range,integerOnly:integerOnly,width:width,presentation:presentation)
         }.font(.system(size:13))
     }
 }
