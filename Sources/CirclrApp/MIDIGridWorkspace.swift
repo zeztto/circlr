@@ -7,6 +7,7 @@ struct StepEditorState {
     var drumMode=false
     var extraPitches:Set<Int>=[]
     var newPitch=36
+    var rowQuery=""
 }
 
 struct MIDIGridWorkspace:View {
@@ -15,7 +16,7 @@ struct MIDIGridWorkspace:View {
     @Binding var steps:StepEditorState
     @State private var focusTarget=MIDIEditorFocus()
     var selected:Note? {store.currentLane?.notes.first{$0.id==store.selectedNoteID}}
-    var keyHelp:String {store.midiStepMode ? "방향키 셀 선택 · Return 켜기/끄기 · Delete 지우기 · ⌥ 클릭 선택 · Tab 수치 입력":"Tab 노트 선택 · 방향키 이동 · ⇧ 좌우 길이 · ⌥ 상하 세기 · Return 입력 · Delete 삭제"}
+    var keyHelp:String {store.midiStepMode ? "방향키 셀 선택 · Return 켜기/끄기 · Delete 지우기 · 행 이름 선택 · Home/End 첫·끝 행 · PageUp/Down 화면 이동 · Tab 수치 입력":"Tab 노트 선택 · 방향키 이동 · ⇧ 좌우 길이 · ⌥ 상하 세기 · Return 입력 · Delete 삭제"}
     var body:some View {
         HStack(alignment:.top,spacing:20) {
             VStack(alignment:.leading,spacing:10) {
@@ -30,9 +31,12 @@ struct MIDIGridWorkspace:View {
                     Button("바운스"){store.bounceTrack()}.disabled(store.preparing)
                     Button{store.startMIDIRecording()}label:{Image(systemName:store.midiRecording ? "stop.circle":"record.circle")}.accessibilityLabel(store.midiRecording ? "MIDI 녹음 정지":"MIDI 녹음").disabled(store.editPatternID != nil)
                     Spacer(minLength:0)
-                    Button{topPitch=max(store.midiStepMode ? 12:27,topPitch-12);focusTarget.focus()}label:{Image(systemName:"minus")}.accessibilityLabel("표시 음역 한 옥타브 아래")
-                    Text(Scale.roots[(topPitch-1)%12]+String((topPitch-1)/12-1)).monospacedDigit().help("표시 범위의 가장 높은 음")
-                    Button{topPitch=min(128,topPitch+12);focusTarget.focus()}label:{Image(systemName:"plus")}.accessibilityLabel("표시 음역 한 옥타브 위")
+                    if store.midiStepMode && steps.drumMode {StepRowSearch(store:store,state:$steps,focusTarget:focusTarget)}
+                    else {
+                        Button{topPitch=max(store.midiStepMode ? 12:27,topPitch-12);focusTarget.focus()}label:{Image(systemName:"minus")}.accessibilityLabel("표시 음역 한 옥타브 아래")
+                        Text(Scale.roots[(topPitch-1)%12]+String((topPitch-1)/12-1)).monospacedDigit().help("표시 범위의 가장 높은 음")
+                        Button{topPitch=min(128,topPitch+12);focusTarget.focus()}label:{Image(systemName:"plus")}.accessibilityLabel("표시 음역 한 옥타브 위")
+                    }
                 }
                 if store.midiStepMode {StepEditor(store:store,topPitch:topPitch,state:$steps,focusTarget:focusTarget)}
                 else {
@@ -50,6 +54,7 @@ struct MIDIGridWorkspace:View {
         .onAppear{revealPitch()}
         .onChange(of:selected){_,_ in revealPitch()}
         .onChange(of:store.midiStepMode){_,_ in revealPitch()}
+        .onChange(of:store.stepRowScope){_,_ in steps.rowQuery="";steps.extraPitches=[]}
     }
     func revealPitch() {
         guard let selected else{return};let rows=store.midiStepMode ? 12:27

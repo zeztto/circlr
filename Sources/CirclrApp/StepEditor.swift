@@ -4,6 +4,18 @@ import Combine
 import CirclrCore
 
 extension AppStore {
+    var stepRowScope:String {"\(project.id):\(mediaImportGeneration):\(String(describing:hierarchySelection)):\(selectedLaneID ?? editPatternID ?? ""):\(editOriginal)"}
+    func stepRows(extra:Set<Int>)->[StepRow] {
+        StepRows.pitches(observed:(currentLane?.notes ?? []).map(\.pitch),mapped:selectedTrack?.instrument.sample?.zones?.map(\.pitch) ?? [],extra:extra,fallback:selectedTrack?.instrument.sample?.rootPitch ?? 36)
+            .map{StepRow(pitch:$0,label:stepRowLabel($0))}
+    }
+    func stepRowLabel(_ pitch:Int)->String {
+        if let instrument=selectedTrack?.instrument {
+            if let zone=instrument.sample?.zones?.first(where:{$0.pitch==pitch}),let asset=project.assets.first(where:{$0.id==zone.assetID}) {return "\(pitch) · \(asset.name)"}
+            if instrument.drums && instrument.kind == .soundBank,let name=[36:"킥",38:"스네어",39:"클랩",42:"닫힌 하이햇",46:"열린 하이햇",45:"톰",49:"크래시",51:"라이드"][pitch] {return "\(pitch) · \(name)"}
+        }
+        return "\(pitch) · \(Scale.roots[pitch%12])\(pitch/12-1)"
+    }
     func playingStep(in grid:StepGrid)->Int? {
         guard playback.playing,!hasPendingMusic,let plan=prepared?.plan,let node=selectedCircle,let clock=node.clock,
               let seconds=PlaybackPosition.localSeconds(for:node,at:meter.seconds,plan:plan,album:nil,albumID:project.album?.id) else{return nil}
@@ -31,15 +43,12 @@ struct StepEditor:View {
     let topPitch:Int
     @Binding var state:StepEditorState
     let focusTarget:MIDIEditorFocus
+    @State private var rowRequest:StepRowRequest?
     var grid:StepGrid? {try? StepGrid(subdivisions:state.subdivisions,beats:store.editorBeats)}
     var selected:Note? {store.currentLane?.notes.first{$0.id==store.selectedNoteID}}
     var pitches:[Int] {
         if !state.drumMode {return (0..<12).map{max(0,min(127,topPitch-1-$0))}.reduce(into:[Int]()){if !$0.contains($1){$0.append($1)}}}
-        let observed=Set((store.currentLane?.notes ?? []).map(\.pitch))
-        let mapped=Set(store.selectedTrack?.instrument.sample?.zones?.map(\.pitch) ?? [])
-        var result=observed.union(mapped).union(state.extraPitches)
-        if result.isEmpty {result.insert(store.selectedTrack?.instrument.sample?.rootPitch ?? 36)}
-        return result.sorted()
+        return StepRows.filter(store.stepRows(extra:state.extraPitches),query:state.rowQuery).map(\.pitch)
     }
     var body:some View {
         if let grid {
@@ -58,21 +67,24 @@ struct StepEditor:View {
                     }
                     Spacer(minLength:0)
                     if state.drumMode {
+                        Text("\(pitches.count)/\(store.stepRows(extra:state.extraPitches).count)행").monospacedDigit().foregroundStyle(StudioTheme.secondary).font(.system(size:11))
                         CommittedNumberField(title:"드럼 행 MIDI 음높이",value:Binding(get:{Double(state.newPitch)},set:{state.newPitch=Int($0)}),range:0...127,integerOnly:true,width:48)
-                        Button{state.extraPitches.insert(state.newPitch);focusTarget.focus()}label:{Image(systemName:"plus")}.accessibilityLabel("드럼 행 추가")
+                        Button{state.rowQuery="";state.extraPitches.insert(state.newPitch);rowRequest=StepRowRequest(pitch:state.newPitch)}label:{Image(systemName:"plus")}.accessibilityLabel("드럼 행 추가")
                     }
                 }
                 VStack(spacing:0) {
                     StepColumnHeader(store:store,meter:store.meter,grid:grid,page:min(state.page,grid.pageCount-1))
                     ScrollView(.vertical) {
-                        StepGridCanvas(store:store,grid:grid,page:min(state.page,grid.pageCount-1),pitches:pitches,focusTarget:focusTarget)
-                            .frame(height:CGFloat(pitches.count*28))
+                        StepGridCanvas(store:store,grid:grid,page:min(state.page,grid.pageCount-1),pitches:pitches,focusTarget:focusTarget,rowRequest:rowRequest)
+                            .frame(height:CGFloat(max(1,pitches.count)*28))
                     }
+                    if pitches.isEmpty {Text("일치하는 드럼 행이 없습니다").foregroundStyle(StudioTheme.secondary).padding(.vertical,8)}
                 }.frame(minHeight:100,maxHeight:.infinity)
             }
             .onAppear{reveal()}
             .onChange(of:selected){_,_ in reveal()}
             .onChange(of:store.editorBeats){_,_ in state.page=min(state.page,(self.grid?.pageCount ?? 1)-1)}
+            .onChange(of:store.stepRowScope){_,_ in rowRequest=nil}
         } else {Text("스텝 편집은 131,072박 이하의 음악 서클에서 사용할 수 있습니다").foregroundStyle(StudioTheme.secondary)}
     }
     func resolution(_ value:Int)->String {[1:"1/4",2:"1/8",3:"1/8 셋잇단",4:"1/16",6:"1/16 셋잇단",8:"1/32"][value] ?? "1/16"}
@@ -87,6 +99,8 @@ struct StepEditor:View {
         }catch{store.fail(error)}
     }
 }
+
+struct StepRowRequest:Equatable {let id=UUID();let pitch:Int}
 
 struct StepColumnHeader:View {
     @ObservedObject var store:AppStore
@@ -114,18 +128,41 @@ struct StepGridCanvas:NSViewRepresentable {
     let page:Int
     let pitches:[Int]
     let focusTarget:MIDIEditorFocus
+    let rowRequest:StepRowRequest?
     @Environment(\.isEnabled) private var enabled
     func makeNSView(context:Context)->StepGridView {let view=StepGridView(store:store,grid:grid,page:page,pitches:pitches);focusTarget.view=view;return view}
     func updateNSView(_ view:StepGridView,context:Context) {
         let note=store.currentLane?.notes.first{$0.id==store.selectedNoteID}
         let changed=view.grid != grid || view.page != page || view.pitches != pitches || view.lastSelection != note
+        let cursorPitch=view.pitches.indices.contains(view.row) ? view.pitches[view.row]:nil
         view.grid=grid;view.page=page;view.pitches=pitches;view.allowsEditing=enabled
-        view.row=min(view.row,max(0,pitches.count-1));view.column=min(view.column,max(0,view.columns-1))
+        view.row=cursorPitch.flatMap{pitches.firstIndex(of:$0)} ?? 0
+        view.column=min(view.column,max(0,view.columns-1))
         if changed,let note,let index=grid.index(at:note.beat),index/16==page,let row=pitches.firstIndex(of:note.pitch) {
             view.row=row;view.column=index%16
-            DispatchQueue.main.async{[weak view] in guard let view else{return};view.scrollToVisible(view.rect(row:view.row,column:view.column))}
+        }
+        if changed,!pitches.isEmpty {
+            let identity=store.numberEditIdentity
+            DispatchQueue.main.async{[weak view] in
+                guard let view,view.window != nil,view.store.numberEditIdentity==identity,
+                      view.grid==grid,view.page==page,view.pitches==pitches else{return}
+                view.scrollToVisible(view.rect(row:view.row,column:view.column))
+            }
         }
         view.lastSelection=note;view.needsDisplay=true
+        if view.lastRowRequestID != rowRequest?.id {
+            view.lastRowRequestID=rowRequest?.id
+            if let rowRequest {
+                let identity=store.numberEditIdentity
+                DispatchQueue.main.async{[weak view] in
+                    guard let view,let window=view.window,view.allowsEditing,
+                          view.lastRowRequestID==rowRequest.id,view.store.numberEditIdentity==identity,
+                          view.page==page,view.grid==grid,view.pitches==pitches,
+                          let row=view.pitches.firstIndex(of:rowRequest.pitch) else{return}
+                    view.choose(row:row,column:view.column);window.makeFirstResponder(view)
+                }
+            }
+        }
     }
 }
 @MainActor final class StepGridView:NSView {
@@ -135,19 +172,27 @@ struct StepGridCanvas:NSViewRepresentable {
     var pitches:[Int]
     var row=0,column=0
     var lastSelection:Note?
+    var lastRowRequestID:UUID?
     var allowsEditing=true
     var meterSubscription:AnyCancellable?
     var accessibilityKey=""
+    var accessibilityIdentity:NumberEditIdentity?
     var cellCacheKey=""
     var cellNotes:[Int:[Note]]=[:]
     var heldCells=Set<Int>()
     var columns:Int {min(16,max(0,grid.stepCount-page*16))}
     var cellWidth:Double {max(1,(bounds.width-116)/16)}
+    var visibleRows:Range<Int> {
+        let first=max(0,min(pitches.count,Int(floor(visibleRect.minY/28))))
+        let end=max(first,min(pitches.count,Int(ceil(visibleRect.maxY/28))))
+        return first..<end
+    }
     override var isFlipped:Bool {true}
     override var acceptsFirstResponder:Bool {true}
     init(store:AppStore,grid:StepGrid,page:Int,pitches:[Int]) {
         self.store=store;self.grid=grid;self.page=page;self.pitches=pitches;super.init(frame:.zero)
         setAccessibilityElement(true);setAccessibilityRole(.group);setAccessibilityLabel("스텝 편집기 · 방향키 선택 · Return 입력")
+        setAccessibilityHelp("행 이름은 선택만 합니다. Home·End 첫·마지막 행, PageUp·PageDown 화면 단위 이동")
         meterSubscription=store.meter.$seconds.sink{[weak self] _ in DispatchQueue.main.async{self?.needsDisplay=true}}
     }
     required init?(coder:NSCoder){fatalError()}
@@ -159,13 +204,7 @@ struct StepGridCanvas:NSViewRepresentable {
         }
     }
     func rect(row:Int,column:Int)->CGRect {CGRect(x:112+Double(column)*cellWidth+2,y:Double(row)*28+2,width:max(1,cellWidth-4),height:24)}
-    func label(_ pitch:Int)->String {
-        if let instrument=store.selectedTrack?.instrument {
-            if let zone=instrument.sample?.zones?.first(where:{$0.pitch==pitch}),let asset=store.project.assets.first(where:{$0.id==zone.assetID}) {return "\(pitch) · \(asset.name)"}
-            if instrument.drums && instrument.kind == .soundBank,let name=[36:"킥",38:"스네어",39:"클랩",42:"닫힌 하이햇",46:"열린 하이햇",45:"톰",49:"크래시",51:"라이드"][pitch] {return "\(pitch) · \(name)"}
-        }
-        return "\(pitch) · \(Scale.roots[pitch%12])\(pitch/12-1)"
-    }
+    func label(_ pitch:Int)->String {store.stepRowLabel(pitch)}
     var playingStep:Int? {
         store.playingStep(in:grid)
     }
@@ -188,7 +227,7 @@ struct StepGridCanvas:NSViewRepresentable {
         refreshCells();let playing=playingStep,selectedIDs=store.selectedMIDIIDs
         for col in 0..<columns {
             let index=page*16+col
-            for row in pitches.indices {
+            for row in visibleRows {
                 let rect=rect(row:row,column:col),onsets=cellNotes[row*16+col] ?? [],path=NSBezierPath(roundedRect:rect,xRadius:4,yRadius:4)
                 let focused=(self.row==row && self.column==col) || onsets.contains{selectedIDs.contains($0.id)}
                 (onsets.isEmpty ? (index%grid.subdivisions==0 ? StudioTheme.raisedNS:StudioTheme.surfaceNS):StudioTheme.accentNS.withAlphaComponent(0.32)).setFill();path.fill()
@@ -201,7 +240,7 @@ struct StepGridCanvas:NSViewRepresentable {
             }
         }
         let paragraph=NSMutableParagraphStyle();paragraph.lineBreakMode = .byTruncatingTail
-        for (i,pitch) in pitches.enumerated() {(label(pitch) as NSString).draw(in:CGRect(x:4,y:6+i*28,width:102,height:20),withAttributes:[.font:NSFont.systemFont(ofSize:12,weight:.medium),.foregroundColor:StudioTheme.textNS,.paragraphStyle:paragraph])}
+        for i in visibleRows {(label(pitches[i]) as NSString).draw(in:CGRect(x:4,y:6+i*28,width:102,height:20),withAttributes:[.font:NSFont.systemFont(ofSize:12,weight:.medium),.foregroundColor:StudioTheme.textNS,.paragraphStyle:paragraph])}
         updateAccessibility()
     }
     func choose(row:Int,column:Int) {
@@ -215,7 +254,8 @@ struct StepGridCanvas:NSViewRepresentable {
         guard allowsEditing else{return}
         window?.makeFirstResponder(self)
         let point=convert(event.locationInWindow,from:nil)
-        guard point.x>=112,point.y>=0 else{return}
+        guard point.x>=0,point.y>=0 else{return}
+        if point.x<112 {choose(row:Int(point.y/28),column:column);return}
         let row=Int(point.y/28),col=Int((point.x-112)/cellWidth)
         guard pitches.indices.contains(row),(0..<columns).contains(col) else{return}
         if event.modifierFlags.contains(.shift) {
@@ -239,6 +279,10 @@ struct StepGridCanvas:NSViewRepresentable {
         case 124:choose(row:row,column:min(columns-1,column+1))
         case 125:choose(row:min(pitches.count-1,row+1),column:column)
         case 126:choose(row:max(0,row-1),column:column)
+        case 115:choose(row:0,column:column)
+        case 119:choose(row:pitches.count-1,column:column)
+        case 116:choose(row:max(0,row-max(1,visibleRows.count-1)),column:column)
+        case 121:choose(row:min(pitches.count-1,row+max(1,visibleRows.count-1)),column:column)
         case 48:
             if event.modifierFlags.contains(.shift) {window?.selectPreviousKeyView(self)} else {window?.selectNextKeyView(self)}
         case 36,76:store.editStep(grid:grid,index:page*16+column,pitch:pitches[row]);needsDisplay=true
@@ -251,24 +295,40 @@ struct StepGridCanvas:NSViewRepresentable {
     }
     func updateAccessibility() {
         guard let window else{return}
-        let key="\(cellCacheKey):\(convert(bounds,to:nil)):\(window.frame):\(row):\(column)"
-        guard key != accessibilityKey else{return};accessibilityKey=key
+        let key="\(cellCacheKey):\(convert(bounds,to:nil)):\(window.frame):\(visibleRect):\(row):\(column):\(allowsEditing)"
+        let identity=store.numberEditIdentity
+        guard key != accessibilityKey || identity != accessibilityIdentity else{return}
+        accessibilityKey=key;accessibilityIdentity=identity
+        setAccessibilityValue(pitches.indices.contains(row) ? "\(label(pitches[row])) · \(page*16+column+1)스텝 · \(pitches.count)행":"일치하는 드럼 행이 없습니다")
         var children:[NSAccessibilityElement]=[]
-        for (row,pitch) in pitches.enumerated() {for col in 0..<columns {
-            let cell=StepCellAccessibility(parent:self,row:row,column:col)
-            cell.setAccessibilityLabel(label(pitch)+" · \(page*16+col+1)스텝")
-            cell.setAccessibilityValue(cellNotes[row*16+col]?.isEmpty==false ? "켜짐":heldCells.contains(row*16+col) ? "이전 스텝에서 이어짐":"꺼짐")
-            cell.setAccessibilityFrame(window.convertToScreen(convert(rect(row:row,column:col),to:nil)));children.append(cell)
-        }}
+        for row in visibleRows {
+            let pitch=pitches[row],header=StepCellAccessibility(parent:self,row:row,column:nil)
+            header.setAccessibilityLabel(label(pitch)+" · 행 선택")
+            header.setAccessibilityFrame(window.convertToScreen(convert(CGRect(x:0,y:row*28,width:112,height:28),to:nil)));children.append(header)
+            for col in 0..<columns {
+                let cell=StepCellAccessibility(parent:self,row:row,column:col)
+                cell.setAccessibilityLabel(label(pitch)+" · \(page*16+col+1)스텝")
+                cell.setAccessibilityValue(cellNotes[row*16+col]?.isEmpty==false ? "켜짐":heldCells.contains(row*16+col) ? "이전 스텝에서 이어짐":"꺼짐")
+                cell.setAccessibilityFrame(window.convertToScreen(convert(rect(row:row,column:col),to:nil)));children.append(cell)
+            }
+        }
         setAccessibilityChildren(children)
     }
 }
 @MainActor final class StepCellAccessibility:NSAccessibilityElement {
     weak var grid:StepGridView?
-    let row:Int,column:Int
-    init(parent:StepGridView,row:Int,column:Int) {self.grid=parent;self.row=row;self.column=column;super.init();setAccessibilityParent(parent);setAccessibilityRole(.button);setAccessibilityEnabled(true)}
+    let row:Int,column:Int?,pitch:Int,page:Int,stepGrid:StepGrid,identity:NumberEditIdentity
+    init(parent:StepGridView,row:Int,column:Int?) {
+        self.grid=parent;self.row=row;self.column=column;pitch=parent.pitches[row]
+        page=parent.page;stepGrid=parent.grid;identity=parent.store.numberEditIdentity
+        super.init();setAccessibilityParent(parent);setAccessibilityRole(.button);setAccessibilityEnabled(parent.allowsEditing)
+    }
     override func accessibilityPerformPress()->Bool {
-        guard let grid,grid.window != nil,grid.allowsEditing,grid.pitches.indices.contains(row),(0..<grid.columns).contains(column) else{return false}
-        grid.window?.makeFirstResponder(grid);grid.choose(row:row,column:column);grid.store.editStep(grid:grid.grid,index:grid.page*16+column,pitch:grid.pitches[row]);grid.needsDisplay=true;return true
+        guard let grid,grid.window != nil,grid.allowsEditing,grid.store.numberEditIdentity==identity,
+              grid.page==page,grid.grid==stepGrid,grid.pitches.indices.contains(row),grid.pitches[row]==pitch,
+              grid.visibleRows.contains(row),(0..<grid.columns).contains(column ?? grid.column) else{return false}
+        grid.window?.makeFirstResponder(grid);grid.choose(row:row,column:column ?? grid.column)
+        if let column {grid.store.editStep(grid:stepGrid,index:page*16+column,pitch:pitch)}
+        grid.needsDisplay=true;return true
     }
 }

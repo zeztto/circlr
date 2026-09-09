@@ -2,6 +2,12 @@
 
 0.1–0.3은 설계 문서 revision이며, 0.4.0부터 로컬 실행 프로토타입을 포함한다.
 
+## 개발 중 — 0.20.0 build 47 드럼 행 탐색
+
+- 드럼 스텝에서 행·샘플 이름·MIDI 번호를 바로 검색한다. 일치/전체 수·빈 결과·선택 행 복귀를 표시하며 Return/Esc로 격자에 돌아간다. Unicode/전각·대소문자와 ASCII 샵/플랫을 정규화한다.
+- 행 추가는 검색을 지우고 현재 스텝 열을 유지한 채 해당 pitch로 이동한다. 이름 클릭은 선택만 하며 Home/End·PageUp/PageDown으로 탐색한다. 필터·모드 변경 뒤 커서와 스크롤을 맞춘다.
+- 보이는 행만 그리기/AX에 노출하고 오래된 셀 action의 대상·pitch·페이지·격자를 검사한다. Swift 369개·Python 26개, 작은 창의 실제 검색·입력/Undo·대상 분리·저장 복원 및 패키지 검증을 통과했다. [계약](docs/61-step-row-navigation.md) · [QA](qa/step-row-navigation-review.md).
+
 ## 개발 중 — 0.20.0 build 46 MIDI 음역 탐색
 
 - 전체 MIDI 연주 분포와 현재 1/2옥타브 범위를 표시한다. 클릭·드래그·좌우/Shift 좌우·Home/End와 접근성으로 음역만 이동하며 Return/Esc는 노트 생성 없이 궤도로 복귀한다.
