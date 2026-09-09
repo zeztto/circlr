@@ -6,7 +6,9 @@ macOS용 앨범·송폼 궤도 편집기. **앨범 → 곡·악장 → 섹션 �
 
 연결 UI는 [서클 둘레 8방향 IN/OUT과 다중 입출력](docs/22-eight-direction-ports.md)으로 확장 중이다. 포트의 신호 의미와 연결점 배치를 분리한다. 아래 일반 사용법은 배포된 0.19 앱 기준이며 새 포트 기능은 독립 개발 브랜치에서 검증한다.
 
-현재 **`codex/daw-integration`의 0.20.0 build 57**에 녹음 lifecycle과 8방향·다중 bus·그룹 포트를 통합했다. 같은 캔버스의 연결 편집·녹음 상태·스텝·오토메이션이 공존하며, 녹음 시작·정리 중 음악 편집과 Undo의 경쟁을 차단한다. build 23의 실제 편집·바운스·Undo·저장/재열기·닫기 최소화 및 출력별 모션 검증은 [통합 QA](qa/daw-integration-review.md)에 기록했다.
+현재 **`codex/daw-integration`의 0.20.0 build 58**에 녹음 lifecycle과 8방향·다중 bus·그룹 포트를 통합했다. 같은 캔버스의 연결 편집·녹음 상태·스텝·오토메이션이 공존하며, 녹음 시작·정리 중 음악 편집과 Undo의 경쟁을 차단한다. build 23의 실제 편집·바운스·Undo·저장/재열기·닫기 최소화 및 출력별 모션 검증은 [통합 QA](qa/daw-integration-review.md)에 기록했다.
+
+build 58은 **오디오를 넣을 트랙을 같은 라이브러리 화면에서 검색**한다. 이름·번호, 동명 트랙 구분, 현재 대상 자동 스크롤, ↑↓·Return·Esc를 지원한다. 고른 뒤에도 번호·전체 이름 도움말이 남고 파일 선택과 시작 박을 유지한다. Swift **423개**·Python **26개**, 99트랙의 실제 검색·충돌 거절·9.5박 가져오기·Undo/Redo·저장 재열기를 확인했다. [사용법](docs/72-library-track-search.md) · [QA](qa/library-track-search-review.md).
 
 build 57은 **접힌 그룹 안의 오디오·MIDI·음색으로 바로 이동**한다. ⌘J/역할 버튼/MCP focus는 선택 경로만 화면에서 펼치고, Esc로 나오면 원래 접힘 상태를 보여준다. 음악 Undo/Redo와 그룹의 저장 상태를 유지하며 내부 편집 화면도 재열기에서 복원한다. Swift **419개**·Python **26개**, 실제 경로 왕복·음악/그룹 Undo·MCP·저장 복원을 확인했다. [사용법](docs/71-navigation-group-reveal.md) · [QA](qa/navigation-reveal-review.md).
 

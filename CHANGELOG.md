@@ -2,6 +2,12 @@
 
 0.1–0.3은 설계 문서 revision이며, 0.4.0부터 로컬 실행 프로토타입을 포함한다.
 
+## 개발 중 — 0.20.0 build 58 라이브러리 대상 트랙 검색
+
+- 단일 오디오의 긴 트랙 메뉴를 같은 화면의 이름·번호 검색 목록으로 바꿨다. Unicode 검색, 프로젝트 순서 번호, 대상 섹션의 오디오/MIDI 사용량, 긴 이름과 현재 대상 표시를 제공한다.
+- ↑↓·Return·클릭 선택과 Esc 복귀는 파일 검색·선택·시작 박·원본/이번 사용 범위를 유지한다. 선택 후 footer도 번호로 동명 트랙을 구별한다. 요청과 파일 ID가 바뀌면 오래된 선택을 거절한다.
+- Swift 423개·Python 26개, 마지막 관련 검사 9개, native 99트랙 검색·실제 import/Undo/Redo·저장 재열기와 패키지를 검증했다. [계약](docs/72-library-track-search.md) · [QA와 검증 경계](qa/library-track-search-review.md).
+
 ## 개발 중 — 0.20.0 build 57 접힌 그룹 작업 이동
 
 - ⌘J·트랙 역할 버튼·MCP focus가 선택 경로의 그룹만 scene에서 펼친다. 이동은 그룹의 collapsed/layout override·dirty·음악/포트 revision·Undo/Redo를 바꾸지 않는다.

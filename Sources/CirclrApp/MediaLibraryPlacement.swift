@@ -8,13 +8,13 @@ extension AppStore {
         do {_=try AudioImportPlacement.start(AudioImportPlacement.beat(request.destination),of:request.destination,in:project);return nil}
         catch{return error.localizedDescription}
     }
-    func changeLibraryPlacement(_ request:MediaImportRequest,change:(AudioImportDestination)throws->AudioImportDestination) {
-        guard libraryOpen,canStartMediaImport,libraryDestinationCurrent,libraryDestination==request else{library.notice="대상이 변경됐습니다. 가져오기 대상을 갱신하세요";return}
+    @discardableResult func changeLibraryPlacement(_ request:MediaImportRequest,change:(AudioImportDestination)throws->AudioImportDestination)->Bool {
+        guard libraryOpen,canStartMediaImport,libraryDestinationCurrent,libraryDestination==request else{library.notice="대상이 변경됐습니다. 가져오기 대상을 갱신하세요";return false}
         do {
             let target=try change(request.destination)
             libraryDestination=MediaImportRequest(projectID:request.projectID,revision:request.revision,generation:request.generation,selection:request.selection,destination:target)
-            library.notice=""
-        }catch{library.notice=error.localizedDescription}
+            library.notice="";return true
+        }catch{library.notice=error.localizedDescription;return false}
     }
     func chooseLibrarySection(_ address:CircleAddress,projectID:ID,revision:Int,generation:Int,selection:CircleAddress?) {
         guard libraryOpen,canStartMediaImport,project.id==projectID,project.musicRevision==revision,
@@ -64,11 +64,11 @@ struct LibraryPlacementControls:View {
                 }
                 Spacer(minLength:4)
                 if case .section(_,_,let track,_,_,_)=request.destination,library.chosen.count==1,library.chosen.first?.kind == .audio {
-                    Menu {
-                        Button("새 트랙"){store.changeLibraryPlacement(request){try AudioImportPlacement.track(nil,of:$0,in:store.project)}}
-                        ForEach(store.project.tracks){item in Button(item.name){store.changeLibraryPlacement(request){try AudioImportPlacement.track(item.id,of:$0,in:store.project)}}}
-                    }label:{Text(store.project.tracks.first{$0.id==track}?.name ?? "새 트랙").lineLimit(1).truncationMode(.middle)}
-                        .menuStyle(.borderlessButton).frame(maxWidth:160).accessibilityLabel("가져올 오디오 트랙")
+                    Button {
+                        if let entry=library.chosen.first {library.notice="";library.workspace = .track(request,entryID:entry.id)}
+                    }label:{Label(AudioImportPlacement.trackLabel(track,in:store.project),systemImage:"magnifyingglass").lineLimit(1).truncationMode(.middle)}
+                        .frame(maxWidth:180).accessibilityLabel("가져올 오디오 트랙 선택")
+                        .help(AudioImportPlacement.trackLabel(track,in:store.project)+" · 이름·번호로 대상 트랙 검색")
                         .disabled(!store.libraryDestinationCurrent || !store.canStartMediaImport)
                 }
             }.font(.system(size:12))

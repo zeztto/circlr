@@ -23,7 +23,7 @@ extension AppStore {
         case .pattern(let id,let beat):return "\(project.patterns.first{$0.id==id}?.name ?? "리듬") · \(BeatPosition.text(beat))박"
         case .section(let a,let u,let track,let beat,_,let original):
             let name=studioRoutes.first{$0.id == .section(arrangementID:a,useID:u)}.map{$0.path+" › "+$0.name} ?? project.arrangements.first{$0.id==a}?.uses.first{$0.id==u}?.name ?? "섹션"
-            let lane=library.chosen.count==1 && library.chosen.first?.kind == .midi ? "새 MIDI 트랙":library.chosenIDs.count>1 ? "새 트랙 \(library.chosenIDs.count)개":project.tracks.first{$0.id==track}?.name ?? "새 트랙"
+            let lane=library.chosen.count==1 && library.chosen.first?.kind == .midi ? "새 MIDI 트랙":library.chosenIDs.count>1 ? "새 트랙 \(library.chosenIDs.count)개":AudioImportPlacement.trackLabel(track,in:project)
             return "\(name) › \(lane) · \(BeatPosition.text(beat))박"+(original ? " · 공유 원본":"")
         }
     }
@@ -59,10 +59,12 @@ struct MediaLibraryView:View {
                 Button(library.workspace != .files ? "파일 검색":"폴더 관리 · \(library.folders.count)"){library.workspace = library.workspace == .files ? .folders:.files}
                 Button("폴더 추가…"){library.chooseFolder()}
                 Button{library.refresh()}label:{Image(systemName:"arrow.clockwise")}.help("등록 폴더 새로고침").accessibilityLabel("라이브러리 새로고침")
-                Button(library.choosingDestination ? "파일 목록 · Esc":"닫기 · Esc"){if library.choosingDestination{library.choosingDestination=false}else{store.closeMediaLibrary()}}.keyboardShortcut(.escape,modifiers:[]).foregroundStyle(StudioTheme.secondary)
+                Button(library.choosingDestination || library.choosingTrack ? "파일 목록 · Esc":"닫기 · Esc"){if library.choosingDestination || library.choosingTrack{library.workspace = .files}else{store.closeMediaLibrary()}}.keyboardShortcut(.escape,modifiers:[]).foregroundStyle(StudioTheme.secondary)
             }.padding(18)
             if library.foldersVisible {folderWorkspace} else if library.choosingDestination {
                 LibrarySectionChooser(store:store,library:library,projectID:store.project.id,revision:store.project.musicRevision,generation:store.mediaImportGeneration,selection:store.hierarchySelection)
+            } else if case .track(let request,let entryID)=library.workspace {
+                LibraryTrackChooser(store:store,library:library,request:request,entryID:entryID)
             } else {
             HStack(spacing:10) {
                 Image(systemName:"magnifyingglass").foregroundStyle(StudioTheme.secondary)

@@ -8,6 +8,8 @@
 
 build 57: 접힌 그룹 내부 작업 이동을 scene에만 적용하고 음악 이력을 보존했다. 상위 복귀·명시적 그룹 Undo·MCP·저장된 편집 화면 재열기를 검증했다. [계약](71-navigation-group-reveal.md) · [QA](../qa/navigation-reveal-review.md).
 
+build 58: 추가 에이전트 재시도가 실제 `agent thread limit reached`로 거절되어 순차 역할 전환을 유지했다. 오디오 대상 트랙 검색·번호 구분과 요청 충돌 보호를 구현하고 99트랙 native import/Undo/Redo·저장 재열기를 검증했다. [계약](72-library-track-search.md) · [QA](../qa/library-track-search-review.md).
+
 ## 상태와 남은 완료 조건
 
 | 작업 | 현재 구현 | 확장·완료 조건 |
@@ -15,7 +17,7 @@ build 57: 접힌 그룹 내부 작업 이동을 scene에만 적용하고 음악 
 | 스텝 | 0.16 구현·native 검증 완료 | 일반 Note/Lane을 그대로 편집하는 16-step page, 드럼/음정 row, 해상도, 세기/길이, 키보드, MCP, Undo/바운스 |
 | MIDI | 0.17 선택/quantize/transpose/복제·format 0/1 노트 import, 기존 MIDI 녹음/테이크. build 50 다중 노트 드래그/길이·Undo ([QA](../qa/midi-group-drag-review.md)), build 51 음높이/시작 박 조건 선택·반전·해제 ([QA](../qa/midi-selection-tools-review.md)) | CC/페달/피치 벤드·tempo map import·고급 연주 편집 |
 | 오디오 녹음 | 0.20 소스·검증 앱: 비동기 시작/종료·취소·실패 복구·입력 상태·MCP·atomic take, 오프라인 왕복·native 재열기/대기 버튼 검사 통과 | 허용된 실제 입력·녹음 중 UI→편집→bounce·Undo·재열기와 출고 |
-| 파일 가져오기 | build 52 다중 선택·폴더별 batch·원자적 실패/Undo, build 53 폴더 관리·오류 복구, build 54 섹션 검색·시작 박/트랙, build 55 가져오기와 편집 위치 표시 통일·실제 import/Undo ([QA](../qa/beat-position-review.md)) | 중첩 폴더 catalog dedup·실제 file promise·직접 배치 gesture |
+| 파일 가져오기 | build 52 다중 선택·폴더별 batch·원자적 실패/Undo, build 53 폴더 관리·오류 복구, build 54 섹션 검색·시작 박/트랙, build 55 위치 표시 통일, build 58 대상 트랙 검색·번호 구분·실제 import/Undo ([QA](../qa/library-track-search-review.md)) | 중첩 폴더 catalog dedup·실제 file promise·직접 배치 gesture |
 | 오디오 편집 | 0.18 split/duplicate/fade/mute/delete·MCP·native PCM·Undo/저장 검증 | 전체 source로 trim 재확장, crossfade·time warp·comping·window 처리 cache |
 | 오토메이션 | 0.19 gain/pan·선형/유지·궤도/선형 편집·MCP·native WAV/Undo/저장 검증 | synth filter·plugin parameter·MIDI CC·전역 bus, 실시간 write/touch/latch |
 | 엔진 | prepared PCM, 일부 live synth/recording | 장치 lifecycle, transport/record sync, 이후 continuous render/PDC·plugin crash 격리 |

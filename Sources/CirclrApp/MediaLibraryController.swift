@@ -39,11 +39,12 @@ func mediaLibraryError(_ error:Error)->String {
     @Published private(set) var selectedID:String?
     @Published private(set) var chosenIDs:Set<String>=[]
     private var rangeAnchor:String?
-    enum Workspace {case files,folders,destination}
+    enum Workspace:Equatable {case files,folders,destination,track(MediaImportRequest,entryID:String)}
     @Published var workspace=Workspace.files {didSet{if workspace != .files{stopPreview()}}}
     @Published var searchFocus=UUID()
     var foldersVisible:Bool {get{workspace == .folders}set{workspace=newValue ? .folders:.files}}
     var choosingDestination:Bool {get{workspace == .destination}set{workspace=newValue ? .destination:.files}}
+    var choosingTrack:Bool {if case .track=workspace{return true};return false}
     @Published private(set) var scanning=false
     @Published private(set) var searching=false
     @Published var notice=""
