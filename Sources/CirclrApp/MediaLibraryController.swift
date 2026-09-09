@@ -39,9 +39,13 @@ func mediaLibraryError(_ error:Error)->String {
     @Published private(set) var selectedID:String?
     @Published private(set) var chosenIDs:Set<String>=[]
     private var rangeAnchor:String?
+    @Published var foldersVisible=false {didSet{if foldersVisible{stopPreview()}}}
     @Published private(set) var scanning=false
     @Published private(set) var searching=false
     @Published var notice=""
+    @Published private(set) var scanNotice=""
+    @Published private(set) var folderLocations:[String:String]=[:]
+    @Published private(set) var folderIssues:[String:String]=[:]
     @Published private(set) var detail="파일을 선택하세요"
     @Published private(set) var previewPreparing=false
     @Published private(set) var previewing=false
@@ -51,12 +55,20 @@ func mediaLibraryError(_ error:Error)->String {
     private var keyMonitor:Any?
     private var scanGeneration=0,searchGeneration=0,selectionGeneration=0,previewGeneration=0
     private var scanTask:Task<Void,Never>?,searchTask:Task<Void,Never>?,detailTask:Task<Void,Never>?,previewTask:Task<Void,Never>?
-    private var scanWorker:Task<([LibraryEntry],[String],[String:Data]),Error>?
+    private var scanWorker:Task<([LibraryEntry],[String:String],[String:Data],[String:String]),Error>?
     private var searchWorker:Task<[LibraryEntry],Never>?
     private var detailWorker:Task<LibraryMediaInfo,Error>?
     private var previewWorker:Task<Void,Error>?
     private let defaults:UserDefaults
     private let key="circlr.mediaLibrary.folders.v1"
+    var folderLabels:[String:String] {MediaLibraryFolderDisplay.labels(folders.map{LibraryFolderLocation(id:$0.id,name:$0.name,path:folderLocations[$0.id])})}
+    func folderLabel(_ id:String)->String {folderLabels[id] ?? "폴더"}
+    func folderStatus(_ id:String)->String {
+        if scanning{return "파일 읽는 중"}
+        let count="\(entries.filter{$0.folderID==id}.count)개 파일"
+        return folderIssues[id].map{count+" · "+$0} ?? count
+    }
+    func showFiles(_ id:String) {guard folders.contains(where:{$0.id==id}) else{return};folderFilter=id;query=""}
     var selected:LibraryEntry? {entries.first{$0.id==selectedID}}
     var chosen:[LibraryEntry] {results.filter{chosenIDs.contains($0.id)}}
     var selectionIssue:String? {
@@ -68,7 +80,7 @@ func mediaLibraryError(_ error:Error)->String {
         self.defaults=defaults
         if let data=defaults.data(forKey:key) {
             do {folders=try JSONDecoder().decode([LibraryFolder].self,from:data)}
-            catch {notice="등록 폴더 설정을 읽지 못했습니다. 폴더를 다시 추가하세요"}
+            catch {scanNotice="등록 폴더 설정을 읽지 못했습니다. 폴더를 다시 추가하세요"}
         }
     }
     private func persist() {do{defaults.set(try JSONEncoder().encode(folders),forKey:key)}catch{notice=mediaLibraryError(error)}}
@@ -86,46 +98,51 @@ func mediaLibraryError(_ error:Error)->String {
         } catch {notice="폴더 추가 실패: \(mediaLibraryError(error))"}
     }
     func removeFolder(_ id:String) {
-        stopPreview();folders.removeAll{$0.id==id};persist()
+        stopPreview();folders.removeAll{$0.id==id};folderLocations.removeValue(forKey:id);folderIssues.removeValue(forKey:id);persist()
         if folderFilter==id {folderFilter=nil}
         entries.removeAll{$0.folderID==id};filter();refresh()
     }
     func refresh() {
         scanGeneration+=1;let generation=scanGeneration,sources=folders
         scanTask?.cancel();scanWorker?.cancel();scanning = !sources.isEmpty;notice=""
-        if sources.isEmpty {entries=[];filter();return}
-        let worker=Task.detached(priority:.utility) { () throws -> ([LibraryEntry],[String],[String:Data]) in
-            var all:[LibraryEntry]=[],warnings:[String]=[],bookmarks:[String:Data]=[:]
+        if sources.isEmpty {entries=[];folderLocations=[:];folderIssues=[:];scanNotice="";filter();return}
+        let worker=Task.detached(priority:.utility) { () throws -> ([LibraryEntry],[String:String],[String:Data],[String:String]) in
+            var all:[LibraryEntry]=[],warnings:[String:String]=[:],bookmarks:[String:Data]=[:],locations:[String:String]=[:]
             for folder in sources {
                 try Task.checkCancellation()
-                if all.count>=50_000 {warnings.append("전체 50,000개 검색 한도에 도달했습니다. 더 작은 폴더를 등록하세요");break}
+                if all.count>=50_000 {warnings[folder.id]="전체 50,000개 검색 한도에 도달해 이 폴더를 읽지 못했습니다";continue}
                 do {
                     let access=try LibraryAccess(folder)
+                    locations[folder.id]=access.url.path
                     if access.bookmarkWasStale {
                         do {bookmarks[folder.id]=try access.url.bookmarkData(options:[.withSecurityScope,.securityScopeAllowOnlyReadAccess],includingResourceValuesForKeys:nil,relativeTo:nil)}
-                        catch {warnings.append(folder.name+": 폴더 위치를 보관하지 못했습니다. 다시 추가하세요")}
+                        catch {warnings[folder.id]="폴더 위치를 보관하지 못했습니다. 다시 추가하세요"}
                     }
                     let result=try MediaLibrary.scan(access.url,folderID:folder.id,folderName:folder.name,limit:50_000-all.count)
                     all += result.entries
-                    if result.limited {warnings.append(folder.name+": 검색 한도에 도달했습니다. 더 작은 폴더를 등록하세요")}
-                    if result.skipped>0 {warnings.append(folder.name+": \(result.skipped)개 항목을 읽지 못했습니다")}
+                    if result.limited {warnings[folder.id]="검색 한도에 도달했습니다. 더 작은 폴더를 등록하세요"}
+                    if result.skipped>0 {warnings[folder.id]=[warnings[folder.id],"\(result.skipped)개 항목을 읽지 못했습니다"].compactMap{$0}.joined(separator:" · ")}
                 } catch is CancellationError {throw CancellationError()}
-                catch {warnings.append(folder.name+": 폴더를 읽지 못했습니다. 연결 또는 접근 권한을 확인하세요")}
+                catch {warnings[folder.id]="폴더를 읽지 못했습니다. 연결 또는 접근 권한을 확인하세요"}
             }
-            return (all,warnings,bookmarks)
+            return (all,warnings,bookmarks,locations)
         }
         scanWorker=worker
         scanTask=Task { [weak self] in
             do {
-                let (entries,warnings,bookmarks)=try await worker.value
+                let (entries,warnings,bookmarks,locations)=try await worker.value
                 guard let self,self.scanGeneration==generation,!Task.isCancelled else{return}
                 for index in self.folders.indices {if let data=bookmarks[self.folders[index].id]{self.folders[index].bookmark=data}}
                 if !bookmarks.isEmpty{self.persist()}
-                self.scanning=false;self.entries=entries;self.notice=warnings.joined(separator:"\n");self.filter()
+                self.scanning=false;self.entries=entries;self.folderIssues=warnings
+                self.folderLocations.merge(locations){_,current in current}
+                self.scanNotice=self.folders.compactMap{folder in warnings[folder.id].map{self.folderLabel(folder.id)+": "+$0}}.joined(separator:"\n")
+                self.filter()
             } catch {guard let self,self.scanGeneration==generation else{return};self.scanning=false}
         }
     }
     private func filter() {
+        notice=""
         searchGeneration+=1;let generation=searchGeneration,entries=entries,query=query,folder=folderFilter,kind=kindFilter
         searchTask?.cancel();searchWorker?.cancel();searching=true
         searchTask=Task { [weak self] in
@@ -144,6 +161,7 @@ func mediaLibraryError(_ error:Error)->String {
     }
     func select(_ id:String?,force:Bool=false,preserving:Bool=false) {
         guard !searching else{return}
+        notice=""
         if !preserving {let next:Set<String>=id.map{[$0]} ?? [];if chosenIDs != next{stopPreview()};chosenIDs=next;rangeAnchor=id}
         guard force || id != selectedID else{return}
         stopPreview();selectedID=id;selectionGeneration+=1;let generation=selectionGeneration
@@ -181,9 +199,9 @@ func mediaLibraryError(_ error:Error)->String {
     func selectAll() {
         guard !searching else{return}
         guard results.count<=MediaLibrarySelection.limit else{notice="한 번에 최대 64개 파일을 선택하세요. 검색 범위를 줄이세요";return}
-        stopPreview();chosenIDs=Set(results.map(\.id))
+        notice="";stopPreview();chosenIDs=Set(results.map(\.id))
     }
-    func clearSelection(){guard !searching else{return};stopPreview();chosenIDs=[]}
+    func clearSelection(){guard !searching else{return};notice="";stopPreview();chosenIDs=[]}
     func accessSelection()throws->([LibraryEntry],[LibraryAccess],[URL]) {
         let entries=try MediaLibrarySelection.entries(results,ids:chosenIDs)
         try MediaLibrarySelection.validate(entries)
@@ -207,6 +225,7 @@ func mediaLibraryError(_ error:Error)->String {
         }
     }
     func togglePreview() {
+        guard !foldersVisible else{return}
         if previewPreparing || previewing {stopPreview();return}
         guard !previewPending else{notice="이전 출력 준비를 정리하고 있습니다. 잠시 뒤 다시 시도하세요";return}
         guard let entry=selected,entry.kind == .audio,let folder=folders.first(where:{$0.id==entry.folderID}) else{return}

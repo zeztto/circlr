@@ -6,7 +6,9 @@ macOS용 앨범·송폼 궤도 편집기. **앨범 → 곡·악장 → 섹션 �
 
 연결 UI는 [서클 둘레 8방향 IN/OUT과 다중 입출력](docs/22-eight-direction-ports.md)으로 확장 중이다. 포트의 신호 의미와 연결점 배치를 분리한다. 아래 일반 사용법은 배포된 0.19 앱 기준이며 새 포트 기능은 독립 개발 브랜치에서 검증한다.
 
-현재 **`codex/daw-integration`의 0.20.0 build 52**에 녹음 lifecycle과 8방향·다중 bus·그룹 포트를 통합했다. 같은 캔버스의 연결 편집·녹음 상태·스텝·오토메이션이 공존하며, 녹음 시작·정리 중 음악 편집과 Undo의 경쟁을 차단한다. build 23의 실제 편집·바운스·Undo·저장/재열기·닫기 최소화 및 출력별 모션 검증은 [통합 QA](qa/daw-integration-review.md)에 기록했다.
+현재 **`codex/daw-integration`의 0.20.0 build 53**에 녹음 lifecycle과 8방향·다중 bus·그룹 포트를 통합했다. 같은 캔버스의 연결 편집·녹음 상태·스텝·오토메이션이 공존하며, 녹음 시작·정리 중 음악 편집과 Undo의 경쟁을 차단한다. build 23의 실제 편집·바운스·Undo·저장/재열기·닫기 최소화 및 출력별 모션 검증은 [통합 QA](qa/daw-integration-review.md)에 기록했다.
+
+build 53은 **라이브러리의 폴더 관리 단계를 줄이고 오류 복구 표시를 정리**한다. 같은 화면에서 경로·파일 수·읽기 상태를 보고 바로 검색하거나 등록을 해제한다. 동명 폴더를 상위 경로로 구분하며, 선택을 수정하면 해결된 오류만 사라진다. 검색어·다중 선택의 관리 화면 왕복과 Escape, 가져온 음악을 보존하는 등록 해제·Undo·저장 복원을 확인했다. [사용법](docs/67-library-folder-workspace.md) · [QA](qa/library-folders-review.md).
 
 build 52는 **샘플 라이브러리에서 여러 오디오를 한 번에 가져온다.** 체크박스·⇧↑↓ 범위·모두 선택/해제로 최대 64개를 고르고 각 새 트랙의 같은 시작 박에 배치한다. 선택 수·현재 파일·대상을 표시하며 MIDI 혼합과 손상 파일의 부분 적용을 막는다. Swift **391개**·Python **26개**, 두 폴더의 실제 가져오기→한 번 Undo/Redo→저장·재열기와 원본 보존을 확인했다. [사용법](docs/66-library-batch-import.md) · [QA](qa/library-batch-review.md).
 

@@ -5,7 +5,7 @@ import CirclrAudio
 extension AppStore {
     func showMediaLibrary() {
         commandPalette=nil;navigationOpen=false;keyboardHelp=false
-        refreshLibraryDestination();libraryOpen=true;library.refresh()
+        library.foldersVisible=false;refreshLibraryDestination();libraryOpen=true;library.refresh()
         library.watchKeyboard{[weak self] in self?.libraryOpen == true && self?.canStartMediaImport == true}
     }
     func closeMediaLibrary() {libraryOpen=false;focusCanvas?()}
@@ -28,6 +28,7 @@ extension AppStore {
         }
     }
     func importLibrarySelection() {
+        library.notice=""
         guard libraryOpen,!library.searching,canStartMediaImport,libraryDestinationCurrent,let request=libraryDestination else{library.notice="가져오기 대상을 갱신하고 재생·녹음을 정지하세요";return}
         do {
             let (entries,access,urls)=try library.accessSelection()
@@ -40,7 +41,7 @@ extension AppStore {
             } else {
                 beginAudioImport(urls,request:request,retaining:access);closeMediaLibrary()
             }
-        } catch {library.notice="가져오기 실패: \(mediaLibraryError(error))"}
+        } catch {if library.selectionIssue==nil{library.notice="가져오기 실패: \(mediaLibraryError(error))"}}
     }
 }
 
@@ -53,10 +54,13 @@ struct MediaLibraryView:View {
         VStack(alignment:.leading,spacing:0) {
             HStack {
                 Text("샘플 라이브러리").font(.system(size:18,weight:.semibold))
-                Spacer();Button("폴더 추가…"){library.chooseFolder()}
+                Spacer()
+                Button(library.foldersVisible ? "파일 검색":"폴더 관리 · \(library.folders.count)"){library.foldersVisible.toggle()}
+                Button("폴더 추가…"){library.chooseFolder()}
                 Button{library.refresh()}label:{Image(systemName:"arrow.clockwise")}.help("등록 폴더 새로고침").accessibilityLabel("라이브러리 새로고침")
-                Button("닫기 · Esc"){store.closeMediaLibrary()}.foregroundStyle(StudioTheme.secondary)
+                Button("닫기 · Esc"){store.closeMediaLibrary()}.keyboardShortcut(.escape,modifiers:[]).foregroundStyle(StudioTheme.secondary)
             }.padding(18)
+            if library.foldersVisible {folderWorkspace} else {
             HStack(spacing:10) {
                 Image(systemName:"magnifyingglass").foregroundStyle(StudioTheme.secondary)
                 CommandSearchField(text:$library.query,onMove:library.move,onSubmit:store.importLibrarySelection,onCancel:store.closeMediaLibrary,placeholder:"파일명 · 하위 폴더 · 형식 검색",onExtend:library.extend)
@@ -64,12 +68,9 @@ struct MediaLibraryView:View {
             HStack(spacing:16) {
                 Menu {
                     Button("모든 폴더"){library.folderFilter=nil}
-                    ForEach(library.folders){folder in Button(folder.name){library.folderFilter=folder.id}}
-                    if !library.folders.isEmpty {
-                        Divider();Menu("목록에서 폴더 제거") {ForEach(library.folders){folder in Button(folder.name){library.removeFolder(folder.id)}}}
-                    }
-                }label:{Label(library.folders.first{$0.id==library.folderFilter}?.name ?? "모든 폴더",systemImage:"folder")}
-                    .accessibilityLabel("검색 폴더 선택")
+                    ForEach(library.folders){folder in Button(library.folderLabel(folder.id)){library.folderFilter=folder.id}}
+                }label:{Label(library.folderFilter.map{library.folderLabel($0)} ?? "모든 폴더",systemImage:"folder").lineLimit(1).truncationMode(.middle)}
+                    .frame(maxWidth:250,alignment:.leading).accessibilityLabel("검색 폴더 선택").accessibilityValue(library.folderFilter.map{library.folderLabel($0)} ?? "모든 폴더")
                 Menu {
                     Button("모든 형식"){library.kindFilter=nil};Button("오디오"){library.kindFilter = .audio};Button("MIDI"){library.kindFilter = .midi}
                 }label:{Text(library.kindFilter.map{$0 == .audio ? "오디오":"MIDI"} ?? "모든 형식")}.accessibilityLabel("샘플 형식 선택")
@@ -78,7 +79,7 @@ struct MediaLibraryView:View {
                 Button("해제"){library.clearSelection()}.disabled(library.searching || library.chosenIDs.isEmpty).accessibilityLabel("샘플 선택 해제")
                 Text(library.scanning ? "폴더 읽는 중":library.searching ? "검색 중":"\(library.results.count)개 파일").foregroundStyle(StudioTheme.secondary).monospacedDigit()
             }.menuStyle(.borderlessButton).padding(.horizontal,18).padding(.vertical,10).background(StudioTheme.raised)
-            if !library.notice.isEmpty {Text(library.notice).font(.system(size:12)).foregroundStyle(StudioTheme.accent).fixedSize(horizontal:false,vertical:true).lineLimit(3).help(library.notice).padding(.horizontal,18).padding(.vertical,8)}
+            notices
             ScrollViewReader { proxy in
                 ScrollView {
                     if library.results.isEmpty {
@@ -89,7 +90,7 @@ struct MediaLibraryView:View {
                     }
                     LazyVStack(spacing:1) {
                         ForEach(library.results){entry in
-                            LibraryResultRow(entry:entry,selected:library.chosenIDs.contains(entry.id),focused:library.selectedID==entry.id,select:{library.select(entry.id)},toggle:{library.toggleSelection(entry.id)}).disabled(library.searching)
+                            LibraryResultRow(entry:entry,folderLabel:library.folderLabel(entry.folderID),selected:library.chosenIDs.contains(entry.id),focused:library.selectedID==entry.id,select:{library.select(entry.id)},toggle:{library.toggleSelection(entry.id)}).disabled(library.searching)
                         }
                     }
                 }.onChange(of:library.selectedID){_,id in if let id{proxy.scrollTo(id,anchor:.center)}}
@@ -118,20 +119,65 @@ struct MediaLibraryView:View {
                 }
                 Text(store.libraryDestination != nil && !store.libraryDestinationCurrent ? "곡이나 선택이 변경되었습니다. 가져오기 대상을 확인하고 갱신하세요":"체크박스 여러 파일 · ↑↓ 한 파일 · ⇧↑↓ 범위 · Return 가져오기 · ⌥Space 현재 파일 듣기").font(.system(size:11)).foregroundStyle(StudioTheme.secondary)
             }.padding(18)
+            }
         }.frame(width:850,height:560).background(StudioTheme.surface,in:RoundedRectangle(cornerRadius:10))
             .overlay{RoundedRectangle(cornerRadius:10).stroke(StudioTheme.line,lineWidth:1)}
             .onChange(of:store.canStartMediaImport){_,ready in if !ready{library.stopPreview()}}
+    }
+    @ViewBuilder private var notices:some View {
+        if !library.notice.isEmpty {
+            HStack(alignment:.top,spacing:12) {
+                Text(library.notice).fixedSize(horizontal:false,vertical:true).lineLimit(3).help(library.notice)
+                Spacer(minLength:0)
+                Button{library.notice=""}label:{Image(systemName:"xmark")}.accessibilityLabel("라이브러리 안내 닫기")
+            }.font(.system(size:12)).foregroundStyle(StudioTheme.accent).padding(.horizontal,18).padding(.vertical,8)
+        }
+        if !library.foldersVisible && !library.scanNotice.isEmpty {
+            Text(library.scanNotice).font(.system(size:12)).foregroundStyle(StudioTheme.accent).fixedSize(horizontal:false,vertical:true).lineLimit(3).help(library.scanNotice).padding(.horizontal,18).padding(.vertical,8)
+        }
+    }
+    private var folderWorkspace:some View {
+        VStack(alignment:.leading,spacing:0) {
+            Text("등록을 해제해도 원본 파일과 곡에 가져온 오디오는 유지됩니다.")
+                .font(.system(size:12)).foregroundStyle(StudioTheme.secondary).padding(.horizontal,18).padding(.bottom,14)
+            notices
+            ScrollView {
+                if library.folders.isEmpty {
+                    Text("검색할 샘플 폴더를 추가하세요").frame(maxWidth:.infinity).padding(.vertical,50)
+                }
+                LazyVStack(spacing:0) {
+                    ForEach(library.folders){folder in
+                        VStack(alignment:.leading,spacing:8) {
+                            HStack(spacing:12) {
+                                Text(library.folderLabel(folder.id)).font(.system(size:14,weight:.medium)).lineLimit(1).truncationMode(.middle)
+                                Spacer(minLength:8)
+                                Button("파일 보기"){library.showFiles(folder.id);library.foldersVisible=false}.accessibilityLabel("\(library.folderLabel(folder.id)) 파일 보기")
+                                Button("등록 해제"){library.removeFolder(folder.id)}.accessibilityLabel("\(library.folderLabel(folder.id)) 등록 해제")
+                            }
+                            Text(library.folderLocations[folder.id] ?? "폴더 위치를 확인할 수 없습니다")
+                                .font(.system(size:12)).foregroundStyle(StudioTheme.secondary).lineLimit(2).truncationMode(.middle).textSelection(.enabled)
+                                .help(library.folderLocations[folder.id] ?? folder.name)
+                            Text(library.folderStatus(folder.id))
+                                .font(.system(size:12)).foregroundStyle(library.folderIssues[folder.id]==nil ? StudioTheme.secondary:StudioTheme.accent)
+                                .fixedSize(horizontal:false,vertical:true)
+                        }.padding(18)
+                        Divider().overlay(StudioTheme.line)
+                    }
+                }
+            }
+        }.frame(maxWidth:.infinity,maxHeight:.infinity,alignment:.topLeading)
     }
 }
 
 
 private struct LibraryResultRow:View {
     let entry:LibraryEntry
+    let folderLabel:String
     let selected:Bool
     let focused:Bool
     let select:()->Void
     let toggle:()->Void
-    private var path:String {entry.folderName+" / "+entry.relativePath}
+    private var path:String {folderLabel+" / "+entry.relativePath}
     private var typeName:String {entry.kind == .midi ? "MIDI":(entry.name as NSString).pathExtension.uppercased()}
     var body:some View {
         HStack(spacing:0) {
