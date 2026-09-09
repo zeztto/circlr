@@ -90,7 +90,7 @@ struct AudioWorkspaceView:View {
     @State private var focusTarget=AudioEditorFocus()
     @State private var fieldFocus=NumberFieldFocus([
         "오디오 배치 박","오디오 원본 시작 초","오디오 원본 끝 초","오디오 분할 위치 초",
-        "오디오 볼륨 dB","오디오 페이드 인 ms","오디오 페이드 아웃 ms","오디오 원본 BPM"])
+        "오디오 볼륨 dB","오디오 페이드 인 ms","오디오 페이드 아웃 ms","오디오 원본 BPM"],revealOnFocus:true)
     var liveClip:AudioClip {store.currentAudioClip ?? clip}
     var rate:Double {
         guard let node=store.selectedMusic,let clock=store.sectionClock else{return 1}
@@ -105,6 +105,7 @@ struct AudioWorkspaceView:View {
     var cursorOutside:Bool {!viewport.contains(sourceCursor,assetDuration:asset.duration)}
     var body:some View {
         let scopeIdentity=store.numberEditIdentity
+        GeometryReader { geometry in
         VStack(alignment:.leading,spacing:8) {
             HStack(spacing:12) {
                 Toggle(store.editOriginal ? "공유 원본":"이번 사용",isOn:Binding(get:{store.editOriginal},set:{value in
@@ -113,20 +114,32 @@ struct AudioWorkspaceView:View {
                     .accessibilityValue(store.editOriginal ? "공유 원본":"이번 사용")
                     .help(store.editOriginal ? "같은 원본을 사용하는 다른 섹션 사용에도 오디오 편집이 반영됩니다":"오디오 편집은 이번 사용에만 반영됩니다. 체크하면 공유 원본을 편집합니다")
                 Text(asset.name).foregroundStyle(StudioTheme.secondary).lineLimit(1).help(asset.name)
-                Spacer(minLength:8)
+                Spacer(minLength:0)
+            }
+            OrbitAudioEditor(store:store,clip:liveClip,asset:asset,viewport:$viewport,focusTarget:focusTarget)
+                .frame(maxWidth:.infinity)
+                .frame(height:min(store.project.usesOrbits ? 160:140,max(80,geometry.size.height-100)))
+            ScrollView {
+            VStack(alignment:.leading,spacing:10) {
+                MIDIWorkspaceToolbarLayout {
+                    HStack(spacing:10) {
                 Button("분할"){act{store.splitAudio()}}
                     .disabled(store.audioCutOffset<=0 || store.audioCutOffset>=liveClip.duration)
                     .help("선택 시작 기준 커서에서 두 서클로 분할 · ⌘T")
                 Button(store.audioDuplicateIssue==nil ? "복제":"복제 · 공간 없음"){act{store.duplicateAudio()}}.disabled(store.audioDuplicateIssue != nil).help(store.audioDuplicateIssue ?? "구간 뒤로 복제 · ⌘D")
+                    }.fixedSize(horizontal:true,vertical:false)
+                    HStack(spacing:10) {
                 TrackBounceButton(store:store)
                 if store.selectedMusic?.bounce != nil {Button("원본 복원"){act{store.restoreBounce()}}}
+                    }.fixedSize(horizontal:true,vertical:false)
+                    HStack(spacing:10) {
                 Toggle("템포 추종",isOn:Binding(get:{liveClip.followsTempo},set:{value in store.editAudioClip(liveClip){$0.followsTempo=value}}))
                 Toggle("음소거",isOn:Binding(get:{store.musicEditingNode?.muted ?? false},set:{v in store.updateMusic("오디오 음소거"){$0.muted=v}}))
                 Button("삭제"){act{store.applyAudioEdit(.delete,label:"오디오 삭제")}}
-            }
-            OrbitAudioEditor(store:store,clip:liveClip,asset:asset,viewport:$viewport,focusTarget:focusTarget)
-                .frame(maxWidth:.infinity,maxHeight:.infinity)
-            HStack(spacing:10) {
+                    }.fixedSize(horizontal:true,vertical:false)
+                }
+                MIDIWorkspaceToolbarLayout {
+                    HStack(spacing:10) {
                 Button("수치 입력"){_ = fieldFocus.enter(in:focusTarget.view?.window)}
                     .help("파형에서 Tab 첫 수치 · ⇧Tab 마지막 수치 · Return/Esc 파형 복귀")
                 Button("전체 파일"){viewport.showAll();focusTarget.focus()}.disabled(viewport.fitted==nil)
@@ -135,13 +148,14 @@ struct AudioWorkspaceView:View {
                     .help((selectionOutside ? "화면 밖 선택 구간까지 다시 맞춤":"현재 구간을 확대 · 편집 중 표시 범위 유지")+" · 파형에서 F")
                 Button {zoom(0.5)} label:{Image(systemName:"minus")}.accessibilityLabel("오디오 파형 축소").help("파형 축소 · −")
                 Button {zoom(2)} label:{Image(systemName:"plus")}.accessibilityLabel("오디오 파형 확대").help("파형 확대 · +")
-                Spacer(minLength:0)
+                    }.fixedSize(horizontal:true,vertical:false)
+                    HStack(spacing:10) {
                 Text(String(format:"원본 %.3f초 · 재생 %.3f초",liveClip.duration,liveClip.duration/max(1e-9,rate)))
                     .font(.system(size:11)).monospacedDigit().foregroundStyle(StudioTheme.secondary)
-                Spacer(minLength:0)
                 Button("커서 보기"){viewport.reveal(sourceCursor,assetDuration:asset.duration);focusTarget.focus()}
                     .disabled(!cursorOutside).help("화면 밖 분할 커서를 현재 배율로 찾기 · C")
-            }
+                    }.fixedSize(horizontal:true,vertical:false)
+                }
             Grid(alignment:.leading,horizontalSpacing:16,verticalSpacing:6) {
                 GridRow {
                     field("배치",unit:"박",value:binding(\.beat),range:0...131072,presentation:.beatPosition)
@@ -161,19 +175,23 @@ struct AudioWorkspaceView:View {
                     field("원본",unit:"BPM",value:binding(\.sourceBPM),range:1...999)
                 }
             }
+            }.padding(.trailing,6)
+            }.frame(maxHeight:.infinity)
+        }
         }
         .environment(\.numberEditing,NumberEditingContext(snapshot:store.numberEditIdentity,current:{store.numberEditIdentity},focusCanvas:{focusTarget.focus()},fieldFocus:fieldFocus))
         .onAppear{store.requestWaveform(asset)}
         .onChange(of:asset.id){_,_ in viewport.showAll();store.requestWaveform(asset)}
     }
     func field(_ title:String,unit:String,value:Binding<Double>,range:ClosedRange<Double>,presentation:NumberEditPresentation = .number)->some View {
-        HStack(spacing:6) {
-            Text(title).foregroundStyle(StudioTheme.secondary).lineLimit(1)
-            Spacer(minLength:0)
-            CommittedNumberField(title:"오디오 "+title+" "+unit,value:value,range:range,width:76,
-                presentation:unit=="초" ? .sourceSeconds:unit=="ms" ? .sourceMilliseconds:presentation)
-            Text(unit).foregroundStyle(StudioTheme.secondary).font(.system(size:11)).frame(width:26,alignment:.leading)
-        }.frame(maxWidth:.infinity)
+        VStack(alignment:.leading,spacing:3) {
+            Text(title).foregroundStyle(StudioTheme.secondary).fixedSize(horizontal:false,vertical:true)
+            HStack(spacing:6) {
+                CommittedNumberField(title:"오디오 "+title+" "+unit,value:value,range:range,width:76,
+                    presentation:unit=="초" ? .sourceSeconds:unit=="ms" ? .sourceMilliseconds:presentation)
+                Text(unit).foregroundStyle(StudioTheme.secondary).font(.system(size:11)).frame(width:26,alignment:.leading)
+            }
+        }.frame(maxWidth:.infinity,alignment:.leading)
     }
     func act(_ action:()->Void){action();focusTarget.focus()}
     func zoom(_ factor:Double) {

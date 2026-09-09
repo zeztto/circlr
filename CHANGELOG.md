@@ -1,5 +1,11 @@
 # 변경 이력
 
+## 개발 중 — 0.20.0 build103 오디오 compact 배치
+
+- metadata 위·가변 높이 파형 frame·도구 Scroll 아래·action/nav flow·4열 label above 적용. audio 수치 focus만 선택적 자동 reveal.
+- Release39.90초·native 초안0. 줌 왕복·invalid999 Tab focus 유지·trim0.1초/Undo·첫/마지막 입력 접근·수평 overflow 없음 확인.
+- checker4개 상태·자산2개·physical0, revision38 음악 복원·strict 저장 재열기·완료 open 통과. 전체8필드 연속 Tab·본문180 미만·녹음 busy는 미검증. 사용자 앱 유지. [계약](docs/118-audio-compact-layout.md).
+
 ## 개발 중 — 0.20.0 build102 연결 목록 접근
 
 - compact 고정 jump bar·목록 재연결의 compose/search focus·wide 두 열 유지. 첫 후보의 keyboard 우회를 수정한 최종 Release38.32초 통과.

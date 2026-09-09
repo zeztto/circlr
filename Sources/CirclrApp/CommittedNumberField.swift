@@ -46,20 +46,25 @@ struct NumberEditingContext {
     private final class WeakField {weak var value:NSTextField?;init(_ value:NSTextField){self.value=value}}
     let order:[String]
     private var fields:[String:WeakField]=[:]
-    init(_ order:[String]){self.order=order}
+    private let revealOnFocus:Bool
+    init(_ order:[String],revealOnFocus:Bool=false){self.order=order;self.revealOnFocus=revealOnFocus}
+    private func reveal(_ field:NSTextField) {
+        guard revealOnFocus else{return}
+        field.scrollToVisible(field.bounds.insetBy(dx:0,dy:-22))
+    }
     func register(_ field:NSTextField,title:String){fields[title]=WeakField(field)}
     func enter(last:Bool=false,in window:NSWindow?)->Bool {
         guard let window else{return false}
         let titles=last ? Array(order.reversed()):order
         guard let field=titles.compactMap({fields[$0]?.value}).first(where:{$0.window===window && $0.isEnabled}),
               window.makeFirstResponder(field) else{return false}
-        field.selectText(nil);return true
+        reveal(field);field.selectText(nil);return true
     }
     func move(from title:String,forward:Bool,in window:NSWindow?)->Bool {
         guard let index=order.firstIndex(of:title),order.indices.contains(index+(forward ? 1:-1)),
               let next=fields[order[index+(forward ? 1:-1)]]?.value,next.window===window,next.isEnabled,
               window?.makeFirstResponder(next)==true else{return false}
-        next.selectText(nil);return true
+        reveal(next);next.selectText(nil);return true
     }
 }
 private struct NumberEditingKey: EnvironmentKey {
