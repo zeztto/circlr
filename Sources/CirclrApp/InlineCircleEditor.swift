@@ -223,10 +223,7 @@ struct HierarchySettingsEditor: View {
             if let music=store.selectedMusic {
                 Toggle("음소거",isOn:Binding(get:{music.muted},set:{v in store.updateMusic("음소거"){$0.muted=v}}))
             }
-            if case .composition(let id)=store.hierarchySelection,let composition=store.project.album?.composition(id) {
-                if !composition.arrangementIDs.isEmpty {
-                    Button("편곡안 복제"){store.duplicateHierarchyArrangement()}
-                }
+            if case .composition(let id)=store.hierarchySelection,store.project.album?.composition(id) != nil {
                 Button("악장 추가"){store.addComposition(.movement)}
             }
             if store.selectedUse != nil,store.selectedHierarchyGroup == nil { Button("리듬 패턴 만들기") { store.makeHierarchyPattern() } }

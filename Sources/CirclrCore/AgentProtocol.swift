@@ -43,6 +43,7 @@ public struct AgentArguments:Codable {
 }
 public struct AgentOperation:Codable {
     public var kind:String
+    public var compositionID:ID?
     public var arrangementID:ID?
     public var useID:ID?
     public var laneID:ID?
@@ -98,10 +99,32 @@ public enum AgentProjectEditing {
         try check(request,project:input)
         guard let operations=request.arguments?.operations,!operations.isEmpty,operations.count<=128 else {throw CirclrError("operations는 1–128개가 필요합니다")}
         var p=input
+        var explicitSelection:ID?
         for op in operations {
             p.activeArrangementID=input.activeArrangementID
             if let ai=op.arrangementID {guard p.arrangements.contains(where:{$0.id==ai}) else {throw CirclrError("편곡 ID를 찾을 수 없습니다")};p.activeArrangementID=ai}
             switch op.kind {
+            case "duplicate_arrangement", "rename_arrangement":
+                guard let compositionID=op.compositionID,let arrangementID=op.arrangementID,let name=op.name else {
+                    throw CirclrError("compositionID, arrangementID, name이 필요합니다")
+                }
+                if op.kind == "duplicate_arrangement" {
+                    let previousSelection=p.album?.composition(compositionID)?.selectedArrangementID
+                    try ArrangementSelection.duplicate(arrangementID,compositionID:compositionID,name:name,in:&p)
+                    // Background copies must preserve the playback choice too: hierarchy
+                    // normalization follows that choice and would otherwise close editors.
+                    if let ownerIndex=p.album?.compositions.firstIndex(where:{$0.id==compositionID}) {
+                        p.album?.compositions[ownerIndex].selectedArrangementID=previousSelection
+                    }
+                } else {
+                    try ArrangementSelection.rename(arrangementID,compositionID:compositionID,name:name,in:&p)
+                }
+            case "select_arrangement":
+                guard let compositionID=op.compositionID,let arrangementID=op.arrangementID else {
+                    throw CirclrError("compositionID, arrangementID가 필요합니다")
+                }
+                try ArrangementSelection.select(arrangementID,compositionID:compositionID,in:&p)
+                explicitSelection=arrangementID
             case "set_global":guard let context=op.context else {throw CirclrError("context가 필요합니다")};p.global=context
             case "rename_project":guard let name=op.name,!name.isEmpty,name.count<=256 else {throw CirclrError("name이 필요합니다")};p.name=name
             case "set_instrument":
@@ -224,8 +247,8 @@ public enum AgentProjectEditing {
             default:throw CirclrError("지원하지 않는 operation: \(op.kind)")
             }
         }
-        // An agent's working arrangement must not navigate the musician's current canvas.
-        p.activeArrangementID=input.activeArrangementID
+        // Only an explicit selection may navigate the musician's current canvas.
+        p.activeArrangementID=explicitSelection ?? input.activeArrangementID
         try ProjectStore.validateStructure(p)
         return p
     }

@@ -60,7 +60,7 @@ struct RootView: View {
         .overlay(alignment:.top) {
             if let request=store.arrangementPickerRequest {
                 ZStack(alignment:.top) {
-                    Color.black.opacity(0.3).contentShape(Rectangle()).onTapGesture{store.closeArrangementPicker()}
+                    Color.black.opacity(0.3).contentShape(Rectangle())
                     ArrangementPickerView(store:store,request:request).id(request.id).padding(.top,85)
                 }
             }
@@ -161,9 +161,12 @@ struct RootView: View {
     private var actions:some View {
         HStack(spacing:5) {
             if let address=store.hierarchySelection {
-                if case .composition=address,let owner=store.arrangementPickerOwner {
-                    Button{store.showArrangementPicker(compositionID:owner.id)}label:{Label("편곡안",systemImage:"magnifyingglass")}
-                        .help("이 곡·악장의 편곡안 찾기 · ⌥⌘J")
+                if let owner=store.arrangementPickerOwner {
+                    let choice=(try? ArrangementSelection.catalog(store.project,compositionID:owner.id))?.first{$0.id==owner.selectedArrangementID}
+                    Button{store.showArrangementPicker(compositionID:owner.id)}label:{
+                        Label(choice?.title ?? "편곡안",systemImage:"magnifyingglass").lineLimit(1).frame(maxWidth:180)
+                    }.help((choice?.title ?? owner.name)+" · 이 곡·악장의 편곡안 찾기 · ⌥⌘J")
+                        .accessibilityLabel("현재 편곡안 · "+(choice?.title ?? owner.name))
                 }
                 if store.canEditCirclePorts { Button("연결") { store.showConnections() }.help("IN/OUT·대상·8방향 위치 편집 · L") }
                 Button{store.connectionsOpen=false;store.hierarchyTransitionID=nil;store.focusHierarchy(address,detail:true);store.hierarchySettingsOpen=true}label:{Image(systemName:"slider.horizontal.3")}.help("선택 서클의 이름·음악 설정")

@@ -13,6 +13,32 @@ SPEC.loader.exec_module(server)
 
 
 class MCPTests(unittest.TestCase):
+    def test_arrangement_apply_requires_explicit_target_and_forwards_atomic_batch(self):
+        operations = [
+            {'kind': 'duplicate_arrangement', 'compositionID': 'owner', 'arrangementID': 'source', 'name': '  대안  '},
+            {'kind': 'rename_arrangement', 'compositionID': 'other-owner', 'arrangementID': 'other-source', 'name': '새 이름'},
+            {'kind': 'select_arrangement', 'compositionID': 'owner', 'arrangementID': 'source'},
+        ]
+        args = {'projectID': 'p', 'expectedRevision': 7, 'operations': operations}
+        with patch.object(server, 'rpc', return_value={'ok': True}) as ipc:
+            self.assertFalse(server.call_tool('/qa.sock', 'circlr_apply', args)['isError'])
+            ipc.assert_called_once()
+            request = ipc.call_args.args[1]
+            self.assertEqual(request['method'], 'apply')
+            self.assertEqual(request['expectedRevision'], 7)
+            self.assertEqual(request['arguments']['operations'], operations)
+        for operation in operations:
+            required = ('compositionID', 'arrangementID') if operation['kind'] == 'select_arrangement' else ('compositionID', 'arrangementID', 'name')
+            for key in required:
+                for invalid in ({k: v for k, v in operation.items() if k != key}, {**operation, key: 123}):
+                    with self.subTest(kind=operation['kind'], key=key, invalid=invalid), patch.object(server, 'rpc') as ipc:
+                        with self.assertRaises(ValueError):
+                            server.call_tool('/unused.sock', 'circlr_apply', {**args, 'operations': [operations[0], invalid]})
+                        ipc.assert_not_called()
+        with patch.object(server, 'rpc') as ipc, self.assertRaisesRegex(ValueError, 'read-only'):
+            server.call_tool('/unused.sock', 'circlr_apply', args, read_only=True)
+        ipc.assert_not_called()
+
     def test_sounds_read_only_contract_reaches_native(self):
         args={'soundTarget':'instrument','query':'#５','category':'soundBank','bankDrums':False,'offset':2,'limit':1,'catalogID':'a'*64}
         with patch.object(server, 'rpc', return_value={'ok':True,'result':{'items':[]}}) as ipc:

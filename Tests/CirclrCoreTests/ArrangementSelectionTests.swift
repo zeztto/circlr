@@ -57,4 +57,86 @@ final class ArrangementSelectionTests:XCTestCase {
         p.album!.compositions[0].arrangementIDs.append("missing")
         XCTAssertThrowsError(try ArrangementSelection.catalog(p,compositionID:owner))
     }
+    func testOwnedDuplicateUsesExplicitSourceAndPreservesExistingMusic()throws {
+        var (p,owner)=try fixture()
+        p.arrangements[0].uses[0].repeatCount=3
+        let source=p.arrangements[0],before=p
+        XCTAssertNotEqual(p.activeArrangementID,source.id)
+        let id=try ArrangementSelection.duplicate(source.id,compositionID:owner,name:"  도시의 밤\n",in:&p)
+        let copy=try XCTUnwrap(p.arrangements.last)
+        XCTAssertEqual(copy.id,id);XCTAssertNotEqual(id,source.id);XCTAssertEqual(copy.name,"도시의 밤")
+        XCTAssertEqual(copy.uses.count,source.uses.count)
+        for (original,duplicate) in zip(source.uses,copy.uses) {
+            XCTAssertNotEqual(original.id,duplicate.id)
+            var normalized=duplicate;normalized.id=original.id
+            XCTAssertEqual(normalized,original)
+        }
+        var expected=before
+        expected.arrangements.append(copy);expected.activeArrangementID=id
+        expected.album!.compositions[0].arrangementIDs.append(id)
+        expected.album!.compositions[0].selectedArrangementID=id
+        XCTAssertEqual(p,expected)
+        try ProjectStore.validateStructure(p)
+    }
+    func testOwnedRenameOnlyChangesTargetAndSameTrimmedNameIsNoOp()throws {
+        var (p,owner)=try fixture();let id=p.arrangements[0].id,before=p
+        XCTAssertTrue(try ArrangementSelection.rename(id,compositionID:owner,name:" \n다른 이름  ",in:&p))
+        var expected=before;expected.arrangements[0].name="다른 이름"
+        XCTAssertEqual(p,expected)
+        XCTAssertFalse(try ArrangementSelection.rename(id,compositionID:owner,name:" 다른 이름\n",in:&p))
+        XCTAssertEqual(p,expected)
+        XCTAssertTrue(try ArrangementSelection.rename(id,compositionID:owner,name:p.arrangements[1].name,in:&p))
+        XCTAssertEqual(p.arrangements[0].name,p.arrangements[1].name)
+    }
+    func testOwnedOperationsRejectForeignMissingAndInvalidNamesAtomically()throws {
+        var (p,owner)=try fixture();let before=p,source=p.arrangements[0].id
+        let foreign=try XCTUnwrap(p.album!.compositions[1].selectedArrangementID)
+        for id in [foreign,"missing"] {
+            XCTAssertThrowsError(try ArrangementSelection.duplicate(id,compositionID:owner,name:"대안",in:&p));XCTAssertEqual(p,before)
+            XCTAssertThrowsError(try ArrangementSelection.rename(id,compositionID:owner,name:"대안",in:&p));XCTAssertEqual(p,before)
+        }
+        for name in ["", " \n\t",String(repeating:"가",count:121)] {
+            XCTAssertThrowsError(try ArrangementSelection.duplicate(source,compositionID:owner,name:name,in:&p));XCTAssertEqual(p,before)
+            XCTAssertThrowsError(try ArrangementSelection.rename(source,compositionID:owner,name:name,in:&p));XCTAssertEqual(p,before)
+        }
+        let limit=String(repeating:"가",count:120)
+        XCTAssertTrue(try ArrangementSelection.rename(source,compositionID:owner,name:limit,in:&p))
+        let id=try ArrangementSelection.duplicate(source,compositionID:owner,name:limit,in:&p)
+        XCTAssertEqual(p.arrangements.first{$0.id==id}?.name,limit)
+    }
+    func testOwnedOperationsRejectAmbiguousAndBrokenReferencesAtomically()throws {
+        let (valid,owner)=try fixture(),source=valid.arrangements[0].id
+        var shared=valid;shared.album!.compositions[1].arrangementIDs.append(source)
+        var duplicateID=valid;duplicateID.arrangements.append(valid.arrangements[0])
+        var missing=valid;missing.album!.compositions[0].arrangementIDs.append("missing")
+        for invalid in [shared,duplicateID,missing] {
+            var p=invalid
+            XCTAssertThrowsError(try ArrangementSelection.duplicate(source,compositionID:owner,name:"대안",in:&p));XCTAssertEqual(p,invalid)
+            XCTAssertThrowsError(try ArrangementSelection.rename(source,compositionID:owner,name:"대안",in:&p));XCTAssertEqual(p,invalid)
+        }
+    }
+    func testOwnedDuplicateCopiesOccurrenceAndGroupColorsWithoutChangingSource()throws {
+        var p=try CircleColorTests().fixture()
+        let owner=try XCTUnwrap(p.album?.compositions.first?.id),source=p.active
+        let use=try XCTUnwrap(source.uses.first)
+        let group=CanvasGroup(name:"섹션 묶음",members:[use.id])
+        p.arrangements[p.activeIndex].layout.groups=[group]
+        let section=CircleAddress.section(arrangementID:source.id,useID:use.id)
+        let node=try XCTUnwrap(p.sections.first?.graph?.nodes.first?.id)
+        let music=CircleAddress.music(arrangementID:source.id,useID:use.id,nodeID:node)
+        let inner=CircleAddress.group(parent:.group(parent:section,id:"inner"),id:"nested")
+        let outer=CircleAddress.group(parent:.composition(owner),id:group.id)
+        p.circleColors=[section:CircleColor.Preset.amber.color,music:CircleColor.Preset.coral.color,inner:CircleColor.Preset.mint.color,outer:CircleColor.Preset.blue.color,.album:CircleColor.Preset.rose.color]
+        let before=try XCTUnwrap(p.circleColors)
+        let id=try ArrangementSelection.duplicate(source.id,compositionID:owner,name:"색 유지",in:&p)
+        let newUse=try XCTUnwrap(p.active.uses.first?.id),newGroup=try XCTUnwrap(p.active.layout.groups.first?.id)
+        let newSection=CircleAddress.section(arrangementID:id,useID:newUse)
+        var expected=before
+        expected[newSection]=before[section]
+        expected[.music(arrangementID:id,useID:newUse,nodeID:node)]=before[music]
+        expected[.group(parent:.group(parent:newSection,id:"inner"),id:"nested")]=before[inner]
+        expected[.group(parent:.composition(owner),id:newGroup)]=before[outer]
+        XCTAssertEqual(p.circleColors,expected)
+        XCTAssertEqual(p.arrangements.first{$0.id==source.id}?.uses,source.uses)
+    }
 }

@@ -71,6 +71,18 @@ OPERATION = schema({
     "sidechain": {"type": "boolean"}, "bars": {"type": "integer", "minimum": 1, "maximum": 4096},
 }, ["kind"])
 
+ARRANGEMENT_OPERATIONS = ["duplicate_arrangement", "rename_arrangement"]
+OPERATION["properties"]["compositionID"] = {"type": "string", "description": "Explicit owning composition ID; required for arrangement duplication, rename and selection."}
+OPERATION["oneOf"] = [
+    {"type": "object", "properties": {"kind": {"enum": list(OPERATION["properties"]["kind"]["enum"])}}},
+    {"type": "object", "properties": {"kind": {"enum": ARRANGEMENT_OPERATIONS}},
+     "required": ["compositionID", "arrangementID", "name"]},
+    {"type": "object", "properties": {"kind": {"enum": ["select_arrangement"]}},
+     "required": ["compositionID", "arrangementID"]},
+]
+OPERATION["properties"]["kind"]["enum"].extend(ARRANGEMENT_OPERATIONS + ["select_arrangement"])
+OPERATION["description"] = "duplicate_arrangement and rename_arrangement require explicit compositionID, arrangementID and name (1–120 characters after trimming whitespace). Duplicate shares section sources and assets, preserving every owner's playback choice and the editing canvas. Rename changes only the arrangement name. select_arrangement requires compositionID and arrangementID (no name needed); it deliberately changes the owner's playback choice and visible editing branch."
+
 
 def tool(name, method, description, properties=None, required=(), write=False):
     properties = properties or {}
@@ -101,7 +113,7 @@ TOOLS = [
     tool("reconnect_ports", "reconnect_ports", "Replace one existing cable using its complete logical connectionID and two explicit endpoints. Preserves edge ID and gain; rejects cross-graph moves, cycles and duplicates atomically. Composition sequence cables cannot be reconnected.", {**PORT_PAIR, "connectionID": CONNECTION_ID}, (*PORT_PAIR, "connectionID"), True),
     tool("disconnect_ports", "disconnect_ports", "Disconnect the exact logical cable. One Undo; other section uses stay unchanged. Composition sequence cables cannot be disconnected.", {**LAYOUT_REVISION, "connectionID": CONNECTION_ID}, ("expectedLayoutRevision", "connectionID"), True),
     tool("move_ports", "move_ports", "Atomically place 1–128 distinct existing cables in eight directions. One layout Undo; changes layoutRevision only, preserving music and audio. Unchanged placements are a no-op.", {**LAYOUT_REVISION, "moves": {"type": "array", "items": PLACED_CONNECTION, "minItems": 1, "maxItems": 128}}, ("expectedLayoutRevision", "moves"), True),
-    tool("apply", "apply", "Atomically apply 1–128 edits as one Undo action. set_notes/generate_midi replace notes unless append=true. Stable IDs are required; stale revisions fail without changes.", {"operations": {"type": "array", "items": OPERATION, "minItems": 1, "maxItems": 128}}, ("operations",), True),
+    tool("apply", "apply", "Atomically apply 1–128 edits as one Undo action. set_notes/generate_midi replace notes unless append=true. duplicate_arrangement/rename_arrangement require explicit compositionID, arrangementID and a name of 1–120 characters after trimming; duplicate shares section sources/assets while preserving playback choices and the editing canvas. select_arrangement requires compositionID and arrangementID and deliberately changes playback choice and the visible editing branch. Stable IDs are required; stale revisions fail without changes.", {"operations": {"type": "array", "items": OPERATION, "minItems": 1, "maxItems": 128}}, ("operations",), True),
     tool("bounce", "bounce", "Start an asynchronous section track bounce including its internal effects and sidechain. Originals remain restorable; audio replaces output inputs. Read job until terminal state.", {**SCOPE, "trackID": STRING}, ("useID", "trackID"), True),
     tool("restore_bounce", "restore_bounce", "Restore a bounced circle's original inputs; keep rendered audio as a disconnected archive.", {**SCOPE, "nodeID": STRING}, ("useID", "nodeID"), True),
     tool("export", "export", "Start asynchronous master WAV export, 48 kHz stereo 24-bit. Requires a NEW absolute .wav path. No file overwrite. Read job for completion.", {"path": STRING}, ("path",), True),

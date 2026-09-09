@@ -126,7 +126,12 @@ extension AppStore {
         case "apply":
             let candidate=try AgentProjectEditing.apply(request,to:project)
             mutate("에이전트 편집 · \(args.operations?.count ?? 0)개"){$0=candidate}
-            cancelAudition();normalizeHierarchySelection();return agentState()
+            cancelAudition()
+            if let compositionID=args.operations?.last(where:{$0.kind=="select_arrangement"})?.compositionID {
+                // Explicit selection navigates to its owner; background copies and names keep the editor scope.
+                hierarchySettingsOpen=false;focusHierarchy(.composition(compositionID))
+            }else{normalizeHierarchySelection()}
+            return agentState()
         case "undo":
             if let expected=args.expectedLayoutRevision {try AgentPortEditing.checkLayout(expected,project:project)}
             guard undoCount>0 else {throw CirclrError("취소할 편집이 없습니다")};undo();return agentState()

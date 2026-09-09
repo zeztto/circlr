@@ -1,5 +1,13 @@
 # 변경 이력
 
+## 개발 중 — 0.20.0 build83 편곡 복제·이름 변경
+
+- 편곡안 목록에 이름 변경·명명 복제를 통합. 하위 편집에서도 현재 편곡 번호·이름 표시.
+- 목록 전용 ⇧⌘N 이름 변경·⇧⌘D 복제, 입력·취소·오류와 동일 이름 no-op 지원.
+- 소유 곡·편곡 검증, 복제 색상 유지, MCP 명시 대상 작업과 내장 Codex kit 갱신.
+- MCP `duplicate_arrangement`·`rename_arrangement`·`select_arrangement` 지원. 같은 곡/다른 곡의 복제는 재생 선택·active·selection·MIDI 편집기를 유지하고 명시적 선택은 대상 곡에 포커스. UI 복제는 새 편곡 선택.
+- Core30개·MCP21개·최종 Release68.50초 통과. 실제 MCP 복제·명시적 전환·Undo 다섯 번의 음악 복원·재열기 확인. UI·키보드·Undo/Redo·원안 보존·저장 복원도 검증. [QA](qa/arrangement-workspace-review.md).
+
 ## 개발 중 — 0.20.0 build82 출력 세션 취소 경계
 
 - 이전 play의 timeout/catch가 교체된 출력 세션을 취소하지 않도록 세션 ID 확인과 취소를 같은 lock 안에서 수행. 외부 STOP 동작 유지.

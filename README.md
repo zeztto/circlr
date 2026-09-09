@@ -6,7 +6,11 @@ macOS용 앨범·송폼 궤도 편집기. **앨범 → 곡·악장 → 섹션 �
 
 연결 UI는 [서클 둘레 8방향 IN/OUT과 다중 입출력](docs/22-eight-direction-ports.md)으로 확장 중이다. 포트의 신호 의미와 연결점 배치를 분리한다. 아래 일반 사용법은 배포된 0.19 앱 기준이며 새 포트 기능은 독립 개발 브랜치에서 검증한다.
 
-현재 **`codex/daw-integration`의 0.20.0 build 82**에 녹음 lifecycle과 8방향·다중 bus·그룹 포트를 통합했다. 같은 캔버스의 연결 편집·녹음 상태·스텝·오토메이션이 공존하며, 녹음 시작·정리 중 음악 편집과 Undo의 경쟁을 차단한다. build 23의 실제 편집·바운스·Undo·저장/재열기·닫기 최소화 및 출력별 모션 검증은 [통합 QA](qa/daw-integration-review.md)에 기록했다.
+현재 **`codex/daw-integration`의 0.20.0 build 83**에 녹음 lifecycle과 8방향·다중 bus·그룹 포트를 통합했다. 같은 캔버스의 연결 편집·녹음 상태·스텝·오토메이션이 공존하며, 녹음 시작·정리 중 음악 편집과 Undo의 경쟁을 차단한다. build 23의 실제 편집·바운스·Undo·저장/재열기·닫기 최소화 및 출력별 모션 검증은 [통합 QA](qa/daw-integration-review.md)에 기록했다.
+
+**build83은 편곡안의 생성·이름 변경·전환을 한 목록으로 모았다.** MIDI·섹션 편집 중에도 상단에서 현재 편곡 번호와 이름을 확인한다. 목록에서 ⇧⌘N으로 이름을 바꾸고 ⇧⌘D로 이름을 정해 복제하며, 서클 색상과 원안을 보존한다. MCP 복제는 현재 재생 편곡을 유지하고, `select_arrangement`로 명시적으로 전환한다. UI 복제는 새 편곡을 바로 선택한다.
+
+MCP의 복제·이름 변경·명시적 선택을 지원한다. 관련 Core30개·MCP21개와 최종 Release68.50초를 통과했다. 실제 MCP 복제의 편곡 선택·MIDI 편집기 보존, 명시적 전환의 곡 포커스, Undo 다섯 번의 음악 복원·재열기를 확인했다. UI·키보드·원안 보존 검증도 완료했다. [계약](docs/97-arrangement-workspace.md) · [QA](qa/arrangement-workspace-review.md).
 
 **build82는 이전 재생의 늦은 실패가 새 출력 세션을 취소하지 않도록 수정했다.** timeout/catch의 세션 ID 확인과 취소를 같은 lock 안에서 처리하며 외부 STOP 동작은 유지한다. OutputWorkerProcess/Protocol 관련16개 테스트를 통과했다. build81 무음 helper의 실제 장치 시작·STOP·EOF·세션 교체와 별도 재생 시계 0→1초·자연 종료를 확인했으며, build82 release 빌드는 46.09초에 통과했다. 실제 host 첫 시도는 장치 단계 timeout 뒤 idle로 복구했고, 다른 세션의 재시도는 출력 시작·시계 1.1145625초 진행·STOP 후 idle을 확인했다. 세 번째 세션은 약34초 진행 후 자연 종료했으나 간헐적인 최초 시작 실패가 남아 있다. 청취·입력·장치 변경·MP4 검증과 과거 HAL 정지 원인 확인은 남아 있다. [출력 세션 QA](qa/output-session-review.md).
 
