@@ -6,10 +6,13 @@ struct EffectControls: View {
     @Binding var effect: Effect
     var allowsAU = false
     var isCurrent: () -> Bool = {true}
+    var chooseAudioUnit: (() -> Void)?
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             StudioChoice("효과", selection: Binding(get: {effect.kind}, set: {kind in
-                guard isCurrent() else {return}; var next=effect; next.kind=kind; effect=next
+                guard isCurrent() else {return}
+                if kind == .audioUnit,let chooseAudioUnit {chooseAudioUnit();return}
+                var next=effect; next.kind=kind; effect=next
             }), options: EffectKind.allCases.filter {allowsAU || $0 != .audioUnit}.map {($0,AppStore.effectName($0))})
             EffectParameterFields(effect:$effect) {expected,next in
                 guard isCurrent(),effect==expected else{return false}

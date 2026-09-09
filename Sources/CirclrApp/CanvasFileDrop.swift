@@ -14,7 +14,7 @@ struct CanvasFileDropPreview {
 extension AlbumCanvasView {
     func fileDropTarget(_ sender:NSDraggingInfo)->CanvasFileDropPreview? {
         let point=convert(sender.draggingLocation,from:nil)
-        guard store.canStartMediaImport,sender.draggingSourceOperationMask.contains(.copy),workspaceViewport.contains(point),
+        guard store.soundPickerRequest==nil,store.canStartMediaImport,sender.draggingSourceOperationMask.contains(.copy),workspaceViewport.contains(point),
               ![editor?.frame,portTools?.frame,cableTools?.frame].compactMap({$0}).contains(where:{$0.contains(point)}),
               let hit=hit(point),let section=scene?.path(to:hit.id).last(where:{$0.role == .section}),
               let clock=section.clock else{return nil}

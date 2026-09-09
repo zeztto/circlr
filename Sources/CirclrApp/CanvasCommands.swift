@@ -21,6 +21,7 @@ extension AppStore {
         hierarchyTransitionID=nil;focusHierarchy(address,detail:true);hierarchySettingsOpen=true
     }
     func showCommands() {
+        soundPickerRequest=nil
         libraryOpen=false
         navigationOpen=false
         var commands=canvasCommands?() ?? []
@@ -43,6 +44,9 @@ extension AppStore {
         add("media-library","샘플 라이브러리 검색·미리 듣기","⌥⌘L"){[weak self] in self?.showMediaLibrary()}
         add("global","글로벌 템포·박자·스케일 설정"){[weak self] in self?.focusHierarchy(.album,detail:true);self?.hierarchySettingsOpen=true}
         add("settings","선택 서클 이름·음악 설정","R"){[weak self] in self?.openCircleSettings()}
+        if let trackID=selectedTrackID {add("sound-search","음색·악기 찾기"){[weak self] in self?.showInstrumentPicker(trackID:trackID)}}
+        if case .effect=selectedMusic?.content {add("effect-search","Audio Unit 이펙트 찾기"){[weak self] in self?.showSoundPicker(.musicEffect)}}
+        if selectedSignal?.kind == .effect {add("signal-effect-search","전역 Audio Unit 이펙트 찾기"){[weak self] in self?.showSoundPicker(.signalEffect)}}
         add("navigation","섹션·트랙으로 바로 이동","⌘J"){[weak self] in self?.showNavigation()}
         add("parent","상위 서클로 이동","Esc"){[weak self] in self?.hierarchyParent()}
         add("fit","전체 앨범 보기","F"){[weak self] in self?.hierarchyCommand=HierarchyCommand(action:.fit)}

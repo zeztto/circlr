@@ -6,7 +6,11 @@ struct InspectorView:View {
     var body:some View { EmptyView() }
     @ViewBuilder func signal(_ n:SignalNode)->some View {
         let projectID=store.project.id
-        if n.kind == .effect {EffectControls(effect:Binding(get:{store.selectedSignal?.effect ?? n.effect},set:{v in store.updateSignal("이펙트 편집"){$0.effect=v}}),allowsAU:true,isCurrent:{store.project.id==projectID && store.selectedSignal?.id==n.id});if n.effect.kind == .audioUnit {Picker("Audio Unit",selection:Binding(get:{store.selectedSignal?.effect.plugin?.id ?? ""},set:{id in store.updateSignal("Audio Unit"){$0.effect.plugin=store.effects.first{$0.id==id}}})){Text("선택").tag("");ForEach(store.effects){Text($0.name).tag($0.id)}};Button("플러그인 편집"){store.showPluginEditor(effect:true)}.disabled(n.effect.plugin==nil)}}
+        if n.kind == .effect {
+            EffectControls(effect:Binding(get:{store.selectedSignal?.effect ?? n.effect},set:{v in store.updateSignal("이펙트 편집"){$0.effect=v}}),allowsAU:true,isCurrent:{store.project.id==projectID && store.selectedSignal?.id==n.id},chooseAudioUnit:{store.showSoundPicker(.signalEffect)})
+            SoundPickerButton(title:"Audio Unit 이펙트 찾기",current:n.effect.kind == .audioUnit ? n.effect.plugin?.name ?? "Audio Unit 선택 필요":"설치된 Audio Unit 이펙트") {store.showSoundPicker(.signalEffect)}
+            if n.effect.kind == .audioUnit {Button("플러그인 편집"){store.showPluginEditor(effect:true)}.disabled(n.effect.plugin==nil)}
+        }
         Menu("출력 연결"){ForEach(store.project.signal.nodes.filter{$0.id != n.id && $0.kind != .source}){target in Button(target.name){store.connect(n.id,target.id)}}}.disabled(n.kind == .master)
         if n.kind == .effect || n.kind == .bus {Button("노드 삭제",role:.destructive){store.removeSelection()}}
     }
@@ -41,10 +45,8 @@ struct TrackInspector:View {
     var body:some View {
         VStack(alignment:.leading,spacing:12) {
             if showsTrackLevel {TrackLevelEditor(store:store,track:track)}
-            StudioChoice("악기",selection:Binding(get:{track.instrument.kind},set:{v in
-                if v == .sampler {store.chooseSampleInstrument()}
-                else {store.updateTrack("악기 종류"){$0.instrument.kind=v;if v == .synthesizer && $0.instrument.synth == nil {$0.instrument.synth=SynthPatch()}}}
-            }),options:[(.synthesizer,"내장 신스"),(.sampler,"샘플 악기"),(.soundBank,"기본 Sound Bank"),(.audioUnit,"Audio Unit")])
+            SoundPickerButton(title:"음색·악기 찾기",current:store.instrumentName(track.instrument)) {store.showInstrumentPicker(trackID:track.id)}
+            if track.instrument.kind != .sampler {Button("샘플 파일을 악기로 열기…"){store.chooseSampleInstrument()}}
             if track.instrument.kind == .synthesizer {
                 SynthInspector(store:store,patch:track.instrument.synth ?? SynthPatch())
             } else if track.instrument.kind == .sampler,let sample=track.instrument.sample {
@@ -60,7 +62,6 @@ struct TrackInspector:View {
                 Toggle("드럼",isOn:Binding(get:{track.instrument.drums},set:{v in store.updateTrack("드럼"){$0.instrument.drums=v}}))
                 StudioStepper("GM Program · 0–127",value:Binding(get:{track.instrument.program},set:{v in store.updateTrack("GM Program"){$0.instrument.program=v}}),in:0...127)
             } else if track.instrument.kind == .audioUnit {
-                Picker("Audio Unit",selection:Binding(get:{track.instrument.plugin?.id ?? ""},set:{id in store.updateTrack("Audio Unit"){$0.instrument.plugin=store.instruments.first{$0.id==id}}})){Text("선택").tag("");ForEach(store.instruments){Text($0.name).tag($0.id)}}
                 Button("Plugin 화면"){store.showPluginEditor(effect:false)}.disabled(track.instrument.plugin==nil)
             }
         }
@@ -72,7 +73,6 @@ struct SynthInspector:View {
     func binding(_ key:WritableKeyPath<SynthPatch,Double>)->Binding<Double> {Binding(get:{store.selectedTrack?.instrument.synth?[keyPath:key] ?? patch[keyPath:key]},set:{v in store.updateTrack("신스 편집"){$0.instrument.synth?[keyPath:key]=v}})}
     var body:some View {
         VStack(alignment:.leading,spacing:12) {
-            StudioChoice("음색",selection:Binding(get:{patch.voice},set:{v in store.updateTrack("신스 음색"){$0.instrument.synth=SynthPatch(v)}}),options:SynthVoice.allCases.map{($0,$0.label)})
             LazyVGrid(columns:[GridItem(.flexible(minimum:240),spacing:28),GridItem(.flexible(minimum:240))],alignment:.leading,spacing:10) {
                 parameter("필터 Hz",\.cutoff,40...20000)
                 parameter("Detune cent",\.detune,0...60)

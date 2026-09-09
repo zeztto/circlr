@@ -2,6 +2,12 @@
 
 0.1–0.3은 설계 문서 revision이며, 0.4.0부터 로컬 실행 프로토타입을 포함한다.
 
+## 개발 중 — 0.20.0 build 60 음색·Audio Unit 검색
+
+- 악기 종류와 음색의 중첩 메뉴를 내장 신스·Sound Bank·설치된 AU 검색으로 합쳤다. 이름·제조사·종류 필터, 현재 음색 찾기, ↑↓·Return·Esc, 명령 검색 진입을 지원한다. 서클과 전역 이펙터도 같은 검색을 사용한다.
+- 같은 신스/AU 재선택은 수정한 patch와 plugin state를 보존한다. 종류 메뉴에서 AU 검색을 열었다 취소해도 이전 효과가 유지된다. 프로젝트·세션·revision·대상이 바뀌거나 녹음/준비/import 중이면 오래된 요청을 거절한다.
+- Swift 437개·Python 26개와 release build, native 23상태·20화면, Undo/Redo·외부 수정·미설치 AU·저장 재열기·패키지 검증 통과. [계약](docs/74-sound-selection-search.md) · [QA](qa/sound-selection-review.md). 서브 에이전트 dispatch는 현재 세션의 thread limit으로 실패해 역할별 순차 검토했다.
+
 ## 개발 중 — 0.20.0 build 59 섹션·서클 직접 검색
 
 - 작업 이동 결과를 실제 섹션·MIDI·오디오·음색·이펙트·라우터·믹스·출력으로 바꿨다. Return/클릭은 표시한 대상을 열며, 빈 섹션도 바로 이동한다. 섹션 메뉴를 전체 앨범/이 섹션과 종류 필터로 대체했다.

@@ -64,14 +64,11 @@ struct SectionEditor:View {
         if let track=store.selectedTrack {
             HStack(spacing:16) {
                 CommittedNameField(title:"트랙 이름",value:Binding(get:{store.project.tracks.first{$0.id==track.id}?.name ?? track.name},set:{v in store.updateTrack("트랙 이름"){$0.name=v}}),fontSize:12,weight:.medium,message:{store.status=$0}).frame(width:130).numberEditing(in:store)
-                Menu {
-                    Button("기본 Sound Bank"){store.updateTrack("악기"){$0.instrument.kind = .soundBank}}
-                    ForEach(store.instruments){plugin in Button(plugin.name){store.updateTrack("악기"){$0.instrument.kind = .audioUnit;$0.instrument.plugin=plugin}}}
-                } label:{Text(track.instrument.kind == .soundBank ? "Sound Bank":track.instrument.plugin?.name ?? "악기 선택").lineLimit(1)}.menuStyle(.borderlessButton).frame(maxWidth:220,alignment:.leading)
+                Button{store.showInstrumentPicker(trackID:track.id)}label:{Label(store.instrumentName(track.instrument),systemImage:"magnifyingglass").lineLimit(1)}.help("음색·악기 찾기").frame(maxWidth:220,alignment:.leading)
                 if track.instrument.kind == .soundBank {
                     CountControl(title:"GM",value:Binding(get:{(store.project.tracks.first{$0.id==track.id}?.instrument.program ?? track.instrument.program)+1},set:{v in store.updateTrack("GM Program"){$0.instrument.program=v-1}}),range:1...128)
                     Toggle("드럼",isOn:Binding(get:{track.instrument.drums},set:{v in store.updateTrack("드럼"){$0.instrument.drums=v}})).controlSize(.mini).fixedSize()
-                } else {Button("Plugin 열기"){store.showPluginEditor(effect:false)}.disabled(track.instrument.plugin==nil)}
+                } else if track.instrument.kind == .audioUnit {Button("Plugin 열기"){store.showPluginEditor(effect:false)}.disabled(track.instrument.plugin==nil)}
                 Spacer(minLength:0)
                 ValueField(title:"트랙 볼륨",value:Binding(get:{store.project.tracks.first{$0.id==track.id}?.gain ?? track.gain},set:{v in store.updateTrack("트랙 볼륨"){$0.gain=v}}),width:52,range:0...4)
                 Button {store.updateTrack("음소거"){$0.muted.toggle()}} label:{Image(systemName:track.muted ? "speaker.slash.fill":"speaker.wave.2").foregroundStyle(track.muted ? StudioTheme.accent:StudioTheme.secondary)}.help("트랙 음소거")

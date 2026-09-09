@@ -12,6 +12,8 @@ build 58: 추가 에이전트 재시도가 실제 `agent thread limit reached`�
 
 build 59: 작업 검색에서 실제 섹션·서클로 직접 이동하고 섹션·트랙·종류 필터를 제공한다. 다중 역할 메뉴, 긴/동명 경로와 MIDI/오디오/이펙트 진입을 정리하고 편집 이력·외부 변경·저장 복원을 검증했다. [계약](73-direct-work-navigation.md) · [QA](../qa/direct-work-navigation-review.md).
 
+build 60: 에이전트 한도 해제 요청 후 read-only 조사 dispatch를 재시도했으나 현재 세션에서 thread limit으로 거절됐다. 순차 작업으로 음색·AU 직접 검색, 설정 보존과 서클/전역 이펙트 선택을 구현하고 실제 앱의 취소·Undo/Redo·외부 변경 차단·재열기를 검증했다. [계약](74-sound-selection-search.md) · [QA](../qa/sound-selection-review.md).
+
 ## 상태와 남은 완료 조건
 
 | 작업 | 현재 구현 | 확장·완료 조건 |

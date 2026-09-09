@@ -6,7 +6,9 @@ macOS용 앨범·송폼 궤도 편집기. **앨범 → 곡·악장 → 섹션 �
 
 연결 UI는 [서클 둘레 8방향 IN/OUT과 다중 입출력](docs/22-eight-direction-ports.md)으로 확장 중이다. 포트의 신호 의미와 연결점 배치를 분리한다. 아래 일반 사용법은 배포된 0.19 앱 기준이며 새 포트 기능은 독립 개발 브랜치에서 검증한다.
 
-현재 **`codex/daw-integration`의 0.20.0 build 59**에 녹음 lifecycle과 8방향·다중 bus·그룹 포트를 통합했다. 같은 캔버스의 연결 편집·녹음 상태·스텝·오토메이션이 공존하며, 녹음 시작·정리 중 음악 편집과 Undo의 경쟁을 차단한다. build 23의 실제 편집·바운스·Undo·저장/재열기·닫기 최소화 및 출력별 모션 검증은 [통합 QA](qa/daw-integration-review.md)에 기록했다.
+현재 **`codex/daw-integration`의 0.20.0 build 60**에 녹음 lifecycle과 8방향·다중 bus·그룹 포트를 통합했다. 같은 캔버스의 연결 편집·녹음 상태·스텝·오토메이션이 공존하며, 녹음 시작·정리 중 음악 편집과 Undo의 경쟁을 차단한다. build 23의 실제 편집·바운스·Undo·저장/재열기·닫기 최소화 및 출력별 모션 검증은 [통합 QA](qa/daw-integration-review.md)에 기록했다.
+
+build 60은 **음색·악기와 Audio Unit을 같은 캔버스에서 검색해 바로 적용한다.** 내장 신스·설치된 AU를 이름/제조사로 찾으며, 서클·전역 이펙트에도 검색을 제공한다. 같은 음색은 수정한 설정을 보존하고 다른 음색은 Undo 한 번으로 복원한다. ⇧⌘P의 `음색·악기 찾기` 또는 편집기의 검색 버튼으로 열고 ↑↓·Return·Esc로 조작한다. Swift **437개**·Python **26개**, native 상태 23개·화면 20개로 실제 선택·취소·오래된 요청 차단·저장 복원을 검사했다. [사용법](docs/74-sound-selection-search.md) · [QA](qa/sound-selection-review.md).
 
 build 59는 **⌘J 검색 결과에서 실제 섹션·서클을 바로 연다.** 이펙트를 찾고 Return을 누르면 해당 이펙트가 열리며, 전체 앨범/이 섹션·종류 필터와 현재 위치 찾기를 지원한다. 다중 서클 메뉴를 검색으로 바꾸고 긴 이름·반복 섹션·공유 이펙트의 경로를 구별한다. Swift **429개**·Python **26개**, 13섹션·137대상의 실제 이동·이력·외부 변경·재실행을 확인했다. [사용법](docs/73-direct-work-navigation.md) · [QA](qa/direct-work-navigation-review.md).
 

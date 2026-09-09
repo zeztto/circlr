@@ -72,9 +72,9 @@ struct InlineCircleEditor: View {
                 case .effect(let effect):
                     let projectID=store.project.id, address=store.hierarchySelection
                     ScrollView { VStack(alignment: .leading, spacing: 22) {
-                        EffectControls(effect: Binding(get: {if case .effect(let value)=store.selectedMusic?.content {return value};return effect}, set: { value in store.updateMusic("이펙트 편집") { $0.content = .effect(value) } }), allowsAU: true,isCurrent:{store.project.id==projectID && store.hierarchySelection==address})
+                        EffectControls(effect: Binding(get: {if case .effect(let value)=store.selectedMusic?.content {return value};return effect}, set: { value in store.updateMusic("이펙트 편집") { $0.content = .effect(value) } }), allowsAU: true,isCurrent:{store.project.id==projectID && store.hierarchySelection==address},chooseAudioUnit:{store.showSoundPicker(.musicEffect)})
+                        SoundPickerButton(title:"Audio Unit 이펙트 찾기",current:effect.kind == .audioUnit ? effect.plugin?.name ?? "Audio Unit 선택 필요":"설치된 Audio Unit 이펙트") {store.showSoundPicker(.musicEffect)}
                         if effect.kind == .audioUnit {
-                            StudioChoice("Audio Unit", selection: Binding(get: { effect.plugin?.id ?? "" }, set: { id in store.updateMusic("Audio Unit 선택") { var value = effect; value.plugin = store.effects.first { $0.id == id }; $0.content = .effect(value) } }), options: [("", "선택")]+store.effects.map { ($0.id, $0.name) })
                             Button("플러그인 편집") { store.showMusicPluginEditor() }.disabled(effect.plugin == nil)
                         }
                         HStack(spacing: 22) {
