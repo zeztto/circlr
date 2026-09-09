@@ -6,7 +6,9 @@ macOS용 앨범·송폼 궤도 편집기. **앨범 → 곡·악장 → 섹션 �
 
 연결 UI는 [서클 둘레 8방향 IN/OUT과 다중 입출력](docs/22-eight-direction-ports.md)으로 확장 중이다. 포트의 신호 의미와 연결점 배치를 분리한다. 아래 일반 사용법은 배포된 0.19 앱 기준이며 새 포트 기능은 독립 개발 브랜치에서 검증한다.
 
-현재 **`codex/daw-integration`의 0.20.0 build 83**에 녹음 lifecycle과 8방향·다중 bus·그룹 포트를 통합했다. 같은 캔버스의 연결 편집·녹음 상태·스텝·오토메이션이 공존하며, 녹음 시작·정리 중 음악 편집과 Undo의 경쟁을 차단한다. build 23의 실제 편집·바운스·Undo·저장/재열기·닫기 최소화 및 출력별 모션 검증은 [통합 QA](qa/daw-integration-review.md)에 기록했다.
+현재 **`codex/daw-integration`의 0.20.0 build 84**에 녹음 lifecycle과 8방향·다중 bus·그룹 포트를 통합했다. 같은 캔버스의 연결 편집·녹음 상태·스텝·오토메이션이 공존하며, 녹음 시작·정리 중 음악 편집과 Undo의 경쟁을 차단한다. build 23의 실제 편집·바운스·Undo·저장/재열기·닫기 최소화 및 출력별 모션 검증은 [통합 QA](qa/daw-integration-review.md)에 기록했다.
+
+**build84는 편곡안 목록에서 연결 순서·반복·경로 제외 섹션과 오류를 보여준다.** `ArrangementCompiler`와 경로 cursor를 공유한다. Swift401개·Release68.85초와 실제 작은 창의 같은 이름 비교·키보드 전환·연결 수정 반영·Undo·재열기를 확인했다. QA checker의 native15개 상태·자산2개·source SHA 대조도 통과했으며 오디오 시작은 모두0회다. [계약](docs/98-arrangement-route-preview.md) · [QA](qa/arrangement-route-review.md).
 
 **build83은 편곡안의 생성·이름 변경·전환을 한 목록으로 모았다.** MIDI·섹션 편집 중에도 상단에서 현재 편곡 번호와 이름을 확인한다. 목록에서 ⇧⌘N으로 이름을 바꾸고 ⇧⌘D로 이름을 정해 복제하며, 서클 색상과 원안을 보존한다. MCP 복제는 현재 재생 편곡을 유지하고, `select_arrangement`로 명시적으로 전환한다. UI 복제는 새 편곡을 바로 선택한다.
 

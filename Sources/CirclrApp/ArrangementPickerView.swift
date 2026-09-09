@@ -9,6 +9,7 @@ struct ArrangementPickerRequest:Identifiable {
     let destination:String
     let currentID:ID?
     let choices:[ArrangementChoice]
+    let routes:[ID:ArrangementRouteSummary]
 }
 
 extension AppStore {
@@ -21,8 +22,17 @@ extension AppStore {
         do {
             let choices=try ArrangementSelection.catalog(project,compositionID:owner.id)
             soundPickerRequest=nil;libraryOpen=false;navigationOpen=false;commandPalette=nil;keyboardHelp=false
-            arrangementPickerRequest=ArrangementPickerRequest(identity:numberEditIdentity,compositionID:owner.id,destination:owner.kind.label+" · "+owner.name,currentID:owner.selectedArrangementID,choices:choices)
+            arrangementPickerRequest=ArrangementPickerRequest(identity:numberEditIdentity,compositionID:owner.id,destination:owner.kind.label+" · "+owner.name,currentID:owner.selectedArrangementID,choices:choices,routes:arrangementRouteSummaries(choices))
         }catch{fail(error)}
+    }
+    private func arrangementRouteSummaries(_ choices:[ArrangementChoice])->[ID:ArrangementRouteSummary] {
+        var summaries:[ID:ArrangementRouteSummary]=[:]
+        for choice in choices {
+            if let arrangement=project.arrangements.first(where:{$0.id==choice.id}) {
+                summaries[choice.id]=ArrangementRouteSummary.make(arrangement)
+            }
+        }
+        return summaries
     }
     func arrangementPickerCurrent(_ request:ArrangementPickerRequest)->Bool {
         arrangementPickerRequest?.id==request.id && request.identity==numberEditIdentity && arrangementPickerOwner?.id==request.compositionID && !preparing && !midiRecording && !audioRecordingBusy && !audioRecordPending && mediaImportTask==nil
@@ -41,7 +51,7 @@ extension AppStore {
         }
         guard let owner=project.album?.composition(request.compositionID) else{throw CirclrError("대상 곡을 찾을 수 없습니다")}
         let choices=try ArrangementSelection.catalog(project,compositionID:owner.id)
-        arrangementPickerRequest=ArrangementPickerRequest(identity:numberEditIdentity,compositionID:owner.id,destination:owner.kind.label+" · "+owner.name,currentID:owner.selectedArrangementID,choices:choices)
+        arrangementPickerRequest=ArrangementPickerRequest(identity:numberEditIdentity,compositionID:owner.id,destination:owner.kind.label+" · "+owner.name,currentID:owner.selectedArrangementID,choices:choices,routes:arrangementRouteSummaries(choices))
     }
     func applyArrangement(_ id:ID,request:ArrangementPickerRequest)throws {
         guard arrangementPickerCurrent(request),request.choices.contains(where:{$0.id==id}) else{throw CirclrError("대상이나 음악이 바뀌었거나 다른 작업 중입니다. 닫은 뒤 다시 열어주세요.")}
@@ -143,19 +153,35 @@ struct ArrangementPickerView:View {
     private func move(_ delta:Int) {guard naming == nil,!rows.isEmpty else{return};let i=rows.firstIndex{$0.id==active} ?? 0;highlighted=rows[max(0,min(rows.count-1,i+delta))].id}
     private func row(_ choice:ArrangementChoice)->some View {
         let selected=choice.id==request.currentID
-        let label=choice.title+" · "+choice.detail+(selected ? " · 재생 편곡":"")
+        let label=([choice.title,choice.detail]+routeLines(choice)+(selected ? ["재생 편곡"]:[])).joined(separator:" · ")
         return Button{apply(choice.id)}label:{rowContent(choice,selected:selected)}
-            .buttonStyle(.plain).disabled(!current || naming != nil).id(choice.id).help(choice.title+" · "+choice.detail)
+            .buttonStyle(.plain).disabled(!current || naming != nil).id(choice.id).help(label)
             .accessibilityLabel(label).accessibilityAddTraits(active==choice.id ? .isSelected:[])
     }
     private func rowContent(_ choice:ArrangementChoice,selected:Bool)->some View {
-        HStack(spacing:12) {
-            VStack(alignment:.leading,spacing:6) {
-                Text(choice.title).font(.system(size:14,weight:.medium)).lineLimit(2)
-                Text(choice.detail).font(.system(size:12)).foregroundStyle(StudioTheme.secondary)
-            }.frame(maxWidth:.infinity,alignment:.leading)
-            if selected {Text("재생 편곡").font(.system(size:12)).foregroundStyle(StudioTheme.accent).fixedSize()}
-        }.padding(.horizontal,18).padding(.vertical,12).contentShape(Rectangle()).background(active==choice.id ? StudioTheme.raised:Color.clear)
+        VStack(alignment:.leading,spacing:6) {
+            HStack(alignment:.top,spacing:12) {
+                Text(choice.title).font(.system(size:14,weight:.medium)).lineLimit(2).frame(maxWidth:.infinity,alignment:.leading)
+                if selected {Text("재생 편곡").font(.system(size:12)).foregroundStyle(StudioTheme.accent).fixedSize()}
+            }
+            ForEach(Array(routeLines(choice).enumerated()),id:\.offset) {_,line in
+                Text(line).font(.system(size:12)).foregroundStyle(StudioTheme.secondary)
+                    .lineLimit(2).fixedSize(horizontal:false,vertical:true).help(line)
+            }
+        }.frame(maxWidth:.infinity,alignment:.leading).padding(.horizontal,18).padding(.vertical,12)
+            .contentShape(Rectangle()).background(active==choice.id ? StudioTheme.raised:Color.clear)
+    }
+    private func routeLines(_ choice:ArrangementChoice)->[String] {
+        guard let route=request.routes[choice.id] else{return [choice.detail,"재생 경로를 확인할 수 없습니다"]}
+        if let error=route.error {return ["재생 경로 확인 · "+error]}
+        if route.steps.isEmpty {return ["빈 편곡 · 섹션을 추가하세요"]}
+        func stepText(_ step:ArrangementRouteStep)->String {
+            step.name+(step.repeatCount>1 ? " ×\(step.repeatCount)":"")
+        }
+        var lines=["재생 \(route.steps.count)개 섹션 · 총 \(route.totalOccurrences)회 · 경로 제외 \(route.excluded.count)개",
+                   "순서 · "+route.steps.map(stepText).joined(separator:" → ")]
+        if !route.excluded.isEmpty {lines.append("경로 제외 · "+route.excluded.map(stepText).joined(separator:" · "))}
+        return lines
     }
     private func beginName(duplicate:Bool) {
         guard current,let choice=currentChoice else{return}

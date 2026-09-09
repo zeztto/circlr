@@ -170,16 +170,11 @@ public enum ArrangementCompiler {
         guard (1...2).contains(project.schemaVersion) else { throw CirclrError("이 프로젝트의 형식 버전을 지원하지 않습니다") }
         guard let a = project.arrangements.first(where: { $0.id == (arrangementID ?? project.activeArrangementID) }) else { throw CirclrError("편곡안을 찾을 수 없습니다") }
         if a.uses.isEmpty { return ExecutionPlan(revision: project.musicRevision, arrangementID: a.id, occurrences: [], transitions: [], duration: 0, warnings: []) }
-        guard let first = onlyUseID ?? a.startID else { throw CirclrError("시작 서클을 지정하세요") }
-        guard Set(a.uses.map(\.id)).count == a.uses.count else { throw CirclrError("서클 ID가 중복되었습니다") }
-        let uses = Dictionary(uniqueKeysWithValues: a.uses.map { ($0.id, $0) })
-        var id: ID? = first, visited = Set<ID>(), occurrences: [Occurrence] = [], transitions: [ScheduledTransition] = [], warnings: [String] = [], cursor = 0.0
+        var flow = try ArrangementFlowCursor(a, onlyUseID: onlyUseID)
+        var occurrences: [Occurrence] = [], transitions: [ScheduledTransition] = [], warnings: [String] = [], cursor = 0.0
         var pending: (FlowEdge, Occurrence)?
         var eventCount = 0
-        while let current = id {
-            guard visited.insert(current).inserted else { throw CirclrError("순환 연결을 발견했습니다. 반복 횟수를 사용하세요") }
-            guard let use = uses[current] else { throw CirclrError("연결된 서클을 찾을 수 없습니다") }
-            guard (1...256).contains(use.repeatCount) else { throw CirclrError("\(use.name): 반복 횟수는 1–256회로 지정하세요") }
+        while let use = try flow.next() {
             guard use.gain.isFinite && (0...4).contains(use.gain) else { throw CirclrError("서클 gain 값을 확인하세요") }
             let (section, context, clock) = try context(project: project, use: use, arrangementID: a.id)
             let lanes = try effectiveLanes(section: section, use: use)
@@ -217,12 +212,7 @@ public enum ArrangementCompiler {
                 occurrences.append(occurrence); cursor = occurrence.end
                 guard occurrences.count <= 10_000, cursor <= 3600 else { throw CirclrError("한 번에 준비할 수 있는 1시간/10,000회 범위를 넘었습니다") }
             }
-            if onlyUseID != nil { break }
-            let edges = a.edges.filter { $0.from == current }
-            if use.isEnd { id = nil }
-            else if edges.count == 1 { pending = (edges[0], occurrences.last!); id = edges[0].to }
-            else if edges.count > 1, let chosen = a.chosenEdges[current], let edge = edges.first(where: { $0.id == chosen }) { pending = (edge, occurrences.last!); id = edge.to }
-            else { throw CirclrError("\(use.name): 다음 연결을 선택하거나 끝으로 지정하세요") }
+            if let edge = try flow.advance(after: use) { pending = (edge, occurrences.last!) }
         }
         _ = try SignalValidator.sorted(project.signal, tracks: project.tracks)
         return ExecutionPlan(revision: project.musicRevision, arrangementID: a.id, occurrences: occurrences, transitions: transitions, duration: occurrences.map(\.end).max() ?? 0, warnings: Array(Set(warnings)).sorted())
