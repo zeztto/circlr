@@ -25,11 +25,22 @@ import SwiftUI
             if let canvas = view as? AlbumCanvasView, canvas.animation != nil { return }
             ancestor = view.superview
         }
-        control.scrollToVisible(control.bounds)
+        Self.reveal(control)
         if window.makeFirstResponder(control) {
             if let field = control as? NSTextField, field.currentEditor() == nil { return }
             requestedOrder = nil
         }
+    }
+    static func reveal(_ control:NSView) {
+        if let table=control as? NSTableView,table.selectedRow>=0,table.selectedRow<table.numberOfRows {
+            table.scrollRowToVisible(table.selectedRow)
+            let row=table.rect(ofRow:table.selectedRow)
+            table.scrollToVisible(row)
+            if let viewport=table.enclosingScrollView {
+                // Reveal this row through the outer composer scroll, not the entire table viewport.
+                viewport.scrollToVisible(table.convert(row,to:viewport))
+            }
+        }else {control.scrollToVisible(control.bounds)}
     }
     func scheduleFocusRequest() {
         guard requestedOrder != nil, !focusScheduled else { return }

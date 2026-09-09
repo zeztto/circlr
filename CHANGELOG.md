@@ -1,5 +1,11 @@
 # 변경 이력
 
+## 개발 중 — 0.20.0 build104 연결 focus·선택 행 유지
+
+- stable identity·측정 높이·connections 전용 reanchor와 공통 `PortKeyboardFocus`의 선택 행 inner/outer reveal 적용.
+- 초기 목록 공백·final2 선택 행 가림을 수정한 최종 Release40.00초 통과. 실제 target/search/filter 폭 왕복·caret·목록 heading/첫 행·키보드 재연결/취소 확인.
+- QA 전체11개 상태·음악r36/자산2개·source hash·strict manifest/disk·완료 open과 시각 검토 통과. physical0·사용자 앱 유지. 케이블 적용·그룹 관리·IME 조합·숨은 jump focus 폭 전환은 미검증. [계약](docs/119-connection-focus-continuity.md).
+
 ## 개발 중 — 0.20.0 build103 오디오 compact 배치
 
 - metadata 위·가변 높이 파형 frame·도구 Scroll 아래·action/nav flow·4열 label above 적용. audio 수치 focus만 선택적 자동 reveal.

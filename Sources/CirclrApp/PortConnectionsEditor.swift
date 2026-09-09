@@ -50,6 +50,7 @@ struct PortConnectionsEditor: View {
     @State private var workspaceGeneration:Int?
     @State private var scrollRequest=UUID()
     @State private var scrollDestination="compose"
+    @State private var connectionListHeight:CGFloat=60
     let keyboard:PortKeyboardFocus
     private var isCurrentWorkspace:Bool {
         workspaceProjectID==store.project.id && workspaceGeneration==store.mediaImportGeneration && workspaceKey?.node==node?.id && workspaceKey?.original==store.editOriginal
@@ -95,7 +96,9 @@ struct PortConnectionsEditor: View {
     private var canConnect:Bool {own != nil && workspace.target.map{id in targets.contains{$0.endpoint==id}} == true}
     var body: some View {
         GeometryReader { geometry in
-            VStack(alignment:.leading,spacing:12) {
+            let compact=geometry.size.width<800
+            let availableHeight=max(60,geometry.size.height-(isGroup ? 54:0))
+            VStack(alignment:.leading,spacing:compact ? 12:0) {
                 if isGroup {
                     HStack {
                         Text("노출 포트 \(ports.count)개").fontWeight(.semibold)
@@ -110,11 +113,6 @@ struct PortConnectionsEditor: View {
                     ScrollView {GroupPortEditor(store:store,group:node.id,keyboard:keyboard) { id in
                         workspace.managingGroupPorts=false;workspace.replacing=nil;workspace.target=nil;workspace.query="";workspace.ownPortID=id;focusSearch()
                     }}
-                } else if geometry.size.width >= 800 {
-                    HStack(alignment: .top, spacing: 24) {
-                        compose(height:geometry.size.height-(isGroup ? 54:0)).frame(maxWidth: .infinity)
-                        connectionWorkspace.frame(maxWidth: .infinity)
-                    }.padding(.trailing, 8)
                 } else {
                     HStack(spacing:8) {
                         PortActionButton(title:workspace.replacing == nil ? "연결 만들기":"재연결 편집",keyboard:keyboard,order:-7) {
@@ -124,23 +122,51 @@ struct PortConnectionsEditor: View {
                             jump(to:"connections")
                         }.frame(width:140)
                         Spacer(minLength:0)
-                    }.frame(height:30)
+                    }.frame(height:compact ? 30:0).clipped().opacity(compact ? 1:0)
+                        .disabled(!compact).accessibilityHidden(!compact)
                     ScrollViewReader { proxy in
                         ScrollView {
-                            VStack(alignment:.leading,spacing:18) {
-                                compose(height:340).id("compose")
-                                Divider()
-                                VStack(alignment:.leading,spacing:10) {connectionHeading;connectionList}.id("connections")
+                            PortConnectionColumns(compact:compact) {
+                                compose(height:compact ? 340:availableHeight).id("compose")
+                                VStack(alignment:.leading,spacing:10) {
+                                    connectionHeading
+                                    ScrollView {
+                                        connectionList.fixedSize(horizontal:false,vertical:true).background(GeometryReader { size in
+                                            Color.clear.preference(key:PortConnectionListHeight.self,value:size.size.height)
+                                        })
+                                    }.frame(height:compact ? max(60,connectionListHeight):max(60,availableHeight-40))
+                                        .scrollDisabled(compact)
+                                }.id("connections")
                             }.padding(.trailing,8)
+                        }
+                        .onPreferenceChange(PortConnectionListHeight.self) {height in
+                            if abs(connectionListHeight-height)>0.5 {connectionListHeight=height}
+                        }
+                        .onChange(of:compact) {_,_ in
+                            // Resize preserves the native responder; only reveal its new location.
+                            let project=store.project.id,generation=store.mediaImportGeneration,target=node?.id,original=store.editOriginal
+                            DispatchQueue.main.async {
+                                guard store.connectionsOpen,store.project.id==project,store.mediaImportGeneration==generation,
+                                      node?.id==target,store.editOriginal==original else{return}
+                                if let field=NSApp.keyWindow?.firstResponder as? NSTextView,
+                                   let control=field.delegate as? NSView {PortKeyboardFocus.reveal(control)}
+                                else if let control=NSApp.keyWindow?.firstResponder as? NSView {PortKeyboardFocus.reveal(control)}
+                            }
                         }
                         .onChange(of:scrollRequest) {_,_ in
                             let destination=scrollDestination,request=scrollRequest
                             let project=store.project.id,generation=store.mediaImportGeneration,target=node?.id,original=store.editOriginal
-                            proxy.scrollTo(destination,anchor:.top)
+                            if compact {proxy.scrollTo(destination,anchor:.top)}
                             DispatchQueue.main.async {
                                 guard scrollRequest==request,store.connectionsOpen,store.project.id==project,
                                       store.mediaImportGeneration==generation,node?.id==target,store.editOriginal==original else{return}
                                 keyboard.focus(destination == "connections" ? 70:20)
+                                // Native focus reveals only the control; restore the requested heading alignment afterward.
+                                DispatchQueue.main.async {
+                                    guard compact,destination=="connections",scrollRequest==request,store.connectionsOpen,store.project.id==project,
+                                          store.mediaImportGeneration==generation,node?.id==target,store.editOriginal==original else{return}
+                                    proxy.scrollTo(destination,anchor:.top)
+                                }
                             }
                         }
                     }
@@ -155,9 +181,6 @@ struct PortConnectionsEditor: View {
         .onChange(of: connections) { _,_ in if isCurrentWorkspace {workspace=workspace.restored(ports:ports,targets:availableTargets,connections:connections)} }
         .onChange(of: targets.map(\.endpoint)) { _, ids in if isCurrentWorkspace,let target=workspace.target,!ids.contains(target) {workspace.target=nil} }
         .onChange(of: ports.map(\.id)) {_,ids in if isCurrentWorkspace,!ids.contains(workspace.ownPortID) {reset()} }
-    }
-    private var connectionWorkspace:some View {
-        VStack(alignment:.leading,spacing:10) {connectionHeading;ScrollView {connectionList}}
     }
     private var connectionHeading:some View {
         HStack {
@@ -421,5 +444,30 @@ struct AudioRouterEditor: View {
             try AudioRouterEditing.replace(target,router:next,expected:expected,in:&candidate)
             store.mutate("라우터 경로 설정"){$0=candidate};error=""
         }catch{self.error=error.localizedDescription}
+    }
+}
+
+private struct PortConnectionListHeight:PreferenceKey {
+    static var defaultValue:CGFloat=0
+    static func reduce(value:inout CGFloat,nextValue:()->CGFloat){value=max(value,nextValue())}
+}
+
+/// Width changes reposition the same native search, port, target and cable controls.
+private struct PortConnectionColumns:SwiftUI.Layout {
+    let compact:Bool
+    func sizeThatFits(proposal:ProposedViewSize,subviews:Subviews,cache:inout ()) -> CGSize {
+        guard subviews.count==2 else{return .zero}
+        let width=proposal.width ?? 800,column=compact ? width:(width-24)/2
+        let first=subviews[0].sizeThatFits(ProposedViewSize(width:column,height:nil))
+        let second=subviews[1].sizeThatFits(ProposedViewSize(width:column,height:nil))
+        return CGSize(width:width,height:compact ? first.height+18+second.height:max(first.height,second.height))
+    }
+    func placeSubviews(in bounds:CGRect,proposal:ProposedViewSize,subviews:Subviews,cache:inout ()) {
+        guard subviews.count==2 else{return}
+        let width=compact ? bounds.width:(bounds.width-24)/2
+        let first=subviews[0].sizeThatFits(ProposedViewSize(width:width,height:nil))
+        subviews[0].place(at:bounds.origin,anchor:.topLeading,proposal:ProposedViewSize(width:width,height:first.height))
+        let point=compact ? CGPoint(x:bounds.minX,y:bounds.minY+first.height+18):CGPoint(x:bounds.minX+width+24,y:bounds.minY)
+        subviews[1].place(at:point,anchor:.topLeading,proposal:ProposedViewSize(width:width,height:nil))
     }
 }

@@ -1,6 +1,12 @@
 # 써클러 개발 방향과 실행 계획
 
-갱신: 2026-09-10. 계획 시작 기준: 0.11 native 앱, 0.12 음악 에이전트 키트 소스. 기존 출고 표기는 0.19.0이며 실행 중 사용자 앱의 별도 관측 버전은0.14다. 개발 검증 후보는 0.20.0 build 103이다. 목표는 송폼 중심의 전문 음악 제작을 먼저 완성하고, 이를 아티스트의 작품·세계관 관리로 확장하는 것이다.
+갱신: 2026-09-10. 계획 시작 기준: 0.11 native 앱, 0.12 음악 에이전트 키트 소스. 기존 출고 표기는 0.19.0이며 실행 중 사용자 앱의 별도 관측 버전은0.14다. 개발 검증 후보는 0.20.0 build 104이다. 목표는 송폼 중심의 전문 음악 제작을 먼저 완성하고, 이를 아티스트의 작품·세계관 관리로 확장하는 것이다.
+
+## 현재 검증 완료 — build104 연결 focus 유지
+
+폭 전환의 control identity와 target 선택 행 inner/outer reveal을 유지한다. 최종 Release40.00초와 실제 target/search/filter 왕복·caret·목록 이동·키보드 재연결/취소를 확인했다. QA11개 상태·음악r36/자산2개·source hash·strict 재열기/disk와 시각 검토를 통과했다. physical0·사용자 앱 유지. 실제 케이블 적용·그룹 관리·IME 조합·숨은 jump focus 폭 전환은 미검증이며 compact 선택 행 reveal은 상단 port actions와 동시 노출이 아니다. [계약](119-connection-focus-continuity.md).
+
+다음 UI 조사 우선순위는 `AutomationEditor.swift:95`의 고정폭 합615px가 compact591px를 넘는지 실제 재현하는 것이다. `TrackBounceStatus`의 assessment 메시지가 else-if tail notice를 가리는 경우와 header take 이름만 표시하는 범위도 소스 감사 후보로 남긴다. 아직 native 확인 결과는 없다. DAW 안정성 후속은 `AudioUnitHost.renderNotes`의 앱 내 instantiate/render가 남은 offline AU instrument 격리이며 build96 effect 격리 완료와 구분한다.
 
 ## 현재 검증 완료 — build103 오디오 compact 배치
 
@@ -8,13 +14,13 @@
 
 ## 현재 검증 완료 — build102 연결 목록 접근
 
-고정 jump bar로 compact 목록/입력을 이동하고 재연결 선택 시 compose/search에 focus한다. 최종 Release38.32초와 실제 keyboard·재연결·대상/octant 보존·취소·wide/compact 왕복을 확인했다. QA14개 상태·focus AX5개·음악36/자산2개·studio SHA와 resized/reopened/disk strict 일치를 통과했다. 폭 전환 focus가 window로 돌아가는 UX는 남아 있다. 실제 케이블 적용·빈 연결·그룹 관리·외부 intent는 native 미검증이며 physical0·사용자 앱을 유지한다. [계약](117-connection-workspace-access.md).
+고정 jump bar로 compact 목록/입력을 이동하고 재연결 선택 시 compose/search에 focus한다. 최종 Release38.32초와 실제 keyboard·재연결·대상/octant 보존·취소·wide/compact 왕복을 확인했다. QA14개 상태·focus AX5개·음악36/자산2개·studio SHA와 resized/reopened/disk strict 일치를 통과했다. build102 당시 폭 전환 focus 이탈은 build104에서 개선했다. 실제 케이블 적용·빈 연결·그룹 관리·외부 intent는 native 미검증이며 physical0·사용자 앱을 유지한다. [계약](117-connection-workspace-access.md).
 
 ## 현재 검증 완료 — build101 inline header
 
 stable3그룹·compact 두 줄과 Orbit 여백으로 header 양끝을 표시한다. 초기69.55초 후보의 잔여 잘림을 수정한 최종 Release37.87초에서 한국어 초안/focus 왕복·Esc·설정/연결·상위 이동을 확인했다. QA7개 상태·초안AX2개·음악r36/자산2개·원본 SHA·strict 재열기 대조를 통과했다. physical0·사용자 앱 유지, 녹음 busy/takes·IME 조합·mode Tab 순서·body 하단 스크롤은 미검증이다. 두 줄 header의 body 감소는 기존 스크롤이 필요하며 build100 결과를 이번 검증에 합산하지 않는다. [계약](116-inline-header-layout.md).
 
-후속 native 조사 후보는 compact591px의 AudioWorkspace 한 줄/고정4열 입력, 폭800 미만 PortConnectionsEditor의 compose340 아래 기존 연결 목록이다. 아직 소스 감사의 잘림 가능성만 있어 실제 재현 뒤 trim 초안/Undo 보존과 reconnect 대상 reveal·목록 직접 이동을 검토한다.
+당시 AudioWorkspace compact 후보는 build103, 기존 연결 목록 접근 후보는 build102에서 실제 재현·수정했다. 연결 폭 전환 focus는 위 build104의 별도 진행 범위다.
 
 ## 현재 검증 완료 — build100 MIDI compact 배치
 
@@ -140,7 +146,7 @@ build81에서 종류별 색상과 사용자 지정·복원을 구현하고 검�
 
 이펙트→오토메이션→바운스 산출물을 해시·PCM으로 재검증하고, build81에서 저장 프로젝트 전체 복원을 확인했다. 궤도 화면에서도 음악 데이터가 유지된다. [통합 근거와 검증 경계](../qa/automation-flow-review.md). 다음은 실제 장치 출력 재점검과 같은 곡의 편곡 대안이다.
 
-## 현행 실행 순서 — build103 기준
+## 현행 실행 순서 — build104 기준
 
 build80에서 바운스 대상명과 연결 사전 검사를 통합하고 실제 UI 바운스·복원·MCP 즉시 거절을 확인했다. [QA](../qa/bounce-target-review.md). 이후 같은 곡에서 이펙트와 오토메이션을 적용한 바운스·저장/재열기는 위 통합 흐름 QA에서 확인했다. 개별 기능 검증을 한 곡 제작 완료로 계산하지 않는다.
 
