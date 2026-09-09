@@ -10,6 +10,8 @@ macOS용 앨범·송폼 궤도 편집기. **앨범 → 곡·악장 → 섹션 �
 
 **build81은 서클 색상을 구분하고 직접 지정한다.** 서클 종류별 기본색과 개별 사용자 지정·복원 메뉴를 추가했다. 저장 모델과 history 14개 테스트를 통과했으며 실제 색상 선택·Undo·저장/재열기와 패널 초기화 회귀를 확인했다. [계약](docs/96-circle-colors.md).
 
+이펙트·오토메이션·바운스의 저장/재열기와 보관된 WAV 자동화 반영을 재검증했다. 물리 출력·청취 결과와 구분한 [통합 흐름 QA](qa/automation-flow-review.md)를 제공한다.
+
 **build80은 바운스 대상과 연결 문제를 실행 전에 보여준다.** 편집기의 공통 버튼에 트랙명을 표시하고, 연결 없는 출력은 UI·MCP에서 렌더 시작 전에 거절한다. 관련17개 테스트·실제 바운스/원본 복원/Undo·native7상태를 검증했다. [계약](docs/95-bounce-target-preflight.md) · [QA](qa/bounce-target-review.md).
 
 **build79은 오디오 가져오기 대상을 파일 창에서 보여준다.** 섹션에서는 새 트랙, 개별 음악 서클에서는 선택 트랙을 사용해 이전 트랙에 뜻하지 않게 섞이는 일을 막는다. 관련16개 테스트와 실제 파일 가져오기·Undo·재열기를 확인했다. [계약](docs/94-audio-import-destination.md) · [QA](qa/import-destination-review.md).
