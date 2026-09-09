@@ -16,6 +16,8 @@ build 60: 에이전트 한도 해제 요청 후 read-only 조사 dispatch를 재
 
 ## 상태와 남은 완료 조건
 
+build 62: read-only `circlr_sounds`로 실제 음색·변형·AU 목록을 조회하고 기존 apply로 주소를 병합하는 경로를 연결했다. Swift 451개·Python 28개, 실제 stdio/최소화/재실행 조회·GUI 대조와 적용/Undo·patch 보존을 검증했다. [계약](76-agent-sound-catalog.md) · [QA](../qa/agent-sounds-review.md). 다음은 곡·악장의 편곡안 선택 검색이며 설정 메뉴 깊이와 동명 목록 구분을 줄인다.
+
 build 61: 실제 Sound Bank 이름·계열·변형·드럼 킷 검색과 optional bankLSB 저장/로드를 연결했다. 키보드 선택·no-op·Undo/Redo·충돌 거절·비활성 신스 보존·재열기와 작은 창 안내 표시를 확인했다. Swift 445개·Python 26개, native 16상태/18화면 통과. 독립 review dispatch를 다시 시도했으나 thread limit으로 거절돼 순차 검토했다. [계약](75-sound-bank-program-search.md) · [QA](../qa/sound-bank-search-review.md). 읽기 전용 MCP 음색 catalog와 편곡안 검색을 다음 독립 범위로 분리하며 물리 I/O gate는 유지한다.
 
 | 작업 | 현재 구현 | 확장·완료 조건 |

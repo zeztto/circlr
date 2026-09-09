@@ -47,7 +47,7 @@ extension AppStore {
          "playback":capturePlaybackVisualization?() ?? ["playing":playback.playing,"seconds":playback.seconds],"output":json(playback.outputStatus),"audition":json(auditionOutput.status),
          "view":["zoom":hierarchyZoom,"layout":project.usesOrbits ? "orbit":"freeform","consoleOpen":consoleOpen,"consoleBounds":[consoleBounds.minX,consoleBounds.minY,consoleBounds.width,consoleBounds.height]],
          "library":["open":libraryOpen,"folders":library.folders.count,"files":library.entries.count,"selectedFiles":library.chosenIDs.count,"scanning":library.scanning,"searching":library.searching,"previewPreparing":library.previewPreparing,"previewPlaying":library.previewing,"previewPending":library.previewPending,"previewSeconds":library.previewSeconds],
-         "runtime":["version":Bundle.main.object(forInfoDictionaryKey:"CFBundleShortVersionString") as? String ?? "development","bundleID":Bundle.main.bundleIdentifier ?? "","windows":NSApplication.shared.windows.filter{$0.identifier?.rawValue=="main"}.map{["visible":$0.isVisible,"minimized":$0.isMiniaturized]}]]
+         "runtime":["version":Bundle.main.object(forInfoDictionaryKey:"CFBundleShortVersionString") as? String ?? "development","build":Bundle.main.object(forInfoDictionaryKey:"CFBundleVersion") as? String ?? "development","capabilities":["soundCatalog":1],"bundleID":Bundle.main.bundleIdentifier ?? "","windows":NSApplication.shared.windows.filter{$0.identifier?.rawValue=="main"}.map{["visible":$0.isVisible,"minimized":$0.isMiniaturized]}]]
     }
     func receiveAgent(_ data:Data,source:String)->[String:Any] {
         do {
@@ -60,7 +60,7 @@ extension AppStore {
             let result: [String:Any]
             do {result=["ok":true,"requestID":request.id,"result":try executeAgent(request,source:source)]}
             catch {recordActivity(source,"실패 · \(request.method) · \(error.localizedDescription)");result=["ok":false,"requestID":request.id,"error":error.localizedDescription,"projectID":project.id,"revision":project.musicRevision,"layoutRevision":project.portLayout?.revision ?? 0]}
-            if !["snapshot","inspect","ports","events","job"].contains(request.method) {
+            if !["snapshot","inspect","ports","sounds","events","job"].contains(request.method) {
                 agentReplies[request.id]=(fingerprint,result);agentReplyOrder.append(request.id)
                 if agentReplyOrder.count>256 {agentReplies.removeValue(forKey:agentReplyOrder.removeFirst())}
             }
@@ -71,6 +71,9 @@ extension AppStore {
         let args=request.arguments ?? AgentArguments()
         switch request.method {
         case "snapshot":return agentState()
+        case "sounds":
+            guard let catalog=agentSoundCatalog,let result=json(try catalog.page(args)) as? [String:Any] else{throw CirclrError("음색 목록을 준비하지 못했습니다. 앱을 다시 열어주세요")}
+            return result
         case "ports":
             guard let node=args.node else {throw CirclrError("조회할 node 주소가 필요합니다")}
             guard let result=json(try AgentPortEditing.snapshot(at:node,in:project)) as? [String:Any] else {throw CirclrError("포트 응답을 인코딩할 수 없습니다")}

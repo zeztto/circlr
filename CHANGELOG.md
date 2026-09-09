@@ -2,6 +2,12 @@
 
 0.1–0.3은 설계 문서 revision이며, 0.4.0부터 로컬 실행 프로토타입을 포함한다.
 
+## 개발 중 — 0.20.0 build 62 MCP 음색 조회
+
+- GUI와 같은 catalog/search를 읽는 `circlr_sounds`를 추가했다. 이름·계열·제조사·정확한 #번호, 악기/효과·드럼 필터, 최대 128개 페이지와 catalogID 변경 검사를 지원한다. 실제 음색 ID와 raw program/LSB/drums 또는 state 없는 AU descriptor를 반환한다.
+- snapshot.runtime에 build·soundCatalog capability를 추가하고 read-only 역할과 번들 에이전트 키트에 조회 방법·기존 patch 보존 규칙을 반영했다. 성공한 읽기는 문서·포커스·재생·activity·쓰기 캐시를 변경하지 않는다. adapter 도구는 23개다.
+- Swift 451개·Python 28개·release와 패키지 검사 통과. 실제 stdio MCP 3회, 각 7페이지/254악기와 10검색, 적용/Undo/Redo·최소화·저장 재열기·GUI 4화면을 검증했다. 물리 재생·실제 AU 작동은 미검증이다. [계약](docs/76-agent-sound-catalog.md) · [QA](qa/agent-sounds-review.md).
+
 ## 개발 중 — 0.20.0 build 61 Sound Bank 이름·변형 검색
 
 - 설치된 macOS Sound Bank metadata에서 실제 음색을 읽어 이름·한글 계열·정확한 `#1`–`#128` 번호로 검색한다. 멜로디/드럼 킷과 같은 번호의 변형 뱅크를 구별하며 숫자 stepper와 별도 드럼 toggle을 검색으로 통합했다.

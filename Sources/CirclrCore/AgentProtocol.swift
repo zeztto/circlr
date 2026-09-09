@@ -9,6 +9,13 @@ public struct AgentRequest:Codable {
     public init(method:String,id:String = newID()){self.id=id;self.method=method}
 }
 public struct AgentArguments:Codable {
+    public var soundTarget:String?
+    public var query:String?
+    public var category:String?
+    public var bankDrums:Bool?
+    public var offset:Int?
+    public var limit:Int?
+    public var catalogID:String?
     public var node:CircleAddress?
     public var first:CirclePortEndpoint?
     public var second:CirclePortEndpoint?

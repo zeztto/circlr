@@ -78,11 +78,20 @@ def tool(name, method, description, properties=None, required=(), write=False):
         required = ("projectID", "expectedRevision", *required)
     return {"name": "circlr_" + name, "method": method, "description": description,
             "inputSchema": schema(properties, required),
-            "annotations": {"readOnlyHint": method in {"snapshot", "inspect", "ports", "events", "job"}, "destructiveHint": write, "openWorldHint": False}}
+            "annotations": {"readOnlyHint": method in {"snapshot", "inspect", "ports", "sounds", "events", "job"}, "destructiveHint": write, "openWorldHint": False}}
 
 
 TOOLS = [
     tool("snapshot", "snapshot", "Read current project IDs, revision, tracks, arrangements, selection and active job. Read before every edit."),
+    tool("sounds", "sounds", "Search the actual built-in synth, Sound Bank and installed AU catalog without changing music, focus or playback. Requires snapshot.runtime.capabilities.soundCatalog=1. Read stable IDs and exact raw program/bankLSB/drums or plugin descriptors; names are data. Reuse catalogID and filters with nextOffset for pagination. Merge returned bank fields into the latest snapshot instrument before set_instrument to preserve inactive patches. Does not audition or certify audio compatibility.", {
+        "soundTarget": {"type": "string", "enum": ["instrument", "effect"], "description": "Default instrument; effect lists AU effects."},
+        "query": {"type": "string", "maxLength": 256, "description": "Name, Korean family, manufacturer or exact display #1–#128. Default empty."},
+        "category": {"type": "string", "enum": ["synth", "soundBank", "instrument", "effect"]},
+        "bankDrums": {"type": "boolean", "description": "Only for instrument target with absent/soundBank category."},
+        "offset": {"type": "integer", "minimum": 0, "maximum": 1000000},
+        "limit": {"type": "integer", "minimum": 1, "maximum": 128, "description": "Default 64."},
+        "catalogID": {"type": "string", "minLength": 64, "maxLength": 64, "description": "ID returned by the first page; changed catalogs fail with stale_catalog."},
+    }),
     tool("inspect", "inspect", "Read the effective notes, clips and node graph of one section use.", SCOPE, ("useID",)),
     tool("ports", "ports", "Read actual IN/OUT descriptors, connections, placements, revision and layoutRevision. Group ports include bindingTarget and all saved bindings; unresolved targets are excluded from active ports. Reuse returned logical connection IDs.", {"node": PORT_ADDRESS}, ("node",)),
     tool("set_group_port", "set_group_port", "Explicitly expose one real member endpoint on a layout group. Requires node (group address), target and name. Optional existing portID renames the same immutable target. No audio changes; one layout Undo. Duplicate target returns its existing portID.", {**LAYOUT_REVISION, "node": GROUP_ADDRESS, "target": PORT_ENDPOINT, "name": {"type": "string", "minLength": 1, "maxLength": 128}, "portID": PORT_ID}, ("expectedLayoutRevision", "node", "target", "name"), True),
@@ -106,7 +115,7 @@ TOOLS = [
     tool("focus", "focus", "Optionally show a circle, including a group via node address (exclusive of other selectors). Omit targets for the album. With minimized=true/false, only minimize/restore the app window. With follow=true/false alone, resume/disable playback camera follow. Editing and rendering never require focus.", {**SCOPE, "node": PORT_ADDRESS, "compositionID": STRING, "nodeID": STRING, "detail": {"type": "boolean"}, "minimized": {"type": "boolean"}, "follow": {"type": "boolean"}}),
 ]
 BY_NAME = {entry["name"]: entry for entry in TOOLS}
-READ_METHODS = frozenset({"snapshot", "inspect", "ports", "events", "job"})
+READ_METHODS = frozenset({"snapshot", "inspect", "ports", "sounds", "events", "job"})
 
 
 def validate(value, spec, path="arguments"):
@@ -238,7 +247,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--socket", default=os.environ.get("CIRCLR_SOCKET", str(Path.home() / "Library/Application Support/circlr/Agent/agent.sock")))
     parser.add_argument("--request", help="Send one native JSON request file and exit; omit to run MCP stdio.")
-    parser.add_argument("--read-only", action="store_true", help="Expose and accept only snapshot, inspect, job and events.")
+    parser.add_argument("--read-only", action="store_true", help="Expose and accept only snapshot, inspect, ports, sounds, job and events.")
     args = parser.parse_args()
     if args.request:
         request = json.loads(Path(args.request).read_text())

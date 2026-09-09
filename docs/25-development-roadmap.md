@@ -1,8 +1,10 @@
 # 써클러 개발 방향과 실행 계획
 
-갱신: 2026-09-09. 계획 시작 기준: 0.11 native 앱, 0.12 음악 에이전트 키트 소스. 사용 앱은 0.19.0, 개발 검증 후보는 0.20.0 build 61이다. 목표는 송폼 중심의 전문 음악 제작을 먼저 완성하고, 이를 아티스트의 작품·세계관 관리로 확장하는 것이다.
+갱신: 2026-09-09. 계획 시작 기준: 0.11 native 앱, 0.12 음악 에이전트 키트 소스. 사용 앱은 0.19.0, 개발 검증 후보는 0.20.0 build 62이다. 목표는 송폼 중심의 전문 음악 제작을 먼저 완성하고, 이를 아티스트의 작품·세계관 관리로 확장하는 것이다.
 
-**build 61에서 Sound Bank의 실제 음색 이름·변형 뱅크·드럼 킷을 검색한다.** 한글 계열과 정확한 표시 번호 #1–128을 지원하고, 저장·로더의 program/MSB/LSB 주소를 일치시켰다. 적용 범위·현재 선택·충돌 안내의 높이 압축도 수정했다. Swift 445개·Python 26개, native 16상태/18화면과 최종 패키지는 [계약](75-sound-bank-program-search.md) · [QA](../qa/sound-bank-search-review.md)에 있다. 다음 독립 작업은 (1) 실제 음색 목록을 검색하는 읽기 전용 MCP 계약과 agent 사용법, (2) 편곡안의 긴 메뉴를 이름·현재 위치·키보드 검색으로 바꾸는 UI다. MCP는 실제 설치 catalog의 안정된 주소를 반환하고 음악·재생·선택을 바꾸지 않아야 한다. 편곡안 검색은 동명 항목·현재 선택·취소·외부 변경·저장 복원을 검증한다. 물리 장치 출력·실제 입력은 아래 별도 출고 조건이다.
+**build 62에서 실제 음색 catalog를 읽기 전용 MCP와 전문 에이전트에 연결했다.** GUI와 같은 검색·안정된 ID·정확한 적용 주소·페이지/목록 변경 감지와 runtime capability를 제공한다. Swift 451개·Python 28개, 실제 stdio/최소화/재열기 3회와 편집 보존은 [계약](76-agent-sound-catalog.md) · [QA](../qa/agent-sounds-review.md)에 있다. 다음 UI는 `InlineCircleEditor.swift`의 곡·악장 설정 안에 있는 편곡안 메뉴다. 설정 깊이를 줄이는 직접 검색 진입과 순번·전체 이름·섹션 수·현재 선택을 제공하고, `AlbumWorkspace.chooseHierarchyArrangement`의 음악 선택/Undo 의미와 composition 소유 범위를 보존한다. 실제 긴/동명 목록·키보드·stale 대상·Undo·저장 복원이 완료 조건이다.
+
+**build 61에서 Sound Bank의 실제 음색 이름·변형 뱅크·드럼 킷을 검색한다.** 한글 계열과 정확한 표시 번호 #1–128을 지원하고, 저장·로더의 program/MSB/LSB 주소를 일치시켰다. 적용 범위·현재 선택·충돌 안내의 높이 압축도 수정했다. Swift 445개·Python 26개, native 16상태/18화면과 최종 패키지는 [계약](75-sound-bank-program-search.md) · [QA](../qa/sound-bank-search-review.md)에 있다. 읽기 전용 MCP catalog는 build 62에서 완료했다. 편곡안 검색은 다음 UI 작업이며 물리 장치 출력·실제 입력은 아래 별도 출고 조건이다.
 
 **build 60에서 음색·Audio Unit 선택을 직접 검색으로 합쳤다.** 내장 신스 10개와 실제 설치 목록을 이름/제조사로 찾으며 같은 음색의 사용자 설정을 보존한다. 서클/전역 AU 검색, 오래된 요청 차단, 명령·키보드 조작과 저장 복원을 검증했다. Swift 437개·Python 26개·native 23상태/20화면의 [계약](74-sound-selection-search.md) · [QA](../qa/sound-selection-review.md). Sound Bank 프로그램 이름·계열과 번호 기준은 build 61에서 개선했다. 편곡안의 긴 메뉴는 후속 대상이다.
 

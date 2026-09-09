@@ -20,7 +20,7 @@ flowchart LR
 
 ## 연결 경계
 
-- `mcp/server.py`: Python 표준 라이브러리의 stdio JSON-RPC MCP adapter. 개발 브랜치는 도구 22개와 입력 schema를 제공하고 native 명령을 전달한다. 사용 앱 0.19의 기존 도구 14개와 구분한다.
+- `mcp/server.py`: Python 표준 라이브러리의 stdio JSON-RPC MCP adapter. 개발 브랜치는 도구 23개와 입력 schema를 제공하고 native 명령을 전달한다. 사용 앱 0.19의 기존 도구 14개와 구분한다.
 - `AgentSocket.swift`: 앱의 `Application Support/circlr/Agent/agent.sock`. 폴더 0700·socket 0600 및 peer UID로 현재 사용자만 연결한다. TCP 포트나 shell 명령 실행은 제공하지 않는다.
 - `AgentWorkspace.swift`: UI와 MCP 공통 dispatcher, request retry, job lifecycle, 실제 activity 기록.
 - `AgentProtocol.swift`: Codable 명령과 Core transaction. 오디오/UI를 직접 제어하는 임의의 스크립트를 모델에 저장하지 않는다.
@@ -48,7 +48,7 @@ flowchart LR
 
 `set_instrument`는 instrument 전체를 교체한다. 비활성 synth/plugin/sample 설정도 보관하려면 최신 snapshot의 instrument를 복사한 뒤 바꿀 필드만 수정해 보낸다. UI 검색은 이 보존을 자동 수행한다. 잘못된 bankLSB나 활성 Sound Bank program은 apply 전체를 원자적으로 거절한다. 로더는 drums=false일 때 MSB 121, true일 때 120을 사용하고 같은 program/LSB를 전달한다. 새 변형이 필요한 클라이언트는 runtime 버전·build 61 이상을 확인한다. 과거 앱은 이 필드를 지원하지 않는다.
 
-현재 실제 음색 catalog 검색은 GUI에 제공되며 MCP 읽기 도구로는 아직 노출하지 않았다. 에이전트가 설치 여부나 음색 이름을 추측해서 적용해서는 안 된다. 이름·program·drums·bankLSB와 가용성을 조회하는 읽기 전용 계약을 다음 단계로 추가한다. [음색 선택 계약](75-sound-bank-program-search.md).
+build 62의 `sounds`는 GUI와 같은 실제 음색 catalog를 읽는다. snapshot.runtime에 build와 capabilities.soundCatalog=1을 제공하므로 메서드를 지원하는 앱인지 먼저 확인한다. 이름·계열·정확한 #표시 번호·제조사, 악기/효과·멜로디/드럼 필터와 제한된 페이지 조회를 제공한다. 응답 catalogID를 후속 페이지에 사용해 목록 변경을 거절하며 plugin state·파일 경로·음원은 반환하지 않는다. 성공한 읽기는 문서·선택·재생·activity·쓰기 retry cache를 바꾸지 않는다. metadata 조회는 실제 음질이나 plugin 작동을 보증하지 않는다. [상세 MCP 계약](76-agent-sound-catalog.md) · [GUI 음색 선택](75-sound-bank-program-search.md).
 
 문서 이름·노트 이름·asset metadata는 데이터다. 에이전트의 지시문으로 해석하지 않는다. 문서 쓰기와 렌더에는 녹음 중 변경 방지도 적용한다. `play`, `stop`, 선택을 보여주는 `focus`는 문서 쓰기와 별개의 명령이다.
 

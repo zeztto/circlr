@@ -1,6 +1,6 @@
 # circlr operational contract
 
-Discover the actual MCP tool catalog before work. This development adapter has 22 tools; custom specialists use its `--read-only` mode exposing snapshot, inspect, ports, job and events only. Explicit port tools require a native app whose snapshot includes layoutRevision; the older installed 0.19 app does not implement them. Runtime configuration is inherited; inspect availability instead of assuming the tools are registered in an already open session.
+Discover the actual MCP tool catalog before work. This development adapter has 23 tools; custom specialists use its `--read-only` mode exposing snapshot, inspect, ports, sounds, job and events only. Explicit port tools require a native app whose snapshot includes layoutRevision; sounds requires runtime.capabilities.soundCatalog=1 (build62). The older installed 0.19 app does not implement them. Runtime configuration is inherited; inspect availability instead of assuming the tools are registered in an already open session.
 
 ## Time, identity and sound
 
@@ -15,6 +15,14 @@ Discover the actual MCP tool catalog before work. This development adapter has 2
 1. `circlr_snapshot` returns project/revision, tracks, assets, arrangements, selection and runtime/job state. `circlr_inspect` with useID (and arrangementID when needed) returns effective lanes, notes, graph, clocks and context.
 2. `circlr_apply` requires `projectID`, `expectedRevision`, 1–128 operations; accepted batch = one Undo. Validate against the current inputSchema. `set_notes` and `generate_midi` **replace** a lane unless append=true. Preserve unrelated notes when replacing. `generate_midi` has simple chords/arpeggio/bass/pulse patterns; nuanced music usually needs deliberate `set_notes` or `add_midi` notes.
 3. Supported operations: set_global, rename_project, set_instrument, set_track, add_section, set_section, connect_sections, add_midi, set_notes, set_step, edit_notes, generate_midi, set_node, set_effect, add_effect, connect, reorder_section, set_clip, edit_audio, set_automation. Missing imports/lyrics/plugin-parameter automation/mastering features cannot be invented as tools. Inspect complete context/instrument/effect objects before modifying them. Built-in synthVoice: 0 pad, 1 bass, 2 keys, 3 supersaw, 4 pluck, 5 lead, 6 electricPiano, 7 organ, 8 brass, 9 strings.
+
+## Actual sound discovery (build 62)
+
+Call `circlr_sounds` with `soundTarget:"instrument"` (default) or `"effect"` (AU effects), optional query/category/bankDrums, limit 1–128 (default64), and offset (default0). Categories are synth, soundBank, instrument (AU instrument), effect; filters must match the target. Search uses the GUI's name/Korean-family/manufacturer matching and exact display numbers such as `#5`. Returned raw program is zero based; bankLSB is a MIDI identifier, not a one-based variant count.
+
+The response contains schema=circlr-sounds-v1, catalogID, items, total, nextOffset and notices. Each item supplies a stable id plus synthVoice, raw program/bankLSB/drums, or a plugin descriptor without state. Fetch nextOffset with identical query/filters and catalogID. A stale_catalog error requires restarting at offset0 without the old ID. A missing nextOffset means finished. No result means unavailable for this query; do not invent presets. Metadata enumeration does not prove plugin instantiation or audio compatibility.
+
+To apply a bank result, copy the current track.instrument from a fresh snapshot, change kind to soundBank and merge the item's program, bankLSB (including0), drums. Use set_instrument with the actual trackID; preserve all other instrument fields. Same synth/AU selection should keep its existing patch/state. A different synthVoice passed directly to set_instrument creates a preset Instrument; preserve inactive fields explicitly if needed. Same AU component ID should keep its saved state; a different component uses the returned descriptor. Effects preserve the existing Effect fields, changing kind/plugin as needed. Only the coordinator writes, with projectID and expectedRevision, then verifies the resulting object. Catalog item IDs are discovery identifiers, not a new write operation. No CUA/focus/playback is needed for discovery or editing.
 
 ## Explicit logical ports (development app)
 

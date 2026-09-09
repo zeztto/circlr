@@ -12,9 +12,9 @@
     "agents/circlr-topliner.toml": "e7d6311e4ab33ee1df2323fd330dbead7340a2a10a8e64aa2f4a3de866c7892e",
     "install.py": "9bbef450063265cc33f085751f7a4efeb80f449e5d373b1288b12506cab3271f",
     "roles.json": "76779cf5e5092224f45e71942b4824510d3a05a26231850f0d086bb995efcde9",
-    "skills/circlr-studio/SKILL.md": "63cec38fc7ace1eb51b011758327be18ee9c16b2f00d49f5430d55415aafc649",
+    "skills/circlr-studio/SKILL.md": "cabab9c29859c2c0529d14e7f00671daf0bfc9ce7f69d557134c3567d92d2d1c",
     "skills/circlr-studio/agents/openai.yaml": "1b6ff6a39ef172a6cb5520cffcf2927b0db08079f4a1fddca4485813f85a3263",
-    "skills/circlr-studio/references/circlr-operations.md": "3dddcd4330950f2a845e28c6a7ea37f14aee1b0a489ab26ac4572c9de1a51e34",
+    "skills/circlr-studio/references/circlr-operations.md": "5af9b8c7ced3f66c257f993eb9be34df93925668e4cd4555d2da1d5b9284b059",
     "skills/circlr-studio/references/design-sources.md": "0bbe84f161f792f386e9a77f5c55577a0d0b0542ae64b2f5096801739ca80198",
     "skills/circlr-studio/references/evaluation-scenarios.md": "36965500999701da0cdd68108954ce8755a05be47d8da5ccbf5f80cbcf1d723f",
     "skills/circlr-studio/references/roles/arranger.md": "c371ff4d812066edf9c0e33cf821739f7e32d73005a137d24ca3eada212429dd",
@@ -26,6 +26,6 @@
     "skills/circlr-studio/references/roles/sound-designer.md": "13cb4573d8b5fd2b72665beb221ff4169be25cee50a29f8f0d5f806c8d1760fe",
     "skills/circlr-studio/references/roles/topliner.md": "2d44187636470ac75fa466c85deac56cdc5ef0e9110b166ed09db0e04501cafe",
     "skills/circlr-studio/references/session-contract.md": "4bddcacb22a3c454fe985787c6fcbf9c7642d98214d046c8e72b859833a2b3e6",
-    "skills/circlr-studio/scripts/mcp_server.py": "dce056635382c8b224ff9c16cdad3a7dcbf5f34f9c1cea2ee341b03f31df93c1"
+    "skills/circlr-studio/scripts/mcp_server.py": "599293ea775c625b5ad1f4b02cde085789ad79b3a1bf4b9cebfac878c1e64b7a"
   }
 }

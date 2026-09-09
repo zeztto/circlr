@@ -13,6 +13,25 @@ SPEC.loader.exec_module(server)
 
 
 class MCPTests(unittest.TestCase):
+    def test_sounds_read_only_contract_reaches_native(self):
+        args={'soundTarget':'instrument','query':'#５','category':'soundBank','bankDrums':False,'offset':2,'limit':1,'catalogID':'a'*64}
+        with patch.object(server, 'rpc', return_value={'ok':True,'result':{'items':[]}}) as ipc:
+            result=server.call_tool('/qa.sock','circlr_sounds',args,read_only=True)
+            self.assertFalse(result['isError'])
+            self.assertEqual(ipc.call_args.args[1]['method'],'sounds')
+            self.assertEqual(ipc.call_args.args[1]['arguments'],args)
+        self.assertTrue(server.BY_NAME['circlr_sounds']['annotations']['readOnlyHint'])
+        self.assertFalse(server.BY_NAME['circlr_sounds']['annotations']['destructiveHint'])
+
+    def test_sounds_invalid_arguments_never_reach_ipc(self):
+        invalid=[{'soundTarget':'shell'},{'query':'x'*257},{'category':'sampler'},{'bankDrums':0},
+                 {'limit':0},{'limit':129},{'limit':True},{'offset':-1},{'offset':1000001},
+                 {'catalogID':'short'},{'path':'/tmp/private'},{'query':None}]
+        for args in invalid:
+            with self.subTest(args=args),patch.object(server,'rpc') as ipc,self.assertRaises(ValueError):
+                server.call_tool('/unused.sock','circlr_sounds',args,read_only=True)
+            ipc.assert_not_called()
+
     def test_read_only_rejects_every_mutation_before_ipc(self):
         with patch.object(server, 'rpc') as ipc:
             for entry in server.TOOLS:
@@ -61,7 +80,7 @@ class MCPTests(unittest.TestCase):
         self.assertEqual(len(replies), 3)
         self.assertEqual(replies[0]["result"]["protocolVersion"], "2025-11-25")
         tools = replies[1]["result"]["tools"]
-        self.assertEqual(len(tools), 22)
+        self.assertEqual(len(tools), 23)
         self.assertTrue(all("method" not in item for item in tools))
         self.assertTrue(replies[2]["result"]["isError"])
 

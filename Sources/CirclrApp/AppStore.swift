@@ -33,6 +33,7 @@ import CirclrAudio
     var instrumentChoices:[SoundCatalogItem]=[]
     var soundBankPresets:[SoundBankPreset]=[]
     var soundBankNotice=""
+    var agentSoundCatalog:AgentSoundCatalog?
     var effectChoices:[SoundCatalogItem]=[]
     @Published var navigationOpen=false
     @Published var navigationIntent=StudioNavigationIntent()
@@ -185,6 +186,7 @@ import CirclrAudio
         do {soundBankPresets=try AudioUnitHost.soundBankCatalog()}
         catch {soundBankNotice=error.localizedDescription}
         instrumentChoices=SoundSelection.instruments(instrumentCatalog,bank:soundBankPresets);effectChoices=SoundSelection.effects(effectCatalog)
+        agentSoundCatalog=try? AgentSoundCatalog(instruments:instrumentChoices,effects:effectChoices,bankNotice:soundBankNotice.isEmpty && soundBankPresets.isEmpty ? "macOS Sound Bank에 선택 가능한 음색이 없습니다":soundBankNotice)
         recorder.onChange = { [weak self] in self?.recordingStateChanged() }
         startAgentBridge()
     }
