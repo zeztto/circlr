@@ -174,8 +174,7 @@ public enum ArrangementRenderer {
     static func apply(_ input: PCM, effect: Effect, sidechain: PCM? = nil) async throws -> PCM {
         if effect.kind == .audioUnit {
             guard let plugin = effect.plugin else { throw CirclrError("Effect Audio Unit을 선택하세요") }
-            let unit = try await AudioUnitHost.instantiate(plugin)
-            return try AudioUnitHost.process(input,unit:unit)
+            return try await AUEffectWorkerProcess().process(input: input, plugin: plugin)
         }
         return try NativeDSP.process(input,effect:effect,sidechain:sidechain)
     }

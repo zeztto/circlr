@@ -20,6 +20,9 @@ def main():
     output_worker = args.binary.with_name("circlr-output-worker")
     if not output_worker.is_file():
         raise ValueError("Build circlr-output-worker beside the app binary before packaging")
+    au_effect_worker = args.binary.with_name("circlr-au-effect-worker")
+    if not au_effect_worker.is_file():
+        raise ValueError("Build circlr-au-effect-worker beside the app binary before packaging")
     subprocess.run([sys.executable, str(root / 'scripts/build-agent-kit.py')], check=True)
     bundle_info = plistlib.loads((root / 'Resources/Info.plist').read_bytes())
     icon_name = bundle_info['CFBundleIconFile']
@@ -42,6 +45,7 @@ def main():
         (stage / 'Contents/Resources').mkdir()
         shutil.copy2(args.binary, stage / 'Contents/MacOS/circlr')
         shutil.copy2(output_worker, stage / 'Contents/MacOS/circlr-output-worker')
+        shutil.copy2(au_effect_worker, stage / 'Contents/MacOS/circlr-au-effect-worker')
         shutil.copy2(root / 'Resources/Info.plist', stage / 'Contents/Info.plist')
         shutil.copy2(icon_source, stage / 'Contents/Resources' / icon_name)
         shutil.copy2(catalog_source, stage / 'Contents/Resources/Assets.car')
@@ -59,6 +63,8 @@ def main():
         if (stage / 'Contents/Resources/Assets.car').read_bytes() != catalog_source.read_bytes():
             raise ValueError('Bundled icon catalog differs from source')
         subprocess.run(['codesign', '--force', '--sign', '-', str(stage / 'Contents/MacOS/circlr-output-worker')], check=True)
+        subprocess.run(['codesign', '--force', '--sign', '-', str(stage / 'Contents/MacOS/circlr-au-effect-worker')], check=True)
+        subprocess.run(['codesign', '--verify', '--strict', str(stage / 'Contents/MacOS/circlr-au-effect-worker')], check=True)
         subprocess.run(['codesign', '--force', '--sign', '-', str(stage)], check=True)
         subprocess.run(['codesign', '--verify', '--deep', '--strict', str(stage)], check=True)
         if app.exists():

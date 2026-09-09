@@ -1,5 +1,12 @@
 # 변경 이력
 
+## 개발 중 — 0.20.0 build96 offline AU effect worker
+
+- AU effect instantiate/render를 별도 process로 이동. bounded 입력/결과·취소·deadline·child/임시 파일 정리와 App 두 outer task의 즉시 STOP 진입 경쟁 수정.
+- state8MiB·request12MiB·maximumFrames268435456 상한. 기존 다중 buffer memory preflight 유지, deadline30–1800초(duration×4+15).
+- 최종 관련46개 실패0·18.491초, Release47.10초·패키지3개 실행 파일 검사 통과. 패키지 Apple AU default/captured state 두 설정의 각12000-frame PCM maxError/RMS error0. [계약](docs/111-au-effect-worker.md) · [QA](qa/au-effect-worker-review.md).
+- GUI 즉시 STOP race는 source guard·compile만 확인했으며 실제 host cancel 테스트와 구분. 사용자 dist 앱 유지. 보안 sandbox가 아닌 crash/hang 격리.
+
 ## 개발 중 — 0.20.0 build95 중복 탐색 버튼
 
 - 현재 역할의 유일한 동일 target 버튼 생략. header 복귀와 다중 검색·⌘1/⌘3 유지.

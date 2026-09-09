@@ -24,16 +24,23 @@ def main():
   args=[sys.executable,str(root/'scripts/package-app.py'),str(binary)]
   subprocess.run(args,check=True,capture_output=True,text=True,timeout=30)
   app=root/'dist/써클러.app'
-  for name in ['circlr','circlr-output-worker']:
+  for name in ['circlr','circlr-output-worker','circlr-au-effect-worker']:
    assert sections(binary.with_name(name))==sections(app/'Contents/MacOS'/name)
   subprocess.run(['codesign','--verify','--deep','--strict',str(app)],check=True,capture_output=True)
   subprocess.run(args,check=True,capture_output=True,text=True,timeout=30)
   assert len(list((root/'dist/archive').glob('*.app')))==1
-  before=hashlib.sha256((app/'Contents/MacOS/circlr').read_bytes()).hexdigest()
+  def snapshot():
+   return {str(path.relative_to(app)):hashlib.sha256(path.read_bytes()).hexdigest() for path in app.rglob('*') if path.is_file()}
+  before=snapshot()
   missing=root/'missing/circlr';missing.parent.mkdir();missing.write_bytes(b'not executed')
   failed=subprocess.run([sys.executable,str(root/'scripts/package-app.py'),str(missing)],capture_output=True,text=True,timeout=10)
   assert failed.returncode!=0 and 'Build circlr-output-worker' in failed.stderr
-  assert hashlib.sha256((app/'Contents/MacOS/circlr').read_bytes()).hexdigest()==before
+  assert snapshot()==before
+  shutil.copy2(binary.with_name('circlr-output-worker'),missing.with_name('circlr-output-worker'))
+  failed_au=subprocess.run([sys.executable,str(root/'scripts/package-app.py'),str(missing)],capture_output=True,text=True,timeout=10)
+  assert failed_au.returncode!=0 and 'Build circlr-au-effect-worker' in failed_au.stderr
+  assert snapshot()==before
+  assert len(list((root/'dist/archive').glob('*.app')))==1
   assert not list((root/'dist').glob('.circlr-stage-*'))
-  print(json.dumps(dict(packaging='passed',executables=2,archivePreserved=True,missingHelperRejected=True)))
+  print(json.dumps(dict(packaging='passed',executables=3,archivePreserved=True,missingHelperRejected=True,missingAUEffectHelperRejected=True)))
 if __name__=='__main__':main()

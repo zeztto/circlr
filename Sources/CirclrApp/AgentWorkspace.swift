@@ -226,7 +226,7 @@ extension AppStore {
         agentJob=AgentJob(id:jobID,kind:request.method,state:"running",message:([renderTitle]+tail.notices).joined(separator:" · "),tail:tail)
         preparing=true;progress=0;status=agentJob!.message
         productionTask=Task { [weak self] in
-            guard let self else{return}
+            guard let self,self.productionGeneration==generation,!Task.isCancelled else{return}
             do {
                 let body=sectionRender?.clock.seconds ?? 0
                 let worker:Task<PCM,Error>
@@ -235,7 +235,12 @@ extension AppStore {
                 }else if let plan=albumRender {
                     worker=Task.detached(priority:.userInitiated){try await ArrangementRenderer.render(project:snapshot,root:root,plan:plan,tailSeconds:tail.effectiveSeconds,includeStems:false){message,value in DispatchQueue.main.async{[weak self] in guard let self,self.productionGeneration==generation else{return};self.progress=value;self.agentJob?.progress=value;self.agentJob?.message=message;self.status=message}}.mix}
                 }else{throw CirclrError("렌더 계획이 없습니다")}
-                self.productionWorker=worker;let pcm=try await worker.value
+                self.productionWorker=worker
+                let pcm=try await withTaskCancellationHandler {
+                    try await worker.value
+                } onCancel: {
+                    worker.cancel()
+                }
                 guard !Task.isCancelled,self.productionGeneration==generation else{return}
                 try AgentProjectEditing.check(request,project:self.project)
                 guard pcm.peak<=1 else {throw CirclrError("출력이 0 dBFS를 넘습니다. Gain을 낮추세요")}

@@ -463,12 +463,17 @@ import CirclrAudio
             renderGeneration += 1; let generation = renderGeneration
             preparing = true; progress = 0; status = "오디오 준비"; renderTask?.cancel(); renderWorker?.cancel()
             renderTask = Task { [weak self] in
+                guard self?.renderGeneration == generation,!Task.isCancelled else{return}
                 do {
                     let worker = Task.detached(priority:.userInitiated) {
                         try await ArrangementRenderer.render(project:snapshot,root:root,plan:plan,includeStems:includeStems,includeVisualization:true) { message,value in DispatchQueue.main.async { [weak self] in guard let self,self.renderGeneration == generation else { return }; self.status = message; self.progress = value } }
                     }
                     self?.renderWorker = worker
-                    let result = try await worker.value
+                    let result = try await withTaskCancellationHandler {
+                        try await worker.value
+                    } onCancel: {
+                        worker.cancel()
+                    }
                     guard let self,self.renderGeneration == generation,!Task.isCancelled else { return }
                     self.prepared = result; self.preparedKey = key
                     self.status = result.peak > 1 ? "출력이 0 dBFS를 넘습니다. Gain을 낮추세요" : (plan.warnings.first ?? "재생 준비 완료")

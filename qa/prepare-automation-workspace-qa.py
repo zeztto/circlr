@@ -14,7 +14,7 @@ import copy
 
 ROOT = Path(__file__).resolve().parents[1]
 NAME = 'automation-workspace'
-BUILD = '34'
+BUILD = '96'
 OUT = ROOT / 'qa/generated/automation-workspace'
 APP = OUT / '써클러 통합 검증.app'
 SOURCE = Path.home() / 'Library/Application Support/circlr-integration-qa/fixtures/studio.circlr'
@@ -35,6 +35,8 @@ def main():
         assert current['id'] == str(uuid.uuid5(uuid.NAMESPACE_URL, 'circlr-integration-qa/' + NAME)).upper()
     assert not APP.exists(), 'Preserve previous QA app'
     assert args.candidate or not FIXTURE.exists(), 'Preserve previous QA project'
+    for worker in ['circlr-output-worker', 'circlr-au-effect-worker']:
+        assert (ROOT / '.build/integration-release/release' / worker).is_file(), 'Build ' + worker + ' before packaging'
     raw = (SOURCE / 'manifest.json').read_bytes()
     project = json.loads(raw)
     assert project['id'] == 'B29AF867-91DE-55DB-9958-EC7EFCF0ADDF'
@@ -51,7 +53,10 @@ def main():
     (APP / 'Contents/MacOS').mkdir(parents=True)
     shutil.copy2(ROOT / '.build/integration-release/release/circlr', APP / 'Contents/MacOS/circlr')
     shutil.copy2(ROOT / '.build/integration-release/release/circlr-output-worker', APP / 'Contents/MacOS/circlr-output-worker')
+    shutil.copy2(ROOT / '.build/integration-release/release/circlr-au-effect-worker', APP / 'Contents/MacOS/circlr-au-effect-worker')
     subprocess.run(['codesign', '--force', '--sign', '-', str(APP / 'Contents/MacOS/circlr-output-worker')], check=True)
+    subprocess.run(['codesign', '--force', '--sign', '-', str(APP / 'Contents/MacOS/circlr-au-effect-worker')], check=True)
+    subprocess.run(['codesign', '--verify', '--strict', str(APP / 'Contents/MacOS/circlr-au-effect-worker')], check=True)
     (APP / 'Contents/Info.plist').write_bytes(plistlib.dumps(info))
     resources = APP / 'Contents/Resources'
     resources.mkdir()
