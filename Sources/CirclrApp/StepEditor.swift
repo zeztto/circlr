@@ -183,6 +183,8 @@ struct StepGridCanvas:NSViewRepresentable {
     var meterSubscription:AnyCancellable?
     var accessibilityKey=""
     var accessibilityIdentity:NumberEditIdentity?
+    var accessibilityCellsKey=""
+    var accessibilityCells:[Int:StepCellAccessibility]=[:]
     var cellCacheKey=""
     var cellNotes:[Int:[Note]]=[:]
     var heldCells=Set<Int>()
@@ -304,21 +306,30 @@ struct StepGridCanvas:NSViewRepresentable {
         let key="\(cellCacheKey):\(convert(bounds,to:nil)):\(window.frame):\(visibleRect):\(row):\(column):\(allowsEditing)"
         let identity=store.numberEditIdentity
         guard key != accessibilityKey || identity != accessibilityIdentity else{return}
+        if cellCacheKey != accessibilityCellsKey || identity != accessibilityIdentity {
+            accessibilityCells=[:];accessibilityCellsKey=cellCacheKey
+        }
         accessibilityKey=key;accessibilityIdentity=identity
         setAccessibilityValue(pitches.indices.contains(row) ? "\(label(pitches[row])) · \(page*16+column+1)스텝 · \(pitches.count)행":"일치하는 드럼 행이 없습니다")
         var children:[NSAccessibilityElement]=[]
         for row in visibleRows {
-            let pitch=pitches[row],header=StepCellAccessibility(parent:self,row:row,column:nil)
+            let pitch=pitches[row],header=accessibilityCell(row:row,column:nil)
             header.setAccessibilityLabel(label(pitch)+" · 행 선택")
-            header.setAccessibilityFrame(window.convertToScreen(convert(CGRect(x:0,y:row*28,width:112,height:28),to:nil)));children.append(header)
+            header.setFrameInView(CGRect(x:0,y:row*28,width:112,height:28),view:self);children.append(header)
             for col in 0..<columns {
-                let cell=StepCellAccessibility(parent:self,row:row,column:col)
+                let cell=accessibilityCell(row:row,column:col)
                 cell.setAccessibilityLabel(label(pitch)+" · \(page*16+col+1)스텝")
                 cell.setAccessibilityValue(cellNotes[row*16+col]?.isEmpty==false ? "켜짐":heldCells.contains(row*16+col) ? "이전 스텝에서 이어짐":"꺼짐")
-                cell.setAccessibilityFrame(window.convertToScreen(convert(rect(row:row,column:col),to:nil)));children.append(cell)
+                cell.setFrameInView(rect(row:row,column:col),view:self);children.append(cell)
             }
         }
         setAccessibilityChildren(children)
+    }
+    func accessibilityCell(row:Int,column:Int?)->StepCellAccessibility {
+        let key=row*17+(column.map{$0+1} ?? 0)
+        let cell=accessibilityCells[key] ?? StepCellAccessibility(parent:self,row:row,column:column)
+        cell.setAccessibilityEnabled(allowsEditing);accessibilityCells[key]=cell
+        return cell
     }
 }
 @MainActor final class StepCellAccessibility:NSAccessibilityElement {

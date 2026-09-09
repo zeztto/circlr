@@ -130,13 +130,13 @@ struct OrbitMIDIEditor:NSViewRepresentable {
         }
         let pitchValue=readoutPitch.map{" · 표시 음 \(pitchName($0)) · MIDI \($0)"} ?? ""
         setAccessibilityValue("\(bars.lowerBound+1)–\(bars.upperBound)마디 · \(pitchName(viewport.lowest))–\(pitchName(viewport.highest)) · \(visible.count)개 노트 표시"+pitchValue)
-        if let window {
+        if window != nil {
             let ids=Set(visible.map(\.id));accessibilityNotes=accessibilityNotes.filter{ids.contains($0.key)}
             setAccessibilityChildren(MIDIOrbitViewport.ordered(visible).map{note -> NSAccessibilityElement in
                 let child=accessibilityNotes[note.id] ?? OrbitNoteAccessibility(parent:self,id:note.id);accessibilityNotes[note.id]=child
                 child.setAccessibilityLabel("\(pitchName(note.pitch)) · \(BeatPosition.text(note.beat))박 · 길이 \(note.length.formatted(.number.precision(.fractionLength(0...3))))박 · 세기 \(note.velocity)"+(note.beat<range.lowerBound ? " · 앞에서 이어짐":"")+(!viewport.showsEnd(note,clock:clock) ? " · 다음 범위로 이어짐":""))
                 child.setAccessibilityValue(selectedIDs.contains(note.id) ? "선택됨":"")
-                child.setAccessibilityFrame(window.convertToScreen(convert(arc(note,clock:clock).bounds.insetBy(dx:-6,dy:-6),to:nil)))
+                child.setFrameInView(arc(note,clock:clock).bounds.insetBy(dx:-6,dy:-6),view:self)
                 return child
             })
         }

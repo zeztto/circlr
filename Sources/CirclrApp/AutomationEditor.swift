@@ -303,7 +303,7 @@ struct AutomationPlot:NSViewRepresentable {
         let help="표시 위치 1–"+BeatPosition.text(displayBeats)+"박"+" · 마디 눈금 "+barLabels.joined(separator:", ")+" · 길이 밖은 마지막 박자 기준 · 겹친 점은 Option 클릭으로 순환 선택"
         setAccessibilityHelp(help);if toolTip != help {toolTip=help}
         setAccessibilityValue(store.selectedAutomationPoint.map{pointDescription($0)} ?? "선택한 점 없음")
-        if let window {
+        if window != nil {
             let identity=store.numberEditIdentity
             if identity != accessibilityIdentity || displayBeats != accessibilityExtent || plotClock != accessibilityClock || orbital != accessibilityOrbital {
                 accessibilityPoints=[:];accessibilityIdentity=identity;accessibilityExtent=displayBeats;accessibilityClock=plotClock;accessibilityOrbital=orbital
@@ -314,7 +314,7 @@ struct AutomationPlot:NSViewRepresentable {
                 let child=accessibilityPoints[p.id] ?? AutomationPointAccessibility(parent:self,id:p.id);accessibilityPoints[p.id]=child
                 child.setAccessibilityLabel("\(i+1)번 점 · "+pointDescription(p))
                 child.setAccessibilityValue(p.id==store.selectedAutomationPointID ? "선택됨":"")
-                let pt=position(p);child.setAccessibilityFrame(window.convertToScreen(convert(NSRect(x:pt.x-7,y:pt.y-7,width:14,height:14),to:nil)))
+                let pt=position(p);child.setFrameInView(NSRect(x:pt.x-7,y:pt.y-7,width:14,height:14),view:self)
                 return child
             };setAccessibilityChildren(children)
         }

@@ -597,16 +597,15 @@ struct AlbumCanvas: NSViewRepresentable {
         let now = ProcessInfo.processInfo.systemUptime
         if playbackAnimation != nil, now-accessibilityUpdateTime < 0.2 { return }
         accessibilityUpdateTime = now
-        guard let scene,let window else{return}
+        guard let scene,window != nil else{return}
         let labeled=Set(labelPlacements.map(\.id))
         let visible=scene.nodes.filter{node in let p=screen(node);return isVisible(node) && (labeled.contains(node.id) || cablePointAvailable(Point(p.x,p.y),labels:false))}
         let children=visible.map { node -> NSAccessibilityElement in
             let p=screen(node),r=min(100,node.radius*camera.zoom)
             let hitRect=labelPlacements.first{$0.id==node.id}?.rect ?? NSRect(x:p.x-r,y:p.y-r,width:max(12,r*2),height:max(12,r*2))
-            let rect=window.convertToScreen(convert(hitRect,to:nil))
             let element=circleAccessibility[node.id] ?? CircleAccessibility(parent:self,address:node.id)
             circleAccessibility[node.id]=element
-            element.setAccessibilityLabel(node.title+" · "+node.subtitle);element.setAccessibilityFrame(rect)
+            element.setAccessibilityLabel(node.title+" · "+node.subtitle);element.setFrameInView(hitRect,view:self)
             element.setAccessibilitySelected(store.hierarchySelections.contains(node.id))
             return element
         }

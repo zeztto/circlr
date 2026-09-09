@@ -16,6 +16,8 @@ build 60: 에이전트 한도 해제 요청 후 read-only 조사 dispatch를 재
 
 ## 상태와 남은 완료 조건
 
+build 70: 부모 AX 좌표와 스텝 객체 재사용으로 캔버스 직접 조작을 개선했다. 스크롤 경계 행·셀 입력/Undo·검색/페이지·노트·오토메이션 점·서클·포트·케이블을 native로 확인했다. AppKit14개·Swift491개·Python29개,14상태/21화면과 음악/자산 보존 통과. [계약](84-accessibility-geometry.md) · [QA](../qa/accessibility-geometry-review.md). 다음은 선택 상태 복귀와 오디오 정밀 입력 가시성이다.
+
 build 69: MIDI 단일/다중 선택의2열 수치 편집과 상단 복제/삭제를 제공한다. 상대 길이·세기 변경은 MCP와 Core를 공유하고 차이 보존·원자적 거절·no-op을 지원한다. Swift491개·Python29개, native14상태/25화면 통과. [계약](83-midi-selection-inspector.md) · [QA](../qa/midi-inspector-review.md). 스텝 행 AX 프레임·선택 상태 복귀·오디오 보조 폼과 물리 입출력은 후속이다.
 
 build 68: 스텝·피아노롤·궤도·오디오·오토메이션의 표시 위치를 서클/원본별로 기억하고 현재 작업을 문서에서 복원한다. 스크롤 왕복·앱 재실행·음악 Undo·길이 축소·비정상 음역을 검사했다. Swift485개·Python28개·native19상태/43화면 통과. [계약](82-editor-view-position.md) · [QA](../qa/editor-position-review.md). 선택 노트/점/분할 커서와 보조 폼의 가시성·물리 입출력이 후속이다. 에이전트 dispatch 재시도는 thread limit으로 거절됐다.

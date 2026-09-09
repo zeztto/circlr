@@ -173,7 +173,7 @@ extension AlbumCanvasView {
     }
 
     func connectionAccessibilityChildren() -> [NSAccessibilityElement] {
-        guard let scene, let window else { return [] }
+        guard let scene, window != nil else { return [] }
         var result: [NSAccessibilityElement] = [], portIDs = Set<CirclePortEndpoint>(), cableIDs = Set<CircleConnectionID>()
         let handles = visiblePortHandles()
         for handle in handles where portIDs.insert(handle.endpoint).inserted {
@@ -184,7 +184,7 @@ extension AlbumCanvasView {
             element.setAccessibilityLabel(node.title+" · "+port.name)
             element.setAccessibilityHelp("포트 선택 · Return 연결 편집 · Tab 다음 포트 · Esc 해제")
             element.setAccessibilitySelected(selectedCanvasPort == handle.endpoint)
-            element.setAccessibilityFrame(window.convertToScreen(convert(NSRect(x:point.x-10,y:point.y-10,width:20,height:20),to:nil)))
+            element.setFrameInView(NSRect(x:point.x-10,y:point.y-10,width:20,height:20),view:self)
             result.append(element)
         }
         for edge in scene.edges {
@@ -199,7 +199,7 @@ extension AlbumCanvasView {
             element.setAccessibilityValue("OUT \(edge.placement.from.label) · IN \(edge.placement.to.label)")
             element.setAccessibilityHelp("선택 후 Tab 끝점 · 좌우 위치 · Return 편집 · Delete 해제")
             element.setAccessibilitySelected(selectedCable == id)
-            element.setAccessibilityFrame(window.convertToScreen(convert(NSRect(x:point.x-10,y:point.y-10,width:20,height:20),to:nil)))
+            element.setFrameInView(NSRect(x:point.x-10,y:point.y-10,width:20,height:20),view:self)
             result.append(element)
         }
         portAccessibility = portAccessibility.filter { portIDs.contains($0.key) }

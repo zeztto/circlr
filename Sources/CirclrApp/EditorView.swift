@@ -169,13 +169,13 @@ struct PianoRoll:NSViewRepresentable {
         for n in visible.filter({!selectedIDs.contains($0.id)})+visible.filter({selectedIDs.contains($0.id)}) {let r=rect(n);(selectedIDs.contains(n.id) ? StudioTheme.accentNS:StudioTheme.accentNS.withAlphaComponent(0.60)).setFill();NSBezierPath(roundedRect:r,xRadius:2,yRadius:2).fill()}
         StudioTheme.accentNS.withAlphaComponent(0.5).setStroke();let cursor=NSBezierPath();cursor.move(to:NSPoint(x:left+store.selectedBeat*unit,y:20));cursor.line(to:NSPoint(x:left+store.selectedBeat*unit,y:bounds.height));cursor.stroke()
         drawPinnedAxes()
-        if let window {
+        if window != nil {
             let ids=Set(visible.map(\.id));accessibilityNotes=accessibilityNotes.filter{ids.contains($0.key)}
             setAccessibilityChildren(MIDIOrbitViewport.ordered(visible).map{note -> NSAccessibilityElement in
                 let child=accessibilityNotes[note.id] ?? PianoNoteAccessibility(parent:self,id:note.id);accessibilityNotes[note.id]=child
                 child.setAccessibilityLabel("\(Scale.roots[note.pitch%12])\(note.pitch/12-1) · \(BeatPosition.text(note.beat))박 · 길이 \(note.length.formatted(.number.precision(.fractionLength(0...3))))박 · 세기 \(note.velocity)")
                 child.setAccessibilityValue(selectedIDs.contains(note.id) ? "선택됨":"")
-                child.setAccessibilityFrame(window.convertToScreen(convert(rect(note),to:nil)));return child
+                child.setFrameInView(rect(note),view:self);return child
             })
         }
     }
