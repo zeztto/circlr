@@ -584,7 +584,8 @@ struct AlbumCanvas: NSViewRepresentable {
         if playbackAnimation != nil, now-accessibilityUpdateTime < 0.2 { return }
         accessibilityUpdateTime = now
         guard let scene,let window else{return}
-        let visible=scene.nodes.filter{node in let p=screen(node);return isVisible(node) && cablePointAvailable(Point(p.x,p.y),labels:false)}
+        let labeled=Set(labelPlacements.map(\.id))
+        let visible=scene.nodes.filter{node in let p=screen(node);return isVisible(node) && (labeled.contains(node.id) || cablePointAvailable(Point(p.x,p.y),labels:false))}
         let children=visible.map { node -> NSAccessibilityElement in
             let p=screen(node),r=min(100,node.radius*camera.zoom)
             let hitRect=labelPlacements.first{$0.id==node.id}?.rect ?? NSRect(x:p.x-r,y:p.y-r,width:max(12,r*2),height:max(12,r*2))

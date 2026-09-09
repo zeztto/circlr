@@ -1,6 +1,26 @@
 import AppKit
 import CirclrCore
 
+struct CanvasLabelText {
+    let title:NSAttributedString
+    let titleHeight:CGFloat
+    let showsSubtitle:Bool
+    let size:CGSize
+    init(_ text:String,primary:Bool,showsSubtitle:Bool,availableWidth:CGFloat) {
+        let font=NSFont.systemFont(ofSize:13,weight:primary ? .semibold:.medium)
+        let width=min(availableWidth,primary ? 320:230,max(72,ceil((text as NSString).size(withAttributes:[.font:font]).width)+20))
+        let style=NSMutableParagraphStyle();style.alignment = .center
+        style.lineBreakMode = primary ? .byWordWrapping:.byTruncatingTail
+        if primary {style.lineBreakStrategy = .hangulWordPriority}
+        style.minimumLineHeight=18;style.maximumLineHeight=18
+        title=NSAttributedString(string:text,attributes:[.font:font,.foregroundColor:StudioTheme.textNS,.paragraphStyle:style])
+        let measured=title.boundingRect(with:CGSize(width:max(1,width-20),height:.greatestFiniteMagnitude),options:[.usesLineFragmentOrigin,.usesFontLeading]).height
+        titleHeight=primary ? min(54,max(18,ceil(measured/18)*18)):18
+        self.showsSubtitle=showsSubtitle
+        size=CGSize(width:width,height:titleHeight+14+(showsSubtitle ? 16:0))
+    }
+}
+
 extension AlbumCanvasView {
     var workspaceViewport:CGRect {
         CanvasWorkspaceGeometry.viewport(width:bounds.width,height:bounds.height,console:store.consoleOpen && store.consoleBounds.height>0 ? store.consoleBounds:nil)
@@ -23,25 +43,39 @@ extension AlbumCanvasView {
             return CanvasLabelCircle(id:node.id,center:p,radius:r)
         }
     }
+    func readableLabelText(for node:CircleSceneNode)->CanvasLabelText {
+        let primary=node.id==store.hierarchySelection
+        return CanvasLabelText(node.title,primary:primary,showsSubtitle:primary || node.radius*camera.zoom>=65,availableWidth:workspaceViewport.width)
+    }
+    var readableLabelObstacles:[CGRect] {
+        var obstacles:[CGRect]=[]
+        if let editor {obstacles.append(editor.frame.insetBy(dx:-8,dy:-8))}
+        if let cableTools,!cableTools.isHidden {obstacles.append(cableTools.frame.insetBy(dx:-8,dy:-8))}
+        if let portTools,!portTools.isHidden {obstacles.append(portTools.frame.insetBy(dx:-8,dy:-8))}
+        if let point=store.selectedCircle.flatMap({visibleTimeHandle($0)}) {obstacles.append(CGRect(x:point.x-18,y:point.y-18,width:36,height:36))}
+        let handles=cableEndpointHandles().map(\.1)+[selectedPortHandle()].compactMap{$0}
+        obstacles += handles.map{CGRect(x:$0.point.x-12,y:$0.point.y-12,width:24,height:24)}
+        return obstacles
+    }
     func drawReadableLabels() {
         labelPlacements=[]
         guard let scene,let context=labelContext else{return}
         let ancestors=Set(scene.path(to:context.id).dropLast().map(\.id))
-        var requests:[CanvasLabelRequest]=[]
+        var requests:[CanvasLabelRequest]=[],texts:[CircleAddress:CanvasLabelText]=[:]
         for node in scene.nodes where isVisible(node) && !ancestors.contains(node.id) && editorAddress != node.id {
             // The transport caption already identifies the active section; keep its contents clear.
             if store.playback.playing,store.playbackFollow == .following,node.id==visualFrame.focus {continue}
             let radius=node.radius*camera.zoom,p=screen(node),direct=node.parent==context.id
-            guard bounds.contains(p) || node.id==context.id else{continue}
+            let primary=node.id==store.hierarchySelection
+            guard bounds.contains(p) || node.id==context.id || (primary && CanvasLabelCircle(id:node.id,center:p,radius:radius).intersects(workspaceViewport)) else{continue}
             guard node.id==context.id || direct || node.id==hoverAddress || (radius>=40 && node.depth<=context.depth+2) else{continue}
-            let titleSize=(node.title as NSString).size(withAttributes:[.font:NSFont.systemFont(ofSize:13,weight:.medium)])
-            let width=min(230,max(72,titleSize.width+20)),height=radius>=65 ? 46.0:30.0
+            let text=readableLabelText(for:node);texts[node.id]=text
             let expanded=node.childCount>0 && scene.children(of:node.id).contains(where:isVisible)
-            requests.append(CanvasLabelRequest(id:node.id,anchor:p,size:CGSize(width:width,height:height),radius:radius,expanded:expanded,priority:node.id==store.hierarchySelection ? 100:node.id==hoverAddress ? 95:direct && ["MIDI","오디오"].contains(node.music?.content.label ?? "") ? 85:direct ? 70:20))
+            requests.append(CanvasLabelRequest(id:node.id,anchor:p,size:text.size,radius:radius,expanded:expanded,priority:primary ? 100:node.id==hoverAddress ? 95:direct && ["MIDI","오디오"].contains(node.music?.content.label ?? "") ? 85:direct ? 70:20,allowsViewportAdjustment:primary))
         }
-        labelPlacements=CanvasLabelLayout.place(requests,within:workspaceViewport,avoiding:editor.map{[$0.frame.insetBy(dx:-8,dy:-8)]} ?? [],circles:labelCircles)
+        labelPlacements=CanvasLabelLayout.place(requests,within:workspaceViewport,avoiding:readableLabelObstacles,circles:labelCircles)
         for placement in labelPlacements {
-            guard let node=scene.node(placement.id) else{continue}
+            guard let node=scene.node(placement.id),let text=texts[placement.id] else{continue}
             let rect=placement.rect,selected=store.hierarchySelections.contains(node.id),hovered=hoverAddress==node.id
             if !rect.insetBy(dx:-8,dy:-8).contains(placement.anchor) {
                 let end=CGPoint(x:max(rect.minX,min(rect.maxX,placement.anchor.x)),y:max(rect.minY,min(rect.maxY,placement.anchor.y)))
@@ -50,9 +84,9 @@ extension AlbumCanvasView {
             }
             let path=NSBezierPath(roundedRect:rect,xRadius:6,yRadius:6)
             StudioTheme.canvasNS.withAlphaComponent(0.95).setFill();path.fill()
-            (selected || hovered ? color(node):StudioTheme.lineNS.withAlphaComponent(0.5)).setStroke();path.lineWidth=1;path.stroke()
-            drawText(node.title,x:rect.midX,y:rect.minY+7,size:13,color:StudioTheme.textNS,maxWidth:rect.width-16)
-            if rect.height>35 {drawText(node.subtitle+(node.repeatCount>1 ? " · ×\(node.repeatCount)":""),x:rect.midX,y:rect.minY+26,size:11,color:StudioTheme.secondaryNS,maxWidth:rect.width-16)}
+            (selected || hovered ? color(node):StudioTheme.lineNS.withAlphaComponent(0.5)).setStroke();path.lineWidth=selected ? 2:1;path.stroke()
+            text.title.draw(with:NSRect(x:rect.minX+10,y:rect.minY+6,width:max(1,rect.width-20),height:text.titleHeight),options:[.usesLineFragmentOrigin,.usesFontLeading,.truncatesLastVisibleLine])
+            if text.showsSubtitle {drawText(node.subtitle+(node.repeatCount>1 ? " · ×\(node.repeatCount)":""),x:rect.midX,y:rect.minY+text.titleHeight+8,size:11,color:StudioTheme.secondaryNS,maxWidth:rect.width-20)}
         }
     }
 }

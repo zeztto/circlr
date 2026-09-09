@@ -8,8 +8,10 @@ public struct CanvasLabelRequest {
     public var radius:Double
     public var expanded:Bool
     public var priority:Int
-    public init(id:CircleAddress,anchor:CGPoint,size:CGSize,radius:Double,expanded:Bool=false,priority:Int=0) {
+    public var allowsViewportAdjustment:Bool
+    public init(id:CircleAddress,anchor:CGPoint,size:CGSize,radius:Double,expanded:Bool=false,priority:Int=0,allowsViewportAdjustment:Bool=false) {
         self.id=id;self.anchor=anchor;self.size=size;self.radius=radius;self.expanded=expanded;self.priority=priority
+        self.allowsViewportAdjustment=allowsViewportAdjustment
     }
 }
 public struct CanvasLabelPlacement {
@@ -31,6 +33,7 @@ public struct CanvasLabelCircle {
 /// Screen-space labels keep a readable size while the musical orbits retain their true geometry.
 public enum CanvasLabelLayout {
     public static func place(_ requests:[CanvasLabelRequest],within viewport:CGRect,avoiding obstacles:[CGRect]=[],circles:[CanvasLabelCircle]=[])->[CanvasLabelPlacement] {
+        guard viewport.minX.isFinite,viewport.minY.isFinite,viewport.width.isFinite,viewport.height.isFinite,viewport.width>0,viewport.height>0 else{return []}
         var occupied=obstacles,result:[CanvasLabelPlacement]=[]
         let ordered=requests.enumerated().sorted{$0.element.priority==$1.element.priority ? $0.offset<$1.offset:$0.element.priority>$1.element.priority}
         for (_,request) in ordered {
@@ -42,7 +45,25 @@ public enum CanvasLabelLayout {
             origins += [CGPoint(x:p.x+r+9,y:p.y-h/2),CGPoint(x:p.x-r-w-9,y:p.y-h/2),CGPoint(x:p.x-w/2,y:p.y+r+9),CGPoint(x:p.x-w/2,y:p.y-r-h-9)]
             // Alternate rows let dense, simultaneous starts remain individually selectable.
             for offset in [h+5,-h-5,2*h+10,-2*h-10] {origins.append(CGPoint(x:p.x+r+9,y:p.y-h/2+offset));origins.append(CGPoint(x:p.x-r-w-9,y:p.y-h/2+offset))}
-            if let rect=origins.map({CGRect(origin:$0,size:request.size)}).first(where:{candidate in viewport.contains(candidate) && !occupied.contains(where:{$0.intersects(candidate)}) && !circles.contains(where:{$0.id != request.id && $0.intersects(candidate)})}) {
+            var candidates=origins.map{CGRect(origin:$0,size:request.size)}
+            // Preserve normal placements first. Only the primary selection may move inward at an edge.
+            // Never shrink the label or pull an unrelated, off-screen circle into the viewport.
+            if request.allowsViewportAdjustment,w<=viewport.width,h<=viewport.height,
+               viewport.contains(p) || CanvasLabelCircle(id:request.id,center:p,radius:r).intersects(viewport,clearance:0) {
+                candidates += origins.map{CGRect(x:max(viewport.minX,min(viewport.maxX-w,$0.x)),y:max(viewport.minY,min(viewport.maxY-h,$0.y)),width:w,height:h)}
+                // Nearby rows may all be occupied in a dense section. The viewport perimeter
+                // offers space without moving any musical circle or hiding an editing control.
+                let x=max(viewport.minX,min(viewport.maxX-w,p.x-w/2)),y=max(viewport.minY,min(viewport.maxY-h,p.y-h/2))
+                let edges=[CGPoint(x:x,y:viewport.minY),CGPoint(x:x,y:viewport.maxY-h),
+                           CGPoint(x:viewport.minX,y:y),CGPoint(x:viewport.maxX-w,y:y),
+                           CGPoint(x:viewport.minX,y:viewport.minY),CGPoint(x:viewport.maxX-w,y:viewport.minY),
+                           CGPoint(x:viewport.minX,y:viewport.maxY-h),CGPoint(x:viewport.maxX-w,y:viewport.maxY-h)]
+                candidates += edges.enumerated().sorted{a,b in
+                    let da=hypot(a.element.x+w/2-p.x,a.element.y+h/2-p.y),db=hypot(b.element.x+w/2-p.x,b.element.y+h/2-p.y)
+                    return da==db ? a.offset<b.offset:da<db
+                }.map{CGRect(origin:$0.element,size:request.size)}
+            }
+            if let rect=candidates.first(where:{candidate in viewport.contains(candidate) && !occupied.contains(where:{$0.intersects(candidate)}) && !circles.contains(where:{$0.id != request.id && $0.intersects(candidate)})}) {
                 result.append(CanvasLabelPlacement(id:request.id,rect:rect,anchor:p));occupied.append(rect.insetBy(dx:-4,dy:-4))
             }
         }
