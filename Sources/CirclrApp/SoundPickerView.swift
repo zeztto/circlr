@@ -35,7 +35,7 @@ extension AppStore {
             name=instrumentName(track.instrument);choice=SoundSelection.choice(in:track.instrument)
             destination=AudioImportPlacement.trackLabel(track.id,in:project)+" · 이 트랙의 모든 섹션"
         case .musicEffect:
-            guard let node=selectedMusic,case .effect(let effect)=node.content else{return}
+            guard let node=musicEditingNode,case .effect(let effect)=node.content else{return}
             name=effect.kind == .audioUnit ? effect.plugin?.name ?? "Audio Unit 선택 필요":Self.effectName(effect.kind)
             choice=effect.kind == .audioUnit ? effect.plugin.map{.audioUnit($0.id)}:nil
             destination=(selectedUse?.name ?? "섹션")+" › "+node.name+(editOriginal ? " · 공유 원본":" · 이번 사용")
@@ -63,10 +63,10 @@ extension AppStore {
             if next != current {updateTrack("음색·악기 선택"){$0.instrument=next}}
             guard selectedTrack?.instrument==next else{throw CirclrError("악기를 적용하지 못했습니다")}
         case .musicEffect:
-            guard case .effect(let current)=selectedMusic?.content else{throw CirclrError("이펙터 서클을 다시 선택하세요")}
+            guard case .effect(let current)=musicEditingNode?.content else{throw CirclrError("이펙터 서클을 다시 선택하세요")}
             let next=try SoundSelection.effect(choice,current:current,catalog:catalog)
             if next != current {updateMusic("Audio Unit 선택"){$0.content = .effect(next)};embeddedPlugin=nil}
-            guard case .effect(let result)=selectedMusic?.content,result==next else{throw CirclrError("이펙트를 적용하지 못했습니다")}
+            guard case .effect(let result)=musicEditingNode?.content,result==next else{throw CirclrError("이펙트를 적용하지 못했습니다")}
         case .signalEffect:
             guard let node=selectedSignal,node.kind == .effect else{throw CirclrError("전역 이펙터를 다시 선택하세요")}
             let next=try SoundSelection.effect(choice,current:node.effect,catalog:catalog)

@@ -21,7 +21,16 @@ struct InlineCircleEditor: View {
             GeometryReader { geometry in
                 editorContent.frame(width:geometry.size.width,height:geometry.size.height,alignment:.topLeading)
             }.clipped()
-            HStack { Text(store.currentAudioClip != nil && !store.automationVisible && !store.hierarchySettingsOpen && !store.connectionsOpen && store.midiImportDraft==nil ? "파형 위 휠로 확대·축소 · ⇧ 휠로 원본 시간 이동":"휠로 확대·축소 · ⇧ 휠로 편집 영역 이동"); Spacer(); Text("⌘S 저장") }
+            HStack {
+                if store.selectedMusic != nil {
+                    let identity=store.numberEditIdentity
+                    Picker("서클 편집 범위",selection:Binding(get:{store.editOriginal},set:{_ = store.setMusicEditScope(original:$0,identity:identity)})) {
+                        Text("서클 · 이번 사용").tag(false);Text("서클 · 공유 원본").tag(true)
+                    }.labelsHidden().controlSize(.mini).frame(width:130)
+                        .help("서클 이름·속성의 편집 범위 · 공유 원본 변경은 같은 원본의 다른 사용에도 반영됩니다. 트랙 음색·레벨은 이 선택과 관계없이 트랙 전체에 적용됩니다.")
+                        .disabled(store.preparing || store.midiRecording || store.audioRecordingBusy || store.audioRecordPending || store.midiImportDraft != nil)
+                }
+                Text(store.currentAudioClip != nil && !store.automationVisible && !store.hierarchySettingsOpen && !store.connectionsOpen && store.midiImportDraft==nil ? "파형 위 휠로 확대·축소 · ⇧ 휠로 원본 시간 이동":"휠로 확대·축소 · ⇧ 휠로 편집 영역 이동"); Spacer(); Text("⌘S 저장") }
                 .font(.system(size: 11)).foregroundStyle(StudioTheme.secondary)
         }
         .frame(maxWidth:.infinity,maxHeight:.infinity,alignment:.topLeading)
@@ -50,7 +59,14 @@ struct InlineCircleEditor: View {
     }
     @ViewBuilder private var editorContent:some View {
         VStack(alignment:.leading,spacing:12) {
-            if store.connectionsOpen { PortConnectionsEditor(store: store,keyboard:connectionKeyboard).id(store.hierarchySelection).id(store.mediaImportGeneration) }
+            if let issue=store.musicEditingIssue,!store.audioIsOutsideSharedOriginal {
+                let identity=store.numberEditIdentity
+                VStack(alignment:.leading,spacing:12) {
+                    Text("공유 원본에서 편집할 수 없습니다").font(.system(size:13,weight:.medium))
+                    Text(issue).foregroundStyle(StudioTheme.secondary).fixedSize(horizontal:false,vertical:true)
+                    if store.editOriginal {Button("이번 사용 편집") {_ = store.setMusicEditScope(original:false,identity:identity)}}
+                }
+            } else if store.connectionsOpen { PortConnectionsEditor(store: store,keyboard:connectionKeyboard).id(store.hierarchySelection).id(store.mediaImportGeneration) }
             else if let draft=store.midiImportDraft {MIDIImportView(store:store,draft:draft).id(draft.id)} else if let id=store.hierarchyTransitionID,let edge=store.project.active.edges.first(where:{$0.id==id}) {
                 TransitionWorkspace(store:store,edgeID:edge.id)
             } else if let plugin = store.embeddedPlugin {
@@ -70,21 +86,22 @@ struct InlineCircleEditor: View {
                 ScrollView { HierarchySettingsEditor(store: store).padding(.trailing, 8).rememberEditorScroll(scroll("settings")) }
             } else if store.automationVisible {
                 AutomationEditor(store:store)
-            } else if let node = store.selectedMusic {
+            } else if let node = store.musicEditingNode ?? (store.audioIsOutsideSharedOriginal ? store.selectedMusic:nil) {
                 switch node.content {
                 case .midi, .rhythmMIDI: midi
                 case .audio: audio
                 case .effect(let effect):
                     let projectID=store.project.id, address=store.hierarchySelection
+                    let original=store.editOriginal,generation=store.mediaImportGeneration
                     ScrollView { VStack(alignment: .leading, spacing: 22) {
-                        EffectControls(effect: Binding(get: {if case .effect(let value)=store.selectedMusic?.content {return value};return effect}, set: { value in store.updateMusic("이펙트 편집") { $0.content = .effect(value) } }), allowsAU: true,isCurrent:{store.project.id==projectID && store.hierarchySelection==address},chooseAudioUnit:{store.showSoundPicker(.musicEffect)})
+                        EffectControls(effect: Binding(get: {if case .effect(let value)=store.musicEditingNode?.content {return value};return effect}, set: { value in store.updateMusic("이펙트 편집") { $0.content = .effect(value) } }), allowsAU: true,isCurrent:{store.project.id==projectID && store.hierarchySelection==address && store.editOriginal==original && store.mediaImportGeneration==generation},chooseAudioUnit:{store.showSoundPicker(.musicEffect)})
                         SoundPickerButton(title:"Audio Unit 이펙트 찾기",current:effect.kind == .audioUnit ? effect.plugin?.name ?? "Audio Unit 선택 필요":"설치된 Audio Unit 이펙트") {store.showSoundPicker(.musicEffect)}
                         if effect.kind == .audioUnit {
                             Button("플러그인 편집") { store.showMusicPluginEditor() }.disabled(effect.plugin == nil)
                         }
                         HStack(spacing: 22) {
                             Toggle("음소거",isOn:Binding(get:{node.muted},set:{value in store.updateMusic("음소거"){$0.muted=value}}))
-                            ValueField(title:"출력 볼륨 dB",value:Binding(get:{store.selectedMusic?.gain ?? node.gain},set:{value in store.updateMusic("출력 볼륨"){$0.gain=value}}),range:0...4,presentation:.gainDecibels)
+                            ValueField(title:"출력 볼륨 dB",value:Binding(get:{store.musicEditingNode?.gain ?? node.gain},set:{value in store.updateMusic("출력 볼륨"){$0.gain=value}}),range:0...4,presentation:.gainDecibels)
                                 .help("0 dB 원래 레벨 · −∞ 무음")
                             Spacer(minLength:8)
                             TrackBounceButton(store:store)
@@ -150,7 +167,7 @@ struct InlineCircleEditor: View {
     @ViewBuilder func signalControls(_ node: MusicCircle) -> some View {
         Toggle("음소거", isOn: Binding(get: { node.muted }, set: { value in store.updateMusic("음소거") { $0.muted=value } }))
         TrackBounceButton(store:store)
-        ValueField(title: "출력 볼륨 dB", value: Binding(get: { store.selectedMusic?.gain ?? node.gain }, set: { value in store.updateMusic("출력 볼륨") { $0.gain=value } }), range: 0...4, presentation: .gainDecibels)
+        ValueField(title: "출력 볼륨 dB", value: Binding(get: { store.musicEditingNode?.gain ?? node.gain }, set: { value in store.updateMusic("출력 볼륨") { $0.gain=value } }), range: 0...4, presentation: .gainDecibels)
             .help("0 dB 원래 레벨 · −∞ 무음")
     }
 }
@@ -211,7 +228,7 @@ struct HierarchySettingsEditor: View {
             }
             if store.selectedMusic != nil {
                 HStack(spacing:12) {
-                    Toggle("공유 원본 편집",isOn:$store.editOriginal)
+                    Toggle("공유 원본 편집",isOn:Binding(get:{store.editOriginal},set:{_ = store.setMusicEditScope(original:$0,identity:store.numberEditIdentity)}))
                     Text(store.editOriginal ? "같은 원본을 사용하는 서클에 반영":"이번 사용에만 반영").font(.system(size:11)).foregroundStyle(StudioTheme.secondary)
                 }
             }
@@ -221,12 +238,12 @@ struct HierarchySettingsEditor: View {
                 CountControl(title:"반복",value:Binding(get:{store.selectedUse?.repeatCount ?? use.repeatCount},set:{v in store.updateUse("섹션 반복"){$0.repeatCount=v}}),range:1...256)
                 }
             }
-            if let music=store.selectedMusic {
+            if let music=store.musicEditingNode {
                 if music.content.input == nil {
                     HStack(spacing:18) {
-                    ValueField(title:"부모 안 시작 박",value:Binding(get:{store.selectedMusic?.startBeat ?? music.startBeat},set:{v in store.updateMusic("시작 박"){$0.startBeat=v}}),range:0...131072,presentation:.beatPosition)
-                    ValueField(title:"길이 박",value:Binding(get:{store.selectedMusic?.lengthBeats ?? store.currentClock?.beats ?? 32},set:{v in store.updateMusic("길이"){$0.lengthBeats=v}}),range:0.03125...131072)
-                    CountControl(title:"반복",value:Binding(get:{store.selectedMusic?.repeatCount ?? music.repeatCount},set:{v in store.updateMusic("반복"){$0.repeatCount=v}}),range:1...256)
+                    ValueField(title:"부모 안 시작 박",value:Binding(get:{store.musicEditingNode?.startBeat ?? music.startBeat},set:{v in store.updateMusic("시작 박"){$0.startBeat=v}}),range:0...131072,presentation:.beatPosition)
+                    ValueField(title:"길이 박",value:Binding(get:{store.musicEditingNode?.lengthBeats ?? store.currentClock?.beats ?? 32},set:{v in store.updateMusic("길이"){$0.lengthBeats=v}}),range:0.03125...131072)
+                    CountControl(title:"반복",value:Binding(get:{store.musicEditingNode?.repeatCount ?? music.repeatCount},set:{v in store.updateMusic("반복"){$0.repeatCount=v}}),range:1...256)
                     }
                 }
             }
@@ -243,7 +260,7 @@ struct HierarchySettingsEditor: View {
             if store.selectedUse != nil,store.selectedMusic == nil,store.selectedHierarchyGroup == nil {
                 HStack{Button("시작 섹션으로 지정"){store.setStart()};Button("재사용"){store.reuse()};Button("독립 원본으로 분리"){store.detach()}}
             }
-            if let music=store.selectedMusic {
+            if let music=store.musicEditingNode {
                 Toggle("음소거",isOn:Binding(get:{music.muted},set:{v in store.updateMusic("음소거"){$0.muted=v}}))
             }
             if case .composition(let id)=store.hierarchySelection,store.project.album?.composition(id) != nil {

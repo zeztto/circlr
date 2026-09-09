@@ -1,12 +1,20 @@
 # 써클러 개발 방향과 실행 계획
 
-갱신: 2026-09-10. 계획 시작 기준: 0.11 native 앱, 0.12 음악 에이전트 키트 소스. 기존 출고 표기는 0.19.0이며 실행 중 사용자 앱의 별도 관측 버전은0.14다. 개발 검증 후보는 0.20.0 build 92이다. 목표는 송폼 중심의 전문 음악 제작을 먼저 완성하고, 이를 아티스트의 작품·세계관 관리로 확장하는 것이다.
+갱신: 2026-09-10. 계획 시작 기준: 0.11 native 앱, 0.12 음악 에이전트 키트 소스. 기존 출고 표기는 0.19.0이며 실행 중 사용자 앱의 별도 관측 버전은0.14다. 개발 검증 후보는 0.20.0 build 93이다. 목표는 송폼 중심의 전문 음악 제작을 먼저 완성하고, 이를 아티스트의 작품·세계관 관리로 확장하는 것이다.
+
+## 현재 검증 완료 — build93 음악 그래프 편집 범위
+
+scope 전용 snapshot·원본 읽기·대상 guard·use-only 안내와 범위 선택을 구현했다. 관련31개 실패0·최종 Release45.48초와 실제 원본 이름 변경·scope/target 초안 처리·group router 생성·Undo를 확인했다. revision62 saved/reopened manifest는 strict 동일하며 QA18개 상태·AX9개·자산2개·physical0 대조도 통과했다. [계약](108-music-graph-edit-scope.md) · [QA](../qa/music-scope-review.md).
+
+baseline92는 ID collision의 전체 실패·revision54 불변으로 확인한 경로이며 원본 오염 발생으로 표현하지 않는다. 실제 AU 비동기 plugin은 미검증으로 코드 guard 확인과 구분한다. 사용자 앱·물리 I/O 조건을 유지한다.
+
+다음 UI 작업은 `AgentConsole.swift`·`AppStore.swift`의 세션 로그 높이 조절이다. 실제1020×768에서 고정122px 로그가 파형 높이를 약80px로 줄이는 것을 확인했다. 로그를40–180px로 조절하고 키보드로 작게/기본을 선택하되 header 상태와 명령 입력은 유지한다. 자동으로 강제 접지 않는다.122→40px에서 편집 viewport82px 증가·화면 왕복 시 높이 유지·wheel 입력 격리·취소와 초안 보존을 검증한다. 현재는 계획이며 코드는 미구현이다.
 
 ## 현재 검증 완료 — build92 router 경로 레벨
 
 네 경로 dB·Tab·slider 입력과 정밀도/순서 보존·명시 대상·원본 분리·expected guard를 구현했다. Core19개·최종 Release41.35초와 실제 입력·preset 충돌 거절·Undo·작은 창/scroll1·저장 재열기를 확인했다. revision54 saved/reopened manifest는 strict 동일하며 QA baseline3개·후보25개·AX12개·자산2개·physical0 대조도 통과했다. 원본 안전성은 이번 route helper 범위이고 물리 출력0회로 사용자 앱을 보존한다. [계약](106-router-route-levels.md) · [QA](../qa/router-level-review.md).
 
-다음 편집 과제는 일반 `updateMusic`의 effective→original 전파 위험을 줄이고 편집용 scope snapshot을 통일하는 것이다. 공유 원본 편집이 이번 사용의 effective 값을 읽어 다른 override까지 원본에 저장하는 경로를 조사하고, 원본/이번 사용의 읽기 snapshot과 명시적 쓰기 대상을 일치시킨다. 대상 필드만 반영하는 계약과 scope 전환·오래된 초안·Undo·다른 use 보존을 검증한다. `addedNodes`/`addedEdges`는 원본 유입 성공과 혼동하지 않는다. ID collision으로 전체 요청이 실패하는 경우를 별도 거절 경로로 검사한다. 이번 route helper의 안전성 확인을 일반 편집기 전체로 확대하지 않는다.
+build93의 편집 과제는 일반 `updateMusic`의 effective→original 전파 위험과 편집용 scope snapshot을 다룬다. 공유 원본 편집이 이번 사용의 effective 값을 읽어 다른 override까지 원본에 저장하는 경로를 조사하고, 원본/이번 사용의 읽기 snapshot과 명시적 쓰기 대상을 일치시킨다. 대상 필드만 반영하는 계약과 scope 전환·오래된 초안·Undo·다른 use 보존을 검증한다. `addedNodes`/`addedEdges`는 원본 유입 성공과 혼동하지 않는다. ID collision으로 전체 요청이 실패하는 경우를 별도 거절 경로로 검사한다. 이번 route helper의 안전성 확인을 일반 편집기 전체로 확대하지 않는다.
 
 후속 I/O는 [앱별 출력 장치 계획](107-app-output-device-plan.md)의 범위와 검증 조건을 확인해 연결한다. 아직 장치 구현·정상 physical 출력 완료로 계산하지 않는다.
 
@@ -76,7 +84,7 @@ build81에서 종류별 색상과 사용자 지정·복원을 구현하고 검�
 
 이펙트→오토메이션→바운스 산출물을 해시·PCM으로 재검증하고, build81에서 저장 프로젝트 전체 복원을 확인했다. 궤도 화면에서도 음악 데이터가 유지된다. [통합 근거와 검증 경계](../qa/automation-flow-review.md). 다음은 실제 장치 출력 재점검과 같은 곡의 편곡 대안이다.
 
-## 현행 실행 순서 — build92 기준
+## 현행 실행 순서 — build93 기준
 
 build80에서 바운스 대상명과 연결 사전 검사를 통합하고 실제 UI 바운스·복원·MCP 즉시 거절을 확인했다. [QA](../qa/bounce-target-review.md). 이후 같은 곡에서 이펙트와 오토메이션을 적용한 바운스·저장/재열기는 위 통합 흐름 QA에서 확인했다. 개별 기능 검증을 한 곡 제작 완료로 계산하지 않는다.
 

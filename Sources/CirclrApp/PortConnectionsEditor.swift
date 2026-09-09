@@ -31,10 +31,10 @@ extension AppStore {
         }
     }
     func addMusicRouter(at point: Point? = nil) {
-        guard var graph = selectedGraph, let use = selectedUse else { return }
+        guard var graph = musicEditingGraph, let use = selectedUse else { status="편집할 원본 그래프가 없습니다. 이번 사용 편집을 선택하세요"; return }; let expected=graph
         let node = MusicCircle(name: "오디오 라우터", content: .router(AudioRouter()))
         graph.nodes.append(node); graph.layout.positions[node.id] = point ?? Point(180, 240)
-        setGraph("오디오 라우터 만들기", graph)
+        setGraph("오디오 라우터 만들기", graph,expected:expected)
         if selectedGraph?.nodes.contains(where: { $0.id == node.id }) == true {
             selectHierarchy(.music(arrangementID: project.activeArrangementID, useID: use.id, nodeID: node.id)); showConnections()
         }

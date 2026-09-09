@@ -24,12 +24,8 @@ extension AppStore {
         return setAudioEditScope(original:false,identity:identity)
     }
     @discardableResult func setAudioEditScope(original:Bool,identity:NumberEditIdentity)->Bool {
-        guard nameEditing.resolve() else{return false}
-        guard numberEditIdentity==identity,case .audio=selectedMusic?.content else {
-            status="대상이나 음악이 바뀌었습니다. 현재 오디오에서 다시 실행하세요";return false
-        }
-        editOriginal=original
-        return true
+        guard case .audio=selectedMusic?.content else{return false}
+        return setMusicEditScope(original:original,identity:identity)
     }
     var audioEditorHasFocus:Bool {NSApp.keyWindow?.firstResponder is OrbitAudioView}
     var audioCommandAvailable:Bool {currentAudioClip != nil && !automationVisible && !(NSApp.keyWindow?.firstResponder is NSTextView) && !libraryOpen && !navigationOpen && commandPalette==nil && !keyboardHelp && !hierarchySettingsOpen}
@@ -125,7 +121,7 @@ struct AudioWorkspaceView:View {
                 TrackBounceButton(store:store)
                 if store.selectedMusic?.bounce != nil {Button("원본 복원"){act{store.restoreBounce()}}}
                 Toggle("템포 추종",isOn:Binding(get:{liveClip.followsTempo},set:{value in store.editAudioClip(liveClip){$0.followsTempo=value}}))
-                Toggle("음소거",isOn:Binding(get:{store.selectedMusic?.muted ?? false},set:{v in store.updateMusic("오디오 음소거"){$0.muted=v}}))
+                Toggle("음소거",isOn:Binding(get:{store.musicEditingNode?.muted ?? false},set:{v in store.updateMusic("오디오 음소거"){$0.muted=v}}))
                 Button("삭제"){act{store.applyAudioEdit(.delete,label:"오디오 삭제")}}
             }
             OrbitAudioEditor(store:store,clip:liveClip,asset:asset,viewport:$viewport,focusTarget:focusTarget)

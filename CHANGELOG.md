@@ -1,5 +1,12 @@
 # 변경 이력
 
+## 개발 중 — 0.20.0 build93 음악 그래프 편집 범위
+
+- scope snapshot·복합 effect 원본 읽기·AU 비동기 대상 guard·use-only 안내·직접 범위 선택. reviewer가 발견한 group router 생성 회귀의 parent 해석 수정.
+- 관련31개 실패0·최종 Release45.48초 통과. baseline92 원본 이름 수정의 ID collision 전체 실패와 candidate 원본 수정·scope/target 초안 처리·group 생성·Undo를 대조.
+- 1020×768·revision62 저장/재열기 전체 manifest strict 동일 확인. QA18개 상태·AX9개·자산2개·physical0 대조 통과. [계약](docs/108-music-graph-edit-scope.md) · [QA](qa/music-scope-review.md).
+- 실제 AU plugin 비동기 native는 미검증이며 코드 guard만 확인. 사용자 앱·물리 출력 조건 유지.
+
 ## 개발 중 — 0.20.0 build92 router 경로 전송량
 
 - 네 경로 dB 수치/Tab·slider 입력과 Core 명시 대상·expected guard·원본/이번 사용 분리·route 순서 보존.

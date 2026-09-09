@@ -76,13 +76,50 @@ extension AppStore {
         selectHierarchy(address); hierarchyCommand = HierarchyCommand(action: .focus(address, detail))
     }
     func hierarchyParent() { hierarchyCommand = HierarchyCommand(action: .parent) }
-    func updateMusic(_ label: String, _ edit: (inout MusicCircle) -> Void) {
-        guard let node = selectedMusic, var graph = selectedGraph, let index = graph.nodes.firstIndex(where: { $0.id == node.id }) else { return }
-        edit(&graph.nodes[index]); setGraph(label, graph)
+    var musicEditingTarget:MusicGraphTarget? {
+        guard var address=hierarchySelection else{return nil}
+        while case .group(let parent,_)=address {address=parent}
+        switch address {
+        case .music,.section:return MusicGraphTarget(address:address,original:editOriginal)
+        default:return nil
+        }
     }
-    func setGraph(_ label: String, _ graph: SectionGraph, musical: Bool = true) {
-        guard let use = selectedUse else { return }; let original = editOriginal
-        mutate(label, musical: musical) { try SectionGraphEditing.set(graph, useID: use.id, original: original, in: &$0) }
+    var musicEditingGraph:SectionGraph? {
+        guard let target=musicEditingTarget else{return nil}
+        return try? MusicGraphEditing.snapshot(target,in:project)
+    }
+    var musicEditingNode:MusicCircle? {
+        guard case .music=hierarchySelection,let target=musicEditingTarget else{return nil}
+        return try? MusicGraphEditing.node(target,in:project)
+    }
+    var musicEditingIssue:String? {
+        guard selectedMusic != nil,let target=musicEditingTarget else{return nil}
+        do {_ = try MusicGraphEditing.node(target,in:project);return nil}
+        catch{return error.localizedDescription}
+    }
+    @discardableResult func setMusicEditScope(original:Bool,identity:NumberEditIdentity)->Bool {
+        guard nameEditing.resolve() else{return false}
+        NSApp.keyWindow?.makeFirstResponder(nil)
+        var resolved=identity;resolved.revision=numberEditIdentity.revision
+        guard resolved==numberEditIdentity,!preparing,!midiRecording,!audioRecordingBusy,!audioRecordPending,mediaImportTask==nil else {
+            status="대상이나 음악이 바뀌었습니다. 현재 서클에서 다시 실행하세요";return false
+        }
+        editOriginal=original;embeddedPlugin=nil
+        return true
+    }
+    func updateMusic(_ label:String,_ edit:(inout MusicCircle)->Void) {
+        guard case .music=hierarchySelection,let target=musicEditingTarget else{return}
+        do {
+            let expected=try MusicGraphEditing.snapshot(target,in:project)
+            let node=try MusicGraphEditing.node(target,in:project)
+            guard let index=expected.nodes.firstIndex(where:{$0.id==node.id}) else{return}
+            var graph=expected;edit(&graph.nodes[index])
+            setGraph(label,graph,expected:expected)
+        }catch{fail(error)}
+    }
+    func setGraph(_ label:String,_ graph:SectionGraph,expected:SectionGraph,musical:Bool=true) {
+        guard let target=musicEditingTarget else{return}
+        mutate(label,musical:musical){try MusicGraphEditing.replace(target,graph:graph,expected:expected,in:&$0)}
     }
     func moveHierarchy(_ address: CircleAddress, to point: Point) {
         mutate("서클 이동", musical: false) { try HierarchyEditing.move(address, to: point, in: &$0) }
@@ -123,8 +160,8 @@ extension AppStore {
         case (.signal(let a), .signal(let b)): selectHierarchy(from); connect(a,b,sidechain:sidechain)
         case (.music(let a, let u, let n), .music(let b, let v, let m)) where a == b && u == v:
             selectHierarchy(from)
-            guard var graph = selectedGraph else { return }
-            do { try SectionGraphEditing.connect(from: n, to: m, sidechain: sidechain, in: &graph); setGraph("음악 서클 연결", graph) } catch { fail(error) }
+            guard var graph = musicEditingGraph else { status="편집할 원본 그래프가 없습니다. 이번 사용 편집을 선택하세요"; return }; let expected=graph
+            do { try SectionGraphEditing.connect(from: n, to: m, sidechain: sidechain, in: &graph); setGraph("음악 서클 연결", graph,expected:expected) } catch { fail(error) }
         case (.section(let a, let u), .section(let b, let v)) where a == b:
             selectHierarchy(from); mutate("섹션 연결") { try ProjectEditing.connect(from: u, to: v, in: &$0) }
         case (.composition(let a), .composition(let b)):
@@ -171,7 +208,7 @@ extension AppStore {
         return CirclePort.ports(for:music.content).filter{$0.direction == .output && $0.signal == .audio}.count==1
     }
     func addMusicEffect(_ kind: EffectKind, at point:Point? = nil) {
-        guard var graph = selectedGraph, let use = selectedUse else { return }
+        guard var graph = musicEditingGraph, let use = selectedUse else { status="편집할 원본 그래프가 없습니다. 이번 사용 편집을 선택하세요"; return }; let expected=graph
         let node = MusicCircle(name: Self.effectName(kind), content: .effect(Effect(kind, amount: kind == .gain ? 1 : 0.5, secondary: 0.3)))
         let source = selectedMusic?.content.output == .audio ? selectedMusic?.id:nil
         let position = selectedMusic.flatMap {graph.layout.positions[$0.id]} ?? Point()
@@ -181,15 +218,15 @@ extension AppStore {
             else if let source {try SectionGraphEditing.insertEffect(node,from:source,in:&graph)}
             else {graph.nodes.append(node)}
         } catch {fail(error);return}
-        setGraph("이펙터 서클 만들기", graph)
+        setGraph("이펙터 서클 만들기", graph,expected:expected)
         if selectedGraph?.nodes.contains(where: { $0.id == node.id }) == true { focusHierarchy(.music(arrangementID: project.activeArrangementID, useID: use.id, nodeID: node.id), detail: true) }
     }
     func removeHierarchy() {
         guard let address = hierarchySelection else { return }
         switch address {
         case .music:
-            guard let music = selectedMusic, var graph = selectedGraph else { return }
-            SectionGraphEditing.remove([music.id], from: &graph); setGraph("음악 서클 삭제", graph)
+            guard let music = musicEditingNode, var graph = musicEditingGraph else { status="이 서클은 공유 원본에 없습니다. 이번 사용 편집을 선택하세요"; return }; let expected=graph
+            SectionGraphEditing.remove([music.id], from: &graph); setGraph("음악 서클 삭제", graph,expected:expected)
         case .section, .signal: removeSelection()
         case .composition(let id):
             mutate("곡·악장 삭제") { p in
@@ -239,17 +276,26 @@ extension AppStore {
 
 extension AppStore {
     func showMusicPluginEditor() {
-        guard let address=hierarchySelection,case .effect(let effect)=selectedMusic?.content,let descriptor=effect.plugin else{return}
+        guard nameEditing.resolve(),case .effect(let effect)=musicEditingNode?.content,let descriptor=effect.plugin else{return}
+        let identity=numberEditIdentity
         Task {
             do {
                 let unit=try await AudioUnitHost.instantiate(descriptor)
                 guard let controller=await unit.auAudioUnit.requestViewController() else{status="이 Audio Unit은 편집 화면을 제공하지 않습니다";return}
-                guard hierarchySelection==address,case .effect(let current)=selectedMusic?.content,current.plugin?.id==descriptor.id else{return}
+                guard numberEditIdentity==identity,case .effect(let current)=musicEditingNode?.content,current==effect else{return}
+                var applyIdentity=identity
+                var expectedEffect=effect
                 embeddedPlugin=PluginEditorController(plugin:controller,unit:unit,onApply:{[weak self] in
-                    guard let self,self.hierarchySelection==address,case .effect(var effect)=self.selectedMusic?.content,effect.plugin?.id==descriptor.id else{return}
-                    do{effect.plugin?.state=try AudioUnitHost.capture(unit);self.updateMusic("Audio Unit 설정"){$0.content = .effect(effect)}}catch{self.fail(error)}
+                    guard let self,self.numberEditIdentity==applyIdentity,case .effect(let current)=self.musicEditingNode?.content,current==expectedEffect else{return}
+                    do {
+                        let state=try AudioUnitHost.capture(unit)
+                        self.updateMusic("Audio Unit 설정") { node in
+                            if case .effect(var next)=node.content {next.plugin?.state=state;node.content = .effect(next)}
+                        }
+                        if case .effect(let applied)=self.musicEditingNode?.content {expectedEffect=applied;applyIdentity=self.numberEditIdentity}
+                    }catch{self.fail(error)}
                 })
-            }catch{if hierarchySelection==address{fail(error)}}
+            }catch{if numberEditIdentity==identity{fail(error)}}
         }
     }
     func makeHierarchyPattern() {
@@ -273,9 +319,9 @@ extension AppStore {
         switch address {
         case .signal(let node): mutate("사운드 연결 해제") { $0.signal.edges.removeAll { $0.from == node && (edgeID == nil || $0.id == edgeID) } }
         case .music(_,_,let node):
-            guard var graph=selectedGraph else{return}
+            guard var graph=musicEditingGraph else{status="편집할 원본 그래프가 없습니다. 이번 사용 편집을 선택하세요";return};let expected=graph
             graph.edges.removeAll { $0.from==node && (edgeID == nil || $0.id==edgeID) }
-            setGraph("음악 연결 해제",graph)
+            setGraph("음악 연결 해제",graph,expected:expected)
         case .section(_,let use):
             mutate("섹션 연결 해제") { p in
                 let i=p.activeIndex

@@ -31,8 +31,8 @@ struct InlineEditorHeader:View {
                 Text("섹션 전환").font(.system(size:17,weight:.semibold)).frame(minWidth:80,alignment:.leading)
             } else if store.hierarchySelection == .sound {
                 Text(store.selectedCircle?.title ?? "앨범 사운드").font(.system(size:17,weight:.semibold)).frame(minWidth:80,alignment:.leading)
-            } else {CommittedNameField(title:"서클 이름",value:Binding(get:{store.selectedCircle?.title ?? ""},set:{store.renameHierarchy($0)}),focus:nameFocus,message:{store.status=$0})
-                .disabled(store.midiImportDraft != nil).frame(minWidth:80)}
+            } else {CommittedNameField(title:"서클 이름",value:Binding(get:{store.selectedMusic != nil ? store.musicEditingNode?.name ?? store.selectedCircle?.title ?? "" : store.selectedCircle?.title ?? ""},set:{store.renameHierarchy($0)}),focus:nameFocus,message:{store.status=$0})
+                .disabled(store.midiImportDraft != nil || store.musicEditingIssue != nil).frame(minWidth:80)}
             Spacer(minLength:8)
             HStack(spacing:2) {
                 if store.selectedMusic != nil || store.canEditCirclePorts {mode(contentName,page:.content,help:store.selectedMusic==nil ? "이 서클의 편집으로 돌아가기":"이 서클의 "+contentName+" 편집으로 돌아가기")}
