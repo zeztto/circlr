@@ -10,6 +10,13 @@ public struct MIDIOrbitViewport:Equatable {
     public var rows:Int {pitchRows==24 ? 24:12}
     public var highest:Int {max(rows-1,min(127,topPitch))}
     public var lowest:Int {highest-rows+1}
+    public mutating func setLowestPitch(_ pitch:Int) {topPitch=max(0,min(128-rows,pitch))+rows-1}
+    public mutating func movePitches(_ semitones:Int) {setLowestPitch(lowest+max(-128,min(128,semitones)))}
+    public mutating func centerPitch(_ pitch:Int) {setLowestPitch(max(0,min(127,pitch))-rows/2)}
+    public static func pitch(at fraction:Double)->Int? {
+        guard fraction.isFinite else{return nil}
+        return min(127,Int(max(0,min(1,fraction))*128))
+    }
     public func bars(_ clock:MusicClock)->Range<Int> {
         let count=max(1,clock.meters.count),size=barsPerPage>0 ? min(count,barsPerPage):count
         let first=max(0,min((count-1)/size,page))*size

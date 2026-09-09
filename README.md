@@ -6,7 +6,9 @@ macOS용 앨범·송폼 궤도 편집기. **앨범 → 곡·악장 → 섹션 �
 
 연결 UI는 [서클 둘레 8방향 IN/OUT과 다중 입출력](docs/22-eight-direction-ports.md)으로 확장 중이다. 포트의 신호 의미와 연결점 배치를 분리한다. 아래 일반 사용법은 배포된 0.19 앱 기준이며 새 포트 기능은 독립 개발 브랜치에서 검증한다.
 
-현재 **`codex/daw-integration`의 0.20.0 build 45**에 녹음 lifecycle과 8방향·다중 bus·그룹 포트를 통합했다. 같은 캔버스의 연결 편집·녹음 상태·스텝·오토메이션이 공존하며, 녹음 시작·정리 중 음악 편집과 Undo의 경쟁을 차단한다. build 23의 실제 편집·바운스·Undo·저장/재열기·닫기 최소화 및 출력별 모션 검증은 [통합 QA](qa/daw-integration-review.md)에 기록했다.
+현재 **`codex/daw-integration`의 0.20.0 build 46**에 녹음 lifecycle과 8방향·다중 bus·그룹 포트를 통합했다. 같은 캔버스의 연결 편집·녹음 상태·스텝·오토메이션이 공존하며, 녹음 시작·정리 중 음악 편집과 Undo의 경쟁을 차단한다. build 23의 실제 편집·바운스·Undo·저장/재열기·닫기 최소화 및 출력별 모션 검증은 [통합 QA](qa/daw-integration-review.md)에 기록했다.
+
+build 46은 **MIDI 전체 음역에서 클릭·드래그·키보드로 바로 이동**한다. 현재 표시 범위와 연주 분포를 함께 보여주고 선택한 음명/MIDI 번호를 궤도 중앙에 표시한다. 작은 창에서도 편집 방식·노트 이동·MIDI 메뉴·바운스를 고정해 유지한다. Swift **366개**·Python **26개**, 실제 탐색·노트 편집/Undo·대상 전환·저장 복원을 확인했다. [계약](docs/60-midi-pitch-navigation.md) · [QA와 남은 범위](qa/pitch-navigation-review.md).
 
 build 45는 **이름을 Return/Tab으로 한 번 확정하고 Esc로 취소**한다. 입력 중에는 음악 이력을 만들지 않으며 ⌘S는 이름을 확정한 뒤 저장한다. 빈 이름·외부 변경 오류를 같은 헤더에 표시하고, 한글·일본어·emoji를 보존한다. Swift **363개**·Python **26개**, 실제 입력·저장·충돌·Undo·재열기와 원본 보존을 검증했다. [계약](docs/59-name-editing.md) · [QA와 실제 IME 등 남은 범위](qa/name-editing-review.md).
 

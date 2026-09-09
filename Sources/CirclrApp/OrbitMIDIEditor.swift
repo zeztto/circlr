@@ -30,7 +30,8 @@ struct OrbitMIDIEditor:NSViewRepresentable {
     func makeNSView(context:Context)->OrbitMIDIView {let view=OrbitMIDIView(store:store);focusTarget.view=view;return view}
     func updateNSView(_ view:OrbitMIDIView,context:Context) {
         if !enabled || view.viewport != viewport || (view.dragIdentity != nil && view.dragIdentity != store.numberEditIdentity) {view.cancelDrag()}
-        view.viewport=viewport;view.allowsEditing=enabled;view.needsDisplay=true
+        if view.viewport != viewport || view.contentIdentity != store.numberEditIdentity {view.hoverPitch=nil}
+        view.contentIdentity=store.numberEditIdentity;view.viewport=viewport;view.allowsEditing=enabled;view.needsDisplay=true
     }
 }
 @MainActor final class OrbitMIDIView:NSView {
@@ -40,6 +41,7 @@ struct OrbitMIDIEditor:NSViewRepresentable {
     var previousPhase=0.0,travel=0.0,downRadius=0.0
     var resizing=false,allowsEditing=true
     var dragIdentity:NumberEditIdentity?
+    var contentIdentity:NumberEditIdentity?,hoverPitch:Int?
     var accessibilityNotes:[ID:OrbitNoteAccessibility]=[:]
     override var isFlipped:Bool {true}
     override var acceptsFirstResponder:Bool {true}
@@ -57,6 +59,21 @@ struct OrbitMIDIEditor:NSViewRepresentable {
     func phase(_ point:NSPoint)->Double {OrbitTimeline.phase(Point(point.x-center.x,point.y-center.y))}
     func snap(_ value:Double)->Double {(value*grid).rounded()/grid}
     func pitchName(_ pitch:Int)->String {Scale.roots[pitch%12]+String(pitch/12-1)}
+    var readoutPitch:Int? {
+        if let hoverPitch {return hoverPitch}
+        guard let pitch=store.currentLane?.notes.first(where:{$0.id==store.selectedNoteID})?.pitch,(viewport.lowest...viewport.highest).contains(pitch) else{return nil}
+        return pitch
+    }
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas();trackingAreas.forEach{removeTrackingArea($0)}
+        addTrackingArea(NSTrackingArea(rect:.zero,options:[.mouseMoved,.mouseEnteredAndExited,.activeInKeyWindow,.inVisibleRect],owner:self,userInfo:nil))
+    }
+    override func mouseMoved(with event:NSEvent) {
+        let p=convert(event.locationInWindow,from:nil),r=hypot(p.x-center.x,p.y-center.y)
+        let pitch=r>=inner && r<=outer ? max(viewport.lowest,min(viewport.highest,viewport.highest-Int((outer-r)/row))):nil
+        if pitch != hoverPitch {hoverPitch=pitch;needsDisplay=true}
+    }
+    override func mouseExited(with event:NSEvent){hoverPitch=nil;needsDisplay=true}
     func arc(_ note:Note,clock:MusicClock)->NSBezierPath {
         let r=viewport.beats(clock)
         return OrbitDrawing.arc(center,radius:radius(note.pitch),from:viewport.phase(max(r.lowerBound,note.beat),clock:clock),to:viewport.phase(min(r.upperBound,note.beat+note.length),clock:clock))
@@ -67,7 +84,15 @@ struct OrbitMIDIEditor:NSViewRepresentable {
         for i in 0..<viewport.rows {
             let pitch=viewport.highest-i,r=radius(pitch),path=OrbitDrawing.arc(center,radius:r,from:0,to:1)
             (store.currentContext.scale.contains(pitch) ? NSColor(white:0.145,alpha:1):NSColor(white:0.075,alpha:1)).setStroke();path.lineWidth=max(1,row-0.8);path.stroke()
-            if pitch%6==0 {OrbitDrawing.text(pitchName(pitch),at:OrbitDrawing.point(center,radius:r,phase:0.75),size:9)}
+        }
+        if let pitch=readoutPitch {let guide=OrbitDrawing.arc(center,radius:radius(pitch),from:0,to:1);StudioTheme.accentNS.withAlphaComponent(0.45).setStroke();guide.lineWidth=1;guide.stroke()}
+        // Octave anchors need real text spacing; the hovered/selected semitone is read in the center.
+        var occupied:[NSRect]=[]
+        for pitch in stride(from:viewport.highest,through:viewport.lowest,by:-1) where pitch%12==0 {
+            let p=OrbitDrawing.point(center,radius:radius(pitch),phase:0.75),label=pitchName(pitch)
+            let size=(label as NSString).size(withAttributes:[.font:NSFont.systemFont(ofSize:9)])
+            let rect=NSRect(x:p.x-size.width/2,y:p.y-5,width:size.width,height:12)
+            if !occupied.contains(where:{$0.insetBy(dx:-3,dy:-2).intersects(rect)}) {OrbitDrawing.text(label,at:p,size:9);occupied.append(rect)}
         }
         // Density limits only drawing; the musical snap grid stays unchanged.
         let first=Int(ceil(range.lowerBound*grid)),last=Int(floor(range.upperBound*grid))
@@ -94,9 +119,15 @@ struct OrbitMIDIEditor:NSViewRepresentable {
                 let marker=NSBezierPath(ovalIn:NSRect(x:point.x-3,y:point.y-3,width:6,height:6));StudioTheme.textNS.setStroke();marker.lineWidth=1;marker.stroke()
             }
         }
-        OrbitDrawing.text("\(bars.lowerBound+1)–\(bars.upperBound)마디",at:NSPoint(x:center.x,y:center.y-8),size:11,color:StudioTheme.textNS)
-        OrbitDrawing.text("시계 방향",at:NSPoint(x:center.x,y:center.y+9),size:10)
-        setAccessibilityValue("\(bars.lowerBound+1)–\(bars.upperBound)마디 · \(pitchName(viewport.lowest))–\(pitchName(viewport.highest)) · \(visible.count)개 노트 표시")
+        if let pitch=readoutPitch {
+            OrbitDrawing.text(pitchName(pitch),at:NSPoint(x:center.x,y:center.y-(inner>=25 ? 9:0)),size:13,color:StudioTheme.textNS)
+            if inner>=25 {OrbitDrawing.text("MIDI \(pitch)",at:NSPoint(x:center.x,y:center.y+10),size:10)}
+        } else {
+            OrbitDrawing.text("\(bars.lowerBound+1)–\(bars.upperBound)",at:NSPoint(x:center.x,y:center.y-8),size:11,color:StudioTheme.textNS)
+            OrbitDrawing.text("마디",at:NSPoint(x:center.x,y:center.y+9),size:10)
+        }
+        let pitchValue=readoutPitch.map{" · 표시 음 \(pitchName($0)) · MIDI \($0)"} ?? ""
+        setAccessibilityValue("\(bars.lowerBound+1)–\(bars.upperBound)마디 · \(pitchName(viewport.lowest))–\(pitchName(viewport.highest)) · \(visible.count)개 노트 표시"+pitchValue)
         if let window {
             let ids=Set(visible.map(\.id));accessibilityNotes=accessibilityNotes.filter{ids.contains($0.key)}
             setAccessibilityChildren(MIDIOrbitViewport.ordered(visible).map{note -> NSAccessibilityElement in

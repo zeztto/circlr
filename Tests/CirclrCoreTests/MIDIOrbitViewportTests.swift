@@ -63,4 +63,30 @@ final class MIDIOrbitViewportTests:XCTestCase {
         view.reveal(Note(beat:12,length:1,pitch:64),clock:clock)
         XCTAssertEqual(view.page,3)
     }
+    func testNavigatorCentersEveryPitchWithoutChangingTimePage() {
+        for rows in [12,24] {
+            var view=MIDIOrbitViewport();view.pitchRows=rows;view.page=3;view.barsPerPage=2
+            for pitch in 0...127 {
+                view.centerPitch(pitch)
+                XCTAssertTrue((view.lowest...view.highest).contains(pitch))
+                XCTAssertEqual(view.highest-view.lowest+1,rows)
+                XCTAssertEqual(view.page,3);XCTAssertEqual(view.barsPerPage,2)
+            }
+        }
+    }
+    func testNavigatorMovesInSemitonesAndOctavesAndClampsAtBothEnds() {
+        var view=MIDIOrbitViewport();view.pitchRows=24;view.setLowestPitch(48)
+        view.movePitches(1);XCTAssertEqual(view.lowest,49)
+        view.movePitches(-12);XCTAssertEqual(view.lowest,37)
+        view.movePitches(Int.max);XCTAssertEqual(view.highest,127)
+        view.movePitches(Int.min);XCTAssertEqual(view.lowest,0)
+        view.setLowestPitch(Int.max);XCTAssertEqual(view.lowest,104)
+        view.setLowestPitch(Int.min);XCTAssertEqual(view.highest,23)
+    }
+    func testNavigatorPixelMappingRejectsNonfiniteInputAndKeepsAll128CellsReachable() {
+        for pitch in 0...127 {XCTAssertEqual(MIDIOrbitViewport.pitch(at:(Double(pitch)+0.5)/128),pitch)}
+        XCTAssertEqual(MIDIOrbitViewport.pitch(at:-1),0);XCTAssertEqual(MIDIOrbitViewport.pitch(at:1),127)
+        XCTAssertEqual(MIDIOrbitViewport.pitch(at:2),127)
+        XCTAssertNil(MIDIOrbitViewport.pitch(at:.nan));XCTAssertNil(MIDIOrbitViewport.pitch(at:.infinity))
+    }
 }

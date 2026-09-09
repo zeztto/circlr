@@ -21,21 +21,24 @@ struct MIDIOrbitWorkspace:View {
     private let keyHelp="Tab 노트 선택 · 방향키 이동 · ⇧ 좌우 길이 · ⌥ 상하 세기 · Return 입력 · Delete 삭제"
     var body:some View {
         HStack(alignment:.top,spacing:20) {
-            ScrollView {
-            VStack(alignment:.leading,spacing:8) {
+            VStack(spacing:8) {
                 HStack {
                     Picker("MIDI 편집 방식",selection:$store.midiStepMode){Text("궤도").tag(false);Text("스텝").tag(true)}.pickerStyle(.segmented).labelsHidden().frame(width:110)
                     Text("\(notes.count)개 노트").foregroundStyle(StudioTheme.secondary)
                 }
+            ScrollView {
+            VStack(alignment:.leading,spacing:8) {
                 HStack(spacing:8) {
-                    Button{act{viewport.topPitch=max(viewport.rows-1,viewport.highest-12)}}label:{Image(systemName:"minus")}.accessibilityLabel("표시 음역 한 옥타브 아래")
+                    Button{act{viewport.movePitches(-12)}}label:{Image(systemName:"minus")}.accessibilityLabel("표시 음역 한 옥타브 아래")
                     Text(name(viewport.lowest)+"–"+name(viewport.highest)).monospacedDigit()
-                    Button{act{viewport.topPitch=min(127,viewport.highest+12)}}label:{Image(systemName:"plus")}.accessibilityLabel("표시 음역 한 옥타브 위")
+                    Button{act{viewport.movePitches(12)}}label:{Image(systemName:"plus")}.accessibilityLabel("표시 음역 한 옥타브 위")
+                    Spacer(minLength:0)
+                    Button("맞춤"){act{viewport.fitPitches(notes)}}.fixedSize().accessibilityLabel("연주 음역 맞춤").help("연주의 음역에 맞춰 1옥타브 또는 2옥타브를 표시")
                 }
                 HStack(spacing:8) {
                     Picker("표시 음역",selection:$viewport.pitchRows){Text("1옥타브").tag(12);Text("2옥타브").tag(24)}.pickerStyle(.segmented).labelsHidden().frame(width:132)
-                    Button("연주 음역"){act{viewport.fitPitches(notes)}}
                 }
+                MIDIPitchNavigator(viewport:$viewport,notes:notes,selected:selected,identity:store.numberEditIdentity,focusTarget:focusTarget).frame(height:37)
                 if let clock {
                     let bars=viewport.bars(clock)
                     HStack(spacing:10) {
@@ -52,11 +55,11 @@ struct MIDIOrbitWorkspace:View {
                         else if outside>0 {Text("범위 밖 \(outside)개").font(.system(size:12)).foregroundStyle(StudioTheme.secondary).lineLimit(1)}
                     }
                 }
-                HStack(spacing:12) {
-                    Button("이전 노트"){browse(-1)}.disabled(notes.isEmpty)
-                    Button("다음 노트"){browse(1)}.disabled(notes.isEmpty)
-                }
-                HStack {
+            }.frame(maxWidth:.infinity,alignment:.leading).padding(.trailing,6)
+            }.frame(maxHeight:.infinity)
+                HStack(spacing:7) {
+                    Button{browse(-1)}label:{Image(systemName:"backward.end")}.accessibilityLabel("이전 MIDI 노트").help("이전 노트 선택·표시").disabled(notes.isEmpty)
+                    Button{browse(1)}label:{Image(systemName:"forward.end")}.accessibilityLabel("다음 MIDI 노트").help("다음 노트 선택·표시").disabled(notes.isEmpty)
                     Menu("MIDI") {
                         Button("MIDI 파일 가져오기"){store.chooseMIDIImport()}
                         Button("MIDI 저장"){store.exportMIDI()}
@@ -67,7 +70,6 @@ struct MIDIOrbitWorkspace:View {
                     Button("바운스"){store.bounceTrack()}.disabled(store.preparing)
                     Button{store.startMIDIRecording()}label:{Image(systemName:store.midiRecording ? "stop.circle":"record.circle")}.accessibilityLabel(store.midiRecording ? "MIDI 녹음 정지":"MIDI 녹음").disabled(store.editPatternID != nil)
                 }
-            }.frame(maxWidth:.infinity,alignment:.leading).padding(.trailing,6)
             }.frame(width:228,alignment:.leading)
             OrbitMIDIEditor(store:store,viewport:viewport,focusTarget:focusTarget).frame(minWidth:180,maxWidth:.infinity,maxHeight:.infinity).help(keyHelp)
             MIDINoteInspector(store:store,focusTarget:focusTarget,hint:"Tab 선택 · 방향키 편집",keyHelp:keyHelp)
