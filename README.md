@@ -6,7 +6,9 @@ macOS용 앨범·송폼 궤도 편집기. **앨범 → 곡·악장 → 섹션 �
 
 연결 UI는 [서클 둘레 8방향 IN/OUT과 다중 입출력](docs/22-eight-direction-ports.md)으로 확장 중이다. 포트의 신호 의미와 연결점 배치를 분리한다. 아래 일반 사용법은 배포된 0.19 앱 기준이며 새 포트 기능은 독립 개발 브랜치에서 검증한다.
 
-현재 **`codex/daw-integration`의 0.20.0 build 47**에 녹음 lifecycle과 8방향·다중 bus·그룹 포트를 통합했다. 같은 캔버스의 연결 편집·녹음 상태·스텝·오토메이션이 공존하며, 녹음 시작·정리 중 음악 편집과 Undo의 경쟁을 차단한다. build 23의 실제 편집·바운스·Undo·저장/재열기·닫기 최소화 및 출력별 모션 검증은 [통합 QA](qa/daw-integration-review.md)에 기록했다.
+현재 **`codex/daw-integration`의 0.20.0 build 48**에 녹음 lifecycle과 8방향·다중 bus·그룹 포트를 통합했다. 같은 캔버스의 연결 편집·녹음 상태·스텝·오토메이션이 공존하며, 녹음 시작·정리 중 음악 편집과 Undo의 경쟁을 차단한다. build 23의 실제 편집·바운스·Undo·저장/재열기·닫기 최소화 및 출력별 모션 검증은 [통합 QA](qa/daw-integration-review.md)에 기록했다.
+
+build 48은 **오토메이션의 화면 밖 점까지 바로 탐색하고 마디 눈금도 이어 표시**한다. 이전/다음·Home/End·선택 점 보기와 마디/박/초 정보를 제공하며, 편집·Undo·자유/궤도 전환 때 범위를 유지한다. 깨끗한 빌드의 Swift **374개**·Python **26개**, 실제 탐색·편집/Undo·대상 분리·원본 복원을 확인했다. [계약](docs/62-automation-time-navigation.md) · [QA와 증분 빌드 실패 기록](qa/automation-time-navigation-review.md).
 
 build 47은 **드럼 스텝의 행·샘플 이름·MIDI 번호를 바로 검색**한다. 행 이름 선택, 현재 열을 유지한 행 추가, Home/End·PageUp/PageDown 탐색과 숨겨진 선택 행 복귀를 지원한다. 검색은 음악을 바꾸지 않으며 보이는 행만 그린다. Swift **369개**·Python **26개**, 101행의 작은 창에서 검색·노트 입력/Undo·대상 전환·원본 복원을 확인했다. [계약](docs/61-step-row-navigation.md) · [QA와 남은 범위](qa/step-row-navigation-review.md).
 

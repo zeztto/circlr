@@ -49,6 +49,14 @@ extension AppStore {
         guard let points=currentAutomation?.points,!points.isEmpty else{return}
         let i=points.firstIndex{$0.id==selectedAutomationPointID} ?? (delta>0 ? -1:0)
         selectedAutomationPointID=points[(i+delta+points.count)%points.count].id
+        revealAutomationPoint()
+    }
+    func chooseAutomationBoundary(last:Bool) {
+        selectedAutomationPointID=last ? currentAutomation?.points.last?.id:currentAutomation?.points.first?.id
+        revealAutomationPoint()
+    }
+    func revealAutomationPoint() {
+        if let point=selectedAutomationPoint {automationViewport.reveal(base:automationBeats,beat:point.beat)}
     }
     func removeAutomationPoint() {guard let point=selectedAutomationPoint else{return};setAutomation(currentAutomation?.points.filter{$0.id != point.id} ?? [])}
     func duplicateAutomationPoint() {
@@ -69,7 +77,7 @@ struct AutomationEditor:View {
             .onChange(of:store.editOriginal){_,_ in store.selectedAutomationPointID=lane?.points.first?.id;focusTarget.focus()}
             .environment(\.numberEditing,NumberEditingContext(snapshot:store.numberEditIdentity,current:{store.numberEditIdentity},focusCanvas:{focusTarget.focus()}))
     }
-    var plot:some View {AutomationPlot(store:store,displayBeats:store.automationDisplayedBeats,focusTarget:focusTarget).disabled(!available).help("겹친 점은 Option 클릭으로 순환 선택합니다. 일반 클릭은 현재 선택을 유지합니다.")}
+    var plot:some View {AutomationPlot(store:store,displayBeats:store.automationDisplayedBeats,focusTarget:focusTarget).disabled(!available)}
     var linear:some View {
         VStack(alignment:.leading,spacing:8) {
             HStack(spacing:12){parameterControls;Spacer(minLength:8);originalToggle;pointActions}
@@ -80,7 +88,7 @@ struct AutomationEditor:View {
                     timeControl(point);valueControl(point);Spacer(minLength:8);shapeControl(point)
                 }else{emptyHint;Spacer(minLength:0)}
             }.frame(height:32)
-            HStack(spacing:12){scopeText.lineLimit(1);rangeButton;Spacer(minLength:4);valueHint.lineLimit(1)}
+            HStack(spacing:12){scopeText.lineLimit(1);rangeButton;Spacer(minLength:4);if store.selectedAutomationPoint != nil {positionText}else{valueHint.lineLimit(1)}}
                 .font(.system(size:12)).foregroundStyle(StudioTheme.secondary)
         }
     }
@@ -100,7 +108,7 @@ struct AutomationEditor:View {
             ScrollView {
             VStack(alignment:.leading,spacing:12) {
                 navigation
-                if let point=store.selectedAutomationPoint {timeControl(point);valueControl(point);shapeControl(point)}else{emptyHint}
+                if let point=store.selectedAutomationPoint {timeControl(point);positionText;valueControl(point);shapeControl(point)}else{emptyHint}
                 valueHint.font(.system(size:12)).foregroundStyle(StudioTheme.secondary)
             }.frame(maxWidth:.infinity,alignment:.leading).padding(.trailing,6)
             }.frame(width:250,alignment:.leading)
@@ -126,10 +134,26 @@ struct AutomationEditor:View {
         }
     }
     var navigation:some View {
-        HStack(spacing:12) {
+        let count="\(lane?.points.firstIndex(where:{$0.id==store.selectedAutomationPointID}).map{$0+1} ?? 0)/\(lane?.points.count ?? 0)"
+        return HStack(spacing:8) {
             Button {act{store.chooseAutomationPoint(-1)}} label:{Image(systemName:"chevron.left")}.help("이전 점 · [").accessibilityLabel("이전 오토메이션 점").disabled(lane==nil)
+            Text(count)
+                .monospacedDigit().foregroundStyle(StudioTheme.secondary).fixedSize().accessibilityLabel("선택 점 "+count)
+                .help("Home 첫 점 · End 마지막 점 · 범위 밖의 점을 선택하면 표시 범위를 펼칩니다")
             Button {act{store.chooseAutomationPoint(1)}} label:{Image(systemName:"chevron.right")}.help("다음 점 · ]").accessibilityLabel("다음 오토메이션 점").disabled(lane==nil)
+            if let point=store.selectedAutomationPoint,point.beat>store.automationDisplayedBeats {
+                Button{act{store.revealAutomationPoint()}}label:{Image(systemName:"scope")}.accessibilityLabel("선택 오토메이션 점 보기").help("선택한 점까지 표시 범위를 펼칩니다")
+            }
         }
+    }
+    var positionText:some View {
+        let point=store.selectedAutomationPoint,clock=store.automationClock
+        let position=point.flatMap{AutomationRuler.text(at:$0.beat,clock:clock)} ?? ""
+        let seconds=point.flatMap{p in clock.map{String(format:"%.2f초",$0.seconds(at:p.beat))}} ?? ""
+        let description=[position,seconds].filter{!$0.isEmpty}.joined(separator:" · ")
+        return Text(description)
+            .font(.system(size:11)).foregroundStyle(StudioTheme.secondary).accessibilityLabel("선택 점 위치 · "+description)
+            .help("마디 안의 박은 현재 박자 분모 기준입니다. 위치 입력은 서클 시작부터의 4분음표 박입니다. 서클 길이 밖은 마지막 박자를 이어 표시합니다.")
     }
     func timeControl(_ point:AutomationPoint)->some View {
         HStack(spacing:10) {
@@ -206,9 +230,13 @@ struct AutomationPlot:NSViewRepresentable {
     var displayBeats=32.0
     var plotClock:MusicClock?
     var accessibilityPoints:[ID:AutomationPointAccessibility]=[:]
+    var accessibilityIdentity:NumberEditIdentity?
+    var accessibilityExtent:Double?
+    var accessibilityClock:MusicClock?
+    var accessibilityOrbital:Bool?
     override var isFlipped:Bool {true}
     override var acceptsFirstResponder:Bool {true}
-    init(store:AppStore){self.store=store;super.init(frame:.zero);setAccessibilityElement(true);setAccessibilityRole(.group);setAccessibilityLabel("오토메이션 곡선 · Return 점 추가 · 대괄호 점 선택 · 방향키 시간과 값 · Delete 삭제 · 겹친 점 Option 클릭")}
+    init(store:AppStore){self.store=store;super.init(frame:.zero);setAccessibilityElement(true);setAccessibilityRole(.group);setAccessibilityLabel("오토메이션 곡선 · Return 점 추가 · 대괄호 점 선택 · Home·End 첫·끝 점 · 방향키 시간과 값 · Delete 삭제 · 겹친 점 Option 클릭")}
     required init?(coder:NSCoder){fatalError()}
     override func viewDidMoveToWindow(){super.viewDidMoveToWindow();DispatchQueue.main.async{[weak self] in guard let self,let window=self.window,!(window.firstResponder is NSTextView) else{return};window.makeFirstResponder(self)}}
     var rect:NSRect {bounds.insetBy(dx:42,dy:24)}
@@ -239,6 +267,7 @@ struct AutomationPlot:NSViewRepresentable {
     }
     override func draw(_ dirtyRect:NSRect) {
         let parameter=store.automationParameter,points=points,lane=AutomationLane(parameter:parameter,points:points)
+        var occupied:[NSRect]=[]
         let levels:[Double]=parameter == .gain ? [0,1,4]:[-1,0,1]
         for (index,v) in levels.enumerated() {
             let n=normalized(v),path=NSBezierPath()
@@ -246,18 +275,15 @@ struct AutomationPlot:NSViewRepresentable {
             else {path.move(to:NSPoint(x:rect.minX,y:rect.maxY-n*rect.height));path.line(to:NSPoint(x:rect.maxX,y:rect.maxY-n*rect.height))}
             StudioTheme.lineNS.setStroke();path.lineWidth=1;path.stroke()
             let label=parameter == .gain ? GainScale.text(v):(v<0 ? "L":v>0 ? "R":"C")
-            OrbitDrawing.text(label+(orbital && parameter == .gain ? " dB":""),at:orbital ? NSPoint(x:48,y:rect.minY+Double(index)*20):NSPoint(x:18,y:rect.maxY-n*rect.height),size:11,color:StudioTheme.secondaryNS)
+            let text=label+(orbital && parameter == .gain ? " dB":""),at=orbital ? NSPoint(x:48,y:rect.minY+Double(index)*20):NSPoint(x:18,y:rect.maxY-n*rect.height)
+            occupied.append(labelRect(text,at:at,size:11))
+            OrbitDrawing.text(text,at:at,size:11,color:StudioTheme.secondaryNS)
         }
-        if !orbital,let clock=plotClock {
-            let ticks=clock.barStarts.filter{$0<displayBeats}
-            let stride=max(1,Int(ceil(Double(ticks.count)/max(1,rect.width/80))))
-            for i in ticks.indices where i%stride==0 {
-                let x=rect.minX+ticks[i]/displayBeats*rect.width
-                let grid=NSBezierPath();grid.move(to:NSPoint(x:x,y:rect.minY));grid.line(to:NSPoint(x:x,y:rect.maxY))
-                StudioTheme.lineNS.withAlphaComponent(0.6).setStroke();grid.lineWidth=1;grid.stroke()
-                OrbitDrawing.text("\(i+1)마디",at:NSPoint(x:x,y:bounds.height-9),size:11)
-            }
+        if !orbital {
+            let end=String(format:"%.2f박",displayBeats),at=NSPoint(x:rect.maxX-12,y:bounds.height-12)
+            occupied.append(labelRect(end,at:at,size:11));OrbitDrawing.text(end,at:at,size:11)
         }
+        let barLabels=drawBarRuler(avoiding:occupied)
         let curve=NSBezierPath()
         for i in 0...720 {
             let beat=orbital ? beat(Double(i)/720):Double(i)/720*displayBeats,p=position(beat:beat,value:lane.value(at:beat))
@@ -271,29 +297,54 @@ struct AutomationPlot:NSViewRepresentable {
         }
         if orbital {
             if radius>70 {OrbitDrawing.text(String(format:"%.2f박",displayBeats),at:center,size:12,color:StudioTheme.textNS)}
-            let ticks=plotClock?.barStarts.filter{$0<displayBeats} ?? [0]
-            let stride=max(1,Int(ceil(Double(ticks.count)/max(3,2*Double.pi*radius/70))))
-            for i in ticks.indices where i%stride==0 {
-                let p=OrbitDrawing.point(center,radius:radius+12,phase:phase(ticks[i]))
-                OrbitDrawing.dot(p,radius:1.5,color:StudioTheme.secondaryNS)
-                OrbitDrawing.text("\(i+1)",at:OrbitDrawing.point(center,radius:radius+23,phase:phase(ticks[i])),size:10)
-            }
         } else {
             if plotClock==nil {OrbitDrawing.text("0",at:NSPoint(x:rect.minX,y:bounds.height-9),size:11)}
-            OrbitDrawing.text(String(format:"%.2f박",displayBeats),at:NSPoint(x:rect.maxX-12,y:bounds.height-9),size:11)
         }
-        setAccessibilityValue(store.selectedAutomationPoint.map{AutomationDisplay.time($0.beat,clock:plotClock)+" · "+AutomationDisplay.value($0.value,parameter:parameter)} ?? "선택한 점 없음")
+        let help=String(format:"표시 범위 0–%.2f박",displayBeats)+" · 마디 눈금 "+barLabels.joined(separator:", ")+" · 길이 밖은 마지막 박자 기준 · 겹친 점은 Option 클릭으로 순환 선택"
+        setAccessibilityHelp(help);if toolTip != help {toolTip=help}
+        setAccessibilityValue(store.selectedAutomationPoint.map{pointDescription($0)} ?? "선택한 점 없음")
         if let window {
+            let identity=store.numberEditIdentity
+            if identity != accessibilityIdentity || displayBeats != accessibilityExtent || plotClock != accessibilityClock || orbital != accessibilityOrbital {
+                accessibilityPoints=[:];accessibilityIdentity=identity;accessibilityExtent=displayBeats;accessibilityClock=plotClock;accessibilityOrbital=orbital
+            }
             let visible=points.filter{$0.beat<=displayBeats};let ids=Set(visible.map(\.id))
             accessibilityPoints=accessibilityPoints.filter{ids.contains($0.key)}
             let children=visible.enumerated().map { i,p -> NSAccessibilityElement in
                 let child=accessibilityPoints[p.id] ?? AutomationPointAccessibility(parent:self,id:p.id);accessibilityPoints[p.id]=child
-                child.setAccessibilityLabel("\(i+1)번 점 · "+AutomationDisplay.time(p.beat,clock:plotClock)+" · "+AutomationDisplay.value(p.value,parameter:parameter))
+                child.setAccessibilityLabel("\(i+1)번 점 · "+pointDescription(p))
                 child.setAccessibilityValue(p.id==store.selectedAutomationPointID ? "선택됨":"")
                 let pt=position(p);child.setAccessibilityFrame(window.convertToScreen(convert(NSRect(x:pt.x-7,y:pt.y-7,width:14,height:14),to:nil)))
                 return child
             };setAccessibilityChildren(children)
         }
+    }
+    func pointDescription(_ point:AutomationPoint)->String {
+        [AutomationRuler.text(at:point.beat,clock:plotClock),AutomationDisplay.time(point.beat,clock:plotClock),AutomationDisplay.value(point.value,parameter:store.automationParameter)].compactMap{$0}.joined(separator:" · ")
+    }
+    func labelRect(_ text:String,at point:NSPoint,size:Double)->NSRect {
+        let measured=(text as NSString).size(withAttributes:[.font:NSFont.systemFont(ofSize:size)])
+        return NSRect(x:point.x-measured.width/2,y:point.y-size/2,width:measured.width,height:measured.height)
+    }
+    func drawBarRuler(avoiding reserved:[NSRect])->[String] {
+        var occupied=reserved,labels:[String]=[]
+        let capacity=Int(max(1,orbital ? 2*Double.pi*radius/70:rect.width/80))
+        for tick in AutomationRuler.ticks(clock:plotClock,end:displayBeats,capacity:capacity) {
+            let text=orbital ? String(tick.bar):"\(tick.bar)마디",size=orbital ? 10.0:11.0
+            let gridX=rect.minX+tick.beat/displayBeats*rect.width
+            var point=orbital ? OrbitDrawing.point(center,radius:radius+16,phase:phase(tick.beat)):NSPoint(x:gridX,y:bounds.height-12)
+            if !orbital,tick.bar==1 {point.x+=labelRect(text,at:point,size:size).width/2+2}
+            let frame=labelRect(text,at:point,size:size)
+            guard bounds.contains(frame),!occupied.contains(where:{$0.insetBy(dx:-5,dy:-2).intersects(frame)}) else{continue}
+            occupied.append(frame);labels.append(String(tick.bar))
+            if orbital {OrbitDrawing.dot(OrbitDrawing.point(center,radius:radius+8,phase:phase(tick.beat)),radius:1.5,color:StudioTheme.secondaryNS)}
+            else {
+                let line=NSBezierPath();line.move(to:NSPoint(x:gridX,y:rect.minY));line.line(to:NSPoint(x:gridX,y:rect.maxY))
+                StudioTheme.lineNS.withAlphaComponent(0.6).setStroke();line.lineWidth=1;line.stroke()
+            }
+            OrbitDrawing.text(text,at:point,size:size)
+        }
+        return labels
     }
     override func mouseDown(with event:NSEvent) {
         guard allowsEditing else{return}
@@ -325,6 +376,8 @@ struct AutomationPlot:NSViewRepresentable {
         switch event.keyCode {
         case 33:store.chooseAutomationPoint(-1)
         case 30:store.chooseAutomationPoint(1)
+        case 115:store.chooseAutomationBoundary(last:false)
+        case 119:store.chooseAutomationBoundary(last:true)
         case 36,76:store.addAutomationPoint()
         case 51,117:store.removeAutomationPoint()
         case 53:preview=nil;origin=nil;dragIdentity=nil;dragExtent=nil;store.automationOpen=false
@@ -340,9 +393,12 @@ struct AutomationPlot:NSViewRepresentable {
 @MainActor final class AutomationPointAccessibility:NSAccessibilityElement {
     weak var plot:AutomationPlotView?
     let pointID:ID
-    init(parent:AutomationPlotView,id:ID){plot=parent;pointID=id;super.init();setAccessibilityParent(parent);setAccessibilityRole(.button);setAccessibilityEnabled(true)}
+    let identity:NumberEditIdentity,extent:Double,clock:MusicClock?,orbital:Bool
+    init(parent:AutomationPlotView,id:ID){plot=parent;pointID=id;identity=parent.store.numberEditIdentity;extent=parent.displayBeats;clock=parent.plotClock;orbital=parent.orbital;super.init();setAccessibilityParent(parent);setAccessibilityRole(.button);setAccessibilityEnabled(parent.allowsEditing)}
     override func accessibilityPerformPress()->Bool {
-        guard let plot,plot.allowsEditing,plot.points.contains(where:{$0.id==pointID}) else{return false}
+        guard let plot,plot.window != nil,plot.allowsEditing,plot.store.numberEditIdentity==identity,
+              plot.displayBeats==extent,plot.plotClock==clock,plot.orbital==orbital,
+              plot.points.contains(where:{$0.id==pointID && $0.beat<=plot.displayBeats}) else{return false}
         plot.window?.makeFirstResponder(plot);plot.store.selectedAutomationPointID=pointID;plot.needsDisplay=true;return true
     }
 }

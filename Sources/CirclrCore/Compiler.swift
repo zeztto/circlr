@@ -37,6 +37,9 @@ public enum ContextResolver {
 }
 public struct MusicClock: Equatable {
     public let barStarts: [Double]
+    /// First bar boundary at or after the clock end, before truncating a partial bar.
+    /// Used by editor rulers only; beat/second conversion and playback are unchanged.
+    public let barContinuationBeat: Double
     public let meters: [Meter]
     public let tempos: [TempoChange]
     public var beats: Double { barStarts.last ?? 0 }
@@ -51,7 +54,7 @@ public struct MusicClock: Equatable {
             try ContextResolver.validate(current)
             ms.append(current); starts.append(starts.last! + current.quarters)
         }
-        barStarts = starts; meters = ms
+        barStarts = starts; meters = ms; barContinuationBeat = starts.last!
         guard tempoChanges.allSatisfy({ $0.beat.isFinite && $0.beat >= 0 && $0.beat < starts.last! && $0.bpm.isFinite && (1...999).contains($0.bpm) }), Set(tempoChanges.map(\.beat)).count == tempoChanges.count else { throw CirclrError("Tempo map의 위치와 BPM을 확인하세요") }
         var ts = tempoChanges.sorted { $0.beat < $1.beat }
         if ts.first?.beat != 0 { ts.insert(TempoChange(beat: 0, bpm: context.tempo), at: 0) }
@@ -63,6 +66,7 @@ public struct MusicClock: Equatable {
         guard count<=4096 else { throw CirclrError("녹음 서클은 4096마디 이내로 지정하세요") }
         let full=try MusicClock(bars:max(1,Int(count)),context:context,tempoChanges:tempoChanges.filter{$0.beat<beats})
         barStarts=full.barStarts.filter{$0<beats}+[beats];meters=Array(full.meters.prefix(barStarts.count-1));tempos=full.tempos
+        barContinuationBeat=full.barContinuationBeat
     }
     public func bpm(at beat: Double) -> Double { tempos.last(where: { $0.beat <= beat })?.bpm ?? tempos[0].bpm }
     public init(parent: MusicClock, start: Double, length: Double, context: MusicContext, inheritTempo: Bool, inheritMeter: Bool) throws {
@@ -71,16 +75,17 @@ public struct MusicClock: Equatable {
         let changes=inheritTempo ? parent.tempos.filter{$0.beat>start && $0.beat<start+length}.map{TempoChange(beat:$0.beat-start,bpm:$0.bpm)}:[]
         let base=try MusicClock(beats:length,context:resolved,tempoChanges:changes)
         tempos=base.tempos
-        guard inheritMeter else {barStarts=base.barStarts;meters=base.meters;return}
+        guard inheritMeter else {barStarts=base.barStarts;meters=base.meters;barContinuationBeat=base.barContinuationBeat;return}
         var starts=[0.0],ms:[Meter]=[]
-        var absolute=start
+        var absolute=start,continuation=length
         while absolute<start+length-1e-9 {
             guard ms.count<4096 else {throw CirclrError("서클은 4096마디 이내로 지정하세요")}
             let meter=parent.meters[parent.bar(at:absolute)]
             let next=parent.barStarts.first{$0>absolute+1e-9} ?? absolute+meter.quarters
+            continuation=(next==parent.beats ? parent.barContinuationBeat:next)-start
             absolute=min(start+length,next);starts.append(absolute-start);ms.append(meter)
         }
-        barStarts=starts;meters=ms
+        barStarts=starts;meters=ms;barContinuationBeat=continuation
     }
     public func seconds(at beat: Double) -> Double {
         if beat <= 0 { return beat * 60 / tempos[0].bpm }
