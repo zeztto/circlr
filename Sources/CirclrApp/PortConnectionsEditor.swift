@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import CirclrCore
 
@@ -296,67 +297,94 @@ struct PortConnectionsEditor: View {
 struct AudioRouterEditor: View {
     @ObservedObject var store: AppStore
     let router: AudioRouter
-    @State private var draft: [String: Double] = [:]
+    @State private var error=""
+    @State private var fieldFocus=NumberFieldFocus([
+        "IN 1 OUT 1 전송량 dB","IN 1 OUT 2 전송량 dB",
+        "IN 2 OUT 1 전송량 dB","IN 2 OUT 2 전송량 dB"])
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack { Text("스테레오 2 IN / 2 OUT").fontWeight(.semibold); Spacer(); Button("연결 편집") { store.showConnections() } }
-            Text("입력별로 출력에 보낼 양을 정합니다").foregroundStyle(StudioTheme.secondary)
-            ForEach(0..<2, id: \.self) { input in ForEach(0..<2, id: \.self) { output in
-                HStack {
-                    Text("IN \(input + 1) → OUT \(output + 1)").frame(width: 106, alignment: .leading)
-                    Slider(value: binding(input, output), in: 0...4, step: 0.05, onEditingChanged: { editing in if !editing { commit(input,output) } }).accessibilityLabel("입력 \(input + 1)에서 출력 \(output + 1)로 보낼 양")
-                    RouterAmountField(value:binding(input,output).wrappedValue,label:"IN \(input+1) OUT \(output+1) 전송량") { value in
-                        draft["\(input):\(output)"]=value;commit(input,output)
-                    }.frame(width:68)
-                }
-            } }
-            HStack {
-                Button("1 → 1 · 2 → 2") { store.updateMusic("라우터 기본 경로") { $0.content = .router(AudioRouter()) } }
-                Button("1 → 2 · 2 → 1") { store.updateMusic("라우터 교차 경로") { $0.content = .router(AudioRouter(routes: [.init(input: AudioRouter.input1, output: AudioRouter.output2), .init(input: AudioRouter.input2, output: AudioRouter.output1)])) } }
+        let identity=store.numberEditIdentity
+        if let address=store.hierarchySelection {
+            let target=AudioRouterTarget(address:address,original:store.editOriginal)
+            if let value=try? AudioRouterEditing.snapshot(target,in:store.project) {
+                let context=NumberEditingContext(snapshot:identity,current:{store.numberEditIdentity},focusCanvas:{store.focusCanvas?()},
+                    fieldFocus:fieldFocus,names:store.nameEditing)
+                VStack(alignment:.leading,spacing:14) {
+                    HStack {
+                        Text("스테레오 2 IN / 2 OUT").fontWeight(.semibold)
+                        Spacer()
+                        Button("수치 입력") {_ = fieldFocus.enter(in:NSApp.keyWindow)}
+                            .help("Tab 다음 전송량 · ⇧Tab 이전 전송량 · Return 적용 · Esc 취소")
+                        Button("연결 편집") {store.showConnections()}
+                    }
+                    Text(error.isEmpty ? (store.editOriginal ? "공유 원본":"이번 사용")+" · 0 dB 원래 레벨 · −∞ 내부 경로 제거":error)
+                        .font(.system(size:12)).foregroundStyle(error.isEmpty ? StudioTheme.secondary:Color.red)
+                        .fixedSize(horizontal:false,vertical:true)
+                    ForEach(0..<2,id:\.self) {input in
+                        ForEach(0..<2,id:\.self) {output in
+                            gainRow(input,output,target:target,value:value,identity:identity,context:context)
+                        }
+                    }
+                    HStack {
+                        Button("1 → 1 · 2 → 2") {replace(AudioRouter(),target:target,identity:identity)}
+                        Button("1 → 2 · 2 → 1") {
+                            replace(AudioRouter(routes:[.init(input:AudioRouter.input1,output:AudioRouter.output2),
+                                .init(input:AudioRouter.input2,output:AudioRouter.output1)]),target:target,identity:identity)
+                        }
+                    }
+                }.environment(\.numberEditing,context)
+            }else{
+                Text(store.editOriginal ? "이번 사용에 추가된 라우터입니다. 공유 원본 편집을 끄고 조절하세요.":"라우터의 전송량을 확인할 수 없습니다. 대상을 다시 선택하세요.")
+                    .foregroundStyle(StudioTheme.secondary).fixedSize(horizontal:false,vertical:true)
             }
         }
     }
-    private func binding(_ input: Int, _ output: Int) -> Binding<Double> {
-        Binding(get: { draft["\(input):\(output)"] ?? router.routes.first { $0.input == AudioRouter.inputs[input] && $0.output == AudioRouter.outputs[output] }?.gain ?? 0 }, set: { draft["\(input):\(output)"] = $0 })
+    private func gain(_ router:AudioRouter,_ input:Int,_ output:Int)->Double {
+        router.routes.first{$0.input==AudioRouter.inputs[input] && $0.output==AudioRouter.outputs[output]}?.gain ?? 0
     }
-    private func commit(_ input: Int, _ output: Int) {
-        let key = "\(input):\(output)"
-        if let value = draft[key] {
-            store.updateMusic("라우터 전송량") { node in
-                guard case .router(var current) = node.content else { return }
-                guard (current.routes.first { $0.input == AudioRouter.inputs[input] && $0.output == AudioRouter.outputs[output] }?.gain ?? 0) != value else { return }
-                current.routes.removeAll { $0.input == AudioRouter.inputs[input] && $0.output == AudioRouter.outputs[output] }
-                if value != 0 { current.routes.append(.init(input: AudioRouter.inputs[input], output: AudioRouter.outputs[output], gain: value)) }
-                node.content = .router(current)
-            }
-            draft[key] = nil
+    private func gainRow(_ input:Int,_ output:Int,target:AudioRouterTarget,value:AudioRouter,
+                         identity:NumberEditIdentity,context:NumberEditingContext)->some View {
+        let title="IN \(input+1) OUT \(output+1) 전송량 dB",level=gain(value,input,output)
+        let binding=Binding<Double>(get:{
+            (try? AudioRouterEditing.snapshot(target,in:store.project)).map{gain($0,input,output)} ?? level
+        },set:{next in
+            guard let current=try? AudioRouterEditing.snapshot(target,in:store.project) else{error="라우터가 변경되었습니다. 다시 선택하세요";return}
+            // The shared number session already validates the typing revision and baseline.
+            // Adopt a revision only between edits, preserving every target/scope field.
+            _=setGain(next,input:input,output:output,target:target,expected:gain(current,input,output),
+                      identity:context.beforeTyping() ?? identity)
+        })
+        return HStack(spacing:12) {
+            Text("IN \(input+1) → OUT \(output+1)").frame(width:106,alignment:.leading)
+            GainFader(title:title,gain:level,context:context,reject:{error="편집 대상이나 전송량이 변경되었습니다. 다시 조절하세요"}) {expected,next in
+                setGain(next,input:input,output:output,target:target,expected:expected,identity:context.beforeTyping() ?? identity)
+            }.frame(minWidth:130,maxWidth:.infinity).frame(height:30)
+            CommittedNumberField(title:title,value:binding,range:0...4,width:90,presentation:.gainDecibels)
+            Text("dB").foregroundStyle(StudioTheme.secondary)
         }
     }
-}
-
-private struct RouterAmountField: View {
-    let value: Double
-    let label: String
-    let apply: (Double) -> Void
-    @State private var text = ""
-    @State private var invalid = false
-    @FocusState private var editing: Bool
-    private func formatted(_ value: Double) -> String { String(format:"%.2f",value) }
-    var body: some View {
-        TextField("0–4",text:$text)
-            .textFieldStyle(StudioFieldStyle()).monospacedDigit().focused($editing)
-            .foregroundStyle(invalid ? Color.red : StudioTheme.text)
-            .accessibilityLabel(label).help("0–4 · Return으로 적용 · Esc로 취소")
-            .onAppear {text=formatted(value)}
-            .onChange(of:value) { _,next in if !editing {text=formatted(next)} }
-            .onChange(of:editing) { _,focused in if !focused {commit()} }
-            .onSubmit {if commit() {editing=false}}
-            .onExitCommand {text=formatted(value);invalid=false;editing=false}
+    private func setGain(_ next:Double,input:Int,output:Int,target:AudioRouterTarget,expected:Double,identity:NumberEditIdentity)->Bool {
+        guard store.numberEditIdentity==identity else{error="편집 대상이 변경되었습니다. 다시 조절하세요";return false}
+        do {
+            var candidate=store.project
+            try AudioRouterEditing.setGain(target,input:AudioRouter.inputs[input],output:AudioRouter.outputs[output],
+                gain:next,expectedGain:expected,in:&candidate)
+            store.mutate("라우터 전송량"){$0=candidate}
+            guard let result=try? AudioRouterEditing.snapshot(target,in:store.project),gain(result,input,output)==next else{return false}
+            error="";return true
+        }catch{self.error=error.localizedDescription;return false}
     }
-    @discardableResult private func commit() -> Bool {
-        guard let next=Double(text.trimmingCharacters(in:.whitespacesAndNewlines)),next.isFinite,(0...4).contains(next) else {invalid=true;return false}
-        invalid=false;text=formatted(next)
-        if next != value {apply(next)}
-        return true
+    private func replace(_ next:AudioRouter,target:AudioRouterTarget,identity:NumberEditIdentity) {
+        guard store.nameEditing.resolve() else{return}
+        let current=store.numberEditIdentity
+        var resolvedIdentity=identity;resolvedIdentity.revision=current.revision
+        guard resolvedIdentity==current else{error="편집 대상이 변경되었습니다. 다시 실행하세요";return}
+        do {
+            // A preset click is a new explicit action after name/numeric commits.
+            // Refresh only the revision and same target's expected routes; never adopt another scope.
+            let expected=try AudioRouterEditing.snapshot(target,in:store.project)
+            var candidate=store.project
+            try AudioRouterEditing.replace(target,router:next,expected:expected,in:&candidate)
+            store.mutate("라우터 경로 설정"){$0=candidate};error=""
+        }catch{self.error=error.localizedDescription}
     }
 }

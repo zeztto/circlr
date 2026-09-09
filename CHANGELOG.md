@@ -1,5 +1,12 @@
 # 변경 이력
 
+## 개발 중 — 0.20.0 build92 router 경로 전송량
+
+- 네 경로 dB 수치/Tab·slider 입력과 Core 명시 대상·expected guard·원본/이번 사용 분리·route 순서 보존.
+- Core19개·최종 Release41.35초 통과. 수정 없는 Return 정밀도/no-op·네 경로/slider 입력·삭제/추가·원본22 경로 수정·preset 충돌 거절·각 Undo 확인.
+- 1020×768·scroll1 유지와 revision54의 saved/reopened 전체 manifest strict 동일 확인. QA baseline3개·후보25개·AX12개·자산2개·physical0 대조 통과. [계약](docs/106-router-route-levels.md) · [QA](qa/router-level-review.md).
+- 원본 안전성은 이번 route helper 범위. 물리 출력0회·사용자 앱 보존. 동시 수정 감지로 중단한 첫 빌드는 최종 빌드와 구분.
+
 ## 개발 중 — 0.20.0 build91 출력 dB·router 스크롤
 
 - effect/mix/router 출력 볼륨을 기존 `.gainDecibels`로 통일. 저장·MCP·renderer·automation의 선형 값 유지.

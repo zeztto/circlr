@@ -34,7 +34,7 @@ struct GainControls:View {
     }
 }
 
-private struct GainFader:NSViewRepresentable {
+struct GainFader:NSViewRepresentable {
     let title:String
     let gain:Double
     let context:NumberEditingContext
