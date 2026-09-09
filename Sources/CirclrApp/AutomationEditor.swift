@@ -73,8 +73,8 @@ struct AutomationEditor:View {
     var available:Bool {store.automationNode != nil}
     var body:some View {
         Group {if store.project.usesOrbits {orbital}else{linear}}
-            .onChange(of:store.automationParameter){_,_ in store.selectedAutomationPointID=lane?.points.first?.id;focusTarget.focus()}
-            .onChange(of:store.editOriginal){_,_ in store.selectedAutomationPointID=lane?.points.first?.id;focusTarget.focus()}
+            .onChange(of:store.automationParameter){_,_ in focusTarget.focus()}
+            .onChange(of:store.editOriginal){_,_ in focusTarget.focus()}
             .environment(\.numberEditing,NumberEditingContext(snapshot:store.numberEditIdentity,current:{store.numberEditIdentity},focusCanvas:{focusTarget.focus()}))
     }
     var plot:some View {AutomationPlot(store:store,displayBeats:store.automationDisplayedBeats,focusTarget:focusTarget).disabled(!available)}

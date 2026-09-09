@@ -30,6 +30,9 @@ extension AppStore {
         return try? SectionGraphEditing.effective(section: section, use: use)
     }
     func selectHierarchy(_ address: CircleAddress, additive: Bool = false) {
+        let changing=address != hierarchySelection
+        if changing {rememberEditorSelection()}
+        defer {if changing {restoreEditorSelection()}}
         if address != hierarchySelection { connectionsOpen = false; connectionEditorIntent = nil }
         if address != hierarchySelection {midiImportDraft=nil;audioSplitOffset=nil;selectedAutomationPointID=nil;cancelRecordingRequest()}
         if hierarchySelection != address, midiRecording || audioRecording { stopRecording() }

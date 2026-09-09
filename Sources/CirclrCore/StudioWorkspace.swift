@@ -8,10 +8,11 @@ public struct StudioWorkspace:Codable,Equatable {
     public var transitionID:ID?
     public var connection:ConnectionWorkspaceState?
     public var automationParameter=AutomationParameter.gain
+    public var selection:EditorSelectionState?
     public var editor:EditorViewportState?
     public var automationViewport:AutomationViewport?
     public init(page:Page = .content){self.page=page}
-    enum CodingKeys:String,CodingKey {case page,original,transitionID,connection,automationParameter,editor,automationViewport}
+    enum CodingKeys:String,CodingKey {case page,original,transitionID,connection,automationParameter,editor,automationViewport,selection}
     public init(from decoder:Decoder)throws {
         let c=try decoder.container(keyedBy:CodingKeys.self)
         page=(try? c.decode(Page.self,forKey:.page)) ?? .content
@@ -19,6 +20,7 @@ public struct StudioWorkspace:Codable,Equatable {
         transitionID=try? c.decode(ID.self,forKey:.transitionID)
         connection=try? c.decode(ConnectionWorkspaceState.self,forKey:.connection)
         automationParameter=(try? c.decode(AutomationParameter.self,forKey:.automationParameter)) ?? .gain
+        selection=try? c.decode(EditorSelectionState.self,forKey:.selection)
         editor=try? c.decode(EditorViewportState.self,forKey:.editor)
         automationViewport=(try? c.decode(AutomationViewport.self,forKey:.automationViewport))?.validated
     }

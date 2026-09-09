@@ -7,6 +7,7 @@ extension AppStore {
         else if hierarchyTransitionID != nil && hierarchyTransitionID==recentTransitionID {saved.page = .transition}
         else if hierarchySettingsOpen {saved.page = .settings}
         else if automationVisible {saved.page = .automation}
+        saved.selection=capturedEditorSelection
         saved.original=editOriginal
         saved.transitionID=recentTransitionID;saved.automationParameter=automationParameter
         saved.automationViewport=automationViewport.validated
@@ -29,6 +30,7 @@ extension AppStore {
         automationOpen=view.page == .automation;embeddedPlugin=nil
         hierarchyTransitionID=view.page == .transition ? view.transitionID:nil
         edgeSelection=hierarchyTransitionID
+        restoreEditorSelection(view.selection ?? .init())
         if let id=view.transitionID {recentTransitions[address]=id}
         if let connection=view.connection {connectionWorkspaceStates[.init(node:address,original:view.original)]=connection}
     }
