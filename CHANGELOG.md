@@ -1,5 +1,11 @@
 # 변경 이력
 
+## 개발 중 — 0.20.0 build102 연결 목록 접근
+
+- compact 고정 jump bar·목록 재연결의 compose/search focus·wide 두 열 유지. 첫 후보의 keyboard 우회를 수정한 최종 Release38.32초 통과.
+- 실제 Shift+Tab/Return 목록 이동·재연결 입력 focus·대상/octant 보존·취소·wide/compact 왕복 확인. QA14개 상태·focus AX5개·음악36/자산2개·source SHA·strict 재열기 통과.
+- 폭 전환 시 focus는 window로 돌아가는 잔여 UX. 실제 케이블 적용·빈 연결·그룹 관리·외부 intent는 native 미검증. physical0·사용자 앱 유지. [계약](docs/117-connection-workspace-access.md).
+
 ## 개발 중 — 0.20.0 build101 inline header
 
 - stable3그룹·wide 한 줄/compact 두 줄과 Orbit 수평16 여백으로 원형 상단 잘림 수정. 이름 field의 기존 help 유지.

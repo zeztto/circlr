@@ -48,6 +48,8 @@ struct PortConnectionsEditor: View {
     @State private var workspaceKey:ConnectionWorkspaceKey?
     @State private var workspaceProjectID:ID?
     @State private var workspaceGeneration:Int?
+    @State private var scrollRequest=UUID()
+    @State private var scrollDestination="compose"
     let keyboard:PortKeyboardFocus
     private var isCurrentWorkspace:Bool {
         workspaceProjectID==store.project.id && workspaceGeneration==store.mediaImportGeneration && workspaceKey?.node==node?.id && workspaceKey?.original==store.editOriginal
@@ -114,7 +116,34 @@ struct PortConnectionsEditor: View {
                         connectionWorkspace.frame(maxWidth: .infinity)
                     }.padding(.trailing, 8)
                 } else {
-                    ScrollView {VStack(alignment: .leading, spacing: 18) { compose(height:340); Divider(); connectionHeading;connectionList }.padding(.trailing, 8)}
+                    HStack(spacing:8) {
+                        PortActionButton(title:workspace.replacing == nil ? "연결 만들기":"재연결 편집",keyboard:keyboard,order:-7) {
+                            jump(to:"compose")
+                        }.frame(width:110)
+                        PortActionButton(title:"기존 연결 \(listedConnections.count)개",keyboard:keyboard,order:-6) {
+                            jump(to:"connections")
+                        }.frame(width:140)
+                        Spacer(minLength:0)
+                    }.frame(height:30)
+                    ScrollViewReader { proxy in
+                        ScrollView {
+                            VStack(alignment:.leading,spacing:18) {
+                                compose(height:340).id("compose")
+                                Divider()
+                                VStack(alignment:.leading,spacing:10) {connectionHeading;connectionList}.id("connections")
+                            }.padding(.trailing,8)
+                        }
+                        .onChange(of:scrollRequest) {_,_ in
+                            let destination=scrollDestination,request=scrollRequest
+                            let project=store.project.id,generation=store.mediaImportGeneration,target=node?.id,original=store.editOriginal
+                            proxy.scrollTo(destination,anchor:.top)
+                            DispatchQueue.main.async {
+                                guard scrollRequest==request,store.connectionsOpen,store.project.id==project,
+                                      store.mediaImportGeneration==generation,node?.id==target,store.editOriginal==original else{return}
+                                keyboard.focus(destination == "connections" ? 70:20)
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -248,7 +277,13 @@ struct PortConnectionsEditor: View {
         let placement = store.project.portLayout?.placement(for: edge.id) ?? .init()
         workspace.firstOctant = incoming ? placement.to : placement.from; workspace.secondOctant = incoming ? placement.from : placement.to
     }
-    private func focusSearch() { DispatchQueue.main.async { keyboard.focus(managing ? -60:20) } }
+    private func jump(to destination:String) {
+        scrollDestination=destination;scrollRequest=UUID()
+    }
+    private func focusSearch() {
+        if !managing {jump(to:"compose")}
+        DispatchQueue.main.async { keyboard.focus(managing ? -60:20) }
+    }
     private func rememberWorkspace() {
         guard let workspaceKey,workspaceProjectID==store.project.id,workspaceGeneration==store.mediaImportGeneration else{return}
         store.connectionWorkspaceStates[workspaceKey]=workspace
