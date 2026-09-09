@@ -18,17 +18,10 @@ public struct StudioSectionRoute:Identifiable {
     public var tracks:[StudioTrackRoute]
 }
 
-/// Navigation uses actual lane ownership and audible output paths; it never edits music.
+/// Navigation uses lane ownership and structural main-output paths; it never edits music.
 public enum StudioNavigation {
     public static func outputTracks(from id:ID,graph:SectionGraph)->Set<ID> {
-        var frontier=[id],visited=Set<ID>(),result=Set<ID>()
-        let nodes=Dictionary(uniqueKeysWithValues:graph.nodes.map{($0.id,$0)})
-        while let current=frontier.popLast(),visited.count<=graph.nodes.count {
-            guard visited.insert(current).inserted,let node=nodes[current] else{continue}
-            if case .output(let track)=node.content {result.insert(track)}
-            frontier += graph.edges.filter{$0.from==current && !$0.sidechain}.map(\.to)
-        }
-        return result
+        (try? SectionGraphReachability(graph:graph).outputTracks(from:id)) ?? []
     }
     public static func build(_ project:Project)throws->[StudioSectionRoute] {
         guard let album=project.album else{return []}
@@ -42,15 +35,9 @@ public enum StudioNavigation {
                 for use in arrangement.uses {
                     guard let section=project.sections.first(where:{$0.id==use.sectionID}),let graph=try SectionGraphEditing.effective(section:section,use:use) else{continue}
                     let lanes=try ArrangementCompiler.effectiveLanes(section:section,use:use)
-                    let ordered=try SectionGraphValidator.sorted(graph)
-                    let outgoing=Dictionary(grouping:graph.edges.filter{!$0.sidechain},by:\.from)
-                    var outputs:[ID:Set<ID>]=[:]
-                    for node in ordered.reversed() {
-                        var tracks=Set<ID>()
-                        if case .output(let track)=node.content {tracks.insert(track)}
-                        for edge in outgoing[node.id] ?? [] {tracks.formUnion(outputs[edge.to] ?? [])}
-                        outputs[node.id]=tracks
-                    }
+                    let reachability=try SectionGraphReachability(graph:graph)
+                    let ordered=reachability.orderedNodes
+                    let outputs=Dictionary(uniqueKeysWithValues:ordered.map{($0.id,reachability.outputTracks(from:$0.id))})
                     var tracks:[StudioTrackRoute]=[]
                     for track in project.tracks {
                         let laneIDs=Set(lanes.filter{$0.trackID==track.id}.map(\.id))

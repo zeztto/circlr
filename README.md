@@ -6,7 +6,9 @@ macOS용 앨범·송폼 궤도 편집기. **앨범 → 곡·악장 → 섹션 �
 
 연결 UI는 [서클 둘레 8방향 IN/OUT과 다중 입출력](docs/22-eight-direction-ports.md)으로 확장 중이다. 포트의 신호 의미와 연결점 배치를 분리한다. 아래 일반 사용법은 배포된 0.19 앱 기준이며 새 포트 기능은 독립 개발 브랜치에서 검증한다.
 
-현재 **`codex/daw-integration`의 0.20.0 build 89**에 녹음 lifecycle과 8방향·다중 bus·그룹 포트를 통합했다. 같은 캔버스의 연결 편집·녹음 상태·스텝·오토메이션이 공존하며, 녹음 시작·정리 중 음악 편집과 Undo의 경쟁을 차단한다. build 23의 실제 편집·바운스·Undo·저장/재열기·닫기 최소화 및 출력별 모션 검증은 [통합 QA](qa/daw-integration-review.md)에 기록했다.
+현재 **`codex/daw-integration`의 0.20.0 build 90**에 녹음 lifecycle과 8방향·다중 bus·그룹 포트를 통합했다. 같은 캔버스의 연결 편집·녹음 상태·스텝·오토메이션이 공존하며, 녹음 시작·정리 중 음악 편집과 Undo의 경쟁을 차단한다. build 23의 실제 편집·바운스·Undo·저장/재열기·닫기 최소화 및 출력별 모션 검증은 [통합 QA](qa/daw-integration-review.md)에 기록했다.
+
+**build90은 포트별 출력 경로와 탐색 대상의 판정을 통일한다.** router 실제 route·mute/gain0 구조 연결·sidechain 제외·lane 소유 미연결 대상을 구분한다. 대상 Swift36개·Release73.47초와 실제 독립 bus·현재 트랙 추론·router 교차 변경/Undo를 확인했다. QA10개 상태·AX7개·자산2개 보존과 저장/재열기 manifest 전체 일치도 통과했다. 읽기 전용 장치 조사로 출력 원인을 확정하거나 정상 재생을 확인하지 않았다. [계약](docs/104-port-aware-navigation.md) · [QA](qa/port-navigation-review.md) · [장치 관측](qa/output-device-review.md).
 
 **build89는 현재 트랙의 ⌘1/⌘2/⌘3 대상을 일관되게 선택한다.** parser·Release42.42초와 실제0/1/여러 대상·MIDI/audio 혼합·미연결 대상 Return·종류 전환·현재 찾기를 확인했다. 저장/재열기의 음악·선택·camera 보존과 QA13개 캡처·AX7개 대조를 통과했다. 신규 Swift unit 테스트는 추가하지 않았다. 출력 재대조에서는 서명 보존 helper2회와 동시간 raw2회가 모두 믹서 획득 단계에서 timeout했다. strict 서명 보존은 가능하지만 출력 해결 근거는 아니다. [계약](docs/103-track-shortcuts-and-output-recheck.md) · [단축키 QA](qa/track-shortcut-review.md) · [출력 대조](qa/output-signature-review.md).
 

@@ -1,5 +1,10 @@
 # 변경 이력
 
+## 개발 중 — 0.20.0 build90 포트별 탐색
+
+- 공통 Core structural port reachability로 `StudioNavigation.build`·`outputTracks`·`BounceAssessment` 분류 통일.
+- 실제 router route·mute/gain0 구조 연결·sidechain-only 제외·lane 소유 미연결 접근 보존. Swift7개 class36개 테스트 실패0·Release73.47초 통과. 실제 독립 bus·현재 트랙 추론·router 교차 변경/Undo 확인. QA10개 상태·AX7개·자산2개·physical0 확인. 저장/재열기 manifest는 예외 없이 동일하고 Undo 음악은 musicRevision/hierarchyView 제외·circleColors 정규화 후 복원 확인. [계약](docs/104-port-aware-navigation.md) · [QA](qa/port-navigation-review.md).
+
 ## 개발 중 — 0.20.0 build89 트랙 단축키·출력 재대조
 
 - 현재 section/track의0/1/multi 대상과 혼합 MIDI/audio를 일관되게 선택하도록 ⌘1/⌘2/⌘3 개선. parser·Release42.42초·실제 대상 선택/종류 전환/현재 찾기 통과. 저장·재열기의 음악/선택/camera 보존과 QA13개 캡처·AX7개 대조 통과. [단축키 QA](qa/track-shortcut-review.md). 신규 Swift unit 테스트 없음.

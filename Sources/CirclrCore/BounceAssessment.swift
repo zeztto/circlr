@@ -53,8 +53,8 @@ public struct BounceAssessment: Equatable {
             }
             // Preserve the target API's existing error precedence before membership validation.
             let target = try BounceEditing.target(trackID: trackID, graph: graph)
-            _ = try SectionGraphValidator.sorted(graph)
-            let membership = membership(selectedNodeID, target: target, graph: graph)
+            let reachability = try SectionGraphReachability(graph: graph)
+            let membership = membership(selectedNodeID, target: target, reachability: reachability)
             return Self(target: target, issue: nil, membership: membership, destinations: destinations)
         } catch {
             return Self(target: nil, issue: (error as? BounceIssue) ?? .invalidGraph(error.localizedDescription),
@@ -62,33 +62,11 @@ public struct BounceAssessment: Equatable {
         }
     }
 
-    private struct Visit: Hashable {
-        let endpoint: MusicBusEndpoint
-        let sidechain: Bool
-    }
-    private static func membership(_ selected: ID?, target: BounceTarget, graph: SectionGraph) -> BounceMembership {
+    private static func membership(_ selected: ID?, target: BounceTarget, reachability: SectionGraphReachability) -> BounceMembership {
         guard let selected else { return .notSelected }
-        let nodes = Dictionary(uniqueKeysWithValues: graph.nodes.map { ($0.id, $0) })
-        guard nodes[selected] != nil else { return .missingNode }
+        guard reachability.containsNode(selected) else { return .missingNode }
         if selected == target.outputNodeID { return .output }
-        let incoming = Dictionary(grouping: graph.edges.map(MusicBusConnection.init), by: { $0.to.nodeID })
-        // A visited endpoint denotes the particular output bus whose dependencies are needed.
-        var pending = [Visit(endpoint: .init(nodeID: target.outputNodeID, portID: CirclePort.audioOutput), sidechain: false)]
-        var visited = Set<Visit>(), viaSidechain = false
-        while let visit = pending.popLast() {
-            guard visited.insert(visit).inserted, let node = nodes[visit.endpoint.nodeID] else { continue }
-            if node.id == selected {
-                if !visit.sidechain { return .mainPath }
-                viaSidechain = true
-            }
-            let allowedInputs: Set<String>?
-            if case .router(let router) = node.content {
-                allowedInputs = Set(router.routes.filter { $0.output == visit.endpoint.portID }.map(\.input))
-            } else { allowedInputs = nil }
-            for edge in incoming[node.id] ?? [] where allowedInputs == nil || allowedInputs!.contains(edge.to.portID) {
-                pending.append(Visit(endpoint: edge.from, sidechain: visit.sidechain || edge.sidechain))
-            }
-        }
-        return viaSidechain ? .sidechainOnly : .outsidePath
+        if reachability.reachesMainOutput(target.outputNodeID, from: selected) { return .mainPath }
+        return reachability.reachesSidechainOutput(target.outputNodeID, from: selected) ? .sidechainOnly : .outsidePath
     }
 }
