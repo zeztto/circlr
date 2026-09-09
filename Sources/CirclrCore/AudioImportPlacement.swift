@@ -7,6 +7,22 @@ public struct AudioImportTrackChoice:Equatable {
 }
 
 public enum AudioImportPlacement {
+    /// A container selection must not inherit a previously edited track.
+    public static func suggestedTrack(for selection:CircleAddress?,selectedTrack:ID?)->ID? {
+        guard case .music = selection else{return nil}
+        return selectedTrack
+    }
+    public static func destinationLabel(_ target:AudioImportDestination,in project:Project)->String {
+        switch target {
+        case .pattern(let id,let beat):
+            let name=project.patterns.first(where:{$0.id==id})?.name ?? "리듬 패턴"
+            return "\(String(name.prefix(80))) · \(BeatPosition.text(beat))박"
+        case .section(let a,let u,let track,let beat,_,let original):
+            let name=project.arrangements.first(where:{$0.id==a})?.uses.first(where:{$0.id==u})?.name ?? "섹션"
+            return "\(String(name.prefix(80))) · \(String(trackLabel(track,in:project).prefix(80))) · \(BeatPosition.text(beat))박 · \(original ? "원본":"이번 사용")"
+        }
+    }
+
     public static func trackLabel(_ id:ID?,in project:Project)->String {
         guard let id else{return "새 트랙"}
         guard let index=project.tracks.firstIndex(where:{$0.id==id}) else{return "삭제된 트랙"}

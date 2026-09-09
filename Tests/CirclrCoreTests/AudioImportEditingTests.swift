@@ -34,6 +34,18 @@ final class AudioImportEditingTests:XCTestCase {
         XCTAssertEqual(lanes.first{$0.trackID==before.tracks[0].id}?.notes,before.sections[0].lanes[0].notes)
         XCTAssertEqual(lanes.flatMap(\.audio).map(\.beat),[2,2])
     }
+    func testSingleFileAtSectionCreatesTrackAfterPriorMIDISelection()throws {
+        var p=try fixture();let before=p
+        let selection=CircleAddress.section(arrangementID:p.active.id,useID:p.active.uses[0].id)
+        let track=AudioImportPlacement.suggestedTrack(for:selection,selectedTrack:p.tracks[0].id)
+        let ids=try AudioImportEditing.apply([assets()[0]],to:target(p,track:track),projectID:p.id,revision:p.musicRevision,in:&p)
+        XCTAssertEqual(p.tracks.count,before.tracks.count+1)
+        let lanes=try ArrangementCompiler.effectiveLanes(section:p.sections[0],use:p.active.uses[0])
+        XCTAssertEqual(lanes.first{$0.trackID==before.tracks[0].id}?.notes,before.sections[0].lanes[0].notes)
+        XCTAssertTrue(lanes.first{$0.trackID==before.tracks[0].id}!.audio.isEmpty)
+        XCTAssertEqual(lanes.first{$0.trackID==p.tracks.last!.id}?.audio.map(\.id),ids)
+        XCTAssertEqual(p.active.uses[1],before.active.uses[1])
+    }
     func testSingleFileUsesExistingTrackAndOrbitPositionDoesNotChangeTiming()throws {
         var p=try fixture();p.circleLayout = .orbit;let count=p.tracks.count
         let id=try AudioImportEditing.apply([assets()[0]],to:target(p,track:p.tracks[0].id),projectID:p.id,revision:p.musicRevision,in:&p)[0]

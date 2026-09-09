@@ -418,6 +418,7 @@ import CirclrAudio
         guard canStartMediaImport,let destination=audioImportDestination(at:point) else {status="재생·녹음을 정지하고 오디오를 넣을 섹션을 선택하세요";return}
         let request=mediaImportRequest(destination)
         let panel=NSOpenPanel();panel.title="오디오 가져오기";panel.allowedContentTypes=[.audio];panel.allowsMultipleSelection=true
+        panel.message=AudioImportPlacement.destinationLabel(destination,in:project)+(editPatternID==nil ? "\n여러 파일은 각각 새 트랙에 배치합니다.":"\n선택한 파일을 이 리듬 패턴에 함께 배치합니다.")
         guard panel.runModal() == .OK else{return}
         beginAudioImport(panel.urls,request:request)
     }

@@ -15,7 +15,7 @@ extension AppStore {
     func audioImportDestination(at point:Point?)->AudioImportDestination? {
         if let id=editPatternID {return .pattern(id:id,beat:selectedBeat)}
         guard let use=selectedUse else{return nil}
-        return .section(arrangementID:project.activeArrangementID,useID:use.id,trackID:selectedTrackID,beat:selectedBeat,position:point,original:editOriginal)
+        return .section(arrangementID:project.activeArrangementID,useID:use.id,trackID:AudioImportPlacement.suggestedTrack(for:hierarchySelection,selectedTrack:selectedTrackID),beat:selectedBeat,position:point,original:editOriginal)
     }
     func mediaImportRequest(_ destination:AudioImportDestination)->MediaImportRequest {
         MediaImportRequest(projectID:project.id,revision:project.musicRevision,generation:mediaImportGeneration,selection:hierarchySelection,destination:destination)

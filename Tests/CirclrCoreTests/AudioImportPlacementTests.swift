@@ -2,6 +2,21 @@ import XCTest
 @testable import CirclrCore
 
 final class AudioImportPlacementTests:XCTestCase {
+    func testContainerImportDoesNotReusePreviousTrack() {
+        let music=CircleAddress.music(arrangementID:"a",useID:"u",nodeID:"n")
+        XCTAssertEqual(AudioImportPlacement.suggestedTrack(for:music,selectedTrack:"drums"),"drums")
+        for selection:CircleAddress? in [nil,.album,.sound,.composition("c"),.section(arrangementID:"a",useID:"u"),.group(parent:music,id:"g")] {
+            XCTAssertNil(AudioImportPlacement.suggestedTrack(for:selection,selectedTrack:"drums"))
+        }
+        XCTAssertNil(AudioImportPlacement.suggestedTrack(for:music,selectedTrack:nil))
+    }
+    func testDestinationLabelNamesScopeTrackAndOneBasedBeat()throws {
+        let p=try fixture()
+        let d=AudioImportDestination.section(arrangementID:p.active.id,useID:p.active.uses[0].id,trackID:nil,beat:4,position:nil,original:false)
+        let label=AudioImportPlacement.destinationLabel(d,in:p)
+        XCTAssertTrue(label.contains("새 트랙"));XCTAssertTrue(label.contains("5박"));XCTAssertTrue(label.contains("이번 사용"))
+        XCTAssertTrue(label.contains(p.active.uses[0].name))
+    }
     func fixture()throws->Project {
         var p=Project();_=p.addTrack(name:"키보드");_=p.addSection(name:"구간",at:Point(),bars:2)
         p.sections[0].meterChanges=[MeterChange(bar:1,meter:Meter(3,8))]

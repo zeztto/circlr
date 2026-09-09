@@ -116,3 +116,7 @@ build 61: 실제 Sound Bank 이름·계열·변형·드럼 킷 검색과 optiona
 ## build77 제작 진입 개선
 
 현재 컨테이너 생성 메뉴와 Sound Bank 드럼 기본8행을 제공한다. 입력·생성 Undo와 저장 복원 검증은 [생성 QA](../qa/creation-interface-review.md)에 기록한다. 전체 한 곡 제작 및 물리 I/O 검증은 계속 남아 있다.
+
+## build79 오디오 입력 위치
+
+섹션에서 파일 가져오기는 새 트랙을 기본으로 한다. 파일 선택 전 대상·시작 박·편집 범위를 표시한다. [검증](../qa/import-destination-review.md).
