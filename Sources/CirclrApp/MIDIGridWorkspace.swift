@@ -8,8 +8,9 @@ struct MIDIGridWorkspace:View {
     @Binding var pianoScroll:EditorScrollPosition
     @Binding var stepScroll:EditorScrollPosition
     @State private var focusTarget=MIDIEditorFocus()
+    @State private var revealRequest=0
     var selected:Note? {store.currentLane?.notes.first{$0.id==store.selectedNoteID}}
-    var keyHelp:String {store.midiStepMode ? "방향키 셀 선택 · Return 켜기/끄기 · Delete 지우기 · 행 이름 선택 · Home/End 첫·끝 행 · PageUp/Down 화면 이동 · Tab 수치 입력":"선택 노트 드래그: 함께 이동 · 끝 손잡이: 함께 길이 · ⇧클릭: 선택 추가/해제 · Tab 노트 선택 · 방향키 이동 · ⇧ 좌우 길이 · ⌥ 상하 세기 · Return 입력 · Delete 삭제"}
+    var keyHelp:String {store.midiStepMode ? "방향키 셀 선택 · Return 켜기/끄기 · Delete 지우기 · 행 이름 선택 · Home/End 첫·끝 행 · PageUp/Down 화면 이동 · Tab 수치 입력":"선택 노트 드래그: 함께 이동 · 끝 손잡이: 함께 길이 · ⇧클릭: 선택 추가/해제 · F 선택 보기 · Tab 노트 선택 · 방향키 이동 · ⇧ 좌우 길이 · ⌥ 상하 세기 · Return 입력 · Delete 삭제"}
     var body:some View {
         HStack(alignment:.top,spacing:20) {
             VStack(alignment:.leading,spacing:10) {
@@ -21,6 +22,7 @@ struct MIDIGridWorkspace:View {
                         Button("전체 선택 · ⌘A"){store.chooseMIDINotes(.all);focusTarget.focus()}
                         Button("선택 해제 · ⇧⌘A"){store.chooseMIDINotes(.clear);focusTarget.focus()}
                     }
+                    if !store.midiStepMode {Button("선택 보기"){revealSelectedNotes()}.disabled(selected==nil).help("선택한 MIDI 노트로 이동 · F")}
                     Button("바운스"){store.bounceTrack()}.disabled(store.preparing)
                     Button{store.startMIDIRecording()}label:{Image(systemName:store.midiRecording ? "stop.circle":"record.circle")}.accessibilityLabel(store.midiRecording ? "MIDI 녹음 정지":"MIDI 녹음").disabled(store.editPatternID != nil)
                     Spacer(minLength:0)
@@ -35,7 +37,7 @@ struct MIDIGridWorkspace:View {
                 else {
                     GeometryReader { geometry in
                         ScrollView([.horizontal,.vertical]) {
-                            PianoRoll(store:store,topPitch:topPitch-1,focusTarget:focusTarget)
+                            PianoRoll(store:store,topPitch:topPitch-1,focusTarget:focusTarget,revealRequest:revealRequest,requestReveal:revealSelectedNotes)
                                 .frame(width:max(geometry.size.width,store.editorBeats*48+64),height:562)
                                 .rememberEditorScroll($pianoScroll)
                         }.background(StudioTheme.canvas)
@@ -47,6 +49,17 @@ struct MIDIGridWorkspace:View {
         .environment(\.numberEditing,NumberEditingContext(snapshot:store.numberEditIdentity,current:{store.numberEditIdentity},focusCanvas:{focusTarget.focus()}))
         .onChange(of:selected){_,_ in revealPitch()}
         .onChange(of:store.midiStepMode){_,_ in topPitch=max(store.midiStepMode ? 12:27,topPitch);revealPitch()}
+    }
+    func revealSelectedNotes() {
+        guard let selected else{return}
+        let notes=(store.currentLane?.notes ?? []).filter{store.selectedMIDIIDs.contains($0.id)}
+        let low=notes.map(\.pitch).min() ?? selected.pitch,high=notes.map(\.pitch).max() ?? selected.pitch
+        if high-low<27 {
+            topPitch=min(128,max(high+1,min(topPitch,low+27)))
+        } else {
+            topPitch=min(128,max(selected.pitch+1,min(topPitch,selected.pitch+27)))
+        }
+        revealRequest &+= 1;focusTarget.focus()
     }
     func revealPitch() {
         guard let selected else{return};let rows=store.midiStepMode ? 12:27

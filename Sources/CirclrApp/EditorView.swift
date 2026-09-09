@@ -101,6 +101,8 @@ struct CompactNumber:View {
 struct PianoRoll:NSViewRepresentable {
     @ObservedObject var store:AppStore;let topPitch:Int
     var focusTarget:MIDIEditorFocus?=nil
+    var revealRequest=0
+    var requestReveal:(()->Void)?=nil
     @Environment(\.isEnabled) private var enabled
     func makeNSView(context:Context)->PianoRollView {
         let view=PianoRollView(store:store)
@@ -109,6 +111,8 @@ struct PianoRoll:NSViewRepresentable {
     }
     func updateNSView(_ view:PianoRollView,context:Context){
         let note=store.currentLane?.notes.first{$0.id==store.selectedNoteID}
+        let explicitlyRevealed=view.revealRequest != revealRequest
+        view.revealRequest=revealRequest;view.requestReveal=requestReveal
         let changed=view.lastSelection != note || (note==nil && view.lastBeat != store.selectedBeat)
         if !enabled || view.topPitch != topPitch || (view.dragIdentity != nil && !view.dragIsCurrent) {view.cancelDrag()}
         if view.contentIdentity != store.numberEditIdentity || view.topPitch != topPitch {view.accessibilityNotes=[:]}
@@ -116,7 +120,7 @@ struct PianoRoll:NSViewRepresentable {
         view.store=store;view.topPitch=max(0,min(127,topPitch));view.allowsEditing=enabled
         view.contentIdentity=store.numberEditIdentity
         view.lastSelection=note;view.lastBeat=store.selectedBeat;view.needsDisplay=true
-        if changed {DispatchQueue.main.async{[weak view] in view?.revealSelection()}}
+        if changed || explicitlyRevealed {DispatchQueue.main.async{[weak view] in view?.revealSelection(includeAll:explicitlyRevealed)}}
     }
 }
 @MainActor final class PianoRollView:NSView {
@@ -124,6 +128,8 @@ struct PianoRoll:NSViewRepresentable {
     var original:Note?,gesture:MIDINoteDrag?,previewLane:Lane?,down=NSPoint.zero,resizing=false
     var heldPitch:Int?
     var lastSelection:Note?,lastBeat=0.0
+    var revealRequest=0
+    var requestReveal:(()->Void)?
     var allowsEditing=true
     var dragIdentity:NumberEditIdentity?
     var contentIdentity:NumberEditIdentity?,dragFrame:NSRect?,dragOrbital:Bool?,dragTopPitch:Int?,dragGrid:Int?
@@ -146,14 +152,23 @@ struct PianoRoll:NSViewRepresentable {
     var dragIsCurrent:Bool {allowsEditing && window != nil && dragIdentity==store.numberEditIdentity && dragFrame==convert(bounds,to:nil) && dragOrbital==store.project.usesOrbits && dragTopPitch==topPitch && dragGrid==store.currentContext.beatGrid.subdivisions}
     func cancelDrag(){original=nil;gesture=nil;previewLane=nil;dragIdentity=nil;dragFrame=nil;dragOrbital=nil;dragTopPitch=nil;dragGrid=nil}
     func releaseHeldNote(){if let pitch=heldPitch{store.midi(status:0x80,pitch:pitch,velocity:0,time:ProcessInfo.processInfo.systemUptime);heldPitch=nil}}
-    func revealSelection(){
+    func revealSelection(includeAll:Bool=false){
         // A click can select near a viewport edge; keep the pointer's drag origin stable.
         guard original==nil,window != nil else{return}
         let note=store.currentLane?.notes.first{$0.id==store.selectedNoteID}
         var target=note.map{rect($0)} ?? NSRect(x:left+store.selectedBeat*unit,y:visibleRect.minY,width:unit,height:row)
-        target.size.width=min(target.width,max(unit,visibleRect.width-left-48))
-        target.origin.x-=left+16;target.size.width+=left+32
-        target.origin.y-=20+row;target.size.height+=20+2*row
+        if includeAll {
+            let notes=(store.currentLane?.notes ?? []).filter{store.selectedMIDIIDs.contains($0.id)}
+            if !notes.isEmpty,notes.allSatisfy({$0.pitch<=topPitch && $0.pitch>=topPitch-26}) {
+                let union=notes.map(rect).reduce(NSRect.null){$0.union($1)}
+                if union.width<=visibleRect.width-left && union.height<=visibleRect.height-20 {target=union}
+            }
+        }
+        target.size.width=min(target.width,max(1,visibleRect.width-left))
+        let horizontalMargin=max(0,min(16,(visibleRect.width-left-target.width)/2))
+        let verticalMargin=max(0,min(row,(visibleRect.height-20-target.height)/2))
+        target.origin.x-=left+horizontalMargin;target.size.width+=left+2*horizontalMargin
+        target.origin.y-=20+verticalMargin;target.size.height+=20+2*verticalMargin
         scrollToVisible(target);needsDisplay=true
     }
     func rect(_ n:Note)->NSRect{NSRect(x:left+n.beat*unit,y:20+Double(topPitch-n.pitch)*row+1,width:max(3,n.length*unit),height:row-2)}
@@ -227,6 +242,9 @@ struct PianoRoll:NSViewRepresentable {
     }
     override func keyDown(with event:NSEvent){
         guard allowsEditing else{super.keyDown(with:event);return}
+        if event.keyCode==3,event.modifierFlags.intersection([.command,.control,.option,.shift]).isEmpty,let requestReveal {
+            requestReveal();return
+        }
         if store.handleMIDIKey(event,topPitch:topPitch){needsDisplay=true;return}
         if event.keyCode==53{store.focusCanvas?();store.hierarchyParent()}else{super.keyDown(with:event)}
     }
