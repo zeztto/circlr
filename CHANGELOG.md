@@ -1,5 +1,11 @@
 # 변경 이력
 
+## 개발 중 — 0.20.0 build95 중복 탐색 버튼
+
+- 현재 역할의 유일한 동일 target 버튼 생략. header 복귀와 다중 검색·⌘1/⌘3 유지.
+- parse·Release40.30초 통과. 실제 router 단일 버튼 제거·settings/connection의 header 복귀·audio2/effect2/source3 검색·MIDI 선택과 다른 대상 복귀 확인.
+- 모든 revision62 음악 불변·saved/reopened 전체 manifest strict 동일. QA10개 상태·AX12개·자산2개·physical0 대조 통과. MIDI/effect는 use-only 안내 상태의 탐색 검증이며 편집 검증 아님. [계약](docs/110-route-density.md) · [QA](qa/route-density-review.md).
+
 ## 개발 중 — 0.20.0 build94 콘솔 로그 높이
 
 - 세션40–180px·기본122px, drag와 ⌃⌘1/2/3 지원. header·명령 입력·초안 유지.

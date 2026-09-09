@@ -1,6 +1,12 @@
 # 써클러 개발 방향과 실행 계획
 
-갱신: 2026-09-10. 계획 시작 기준: 0.11 native 앱, 0.12 음악 에이전트 키트 소스. 기존 출고 표기는 0.19.0이며 실행 중 사용자 앱의 별도 관측 버전은0.14다. 개발 검증 후보는 0.20.0 build 94이다. 목표는 송폼 중심의 전문 음악 제작을 먼저 완성하고, 이를 아티스트의 작품·세계관 관리로 확장하는 것이다.
+갱신: 2026-09-10. 계획 시작 기준: 0.11 native 앱, 0.12 음악 에이전트 키트 소스. 기존 출고 표기는 0.19.0이며 실행 중 사용자 앱의 별도 관측 버전은0.14다. 개발 검증 후보는 0.20.0 build 95이다. 목표는 송폼 중심의 전문 음악 제작을 먼저 완성하고, 이를 아티스트의 작품·세계관 관리로 확장하는 것이다.
+
+## 현재 검증 완료 — build95 탐색 밀도
+
+현재 target과 같은 단일 버튼을 생략하고 header 복귀·다중 검색·⌘1/⌘3을 유지했다. parse·Release40.30초와 실제 router/header·audio2/effect2/source3 검색·MIDI 선택/복귀를 확인했다. revision62 음악 불변·saved/reopened 전체 manifest strict 동일이며 QA10개 상태·AX12개·자산2개·physical0 대조도 통과했다. MIDI/effect는 use-only 안내 상태의 탐색 검증에 한정한다. [계약](110-route-density.md) · [QA](../qa/route-density-review.md).
+
+다음 구현 slice는 offline AU effect 실행 격리다. renderer의 `AudioUnitHost.process`가 앱 안에서 plugin을 호출하므로 hang/crash가 앱에 영향을 줄 수 있다. effect 처리만 child worker에 descriptor/state/PCM으로 전달하고 세션별 취소·deadline·원자적 결과 적용·임시 파일 정리를 정의한다. fake hang/crash/truncated/nonfinite/늦은 완료와 Apple AU의 offline PCM 비교를 검증한다. 현재는 미구현 계획이며 물리 출력 worker와 별개다. instrument·plugin UI·실시간 처리는 후속 범위다.
 
 ## 현재 검증 완료 — build94 콘솔 높이
 
@@ -8,7 +14,7 @@
 
 Core 변경·신규 unit 테스트는 없다. 실행 중 job 취소 버튼은 이번 native 미검증이며 앱 재시작 후 기본122px로 돌아간다. 프로젝트 재열기의 같은 세션 높이 유지와 구분한다.
 
-다음 UI 후보는 `StudioNavigationView` route bar의 중복 버튼 생략이다. 현재 서클이 해당 역할의 유일한 후보이면 같은 대상으로 이동하는 버튼을 생략하고, 다중 오디오2개·이펙트2개 검색은 유지한다. header 모드 복귀와 ⌘1/⌘3 접근도 유지한다. 현재는 계획만이며 코드·검증은 미완료다.
+route bar 중복 버튼 과제의 실제 확인 범위는 위 build95에 기록한다.
 
 ## 현재 검증 완료 — build93 음악 그래프 편집 범위
 
@@ -92,7 +98,7 @@ build81에서 종류별 색상과 사용자 지정·복원을 구현하고 검�
 
 이펙트→오토메이션→바운스 산출물을 해시·PCM으로 재검증하고, build81에서 저장 프로젝트 전체 복원을 확인했다. 궤도 화면에서도 음악 데이터가 유지된다. [통합 근거와 검증 경계](../qa/automation-flow-review.md). 다음은 실제 장치 출력 재점검과 같은 곡의 편곡 대안이다.
 
-## 현행 실행 순서 — build94 기준
+## 현행 실행 순서 — build95 기준
 
 build80에서 바운스 대상명과 연결 사전 검사를 통합하고 실제 UI 바운스·복원·MCP 즉시 거절을 확인했다. [QA](../qa/bounce-target-review.md). 이후 같은 곡에서 이펙트와 오토메이션을 적용한 바운스·저장/재열기는 위 통합 흐름 QA에서 확인했다. 개별 기능 검증을 한 곡 제작 완료로 계산하지 않는다.
 

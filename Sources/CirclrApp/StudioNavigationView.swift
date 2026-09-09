@@ -66,9 +66,11 @@ struct StudioRouteButtons:View {
                 let items=route.destinations.filter{$0.role==role}
                 if let first=items.first {
                     if items.count==1 {
-                        Button{if let kind=StudioNavigationRole(source:role){store.openTrackRoles([kind],trackID:route.id)}}label:{title(role,selected:store.hierarchySelection==first.id)}
-                            .help(first.name+(first.connected ? "":" · 출력에 연결되지 않은 원본"))
-                            .accessibilityLabel(route.name+" · "+displayName(role))
+                        if first.id != store.hierarchySelection {
+                            Button{if let kind=StudioNavigationRole(source:role){store.openTrackRoles([kind],trackID:route.id)}}label:{title(role,selected:false)}
+                                .help(first.name+(first.connected ? "":" · 출력에 연결되지 않은 원본"))
+                                .accessibilityLabel(route.name+" · "+displayName(role))
+                        }
                     } else {
                         searchButton(role,items:items)
                     }
