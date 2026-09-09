@@ -6,7 +6,9 @@ macOS용 앨범·송폼 궤도 편집기. **앨범 → 곡·악장 → 섹션 �
 
 연결 UI는 [서클 둘레 8방향 IN/OUT과 다중 입출력](docs/22-eight-direction-ports.md)으로 확장 중이다. 포트의 신호 의미와 연결점 배치를 분리한다. 아래 일반 사용법은 배포된 0.19 앱 기준이며 새 포트 기능은 독립 개발 브랜치에서 검증한다.
 
-현재 **`codex/daw-integration`의 0.20.0 build 98**에 녹음 lifecycle과 8방향·다중 bus·그룹 포트를 통합했다. 같은 캔버스의 연결 편집·녹음 상태·스텝·오토메이션이 공존하며, 녹음 시작·정리 중 음악 편집과 Undo의 경쟁을 차단한다. build 23의 실제 편집·바운스·Undo·저장/재열기·닫기 최소화 및 출력별 모션 검증은 [통합 QA](qa/daw-integration-review.md)에 기록했다.
+현재 **`codex/daw-integration`의 0.20.0 build 99**에 녹음 lifecycle과 8방향·다중 bus·그룹 포트를 통합했다. 같은 캔버스의 연결 편집·녹음 상태·스텝·오토메이션이 공존하며, 녹음 시작·정리 중 음악 편집과 Undo의 경쟁을 차단한다. build 23의 실제 편집·바운스·Undo·저장/재열기·닫기 최소화 및 출력별 모션 검증은 [통합 QA](qa/daw-integration-review.md)에 기록했다.
+
+**build99는 편곡 후보를 현재 안으로 적용하지 않고 직접 복제한다.** Core11개·Release41.58초·strict 서명과 실제 행/키보드 복제·취소·한 Undo·검색0개·stale 거절·strict 저장 재열기를 확인했다. QA14개 상태·AX5개 검사·자산2개·physical0 대조와 PNG7개 직접 검토도 통과했다. 음악 재생 없이 자산2개와 사용자 앱을 보존했다. [계약](docs/114-arrangement-candidate-duplicate.md).
 
 **build98은 섹션 연결 메뉴의 선택 판정과 끝 안내를 통일한다.** Core6개·Release39.03초·패키지 strict 서명 검사와 실제 단일 선택 무변경·끝 해제/Undo를 확인했다. 체크 glyph의 시각 확인은 미검증이며 AX highlight를 체크 증거로 계산하지 않는다. output/audition은0회다. [계약](docs/113-section-flow-menu.md).
 

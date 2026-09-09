@@ -1,5 +1,10 @@
 # 변경 이력
 
+## 개발 중 — 0.20.0 build99 편곡 후보 직접 복제
+
+- 행에서 직접 복제·⇧⌘D 강조 candidate·현재 이름 변경 대상 명시. 원본 ID 고정·입력 중 행 잠금·취소 무변경·clone/select 한 mutate.
+- Core11개 실패0·0.007초·source guard review·Release41.58초·strict 서명 통과. 실제 행/키보드 복제·취소·한 Undo·검색0·현재 이름 변경 취소·stale 거절·저장 재열기 확인. QA14개 상태·AX5개 검사·PNG7개 직접 검토 통과. output/audition0·자산2개 유지. [계약](docs/114-arrangement-candidate-duplicate.md).
+
 ## 개발 중 — 0.20.0 build98 섹션 연결 메뉴
 
 - `AlbumCanvas` 우클릭 체크를 `SectionFlowSelection.isSelected`로 통일하고 isEnd의 ‘끝 해제 후 재생할 연결’ 안내 추가. 기존 선택 동작 유지.

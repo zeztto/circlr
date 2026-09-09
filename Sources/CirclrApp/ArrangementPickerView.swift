@@ -38,9 +38,11 @@ extension AppStore {
         arrangementPickerRequest?.id==request.id && request.identity==numberEditIdentity && arrangementPickerOwner?.id==request.compositionID && !preparing && !midiRecording && !audioRecordingBusy && !audioRecordPending && mediaImportTask==nil
     }
     func closeArrangementPicker(){arrangementPickerRequest=nil;focusCanvas?()}
-    func editArrangementName(_ name:String,duplicate:Bool,request:ArrangementPickerRequest)throws {
-        guard arrangementPickerCurrent(request),let source=request.currentID,
-              request.choices.contains(where:{$0.id==source}) else{throw CirclrError("대상이나 음악이 바뀌었거나 다른 작업 중입니다. 닫은 뒤 다시 열어주세요.")}
+    func editArrangementName(_ name:String,duplicate:Bool,sourceID source:ID,request:ArrangementPickerRequest)throws {
+        guard arrangementPickerCurrent(request),
+              request.choices.contains(where:{$0.id==source}),
+              duplicate || source==request.currentID else{throw CirclrError("대상이나 음악이 바뀌었거나 다른 작업 중입니다. 닫은 뒤 다시 열어주세요.")}
+        guard try ArrangementSelection.catalog(project,compositionID:request.compositionID).contains(where:{$0.id==source}) else{throw CirclrError("복제·이름 변경할 편곡안을 다시 선택하세요")}
         var candidate=project,created:ID?
         if duplicate {created=try ArrangementSelection.duplicate(source,compositionID:request.compositionID,name:name,in:&candidate)}
         else {_ = try ArrangementSelection.rename(source,compositionID:request.compositionID,name:name,in:&candidate)}
@@ -86,7 +88,12 @@ struct ArrangementPickerView:View {
     @State private var highlighted:ID?
     @State private var searchFocus=UUID()
     @State private var notice=""
-    @State private var naming:Bool? // false: rename current arrangement, true: duplicate it
+    private struct NameOperation {
+        let duplicate:Bool
+        let sourceID:ID
+        let sourceTitle:String
+    }
+    @State private var naming:NameOperation?
     @State private var draft=""
     private var currentChoice:ArrangementChoice? {request.choices.first{$0.id==request.currentID}}
     private var rows:[ArrangementChoice] {ArrangementSelection.search(request.choices,query:query)}
@@ -110,10 +117,11 @@ struct ArrangementPickerView:View {
                 Button("현재 편곡 찾기"){query="";highlighted=request.currentID;searchFocus=UUID()}.disabled(naming != nil)
                 Text("\(rows.count)개 결과").monospacedDigit().fixedSize()
             }.font(.system(size:12)).foregroundStyle(StudioTheme.secondary).padding(.horizontal,18).padding(.bottom,14)
-            if let duplicate=naming {
+            if let operation=naming {
+                let duplicate=operation.duplicate
                 VStack(alignment:.leading,spacing:8) {
-                    Text((duplicate ? "복제 원본 · ":"이름 변경 대상 · ")+(currentChoice?.title ?? "선택 없음"))
-                        .font(.system(size:12)).lineLimit(1).help(currentChoice?.title ?? "선택 없음")
+                    Text((duplicate ? "복제 원본 · ":"이름 변경 대상 · ")+operation.sourceTitle)
+                        .font(.system(size:12)).lineLimit(2).help(operation.sourceTitle)
                     HStack(spacing:10) {
                         ArrangementNameField(text:$draft,onSubmit:commitName,onCancel:cancel)
                             .frame(height:28).accessibilityLabel(duplicate ? "새 편곡안 이름":"현재 편곡안 이름")
@@ -124,13 +132,15 @@ struct ArrangementPickerView:View {
                 }.padding(.horizontal,18).padding(.bottom,14)
             }else{
                 HStack(spacing:10) {
-                    Button("이름 변경 · ⇧⌘N"){beginName(duplicate:false)}
+                    Button("현재 이름 변경 · ⇧⌘N"){beginName(duplicate:false,sourceID:request.currentID)}
                         .keyboardShortcut("n",modifiers:[.command,.shift])
                         .help("현재 편곡안 이름 변경 · ⇧⌘N")
-                    Button("이름 정해 복제 · ⇧⌘D"){beginName(duplicate:true)}
+                        .disabled(!current || currentChoice==nil)
+                    Button("강조한 편곡 복제 · ⇧⌘D"){beginName(duplicate:true,sourceID:active)}
                         .keyboardShortcut("d",modifiers:[.command,.shift])
-                        .help("이름 정해 복제 · ⇧⌘D · 섹션 원본은 공유 · 이번 사용 편집은 별도")
-                }.disabled(!current || currentChoice==nil).padding(.horizontal,18).padding(.bottom,14)
+                        .help("강조한 편곡을 이름 정해 복제 · ⇧⌘D · 섹션 원본은 공유 · 이번 사용 편집은 별도")
+                        .disabled(!current || active==nil)
+                }.padding(.horizontal,18).padding(.bottom,14)
             }
             if !current || !notice.isEmpty {
                 Text(!current ? "대상이나 음악이 바뀌었거나 다른 작업 중입니다. 닫은 뒤 다시 열어주세요.":notice)
@@ -143,7 +153,7 @@ struct ArrangementPickerView:View {
                 }.onChange(of:active){_,id in if let id {proxy.scrollTo(id,anchor:.center)}}
                     .onChange(of:query){_,_ in if let active{proxy.scrollTo(active,anchor:.center)}}
             }
-            Text(naming == nil ? "↑↓ 선택 · Return 편곡 적용 · Esc 취소 · 같은 편곡은 현재 작업과 이력 유지\n⇧⌘N 이름 변경 · ⇧⌘D 이름 정해 복제":"Return 이름 적용 · Esc 이름 입력 취소 · 입력 중에는 편곡 전환이 잠깁니다")
+            Text(naming == nil ? "↑↓ 선택 · Return 편곡 적용 · Esc 취소 · 같은 편곡은 현재 작업과 이력 유지\n⇧⌘N 현재 이름 변경 · ⇧⌘D 강조한 편곡 복제":"Return 이름 적용 · Esc 이름 입력 취소 · 입력 중에는 편곡 전환이 잠깁니다")
                 .font(.system(size:12)).foregroundStyle(StudioTheme.secondary).padding(18)
         }.frame(width:850,height:560).background(StudioTheme.surface,in:RoundedRectangle(cornerRadius:10))
             .overlay(RoundedRectangle(cornerRadius:10).strokeBorder(StudioTheme.line)).onAppear{highlighted=request.currentID}
@@ -154,9 +164,17 @@ struct ArrangementPickerView:View {
     private func row(_ choice:ArrangementChoice)->some View {
         let selected=choice.id==request.currentID
         let label=([choice.title,choice.detail]+routeLines(choice)+(selected ? ["재생 편곡"]:[])).joined(separator:" · ")
-        return Button{apply(choice.id)}label:{rowContent(choice,selected:selected)}
-            .buttonStyle(.plain).disabled(!current || naming != nil).id(choice.id).help(label)
-            .accessibilityLabel(label).accessibilityAddTraits(active==choice.id ? .isSelected:[])
+        return HStack(alignment:.top,spacing:8) {
+            Button{apply(choice.id)}label:{rowContent(choice,selected:selected)}
+                .buttonStyle(.plain).frame(maxWidth:.infinity,alignment:.leading)
+                .help(label).accessibilityLabel(label+" · 편곡 적용")
+                .accessibilityAddTraits(active==choice.id ? .isSelected:[])
+            Button("복제"){beginName(duplicate:true,sourceID:choice.id)}
+                .frame(width:60).padding(.top,12).padding(.trailing,18)
+                .help(choice.title+" 이름 정해 복제 · 현재 편곡은 이름 적용 전까지 유지됩니다")
+                .accessibilityLabel(choice.title+" · 이름 정해 복제")
+        }.background(active==choice.id ? StudioTheme.raised:Color.clear)
+            .disabled(!current || naming != nil).id(choice.id)
     }
     private func rowContent(_ choice:ArrangementChoice,selected:Bool)->some View {
         VStack(alignment:.leading,spacing:6) {
@@ -169,7 +187,7 @@ struct ArrangementPickerView:View {
                     .lineLimit(2).fixedSize(horizontal:false,vertical:true).help(line)
             }
         }.frame(maxWidth:.infinity,alignment:.leading).padding(.horizontal,18).padding(.vertical,12)
-            .contentShape(Rectangle()).background(active==choice.id ? StudioTheme.raised:Color.clear)
+            .contentShape(Rectangle())
     }
     private func routeLines(_ choice:ArrangementChoice)->[String] {
         guard let route=request.routes[choice.id] else{return [choice.detail,"재생 경로를 확인할 수 없습니다"]}
@@ -183,18 +201,22 @@ struct ArrangementPickerView:View {
         if !route.excluded.isEmpty {lines.append("경로 제외 · "+route.excluded.map(stepText).joined(separator:" · "))}
         return lines
     }
-    private func beginName(duplicate:Bool) {
-        guard current,let choice=currentChoice else{return}
-        notice="";draft=duplicate ? "":choice.name;naming=duplicate
+    private func beginName(duplicate:Bool,sourceID:ID?) {
+        guard naming==nil,current,let sourceID,
+              let choice=request.choices.first(where:{$0.id==sourceID}),
+              duplicate || sourceID==request.currentID else{return}
+        if duplicate {highlighted=sourceID}
+        notice="";draft=duplicate ? "":choice.name
+        naming=NameOperation(duplicate:duplicate,sourceID:sourceID,sourceTitle:choice.title)
     }
     private func cancel() {
         if naming != nil {naming=nil;draft="";notice="";searchFocus=UUID()}
         else {store.closeArrangementPicker()}
     }
     private func commitName() {
-        guard let duplicate=naming else{return}
+        guard let operation=naming else{return}
         do {
-            try store.editArrangementName(draft,duplicate:duplicate,request:request)
+            try store.editArrangementName(draft,duplicate:operation.duplicate,sourceID:operation.sourceID,request:request)
             naming=nil;draft="";query="";notice="";searchFocus=UUID()
         }catch{notice=error.localizedDescription}
     }
