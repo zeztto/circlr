@@ -127,8 +127,8 @@ import CirclrAudio
     var productionGeneration = 0
     var productionMediaRoot:URL {storageRoot.appendingPathComponent("Bounces")}
     private var recordRepeats = 1
-    private var undoStack: [(String,Project,Bool)] = []
-    private var redoStack: [(String,Project,Bool)] = []
+    private var undoStack: [(name: String, project: Project, layoutOnly: Bool, colorsOnly: Bool)] = []
+    private var redoStack: [(name: String, project: Project, layoutOnly: Bool, colorsOnly: Bool)] = []
     @Published var connectionsOpen = false
     @Published var connectionEditorIntent: ConnectionEditorIntent?
     var connectionWorkspaceStates:[ConnectionWorkspaceKey:ConnectionWorkspaceState]=[:]
@@ -249,13 +249,13 @@ import CirclrAudio
         if audioRecording,recorder.reachedLimit { stopRecording() }
         if audioRecording,recorder.interrupted || ProcessInfo.processInfo.systemUptime-audioLastInputAt>5 {stopRecording();status="입력 장치가 변경되거나 frame이 중단되어 녹음을 마무리합니다";recordActivity("앱",status)}
     }
-    func mutate(_ name: String, musical: Bool = true, portLayoutOnly: Bool = false, _ action: (inout Project) throws -> Void) {
+    func mutate(_ name: String, musical: Bool = true, portLayoutOnly: Bool = false, circleColorsOnly: Bool = false, _ action: (inout Project) throws -> Void) {
         if musical && audioRecordPending {cancelRecordingRequest()}
         if musical && (midiRecording || audioRecordingBusy) { status = "녹음 정지와 파일 마무리 후 음악을 편집하세요"; return }
         do {
             var candidate = project; try action(&candidate)
             if candidate == project { return }
-            undoStack.append((name,project,portLayoutOnly)); if undoStack.count > 80 { undoStack.removeFirst() }; redoStack = []
+            undoStack.append((name,project,portLayoutOnly,circleColorsOnly)); if undoStack.count > 80 { undoStack.removeFirst() }; redoStack = []
             if musical { candidate.musicRevision += 1 }
             project = candidate; dirty = true; undoCount = undoStack.count; redoCount = 0
             if musical { status = playback.playing ? "편집 내용은 다음 재생에 반영됩니다" : "\(name) 완료" }
@@ -273,11 +273,11 @@ import CirclrAudio
     }
     func undo() {
         cancelRecordingRequest();guard !midiRecording && !audioRecordingBusy else{status="녹음 정지와 파일 마무리 후 실행 취소하세요";return}
-        guard let (name,previous,layoutOnly) = undoStack.last else { return }
+        guard let (name,previous,layoutOnly,colorsOnly) = undoStack.last else { return }
         let selectionKey=editorSelectionKey,rememberedSelection=capturedEditorSelection
         do {
-            let restored = try CircleHistory.restore(previous, layoutOnly: layoutOnly, current: project)
-            undoStack.removeLast(); redoStack.append((name,project,layoutOnly)); project = restored
+            let restored = try CircleHistory.restore(previous, layoutOnly: layoutOnly, current: project, colorsOnly: colorsOnly)
+            undoStack.removeLast(); redoStack.append((name,project,layoutOnly,colorsOnly)); project = restored
         } catch { fail(error); return }
         undoCount = undoStack.count; redoCount = redoStack.count; dirty = true; status = "\(name) 실행 취소"; normalizeHierarchySelection()
         if selectedMusic != nil,editorSelectionKey==selectionKey {restoreEditorSelection(rememberedSelection)}
@@ -285,11 +285,11 @@ import CirclrAudio
     }
     func redo() {
         cancelRecordingRequest();guard !midiRecording && !audioRecordingBusy else{status="녹음 정지와 파일 마무리 후 다시 실행하세요";return}
-        guard let (name,next,layoutOnly) = redoStack.last else { return }
+        guard let (name,next,layoutOnly,colorsOnly) = redoStack.last else { return }
         let selectionKey=editorSelectionKey,rememberedSelection=capturedEditorSelection
         do {
-            let restored = try CircleHistory.restore(next, layoutOnly: layoutOnly, current: project)
-            redoStack.removeLast(); undoStack.append((name,project,layoutOnly)); project = restored
+            let restored = try CircleHistory.restore(next, layoutOnly: layoutOnly, current: project, colorsOnly: colorsOnly)
+            redoStack.removeLast(); undoStack.append((name,project,layoutOnly,colorsOnly)); project = restored
         } catch { fail(error); return }
         undoCount = undoStack.count; redoCount = redoStack.count; dirty = true; status = "\(name) 다시 실행"; normalizeHierarchySelection()
         if selectedMusic != nil,editorSelectionKey==selectionKey {restoreEditorSelection(rememberedSelection)}

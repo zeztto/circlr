@@ -84,6 +84,11 @@ extension AlbumCanvasView {
             }
             let path=NSBezierPath(roundedRect:rect,xRadius:6,yRadius:6)
             StudioTheme.canvasNS.withAlphaComponent(0.95).setFill();path.fill()
+            if selected || hovered {
+                // Keep black custom accents legible without replacing the user's color.
+                StudioTheme.textNS.withAlphaComponent(selected ? 0.75:0.55).setStroke()
+                path.lineWidth=selected ? 4:3;path.stroke()
+            }
             (selected || hovered ? color(node):StudioTheme.lineNS.withAlphaComponent(0.5)).setStroke();path.lineWidth=selected ? 2:1;path.stroke()
             text.title.draw(with:NSRect(x:rect.minX+10,y:rect.minY+6,width:max(1,rect.width-20),height:text.titleHeight),options:[.usesLineFragmentOrigin,.usesFontLeading,.truncatesLastVisibleLine])
             if text.showsSubtitle {drawText(node.subtitle+(node.repeatCount>1 ? " · ×\(node.repeatCount)":""),x:rect.midX,y:rect.minY+text.titleHeight+8,size:11,color:StudioTheme.secondaryNS,maxWidth:rect.width-20)}

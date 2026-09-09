@@ -1,9 +1,15 @@
 import Foundation
 
 public enum CircleHistory {
-    /// A visual port move must not invalidate prepared playback or revert newer music.
-    public static func restore(_ saved: Project, layoutOnly: Bool, current: Project) throws -> Project {
+    /// Visual history must not invalidate prepared playback or revert newer music.
+    public static func restore(_ saved: Project, layoutOnly: Bool, current: Project, colorsOnly: Bool = false) throws -> Project {
         guard saved.id == current.id else { throw CirclrError("다른 프로젝트의 실행 취소 기록입니다") }
+        if colorsOnly {
+            // Colors have no playback or port-layout revision of their own.
+            var result = current
+            result.circleColors = saved.circleColors
+            return result
+        }
         if layoutOnly {
             var result = current
             _ = try CirclePortLayoutEditing.restore(saved.portLayout, projectID: current.id,

@@ -27,6 +27,8 @@ struct AlbumCanvas: NSViewRepresentable {
     var labelPlacements:[CanvasLabelPlacement]=[]
     var fileDropPreview:CanvasFileDropPreview?
     var hoverAddress:CircleAddress?
+    var colorTarget: (projectID: ID, address: CircleAddress)?
+    var colorSubscription: AnyCancellable?
     var down = NSPoint.zero
     var dragNode: CircleSceneNode?
     var dragOrigin = Point()
@@ -91,6 +93,7 @@ struct AlbumCanvas: NSViewRepresentable {
         }
         store.canvasCommands = { [weak self] in self?.availableCommands() ?? [] }
         store.focusCanvas = { [weak self] in guard let self else{return};self.window?.makeFirstResponder(self) }
+        installCircleColorObserver()
         registerForDraggedTypes([.fileURL])
         wantsLayer = true; clipsToBounds = true; layer?.masksToBounds = true; layer?.backgroundColor = StudioTheme.canvasNS.cgColor
         setAccessibilityElement(true); setAccessibilityRole(.group); setAccessibilityLabel("앨범 서클 캔버스")
@@ -122,7 +125,7 @@ struct AlbumCanvas: NSViewRepresentable {
                 if event.modifierFlags.contains(.shift), let editor = self.editor, editor.frame.contains(self.convert(event.locationInWindow, from: nil)) { return event }
                 self.scrollWheel(with: event); return nil
             }
-        } else { animation?.invalidate(); animation = nil; playbackAnimation?.invalidate(); playbackAnimation = nil }
+        } else { colorTarget = nil; animation?.invalidate(); animation = nil; playbackAnimation?.invalidate(); playbackAnimation = nil }
     }
     override func layout() {
         super.layout()
@@ -283,13 +286,12 @@ struct AlbumCanvas: NSViewRepresentable {
         let p = camera.screen(point); return NSPoint(x: p.x, y: p.y)
     }
     func color(_ node: CircleSceneNode) -> NSColor {
-        guard let music = node.music else { return StudioTheme.accentNS }
-        if music.muted { return StudioTheme.secondaryNS }
-        switch music.content {
-        case .midi, .rhythmMIDI: return StudioTheme.accentNS
-        case .audio, .rhythmAudio: return NSColor(srgbRed: 0.62, green: 0.75, blue: 0.94, alpha: 1)
-        default: return StudioTheme.secondaryNS
-        }
+        let value = store.project.circleColors?[node.id] ?? node.baseColor
+        let tint = value.nsColor
+        // Desaturation survives callers replacing alpha for ticks and orbit rings.
+        return node.music?.muted == true
+            ? (tint.blended(withFraction: 0.6, of: StudioTheme.secondaryNS) ?? tint)
+            : tint
     }
     func isVisible(_ node: CircleSceneNode) -> Bool {
         let context=labelContext
@@ -314,8 +316,14 @@ struct AlbumCanvas: NSViewRepresentable {
             let path = NSBezierPath(ovalIn: displayRect)
             NSColor(white: node.role == .music ? 0.105 : 0.065+Double(min(4,node.depth))*0.008, alpha: 1).setFill(); path.fill()
             let selected = store.hierarchySelections.contains(node.id)
-            (selected ? color(node) : StudioTheme.lineNS.withAlphaComponent(node.role == .music ? 0.9 : 0.65)).setStroke()
-            path.lineWidth = selected ? 1.8 : 1; path.stroke()
+            let muted = node.music?.muted == true
+            // A wider neutral under-stroke remains visible beside any custom color,
+            // including black, without replacing it. Screen-space widths also retain
+            // the selection outline on circles too small for a separate inner ring.
+            StudioTheme.textNS.withAlphaComponent(selected ? 0.75 : (muted ? 0.22 : 0.35)).setStroke()
+            path.lineWidth = selected ? 4.4 : 2.2; path.stroke()
+            color(node).withAlphaComponent(selected ? 1 : (muted ? 0.3 : 0.55)).setStroke()
+            path.lineWidth = selected ? 2.4 : 1; path.stroke()
             drawTicks(node, center: center, radius: radius)
             if node.repeatCount > 1, radius > 30 {
                 let rings=SectionRings(repeats:node.repeatCount,baseRadius:node.radius/node.scale)
@@ -654,6 +662,31 @@ extension AlbumCanvasView {
         func submenu(_ title:String)->NSMenu {let item=NSMenuItem(title:title,action:nil,keyEquivalent:"");let child=NSMenu();item.submenu=child;menu.addItem(item);return child}
         action("확대해서 편집"){[weak self] in self?.store.hierarchySettingsOpen=false;self?.store.focusHierarchy(node.id,detail:node.role == .music)}
         action(store.hierarchySelections.contains(node.id) ? "선택에서 제외":"선택에 추가"){[weak self] in self?.store.selectHierarchy(node.id,additive:true)}
+        let colors = submenu("서클 색상")
+        let colorProjectID = store.project.id
+        let current = store.project.circleColors?[node.id]
+        action("종류별 기본 색상", in: colors) { [weak self] in
+            guard let self, self.store.project.id == colorProjectID else { return }
+            self.colorTarget = nil
+            self.setCircleColor(nil, for: node.id)
+        }
+        colors.items.last?.state = current == nil ? .on : .off
+        for preset in CircleColor.Preset.allCases {
+            action(preset.title, in: colors) { [weak self] in
+                guard let self, self.store.project.id == colorProjectID else { return }
+                self.colorTarget = nil
+                self.setCircleColor(preset.color, for: node.id)
+            }
+            colors.items.last?.state = current == preset.color ? .on : .off
+            colors.items.last?.image = NSImage(size: NSSize(width: 14, height: 14), flipped: false) { rect in
+                preset.color.nsColor.setFill(); NSBezierPath(ovalIn: rect.insetBy(dx: 2, dy: 2)).fill(); return true
+            }
+        }
+        colors.addItem(.separator())
+        action("사용자 지정…", in: colors) { [weak self] in
+            guard let self, self.store.project.id == colorProjectID else { return }
+            self.chooseCircleColor(node)
+        }
         action("이름·음악 설정"){[weak self] in self?.store.hierarchyTransitionID=nil;self?.store.focusHierarchy(node.id,detail:true);self?.store.hierarchySettingsOpen=true}
         switch node.id {
         case .music(let arrangement,let use,let id):

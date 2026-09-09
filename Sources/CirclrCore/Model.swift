@@ -260,6 +260,9 @@ public struct Project: Codable, Equatable {
     public var hierarchyView: HierarchyViewport?
     public var circleLayout: CircleLayout?
     public var portLayout:CirclePortLayout?
+    /// Appearance overrides belong to a circle occurrence, not its shared musical content.
+    /// Optional storage keeps manifests written before custom colors compatible.
+    public var circleColors: [CircleAddress: CircleColor]?
     public var usesOrbits: Bool { circleLayout != .freeform }
     public var id: ID = newID()
     public var name = "새 곡"
