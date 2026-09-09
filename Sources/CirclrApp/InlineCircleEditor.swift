@@ -154,50 +154,59 @@ struct AudioTrimView: View {
 struct HierarchySettingsEditor: View {
     @ObservedObject var store: AppStore
     var body: some View {
-        VStack(alignment:.leading,spacing:18) {
+        VStack(alignment:.leading,spacing:10) {
             if case .section=store.hierarchySelection,let use=store.selectedUse {
                 Button{store.showConnections(portID:CirclePort.flowOutput)}label:{
                     HStack(spacing:12) {
-                        VStack(alignment:.leading,spacing:5) {
-                            Text("섹션 순서·전환").font(.system(size:14,weight:.medium))
-                            Text("다음 섹션 연결 \(store.project.active.edges.filter{$0.from==use.id}.count)개 · 재생 경로와 전환 효과").font(.system(size:12)).foregroundStyle(StudioTheme.secondary)
-                        }.frame(maxWidth:.infinity,alignment:.leading)
+                        Text("섹션 순서·전환").font(.system(size:13,weight:.medium))
+                        Text("다음 연결 \(store.project.active.edges.filter{$0.from==use.id}.count)개").font(.system(size:12)).foregroundStyle(StudioTheme.secondary)
+                        Spacer(minLength:8)
                         Image(systemName:"arrow.triangle.branch").foregroundStyle(StudioTheme.accent)
-                    }.padding(12).background(StudioTheme.raised,in:RoundedRectangle(cornerRadius:6))
+                    }.padding(.horizontal,12).frame(height:32).background(StudioTheme.raised,in:RoundedRectangle(cornerRadius:6))
                 }.buttonStyle(.plain).frame(maxWidth:660).accessibilityLabel("섹션 순서·전환 · "+use.name).help("다음 섹션 검색 · 재생 분기 · 전환 효과 · 연결 L")
             }
             if case .composition(let id)=store.hierarchySelection,
                let composition=store.project.album?.composition(id),!composition.arrangementIDs.isEmpty {
                 ArrangementPickerButton(store:store,owner:composition)
             }
+            if store.selectedMusic != nil {
+                HStack(spacing:12) {
+                    Toggle("공유 원본 편집",isOn:$store.editOriginal)
+                    Text(store.editOriginal ? "같은 원본을 사용하는 서클에 반영":"이번 사용에만 반영").font(.system(size:11)).foregroundStyle(StudioTheme.secondary)
+                }
+            }
+            if let use=store.selectedUse,store.selectedMusic==nil,store.selectedHierarchyGroup==nil {
+                HStack(spacing:24) {
+                CountControl(title:"마디",value:Binding(get:{store.selectedUse?.barsOverride ?? store.project.sections.first{$0.id==use.sectionID}?.bars ?? 8},set:{v in store.updateUse("섹션 길이"){$0.barsOverride=v}}),range:1...1024)
+                CountControl(title:"반복",value:Binding(get:{store.selectedUse?.repeatCount ?? use.repeatCount},set:{v in store.updateUse("섹션 반복"){$0.repeatCount=v}}),range:1...256)
+                }
+            }
+            if let music=store.selectedMusic {
+                if music.content.input == nil {
+                    HStack(spacing:18) {
+                    ValueField(title:"부모 안 시작 박",value:Binding(get:{store.selectedMusic?.startBeat ?? music.startBeat},set:{v in store.updateMusic("시작 박"){$0.startBeat=v}}),range:0...131072,presentation:.beatPosition)
+                    ValueField(title:"길이 박",value:Binding(get:{store.selectedMusic?.lengthBeats ?? store.currentClock?.beats ?? 32},set:{v in store.updateMusic("길이"){$0.lengthBeats=v}}),range:0.03125...131072)
+                    CountControl(title:"반복",value:Binding(get:{store.selectedMusic?.repeatCount ?? music.repeatCount},set:{v in store.updateMusic("반복"){$0.repeatCount=v}}),range:1...256)
+                    }
+                }
+            }
+            if case .composition(let id)=store.hierarchySelection,let composition=store.project.album?.composition(id) {
+                CountControl(title:"곡·악장 반복",value:Binding(get:{store.project.album?.compositions.first{$0.id==id}?.repeatCount ?? composition.repeatCount},set:{value in store.mutate("곡·악장 반복"){p in if let i=p.album?.compositions.firstIndex(where:{$0.id==id}){p.album?.compositions[i].repeatCount=value}}}),range:1...256)
+            }
             if let group=store.selectedHierarchyGroup {
                 Text("\(group.members.count)개 서클 · 음악과 연결을 유지하는 배치 그룹")
                 Button(group.collapsed ? "그룹 펼치기" : "그룹 접기") {store.updateHierarchyGroup{$0.collapsed.toggle()};store.hierarchySettingsOpen=false;store.hierarchyCommand=HierarchyCommand(action:.focus(store.hierarchySelection ?? .album,false))}
                 Button("그룹 해제"){store.ungroupHierarchy()}
             } else if let address=store.hierarchySelection {
-                if store.selectedMusic != nil {
-                    HStack(spacing:12) {
-                        Toggle("공유 원본 편집",isOn:$store.editOriginal)
-                        Text(store.editOriginal ? "같은 원본을 사용하는 서클에 반영":"이번 사용에만 반영").font(.system(size:11)).foregroundStyle(StudioTheme.secondary)
-                    }
-                }
                 MusicContextEditor(store:store,address:address,projectID:store.project.id,generation:store.mediaImportGeneration,original:store.selectedMusic != nil && store.editOriginal)
             }
-            if let use=store.selectedUse,store.selectedMusic == nil,store.selectedHierarchyGroup == nil {
-                CountControl(title:"마디",value:Binding(get:{store.selectedUse?.barsOverride ?? store.project.sections.first{$0.id==use.sectionID}?.bars ?? 8},set:{v in store.updateUse("섹션 길이"){$0.barsOverride=v}}),range:1...1024)
-                CountControl(title:"반복",value:Binding(get:{store.selectedUse?.repeatCount ?? use.repeatCount},set:{v in store.updateUse("섹션 반복"){$0.repeatCount=v}}),range:1...256)
+            if store.selectedUse != nil,store.selectedMusic == nil,store.selectedHierarchyGroup == nil {
                 HStack{Button("시작 섹션으로 지정"){store.setStart()};Button("재사용"){store.reuse()};Button("독립 원본으로 분리"){store.detach()}}
             }
             if let music=store.selectedMusic {
                 Toggle("음소거",isOn:Binding(get:{music.muted},set:{v in store.updateMusic("음소거"){$0.muted=v}}))
-                if music.content.input == nil {
-                    ValueField(title:"부모 안 시작 박",value:Binding(get:{store.selectedMusic?.startBeat ?? music.startBeat},set:{v in store.updateMusic("시작 박"){$0.startBeat=v}}),range:0...131072,presentation:.beatPosition)
-                    ValueField(title:"길이 박",value:Binding(get:{store.selectedMusic?.lengthBeats ?? store.currentClock?.beats ?? 32},set:{v in store.updateMusic("길이"){$0.lengthBeats=v}}),range:0.03125...131072)
-                    CountControl(title:"반복",value:Binding(get:{store.selectedMusic?.repeatCount ?? music.repeatCount},set:{v in store.updateMusic("반복"){$0.repeatCount=v}}),range:1...256)
-                }
             }
             if case .composition(let id)=store.hierarchySelection,let composition=store.project.album?.composition(id) {
-                CountControl(title:"곡·악장 반복",value:Binding(get:{store.project.album?.compositions.first{$0.id==id}?.repeatCount ?? composition.repeatCount},set:{value in store.mutate("곡·악장 반복"){p in if let i=p.album?.compositions.firstIndex(where:{$0.id==id}){p.album?.compositions[i].repeatCount=value}}}),range:1...256)
                 if !composition.arrangementIDs.isEmpty {
                     Button("편곡안 복제"){store.duplicateHierarchyArrangement()}
                 }

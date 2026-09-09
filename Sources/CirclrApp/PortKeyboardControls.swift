@@ -130,6 +130,10 @@ final class PortButtonControl: NSButton {
     }
     override func keyDown(with event: NSEvent) {
         if navigation?.handleTab(event, control: self) == true { return }
+        if navigation == nil, event.keyCode == 48, event.modifierFlags.intersection([.command, .control, .option]).isEmpty {
+            if event.modifierFlags.contains(.shift) {window?.selectPreviousKeyView(self)} else {window?.selectNextKeyView(self)}
+            return
+        }
         if [36, 49, 76].contains(event.keyCode), event.modifierFlags.intersection([.command, .control, .option]).isEmpty { if !event.isARepeat { performClick(nil) }; return }
         super.keyDown(with: event)
     }

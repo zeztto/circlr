@@ -16,7 +16,9 @@ build 60: 에이전트 한도 해제 요청 후 read-only 조사 dispatch를 재
 
 ## 상태와 남은 완료 조건
 
-build 64: 섹션 연결 대상 검색·분기·전환을 기존 연결 화면으로 통합했다. 실제 32개 섹션과 다른 곡에서 번호/이름/경로 검색, 키보드 선택, 전환 왕복·재연결·해제와 음악 보존을 검증했다. Swift463개·Python28개, native27상태/22화면·저장 복원 통과. [계약](78-section-connection-workspace.md) · [QA](../qa/section-connection-review.md). 다음은 음악 설정 가시성과 연결/전환/설정 작업 복귀의 상태 보존이다.
+build 65: 음악 설정 출처를 직접 버튼으로 바꾸고 길이·반복·리듬의 가시성을 개선했다. 키보드 전달 결함을 실제 앱에서 수정했으며 Swift463개·Python28개·23상태/21화면과 전체 음악 복원을 확인했다. [계약](79-music-settings-visibility.md) · [QA](../qa/music-settings-review.md). 작업 복귀의 전체 상태 계약과 물리 입출력은 후속이다.
+
+build 64: 섹션 연결 대상 검색·분기·전환을 기존 연결 화면으로 통합했다. 실제 32개 섹션과 다른 곡에서 번호/이름/경로 검색, 키보드 선택, 전환 왕복·재연결·해제와 음악 보존을 검증했다. Swift463개·Python28개, native27상태/22화면·저장 복원 통과. [계약](78-section-connection-workspace.md) · [QA](../qa/section-connection-review.md). 음악 설정 가시성은 build65에서 개선했으며 연결/전환/설정 작업 복귀의 전체 상태 보존은 후속이다.
 
 build 63: 곡·악장의 편곡안을 같은 캔버스에서 직접 검색한다. 서클/설정/단축키/명령 진입, 순번·동명·빈 편곡, 음악 선택과 화면 보존, 오래된 요청 거절을 구현했다. Swift457개·Python28개, 실제 26상태/24화면·저장 복원을 검증했다. [계약](77-arrangement-search.md) · [QA](../qa/arrangement-search-review.md). 에이전트 한도 해제 안내 뒤 실제 dispatch를 재시도했으나 런타임 thread limit이 유지됐다. 다음 섹션 연결은 build64에서 통합했으며 음악 설정의 스크롤 깊이는 후속 범위다.
 

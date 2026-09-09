@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 import CirclrCore
 
 /// The canvas edits current musical properties directly, without a whole-settings draft.
@@ -32,7 +33,7 @@ struct MusicContextEditor: View {
         Binding(get:{current[keyPath:key]},set:{value in if value != current[keyPath:key] {_=apply(change(value))}})
     }
     var body: some View {
-        VStack(alignment:.leading,spacing:10) {
+        VStack(alignment:.leading,spacing:6) {
             if snapshot != nil {
                 row(.tempo) {
                     HStack(spacing:8) {ValueField(title:"템포 BPM",value:binding(\.tempo,MusicContextChange.tempo),width:92,showsLabel:false,range:1...999);Text("BPM").foregroundStyle(StudioTheme.secondary)}
@@ -50,6 +51,9 @@ struct MusicContextEditor: View {
                         StudioChoice("",selection:binding(\.scale.name,MusicContextChange.scaleMode),options:scaleOptions).frame(width:158).accessibilityLabel("스케일 종류")
                     }
                 }
+                row(.rhythm) {
+                    StudioChoice("",selection:Binding(get:{current.rhythm.patternID ?? ""},set:{_=apply(.rhythm($0.isEmpty ? nil:$0))}),options:[("","재생 안 함")]+store.project.patterns.map{($0.id,$0.name)}).frame(maxWidth:340).accessibilityLabel("재생할 리듬 패턴")
+                }
                 row(.beatGrid) {
                     VStack(alignment:.leading,spacing:8) {
                         HStack(spacing:14) {
@@ -59,38 +63,86 @@ struct MusicContextEditor: View {
                         AccentContextField(value:current.beatGrid.accents) {text in apply(.accents(text))}
                     }
                 }
-                row(.rhythm) {
-                    StudioChoice("",selection:Binding(get:{current.rhythm.patternID ?? ""},set:{_=apply(.rhythm($0.isEmpty ? nil:$0))}),options:[("","재생 안 함")]+store.project.patterns.map{($0.id,$0.name)}).frame(maxWidth:340).accessibilityLabel("재생할 리듬 패턴")
-                }
                 Text(address == .album ? "앨범 기본값 · 숫자는 Return·Tab으로 적용 · ⌘Z 실행 취소":"값을 바꾸면 이 항목만 개별 설정 · 기본값은 상위 서클·공유 원본을 따릅니다")
                     .font(.system(size:11)).foregroundStyle(StudioTheme.secondary).fixedSize(horizontal:false,vertical:true)
             } else {
                 Text(original ? "이번 사용에만 있는 서클은 공유 원본을 편집할 수 없습니다":"음악 설정을 읽을 수 없습니다")
                 if original {Button("이번 사용 편집으로 전환"){store.editOriginal=false}}
             }
-        }.frame(maxWidth:800,alignment:.leading).font(.system(size:13))
+        }.frame(maxWidth:840,alignment:.leading).font(.system(size:13))
     }
     private var scaleOptions:[(String,String)] {
         var options=Scale.modes.map{($0.0,$0.0)}
         if !options.contains(where:{$0.0==current.scale.name}) {options.append((current.scale.name,current.scale.name+" · 사용자 설정"))}
         return options
     }
+    private func storedValue(_ field:MusicContextField) -> String? {
+        guard let settings=snapshot?.settings else{return nil}
+        switch field {
+        case .tempo:return settings.tempo.value.map{NumberEditSession<Int>.format($0)+" BPM"}
+        case .meter:return settings.meter.value?.label
+        case .scale:return settings.scale.value?.label
+        case .beatGrid:return settings.beatGrid.value.map{"분할 \($0.subdivisions) · 스윙 \(NumberEditSession<Int>.format($0.swing)) · 강세 \($0.accents.isEmpty ? "없음":$0.accents.map(String.init).joined(separator:"+"))"}
+        case .rhythm:
+            guard let value=settings.rhythm.value else{return nil}
+            guard let id=value.patternID else{return "재생 안 함"}
+            return store.project.patterns.first{$0.id==id}?.name ?? "연결된 패턴을 찾을 수 없음"
+        }
+    }
+    private func sourceHelp(_ value:SettingSource,field:MusicContextField) -> String {
+        switch value {
+        case .inherit:return "상위 서클·공유 원본의 값을 따릅니다. 개별 값은 보관됩니다"
+        case .global:return "앨범의 글로벌 값을 사용합니다. 개별 값은 보관됩니다"
+        case .local:return storedValue(field).map{"보관된 개별 값: "+$0+" · 선택하면 복원합니다"} ?? "현재 적용값을 이 서클의 개별 값으로 사용합니다"
+        }
+    }
     private func row<Content:View>(_ field:MusicContextField,@ViewBuilder content:()->Content) -> some View {
-        HStack(alignment:.top,spacing:14) {
-            Text(title(field)).fontWeight(.medium).frame(width:90,height:32,alignment:.leading)
+        HStack(alignment:.top,spacing:12) {
+            Text(title(field)).fontWeight(.medium).frame(width:88,height:32,alignment:.leading)
             if let source=snapshot?.source(field) {
-                Menu {
-                    ForEach(SettingSource.allCases,id:\.self) {value in Button((source==value ? "✓ ":"")+sourceName(value)){_=apply(.source(field,value))}}
-                } label: {
-                    HStack(spacing:7){Text(sourceName(source));Image(systemName:"chevron.down").font(.system(size:8,weight:.semibold))}
-                        .foregroundStyle(source == .local ? StudioTheme.accent:StudioTheme.text)
-                        .frame(width:78,height:32).background(StudioTheme.raised,in:RoundedRectangle(cornerRadius:5))
-                }.menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
-                    .accessibilityLabel(title(field)+" 설정 출처").accessibilityValue(sourceName(source))
-                    .help("기본값: 상위 서클·공유 원본 · 앨범: 글로벌 값 · 개별: 이 대상의 값")
-            } else {Text("앨범").foregroundStyle(StudioTheme.secondary).frame(width:78,height:32)}
+                HStack(spacing:2) {
+                    ForEach(SettingSource.allCases,id:\.self) {value in
+                        MusicSourceButton(title:sourceName(value),label:title(field)+" 출처 · "+sourceName(value),
+                                          selected:source==value,help:sourceHelp(value,field:field)) {
+                            if source != value {_=apply(.source(field,value))}
+                        }.frame(width:48,height:32)
+                    }
+                }.fixedSize()
+            } else {Text("앨범").foregroundStyle(StudioTheme.secondary).frame(width:148,height:32)}
             content().frame(maxWidth:.infinity,alignment:.leading)
         }
+    }
+}
+
+/// Uses the existing native key-view behavior even when macOS Keyboard navigation is off.
+private struct MusicSourceButton:NSViewRepresentable {
+    let title:String
+    let label:String
+    let selected:Bool
+    let help:String
+    let action:()->Void
+    @Environment(\.isEnabled) private var enabled
+    func makeCoordinator()->Coordinator {Coordinator(self)}
+    func makeNSView(context:Context)->PortButtonControl {
+        let button=PortButtonControl(title:title,target:context.coordinator,action:#selector(Coordinator.run))
+        button.isBordered=false;button.wantsLayer=true;button.layer?.cornerRadius=5
+        return button
+    }
+    func updateNSView(_ button:PortButtonControl,context:Context) {
+        context.coordinator.parent=self
+        button.title=title;button.isEnabled=enabled
+        button.font = .systemFont(ofSize:12,weight:selected ? .semibold:.regular)
+        button.contentTintColor=selected ? StudioTheme.accentNS:StudioTheme.secondaryNS
+        button.layer?.backgroundColor=selected ? StudioTheme.raisedNS.cgColor:NSColor.clear.cgColor
+        button.layer?.borderWidth=1
+        button.layer?.borderColor=button.window?.firstResponder===button ? StudioTheme.accentNS.cgColor:StudioTheme.lineNS.cgColor
+        button.setAccessibilityLabel(label);button.setAccessibilityValue(selected ? "선택됨":"선택 안 됨")
+        button.setAccessibilityHelp(help);button.toolTip=help
+    }
+    final class Coordinator:NSObject {
+        var parent:MusicSourceButton
+        init(_ parent:MusicSourceButton){self.parent=parent}
+        @objc func run(){guard parent.enabled else{return};parent.action()}
     }
 }
 
