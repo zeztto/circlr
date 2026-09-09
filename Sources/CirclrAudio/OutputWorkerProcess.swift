@@ -53,13 +53,13 @@ final class OutputWorkerProcess: @unchecked Sendable {
                 if let message = s.transport.message { throw PlaybackTransportError.workerFailed(message) }
                 if control.isCancelled { throw CancellationError() }
                 guard ProcessInfo.processInfo.systemUptime < deadline else {
-                    cancel(timedOut: true)
+                    cancel(expectedID: id, timedOut: true)
                     throw PlaybackTransportError.timedOut
                 }
                 try await Task.sleep(for: .milliseconds(10))
             }
         } catch {
-            cancel()
+            cancel(expectedID: id)
             throw error
         }
     }
@@ -73,9 +73,12 @@ final class OutputWorkerProcess: @unchecked Sendable {
         value.transport.id = id; value.transport.phase = .starting
         startedAt = ProcessInfo.processInfo.systemUptime
     }
-    func cancel(timedOut: Bool = false) {
+    func cancel(expectedID: UUID? = nil, timedOut: Bool = false) {
         lock.lock()
-        guard let token, let id = value.transport.id else { lock.unlock(); return }
+        // A completed request can resume after cleanup and a new begin. Its cancellation
+        // must not revoke the new session; external STOP still targets the current one.
+        guard let token, let id = value.transport.id,
+              expectedID == nil || expectedID == id else { lock.unlock(); return }
         token.cancel(); value.transport.phase = .stopping; value.transport.seconds = 0
         if timedOut { value.request = .timedOut }
         else if value.request != .timedOut { value.request = .cancelled }

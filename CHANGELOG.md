@@ -1,5 +1,11 @@
 # 변경 이력
 
+## 개발 중 — 0.20.0 build82 출력 세션 취소 경계
+
+- 이전 play의 timeout/catch가 교체된 출력 세션을 취소하지 않도록 세션 ID 확인과 취소를 같은 lock 안에서 수행. 외부 STOP 동작 유지.
+- OutputWorkerProcess/Protocol 관련16개 테스트 통과 (`.build/output-session-tests.log`). build82 release 빌드46.09초 통과. 실제 host 첫 시도는 장치 단계 timeout·didStart=false 뒤 idle, 별도 세션 재시도는 didStart=true·시계1.1145625초·STOP 후 idle 확인. 간헐적 최초 시작 실패는 미해결이며 build82 세 번째 세션은 약34초 진행 후 자연 종료. [QA](qa/output-session-review.md).
+- build81 무음 helper에서 실제 장치 시작·STOP·EOF·세션 교체와 별도 재생 시계 0→1초·자연 종료 확인. 청취·입력·장치 변경·MP4는 미검증이며 과거 HAL 정지 원인은 미확정.
+
 ## 검증 갱신 — 이펙트·오토메이션·바운스
 
 - 보관 WAV 해시/PCM 재검증 및 build81 전체 프로젝트 재열기 확인.

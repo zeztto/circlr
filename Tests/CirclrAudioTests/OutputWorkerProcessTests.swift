@@ -75,6 +75,36 @@ for line in sys.stdin:
         XCTAssertNotEqual(host.status.attemptID, first); XCTAssertEqual(host.status.attempts, 2)
         host.cancel();try await wait { host.status.transport.phase == .idle }
     }
+    func testStaleRequestCancellationPreservesReplacementSession() async throws {
+        let host = OutputWorkerProcess(executable: try fixture("ready"))
+        defer { host.cancel() }
+        try await host.play(PCM(frames: 48000), from: 0, timeout: 2)
+        let expiredID = try XCTUnwrap(host.status.attemptID)
+        host.cancel()
+        try await wait { host.status.transport.phase == .idle }
+
+        try await host.play(PCM(frames: 48000), from: 0, timeout: 2)
+        try await wait { host.status.transport.seconds == 0.125 }
+        let replacementID = try XCTUnwrap(host.status.attemptID)
+        XCTAssertNotEqual(replacementID, expiredID)
+
+        // Reproduce the late timeout and catch cleanup from an older waiting request
+        // after its child has exited and its replacement has acquired the host.
+        host.cancel(expectedID: expiredID, timedOut: true)
+        host.cancel(expectedID: expiredID)
+        XCTAssertEqual(host.status.transport.phase, .playing)
+        XCTAssertEqual(host.status.request, .none)
+        try await Task.sleep(for: .milliseconds(700))
+        XCTAssertEqual(host.status.attemptID, replacementID)
+        XCTAssertEqual(host.status.transport.phase, .playing)
+        XCTAssertEqual(host.status.transport.seconds, 0.125)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: temporary(replacementID).path))
+
+        host.cancel(expectedID: replacementID)
+        XCTAssertEqual(host.status.transport.phase, .stopping)
+        try await wait { host.status.transport.phase == .idle }
+        XCTAssertFalse(FileManager.default.fileExists(atPath: temporary(replacementID).path))
+    }
     func testUnresponsiveChildIsKilledAndDirectoryRemoved() async throws {
         let host = OutputWorkerProcess(executable: try fixture("ignore"))
         let task = Task { try await host.play(PCM(frames: 48000), from: 0, timeout: 2) }

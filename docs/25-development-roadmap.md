@@ -1,6 +1,6 @@
 # 써클러 개발 방향과 실행 계획
 
-갱신: 2026-09-10. 계획 시작 기준: 0.11 native 앱, 0.12 음악 에이전트 키트 소스. 사용 앱은 0.19.0, 개발 검증 후보는 0.20.0 build 81이다. 목표는 송폼 중심의 전문 음악 제작을 먼저 완성하고, 이를 아티스트의 작품·세계관 관리로 확장하는 것이다.
+갱신: 2026-09-10. 계획 시작 기준: 0.11 native 앱, 0.12 음악 에이전트 키트 소스. 사용 앱은 0.19.0, 개발 검증 후보는 0.20.0 build 82이다. 목표는 송폼 중심의 전문 음악 제작을 먼저 완성하고, 이를 아티스트의 작품·세계관 관리로 확장하는 것이다.
 
 ## 현재 추가 요청 — 서클 색상
 
@@ -10,15 +10,17 @@ build81에서 종류별 색상과 사용자 지정·복원을 구현하고 검�
 
 이펙트→오토메이션→바운스 산출물을 해시·PCM으로 재검증하고, build81에서 저장 프로젝트 전체 복원을 확인했다. 궤도 화면에서도 음악 데이터가 유지된다. [통합 근거와 검증 경계](../qa/automation-flow-review.md). 다음은 실제 장치 출력 재점검과 같은 곡의 편곡 대안이다.
 
-## 현행 실행 순서 — build80 기준
+## 현행 실행 순서 — build82 기준
 
-build80에서 바운스 대상명과 연결 사전 검사를 통합하고 실제 UI 바운스·복원·MCP 즉시 거절을 확인했다. [QA](../qa/bounce-target-review.md). 다음은 같은 곡에서 이펙트와 오토메이션을 적용한 뒤 바운스까지의 통합 흐름이다. 개별 기능 검증을 한 곡 제작 완료로 계산하지 않는다.
+build80에서 바운스 대상명과 연결 사전 검사를 통합하고 실제 UI 바운스·복원·MCP 즉시 거절을 확인했다. [QA](../qa/bounce-target-review.md). 이후 같은 곡에서 이펙트와 오토메이션을 적용한 바운스·저장/재열기는 위 통합 흐름 QA에서 확인했다. 개별 기능 검증을 한 곡 제작 완료로 계산하지 않는다.
 
 build79에서 섹션의 오디오 가져오기가 과거 트랙을 재사용하던 기본값을 수정하고 파일 창에 목적지를 표시했다. 실제 파일→새 트랙→Undo/재열기를 확인했다. [QA](../qa/import-destination-review.md). 다음 통합 흐름은 가져온 오디오의 이펙트 연결·오토메이션·바운스다.
 
 새 곡 제작 흐름의 첫 구간에서 생성 메뉴와 빈 드럼 입력을 개선했다. build77은 실제 MIDI 입력·생성·Undo와 저장한 스텝 편집기 복원을 검증했다. [QA](../qa/creation-interface-review.md). 다음은 같은 곡의 오디오 가져오기→연결→오토메이션→편곡→바운스 왕복이다. build78에서 MCP focus 직후 저장의 카메라 불일치를 수정하고 취소 위치·재열기까지 검증했다. [QA](../qa/save-focus-review.md).
 
-출력 재점검: 독립 무음 엔진은 한 번 성공했으나 최종 앱과 재실행은 HAL에서 시간 초과했다. 스레드 원인은 입증되지 않았다. [9월10일 진단](../qa/output-recheck-review.md). 사용자 앱 출고 조건을 유지한다. [출력 프로세스 분리 설계](90-output-process-isolation.md)의 wire 계약과7개 경계 검사를 추가했으며 helper 실행 파일의 준비·파일 오류·EOF15개 검사와 출력 무응답 후 자식 종료/재실행을 확인했다. [검토](../qa/output-worker-service-review.md). build76에서 앱 호스트 연결·timeout 후정리·새session 재시도·Space 취소를 검증했다. [계약](91-output-recovery.md) · [QA](../qa/output-host-review.md). 정상 장치 출력/입력·audition·영상 시계는 여전히 남아 있다.
+출력 재점검: build81 무음 helper에서 실제 장치 시작·STOP·EOF·세션 교체를 확인했고, 별도 실행에서 재생 시계 0→1초·자연 종료를 확인했다. [관측 근거](../qa/output-session-review.md). 청취·입력·장치 변경·MP4 검증을 대신하지 않으며 과거 HAL 시간 초과의 원인은 여전히 미확정이다. [기존 진단](../qa/output-recheck-review.md).
+
+build82는 이전 play의 timeout/catch가 교체 세션을 취소하지 않도록 세션 ID 확인과 취소를 같은 lock 안에서 수행한다. 외부 STOP은 유지한다. OutputWorkerProcess/Protocol 관련16개 테스트를 통과했다 (`.build/output-session-tests.log`). build82 release 빌드는 46.09초에 통과했다. 실제 native host 첫 시도는 장치 단계 timeout·didStart=false 후 idle로 복구했고, 다른 세션 재시도는 didStart=true·시계 1.1145625초 진행·STOP 후 idle을 확인했다. 간헐적 최초 시작 실패는 미해결이다. 세 번째 세션은 33.994초 진행 관측 뒤 자연 종료했다. [출력 세션 QA](../qa/output-session-review.md). build76의 timeout 후 정리·재시도·Space 취소는 해당 빌드의 [기존 QA](../qa/output-host-review.md) 범위로 유지한다. 사용자 앱 출고 조건과 입력·audition·장치 변경·영상 시계 검증은 계속 남아 있다.
 
 이 절이 현재 우선순위다. 아래 build별 설명의 당시 ‘다음’ 문장은 개발 이력이며 새 작업 지시가 아니다. 선택 복원(build71), 선택 보기(build72), 오디오 배치(build73), 키보드 수치 입력(build74), 도움말 검색(build75)은 완료된 범위다. 모든 서클의 선택 영구 저장은 별도 설계 범위다.
 
