@@ -107,6 +107,21 @@ struct InlineCircleEditor: View {
         if case .audio(_,let clipID) = store.selectedMusic?.content,
            let clip = store.currentLane?.audio.first(where: { $0.id == clipID }), let asset=store.project.assets.first(where: { $0.id == clip.assetID }) {
             AudioWorkspaceView(store:store,clip:clip,asset:asset,viewport:$viewState.audio)
+        }else if store.audioIsOutsideSharedOriginal {
+            let identity=store.numberEditIdentity
+            VStack(alignment:.leading,spacing:12) {
+                Text("공유 원본 편집 중").font(.system(size:13,weight:.medium))
+                Text("이 오디오는 이번 사용에 추가되어 공유 원본에는 없습니다. 이번 사용 편집으로 전환하면 파형과 구간을 조절할 수 있습니다.")
+                    .foregroundStyle(StudioTheme.secondary).fixedSize(horizontal:false,vertical:true)
+                Button("이번 사용 편집") {
+                    if store.recoverAudioEditScope(identity:identity) {store.focusCanvas?()}
+                }.keyboardShortcut(.defaultAction).disabled(!store.audioScopeRecoveryAvailable)
+                    .help("선택한 오디오를 유지하고 이번 사용 편집으로 전환 · Return")
+            }.frame(maxWidth:.infinity,maxHeight:.infinity,alignment:.topLeading)
+        }else{
+            Text("선택한 오디오의 구간 또는 원본 파일 정보를 찾을 수 없습니다.")
+                .foregroundStyle(StudioTheme.secondary).fixedSize(horizontal:false,vertical:true)
+                .frame(maxWidth:.infinity,maxHeight:.infinity,alignment:.topLeading)
         }
     }
     private var isCurrentView:Bool {viewKey==store.editorWorkspaceKey && viewProjectID==store.project.id && viewGeneration==store.mediaImportGeneration}

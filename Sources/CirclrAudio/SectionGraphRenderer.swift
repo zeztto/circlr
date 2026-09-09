@@ -49,7 +49,10 @@ public enum SectionGraphRenderer {
                 continue
             }
             var local = PCM(frames: frames)
-            if !node.muted {
+            let isOutput:Bool = {if case .output = node.content{return true};return false}()
+            // A pre-output bounce preserves destination mute, gain and automation for playback.
+            // Upstream mute remains part of the captured sound.
+            if !node.muted || (isOutput && !applyOutputGain) {
                 switch node.content {
                 case .instrument(let trackID):
                     guard let track = project.tracks.first(where: { $0.id == trackID }) else { throw CirclrError("서클의 악기를 찾을 수 없습니다") }
@@ -73,7 +76,6 @@ public enum SectionGraphRenderer {
                     }
                 case .midi, .rhythmMIDI, .router: break
                 }
-                let isOutput:Bool = {if case .output = node.content{return true};return false}()
                 if node.gain != 1 && (applyOutputGain || !isOutput) { local.multiply(node.gain) }
                 if applyOutputGain || !isOutput {try AutomationDSP.apply(plan.automation[node.id] ?? [],to:&local)}
             }

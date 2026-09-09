@@ -1,5 +1,12 @@
 # 변경 이력
 
+## 개발 중 — 0.20.0 build86 오디오 범위·바운스 음소거
+
+- 기존 줄에 공유 원본/이번 사용 범위와 전용 클립 복귀 표시. 첫 후보의 Return 무응답을 native에서 발견해 `AlbumCanvas` dispatch 수정 후 복귀·도움말 차단 확인.
+- pre-output 바운스에서 출력 음소거 제외, upstream/정상 출력 음소거 유지. Audio21개·최종 Release41.19초 통과.
+- 실제 범위별 트림0.1/0.2초·각 Undo·파형 높이 유지, 음소거 출력의34초/24bit/48kHz 바운스와 복귀·원본 복원·Undo3·재열기 확인. QA checker28개 상태·자산2개·바운스1개·WAV PCM/checksum 대조 통과. [계약](docs/100-audio-scope-and-bounce-mute.md) · [QA](qa/audio-scope-review.md).
+- 실제 출력·audition0회, 사용자 앱 유지. 고정2초 tail의 효과 잘림은 compiled renderer에서 별도 재현했으며 후속 정책 과제로 유지.
+
 ## 개발 중 — 0.20.0 build85 바운스 상태·연결 복구
 
 - typed assessment로 포트·router·sidechain을 고려한 대상/문제/현재 서클 포함 여부를 제공. 기존 route bar에 원인·경로 제외·연결 보기 표시, 명령 검색에서 출력 IN으로 이동.

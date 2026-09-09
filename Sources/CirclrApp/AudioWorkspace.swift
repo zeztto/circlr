@@ -4,6 +4,33 @@ import CirclrCore
 
 extension AppStore {
     var currentAudioClip:AudioClip? {guard case .audio(_,let id)=selectedMusic?.content else{return nil};return currentLane?.audio.first{$0.id==id}}
+    var audioIsOutsideSharedOriginal:Bool {
+        guard editOriginal,case .audio(let laneID,let clipID)=selectedMusic?.content,
+              currentAudioClip==nil,let use=selectedUse,
+              let section=project.sections.first(where:{$0.id==use.sectionID}),
+              let lanes=try? ArrangementCompiler.effectiveLanes(section:section,use:use) else{return false}
+        return lanes.first(where:{$0.id==laneID})?.audio.contains{$0.id==clipID} == true
+    }
+    var audioScopeRecoveryAvailable:Bool {
+        audioIsOutsideSharedOriginal && !libraryOpen && !navigationOpen && commandPalette==nil && !keyboardHelp &&
+        soundPickerRequest==nil && arrangementPickerRequest==nil && !hierarchySettingsOpen && !connectionsOpen &&
+        !automationVisible && midiImportDraft==nil && embeddedPlugin==nil && errorMessage==nil &&
+        NSApp.modalWindow==nil && NSApp.keyWindow?.attachedSheet==nil &&
+        !(NSApp.keyWindow?.firstResponder is NSTextView)
+    }
+    @discardableResult func recoverAudioEditScope(identity:NumberEditIdentity)->Bool {
+        // Recheck live first responder as focus changes do not necessarily redraw SwiftUI.
+        guard audioScopeRecoveryAvailable else{return false}
+        return setAudioEditScope(original:false,identity:identity)
+    }
+    @discardableResult func setAudioEditScope(original:Bool,identity:NumberEditIdentity)->Bool {
+        guard nameEditing.resolve() else{return false}
+        guard numberEditIdentity==identity,case .audio=selectedMusic?.content else {
+            status="대상이나 음악이 바뀌었습니다. 현재 오디오에서 다시 실행하세요";return false
+        }
+        editOriginal=original
+        return true
+    }
     var audioEditorHasFocus:Bool {NSApp.keyWindow?.firstResponder is OrbitAudioView}
     var audioCommandAvailable:Bool {currentAudioClip != nil && !automationVisible && !(NSApp.keyWindow?.firstResponder is NSTextView) && !libraryOpen && !navigationOpen && commandPalette==nil && !keyboardHelp && !hierarchySettingsOpen}
     var audioCutOffset:Double {guard let clip=currentAudioClip else{return 0};return min(clip.duration,max(0,audioSplitOffset ?? clip.duration/2))}
@@ -81,8 +108,14 @@ struct AudioWorkspaceView:View {
     var sourceCursor:Double {liveClip.sourceStart+store.audioCutOffset}
     var cursorOutside:Bool {!viewport.contains(sourceCursor,assetDuration:asset.duration)}
     var body:some View {
+        let scopeIdentity=store.numberEditIdentity
         VStack(alignment:.leading,spacing:8) {
             HStack(spacing:12) {
+                Toggle(store.editOriginal ? "공유 원본":"이번 사용",isOn:Binding(get:{store.editOriginal},set:{value in
+                    if store.setAudioEditScope(original:value,identity:scopeIdentity) {focusTarget.focus()}
+                })).fixedSize().accessibilityLabel("오디오 공유 원본 편집")
+                    .accessibilityValue(store.editOriginal ? "공유 원본":"이번 사용")
+                    .help(store.editOriginal ? "같은 원본을 사용하는 다른 섹션 사용에도 오디오 편집이 반영됩니다":"오디오 편집은 이번 사용에만 반영됩니다. 체크하면 공유 원본을 편집합니다")
                 Text(asset.name).foregroundStyle(StudioTheme.secondary).lineLimit(1).help(asset.name)
                 Spacer(minLength:8)
                 Button("분할"){act{store.splitAudio()}}

@@ -594,7 +594,12 @@ struct AlbumCanvas: NSViewRepresentable {
         case 3: store.hierarchyCommand=HierarchyCommand(action:.fit)
         case 4: store.panMode=true
         case 9: store.panMode=false
-        case 36,76: enterSelectedCircle()
+        case 36,76:
+            if event.modifierFlags.intersection([.shift,.option]).isEmpty,store.audioScopeRecoveryAvailable {
+                _ = store.recoverAudioEditScope(identity:store.numberEditIdentity)
+                return
+            }
+            enterSelectedCircle()
         case 48: selectNeighbor(forward:!event.modifierFlags.contains(.shift))
         case 123,126: selectNeighbor(forward:false,additive:event.modifierFlags.contains(.shift))
         case 124,125: selectNeighbor(forward:true,additive:event.modifierFlags.contains(.shift))

@@ -51,4 +51,50 @@ final class OutputLevelAudioTests:XCTestCase {
         let a=try XCTUnwrap(normal[track]),b=try XCTUnwrap(baked[track])
         XCTAssertEqual(a.rms/b.rms,0.25,accuracy:1e-6)
     }
+    func testMutedOutputBounceKeepsPreOutputAudioAndUnmuteRestoresProcessedSound() async throws {
+        let root=FileManager.default.temporaryDirectory.appendingPathComponent("circlr-muted-bounce-\(newID())")
+        defer{try? FileManager.default.removeItem(at:root)}
+        var (p,output)=try fixture(root)
+        let useID=p.active.uses[0].id,track=p.tracks[0].id
+        func sectionPCM(_ project:Project, outputProcessing:Bool) async throws -> PCM {
+            let use=project.active.uses[0]
+            let (section,context,clock)=try ArrangementCompiler.context(project:project,use:use)
+            let plan=try XCTUnwrap(SectionGraphCompiler.compile(project:project,section:section,use:use,context:context,clock:clock))
+            let buffers=try await SectionGraphRenderer.render(plan,project:project,root:nil,clock:clock,tail:0,applyOutputGain:outputProcessing)
+            return try XCTUnwrap(buffers[track])
+        }
+        let dry=try await sectionPCM(p,outputProcessing:false)
+        let index=try XCTUnwrap(p.sections[0].graph?.nodes.firstIndex{$0.id==output})
+        p.sections[0].graph!.nodes[index].gain=0.25
+        p.sections[0].graph!.nodes[index].automation=[
+            .init(parameter:.gain,points:[.init(beat:0,value:0.5)]),
+            .init(parameter:.pan,points:[.init(beat:0,value:0.4)])
+        ]
+        let audible=try await sectionPCM(p,outputProcessing:true)
+        XCTAssertGreaterThan(audible.peak,0)
+        p.sections[0].graph!.nodes[index].muted=true
+        let before=p,outputBefore=p.sections[0].graph!.nodes[index]
+        let muted=try await sectionPCM(p,outputProcessing:true)
+        XCTAssertEqual(muted.peak,0)
+        let baked=try await sectionPCM(p,outputProcessing:false)
+        XCTAssertEqual(baked.left,dry.left);XCTAssertEqual(baked.right,dry.right)
+        XCTAssertEqual(p,before)
+        let file=root.appendingPathComponent("muted-output-bounce.wav");try baked.writeWAV(file)
+        _ = try BounceEditing.apply(asset:Asset(name:"바운스",path:file.path,duration:baked.duration,sampleRate:PCM.rate),
+            trackID:track,useID:useID,bodySeconds:2,tailSeconds:0,in:&p)
+        let graph=try XCTUnwrap(SectionGraphEditing.effective(section:p.sections[0],use:p.active.uses[0]))
+        XCTAssertEqual(graph.nodes.first{$0.id==output},outputBefore)
+        let stillMuted=try await sectionPCM(p,outputProcessing:true);XCTAssertEqual(stillMuted.peak,0)
+        let target=LevelTarget.circle(.music(arrangementID:p.activeArrangementID,useID:useID,nodeID:output),original:false)
+        try LevelEditing.set(target,muted:false,in:&p)
+        let unmuted=try await sectionPCM(p,outputProcessing:true)
+        for (actual,expected) in [(unmuted.left,audible.left),(unmuted.right,audible.right)] {
+            XCTAssertLessThanOrEqual(zip(actual,expected).map{abs($0-$1)}.max() ?? 1,1/8_388_608)
+        }
+        // Source mute must still be baked; only the destination output is bypassed.
+        var sourceMuted=before
+        let sourceIndex=try XCTUnwrap(sourceMuted.sections[0].graph?.nodes.firstIndex{if case .audio=$0.content{return true};return false})
+        sourceMuted.sections[0].graph!.nodes[sourceIndex].muted=true
+        let silent=try await sectionPCM(sourceMuted,outputProcessing:false);XCTAssertEqual(silent.peak,0)
+    }
 }
