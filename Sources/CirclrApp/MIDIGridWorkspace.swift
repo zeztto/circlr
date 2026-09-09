@@ -25,8 +25,8 @@ struct MIDIGridWorkspace:View {
                     Menu("MIDI") {
                         Button("MIDI 파일 가져오기"){store.chooseMIDIImport()};Button("MIDI 저장"){store.exportMIDI()}
                         Menu("패턴 추가"){ForEach(MIDIPattern.allCases,id:\.self){pattern in Button(pattern.label){store.generateMIDI(pattern)}}}
-                        Button("전체 선택 · ⌘A"){store.selectMIDINotes(Set((store.currentLane?.notes ?? []).map(\.id)));focusTarget.focus()}
-                        Button("선택 해제"){store.selectedNoteID=nil;focusTarget.focus()}
+                        Button("전체 선택 · ⌘A"){store.chooseMIDINotes(.all);focusTarget.focus()}
+                        Button("선택 해제 · ⇧⌘A"){store.chooseMIDINotes(.clear);focusTarget.focus()}
                     }
                     Button("바운스"){store.bounceTrack()}.disabled(store.preparing)
                     Button{store.startMIDIRecording()}label:{Image(systemName:store.midiRecording ? "stop.circle":"record.circle")}.accessibilityLabel(store.midiRecording ? "MIDI 녹음 정지":"MIDI 녹음").disabled(store.editPatternID != nil)

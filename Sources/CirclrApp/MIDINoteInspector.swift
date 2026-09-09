@@ -21,6 +21,7 @@ struct MIDINoteInspector:View {
     var body:some View {
         ScrollView {
         VStack(alignment:.leading,spacing:8) {
+            MIDINoteSelectionMenu(store:store,focusTarget:focusTarget)
             if let note=selected,store.selectedMIDIIDs.count==1 {
                 HStack(spacing:8){Text("음높이").foregroundStyle(StudioTheme.secondary);CommittedNumberField(title:"MIDI 음높이",value:integer(note,\.pitch),range:0...127,integerOnly:true,width:64);Text(name(note.pitch)).monospacedDigit()}
                 field("시작 박",value:number(note,\.beat),range:0...max(0,store.editorBeats-note.length))
@@ -40,7 +41,7 @@ struct MIDINoteInspector:View {
                         Divider();Button("한 칸 앞"){act{store.editMIDINotes(.move(-1/Double(store.midiQuantizeSubdivision)))}};Button("한 칸 뒤"){act{store.editMIDINotes(.move(1/Double(store.midiQuantizeSubdivision)))}}
                     }
                 }
-                HStack(spacing:12){Text("\(store.selectedMIDIIDs.count)개 선택").foregroundStyle(StudioTheme.secondary);Button("복제"){act{store.duplicateMIDINotes()}};Button("삭제"){act{store.editMIDINotes(.delete)}}}
+                HStack(spacing:12){Button("복제"){act{store.duplicateMIDINotes()}};Button("삭제"){act{store.editMIDINotes(.delete)}}}
             } else {Text("노트를 선택하면 음높이·시작·길이·세기를 편집합니다").foregroundStyle(StudioTheme.secondary)}
             Text(store.selectedMIDIIDs.count>1 && !store.midiStepMode ? "선택 노트를 함께 드래그\n끝 손잡이로 길이 조절":hint).font(.system(size:12)).foregroundStyle(StudioTheme.secondary).help(keyHelp)
         }.frame(maxWidth:.infinity,alignment:.leading).padding(.trailing,6)

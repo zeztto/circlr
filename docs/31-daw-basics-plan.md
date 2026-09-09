@@ -9,7 +9,7 @@
 | 작업 | 현재 구현 | 확장·완료 조건 |
 |---|---|---|
 | 스텝 | 0.16 구현·native 검증 완료 | 일반 Note/Lane을 그대로 편집하는 16-step page, 드럼/음정 row, 해상도, 세기/길이, 키보드, MCP, Undo/바운스 |
-| MIDI | 0.17 선택/quantize/transpose/복제·format 0/1 노트 import, 기존 MIDI 녹음/테이크. build 50 피아노 롤·궤도의 다중 노트 드래그/길이·Undo native 검증 ([QA](../qa/midi-group-drag-review.md)) | CC/페달/피치 벤드·tempo map import·고급 연주 편집 |
+| MIDI | 0.17 선택/quantize/transpose/복제·format 0/1 노트 import, 기존 MIDI 녹음/테이크. build 50 다중 노트 드래그/길이·Undo ([QA](../qa/midi-group-drag-review.md)), build 51 음높이/시작 박 조건 선택·반전·해제 ([QA](../qa/midi-selection-tools-review.md)) | CC/페달/피치 벤드·tempo map import·고급 연주 편집 |
 | 오디오 녹음 | 0.20 소스·검증 앱: 비동기 시작/종료·취소·실패 복구·입력 상태·MCP·atomic take, 오프라인 왕복·native 재열기/대기 버튼 검사 통과 | 허용된 실제 입력·녹음 중 UI→편집→bounce·Undo·재열기와 출고 |
 | 오디오 편집 | 0.18 split/duplicate/fade/mute/delete·MCP·native PCM·Undo/저장 검증 | 전체 source로 trim 재확장, crossfade·time warp·comping·window 처리 cache |
 | 오토메이션 | 0.19 gain/pan·선형/유지·궤도/선형 편집·MCP·native WAV/Undo/저장 검증 | synth filter·plugin parameter·MIDI CC·전역 bus, 실시간 write/touch/latch |

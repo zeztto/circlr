@@ -20,6 +20,12 @@ extension AppStore {
         if let note=notes.first {selectedBeat=note.beat}
     }
     func toggleMIDISelection(_ id:ID) {var ids=selectedMIDIIDs;if ids.contains(id){ids.remove(id)}else{ids.insert(id)};selectMIDINotes(ids)}
+    func chooseMIDINotes(_ action:MIDINoteSelection.Action) {
+        let notes=currentLane?.notes ?? [],ids=MIDINoteSelection.applying(action,to:notes,selected:selectedMIDIIDs)
+        let anchor=selectedNoteID.flatMap{id in notes.first{$0.id==id && ids.contains(id)}} ?? MIDIOrbitViewport.ordered(notes.filter{ids.contains($0.id)}).first
+        selectedNoteID=anchor?.id;additionalNoteIDs=ids.subtracting(anchor.map{[$0.id]} ?? [])
+        if let anchor {selectedBeat=anchor.beat}
+    }
     func beginMIDINoteDrag(_ note:Note)->MIDINoteDrag? {
         guard let lane=currentLane,lane.notes.contains(note) else{return nil}
         let ids=selectedMIDIIDs.contains(note.id) ? selectedMIDIIDs:[note.id]
@@ -55,12 +61,45 @@ extension AppStore {
     func handleMIDIBatchKey(_ event:NSEvent)->Bool {
         if event.modifierFlags.contains(.control){return false}
         if event.modifierFlags.contains(.command) {
-            if event.keyCode==0 {selectMIDINotes(Set((currentLane?.notes ?? []).map(\.id)));return true}
+            if event.keyCode==0,!event.modifierFlags.contains(.option) {chooseMIDINotes(event.modifierFlags.contains(.shift) ? .clear:.all);return true}
             if event.keyCode==2 {duplicateMIDINotes();return true}
             return false
         }
+        if event.modifierFlags.contains(.option),!event.modifierFlags.contains(.shift) {
+            switch event.keyCode {
+            case 35:chooseMIDINotes(.samePitch)
+            case 17:chooseMIDINotes(.sameStart)
+            case 34:chooseMIDINotes(.invert)
+            default:return false
+            }
+            return true
+        }
         if event.keyCode==12 {quantizeMIDI();return true}
         return false
+    }
+}
+
+struct MIDINoteSelectionMenu:View {
+    @ObservedObject var store:AppStore
+    let focusTarget:MIDIEditorFocus
+    var body:some View {
+        let identity=store.numberEditIdentity,count=store.selectedMIDIIDs.count
+        HStack(spacing:12) {
+            Menu {
+                Button("전체 선택 · ⌘A"){choose(.all,identity)}.disabled(store.currentLane?.notes.isEmpty != false)
+                Button("선택 반전 · ⌥I"){choose(.invert,identity)}.disabled(store.currentLane?.notes.isEmpty != false)
+                Divider()
+                Button("같은 음높이 선택 · ⌥P"){choose(.samePitch,identity)}.disabled(count==0)
+                Button("같은 시작 박 선택 · ⌥T"){choose(.sameStart,identity)}.disabled(count==0)
+            }label:{HStack(spacing:5){Text(count==0 ? "노트 선택":"\(count)개 선택").monospacedDigit();Image(systemName:"chevron.down").font(.system(size:10)).accessibilityHidden(true)}}
+            .accessibilityLabel("MIDI 노트 선택 · \(count)개")
+            .help("현재 서클의 전체 마디에서 선택 · 같은 음높이 ⌥P · 같은 시작 박 ⌥T · 반전 ⌥I")
+            Button("해제"){choose(.clear,identity)}.accessibilityLabel("MIDI 노트 선택 해제").help("선택 전체 해제 · ⇧⌘A").disabled(count==0)
+        }
+    }
+    func choose(_ action:MIDINoteSelection.Action,_ identity:NumberEditIdentity) {
+        guard identity==store.numberEditIdentity else{return}
+        store.chooseMIDINotes(action);focusTarget.focus()
     }
 }
 

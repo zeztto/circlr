@@ -64,8 +64,8 @@ struct MIDIOrbitWorkspace:View {
                         Button("MIDI 파일 가져오기"){store.chooseMIDIImport()}
                         Button("MIDI 저장"){store.exportMIDI()}
                         Menu("패턴 추가"){ForEach(MIDIPattern.allCases,id:\.self){pattern in Button(pattern.label){store.generateMIDI(pattern)}}}
-                        Button("전체 선택 · ⌘A"){act{store.selectMIDINotes(Set(notes.map(\.id)))}}
-                        Button("선택 해제"){act{store.selectedNoteID=nil}}
+                        Button("전체 선택 · ⌘A"){act{store.chooseMIDINotes(.all)}}
+                        Button("선택 해제 · ⇧⌘A"){act{store.chooseMIDINotes(.clear)}}
                     }
                     Button("바운스"){store.bounceTrack()}.disabled(store.preparing)
                     Button{store.startMIDIRecording()}label:{Image(systemName:store.midiRecording ? "stop.circle":"record.circle")}.accessibilityLabel(store.midiRecording ? "MIDI 녹음 정지":"MIDI 녹음").disabled(store.editPatternID != nil)
