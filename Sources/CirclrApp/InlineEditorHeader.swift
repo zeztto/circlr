@@ -1,7 +1,7 @@
 import SwiftUI
 import CirclrCore
 
-/// Named workspace modes, kept in the same row when selection details change.
+/// Named workspace modes stay directly accessible as the canvas width changes.
 struct InlineEditorHeader:View {
     @ObservedObject var store:AppStore
     var nameFocus:Binding<Bool>
@@ -26,14 +26,15 @@ struct InlineEditorHeader:View {
         return (store.project.takes ?? []).filter{$0.useID==use.id && $0.lane.trackID==track && ($0.targetLaneID==nil || $0.targetLaneID==store.selectedLaneID)}
     }
     var body:some View {
-        HStack(spacing:8) {
+        InlineEditorHeaderLayout {
+            VStack(alignment:.leading,spacing:0) {
             if showingTransition && !store.connectionsOpen {
                 Text("섹션 전환").font(.system(size:17,weight:.semibold)).frame(minWidth:80,alignment:.leading)
             } else if store.hierarchySelection == .sound {
                 Text(store.selectedCircle?.title ?? "앨범 사운드").font(.system(size:17,weight:.semibold)).frame(minWidth:80,alignment:.leading)
             } else {CommittedNameField(title:"서클 이름",value:Binding(get:{store.selectedMusic != nil ? store.musicEditingNode?.name ?? store.selectedCircle?.title ?? "" : store.selectedCircle?.title ?? ""},set:{store.renameHierarchy($0)}),focus:nameFocus,message:{store.status=$0})
                 .disabled(store.midiImportDraft != nil || store.musicEditingIssue != nil).frame(minWidth:80)}
-            Spacer(minLength:8)
+            }
             HStack(spacing:2) {
                 if store.selectedMusic != nil || store.canEditCirclePorts {mode(contentName,page:.content,help:store.selectedMusic==nil ? "이 서클의 편집으로 돌아가기":"이 서클의 "+contentName+" 편집으로 돌아가기")}
                 if store.canEditCirclePorts {mode("연결",page:.connections,help:"IN/OUT·대상·8방향 위치 편집 · L")}
@@ -43,14 +44,16 @@ struct InlineEditorHeader:View {
                     mode("설정",page:.settings,help:"템포·박자·스케일·반복 설정")
                 }
             }.disabled(store.midiImportDraft != nil)
+            HStack(spacing:8) {
             if !takes.isEmpty {
                 Menu("테이크") {ForEach(takes){take in Button(take.name){store.activateTake(take)}}}
                     .help("이 트랙의 녹음 테이크 선택").disabled(store.midiImportDraft != nil)
             }
             if store.selectedUse != nil {AudioRecordButton(store:store)}
             Button {store.hierarchySettingsOpen=false;store.hierarchyParent()} label:{Image(systemName:"arrow.up.left.and.arrow.down.right")}
-                .help("상위 서클로 축소 · Esc")
-        }.frame(minHeight:30)
+                .help("상위 서클로 축소 · Esc").accessibilityLabel("상위 서클로 축소")
+            }.fixedSize(horizontal:true,vertical:false)
+        }.frame(minHeight:30).padding(.horizontal,store.project.usesOrbits ? 16:0)
     }
     func mode(_ title:String,page target:Page,help:String)->some View {
         StudioModeButton(title:title,label:"작업 전환 · "+title,selected:page==target,help:help,keyboard:store.connectionsOpen ? connectionKeyboard:nil,order:order(target)){select(target)}
@@ -71,5 +74,36 @@ struct InlineEditorHeader:View {
         case .automation:store.connectionsOpen=false;store.hierarchySettingsOpen=false;store.showAutomation()
         case .settings:store.connectionsOpen=false;store.automationOpen=false;store.embeddedPlugin=nil;store.hierarchySettingsOpen=true
         }
+    }
+}
+
+/// Keeps name and native buttons alive when only their positions change.
+private struct InlineEditorHeaderLayout:SwiftUI.Layout {
+    private let gap:CGFloat=8
+    private let minimumName:CGFloat=160
+    private func metrics(width:CGFloat,subviews:Subviews)->(name:CGSize,modes:CGSize,actions:CGSize,wrapped:Bool) {
+        let modes=subviews[1].sizeThatFits(.unspecified)
+        let actions=subviews[2].sizeThatFits(.unspecified)
+        let wrapped=minimumName+modes.width+actions.width+gap*2>width
+        let nameWidth=max(80,width-actions.width-gap-(wrapped ? 0:modes.width+gap))
+        let name=subviews[0].sizeThatFits(ProposedViewSize(width:nameWidth,height:nil))
+        return (CGSize(width:nameWidth,height:name.height),modes,actions,wrapped)
+    }
+    func sizeThatFits(proposal:ProposedViewSize,subviews:Subviews,cache:inout ()) -> CGSize {
+        guard subviews.count==3 else{return .zero}
+        let width=proposal.width ?? minimumName+subviews[1].sizeThatFits(.unspecified).width+subviews[2].sizeThatFits(.unspecified).width+gap*2
+        let value=metrics(width:width,subviews:subviews)
+        let firstHeight=max(30,value.name.height,value.actions.height)
+        return CGSize(width:width,height:value.wrapped ? firstHeight+gap+value.modes.height:max(firstHeight,value.modes.height))
+    }
+    func placeSubviews(in bounds:CGRect,proposal:ProposedViewSize,subviews:Subviews,cache:inout ()) {
+        guard subviews.count==3 else{return}
+        let value=metrics(width:bounds.width,subviews:subviews)
+        let firstHeight=max(30,value.name.height,value.actions.height)
+        subviews[0].place(at:bounds.origin,anchor:.topLeading,proposal:ProposedViewSize(width:value.name.width,height:firstHeight))
+        subviews[2].place(at:CGPoint(x:bounds.maxX-value.actions.width,y:bounds.minY),anchor:.topLeading,
+                          proposal:ProposedViewSize(width:value.actions.width,height:firstHeight))
+        let modesOrigin=value.wrapped ? CGPoint(x:bounds.minX,y:bounds.minY+firstHeight+gap):CGPoint(x:bounds.minX+value.name.width+gap,y:bounds.minY)
+        subviews[1].place(at:modesOrigin,anchor:.topLeading,proposal:ProposedViewSize(value.modes))
     }
 }

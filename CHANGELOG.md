@@ -1,5 +1,11 @@
 # 변경 이력
 
+## 개발 중 — 0.20.0 build101 inline header
+
+- stable3그룹·wide 한 줄/compact 두 줄과 Orbit 수평16 여백으로 원형 상단 잘림 수정. 이름 field의 기존 help 유지.
+- 초기69.55초 후보의 잔여 잘림 뒤 최종 Release37.87초 통과. 실제 양끝 가시성·한국어 초안/focus 왕복·Esc·설정/연결·상위 이동 확인.
+- QA7개 상태·초안AX2개·음악r36/자산2개·원본 SHA·strict 저장 재열기 통과. physical0·사용자 앱 유지. 녹음 busy/takes·IME 조합·mode Tab 순서·body 하단 스크롤은 미검증. [계약](docs/116-inline-header-layout.md).
+
 ## 개발 중 — 0.20.0 build100 MIDI compact 배치
 
 - compact574·threshold700·inspector210·개별 field97/label wrap·adaptive toolbar 적용. 기존 진입 threshold·view identity 유지, Grid/StepEditor도 responsive로 수정.
