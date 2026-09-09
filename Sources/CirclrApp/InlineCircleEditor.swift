@@ -5,9 +5,10 @@ import CirclrAudio
 /// Lives in the canvas view's hierarchy. It never creates an NSWindow or a docked pane.
 struct InlineCircleEditor: View {
     @ObservedObject var store: AppStore
-    @State private var topPitch = 72
-    @State private var orbitViewport = MIDIOrbitViewport()
-    @State private var stepState = StepEditorState()
+    @State private var viewState=EditorViewportState()
+    @State private var viewKey:EditorWorkspaceKey?
+    @State private var viewProjectID:ID?
+    @State private var viewGeneration:Int?
     @State private var nameFocused=false
     @StateObject private var connectionKeyboard=PortKeyboardFocus()
     var body: some View {
@@ -30,10 +31,7 @@ struct InlineCircleEditor: View {
         .numberEditing(in:store)
         .onExitCommand { store.hierarchySettingsOpen = false; store.hierarchyParent() }
         .onAppear {
-            topPitch = store.currentLane?.notes.map(\.pitch).max().map { min(128,max(12,$0+1)) } ?? (store.selectedTrack?.instrument.drums == true ? 48 : 72)
-            orbitViewport.fitPitches(store.currentLane?.notes ?? [])
-            stepState.drumMode=store.selectedTrack?.instrument.drums==true
-            stepState.newPitch=store.selectedTrack?.instrument.sample?.rootPitch ?? 36
+            loadViewState()
             // A false FocusState write can clear focus already assigned by the connection editor.
             if store.hierarchySettingsOpen && store.hierarchyTransitionID==nil { nameFocused = true }
         }
@@ -42,7 +40,13 @@ struct InlineCircleEditor: View {
             if shouldFocus || nameFocused {nameFocused=shouldFocus}
         }
         .onChange(of:store.hierarchyTransitionID){_,id in if id != nil && nameFocused {nameFocused=false}}
-        .onChange(of:store.editOriginal){_,_ in orbitViewport=MIDIOrbitViewport();orbitViewport.fitPitches(store.currentLane?.notes ?? [])}
+        .onChange(of:viewState){_,_ in rememberViewState()}
+        .onDisappear{rememberViewState()}
+        .onChange(of:store.editOriginal){_,_ in rememberViewState();loadViewState()}
+        .onChange(of:store.hierarchySelection){_,_ in rememberViewState();loadViewState()}
+        .onChange(of:store.mediaImportGeneration){_,_ in loadViewState()}
+        .onChange(of:store.editorBeats){_,_ in if isCurrentView {viewState=store.validatedEditorViewport(viewState)}}
+        .onChange(of:store.currentAudioClip?.assetID){_,_ in if isCurrentView {viewState=store.validatedEditorViewport(viewState)}}
     }
     @ViewBuilder private var editorContent:some View {
         VStack(alignment:.leading,spacing:12) {
@@ -63,7 +67,7 @@ struct InlineCircleEditor: View {
             } else if store.hierarchySelection == .sound {
                 VStack(alignment:.leading,spacing:16) { Text("모든 곡의 트랙 출력을 버스와 마스터로 연결합니다"); Button("버스 서클 추가"){store.addHierarchyBus()}; Menu("전역 이펙터 추가"){ForEach(EffectKind.allCases,id:\.self){kind in Button(AppStore.effectName(kind)){store.addHierarchySignalEffect(kind)}}}; Spacer() }
             } else if store.hierarchySettingsOpen || store.selectedMusic == nil {
-                ScrollView { HierarchySettingsEditor(store: store).padding(.trailing, 8) }
+                ScrollView { HierarchySettingsEditor(store: store).padding(.trailing, 8).rememberEditorScroll(scroll("settings")) }
             } else if store.automationVisible {
                 AutomationEditor(store:store)
             } else if let node = store.selectedMusic {
@@ -84,11 +88,11 @@ struct InlineCircleEditor: View {
                             Spacer(minLength:8)
                             Button("트랙 바운스"){store.bounceTrack()}.disabled(store.preparing || store.selectedTrack == nil)
                         }.frame(maxWidth:660,alignment:.leading)
-                    }.padding(.trailing, 8) }
+                    }.padding(.trailing, 8).rememberEditorScroll(scroll("effect")) }
                 case .instrument:
-                    if let track = store.selectedTrack { ScrollView { TrackInspector(store: store, track: track,showsTrackLevel:false) } }
+                    if let track = store.selectedTrack { ScrollView { TrackInspector(store: store, track: track,showsTrackLevel:false).rememberEditorScroll(scroll("instrument")) } }
                 case .output:
-                    if let track = store.selectedTrack { ScrollView { OutputEditor(store:store,track:track) } }
+                    if let track = store.selectedTrack { ScrollView { OutputEditor(store:store,track:track).rememberEditorScroll(scroll("output")) } }
                 case .mix: signalControls(node); Spacer()
                 case .router(let router): AudioRouterEditor(store: store, router: router); signalControls(node); Spacer()
                 case .rhythmAudio: Text("리듬 패턴의 오디오 클립"); AudioLane(store: store); Spacer()
@@ -97,13 +101,25 @@ struct InlineCircleEditor: View {
         }.frame(maxWidth:.infinity,maxHeight:.infinity,alignment:.topLeading)
     }
     @ViewBuilder private var midi:some View {
-        if store.project.usesOrbits && !store.midiStepMode {MIDIOrbitWorkspace(store:store,viewport:$orbitViewport)}else{MIDIGridWorkspace(store:store,topPitch:$topPitch,steps:$stepState)}
+        if store.project.usesOrbits && !store.midiStepMode {MIDIOrbitWorkspace(store:store,viewport:$viewState.orbit,scroll:scroll("orbitControls"))}else{MIDIGridWorkspace(store:store,topPitch:$viewState.topPitch,steps:$viewState.steps,pianoScroll:scroll("piano"),stepScroll:scroll("steps"))}
     }
     @ViewBuilder private var audio: some View {
         if case .audio(_,let clipID) = store.selectedMusic?.content,
            let clip = store.currentLane?.audio.first(where: { $0.id == clipID }), let asset=store.project.assets.first(where: { $0.id == clip.assetID }) {
-            AudioWorkspaceView(store:store,clip:clip,asset:asset)
+            AudioWorkspaceView(store:store,clip:clip,asset:asset,viewport:$viewState.audio)
         }
+    }
+    private var isCurrentView:Bool {viewKey==store.editorWorkspaceKey && viewProjectID==store.project.id && viewGeneration==store.mediaImportGeneration}
+    private func loadViewState() {
+        viewKey=store.editorWorkspaceKey;viewProjectID=store.project.id;viewGeneration=store.mediaImportGeneration
+        viewState=store.initialEditorViewport()
+    }
+    private func rememberViewState() {
+        guard let viewKey,viewProjectID==store.project.id,viewGeneration==store.mediaImportGeneration else{return}
+        store.editorViewStates[viewKey]=viewState
+    }
+    private func scroll(_ name:String)->Binding<EditorScrollPosition> {
+        Binding(get:{viewState.scrolls[name] ?? .init()},set:{viewState.scrolls[name]=$0})
     }
     func editClip(_ clip: AudioClip, _ edit: (inout AudioClip) -> Void) {
         store.editAudioClip(clip,edit)

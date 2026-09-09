@@ -173,6 +173,7 @@ struct AlbumCanvas: NSViewRepresentable {
                 store.selectHierarchy(parent); focus(parent)
             case .fit: store.selectHierarchy(.album); focus(.album)
             case .restore:
+                removePrecisionEditor()
                 connecting=nil;orbitDrag=nil;clearCableSelection()
                 circleAccessibility=[:];portAccessibility=[:];cableAccessibility=[:]
                 if let saved=store.project.hierarchyView,let restored=saved.restored(width:bounds.width,height:bounds.height) {

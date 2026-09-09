@@ -55,7 +55,7 @@ struct AudioWorkspaceView:View {
     @ObservedObject var store:AppStore
     let clip:AudioClip
     let asset:Asset
-    @State private var viewport=AudioSourceViewport()
+    @Binding var viewport:AudioSourceViewport
     @State private var focusTarget=AudioEditorFocus()
     @State private var fieldFocus=NumberFieldFocus([
         "오디오 배치 박","오디오 원본 시작 초","오디오 원본 끝 초","오디오 분할 위치 초",
@@ -129,8 +129,6 @@ struct AudioWorkspaceView:View {
         .environment(\.numberEditing,NumberEditingContext(snapshot:store.numberEditIdentity,current:{store.numberEditIdentity},focusCanvas:{focusTarget.focus()},fieldFocus:fieldFocus))
         .onAppear{store.requestWaveform(asset)}
         .onChange(of:asset.id){_,_ in viewport.showAll();store.requestWaveform(asset)}
-        .onChange(of:store.hierarchySelection){_,_ in viewport.showAll()}
-        .onChange(of:store.editOriginal){_,_ in viewport.showAll()}
     }
     func field(_ title:String,unit:String,value:Binding<Double>,range:ClosedRange<Double>,presentation:NumberEditPresentation = .number)->some View {
         HStack(spacing:6) {

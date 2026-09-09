@@ -43,6 +43,7 @@ struct StepEditor:View {
     let topPitch:Int
     @Binding var state:StepEditorState
     let focusTarget:MIDIEditorFocus
+    @Binding var scroll:EditorScrollPosition
     @State private var rowRequest:StepRowRequest?
     var grid:StepGrid? {try? StepGrid(subdivisions:state.subdivisions,beats:store.editorBeats)}
     var selected:Note? {store.currentLane?.notes.first{$0.id==store.selectedNoteID}}
@@ -77,11 +78,11 @@ struct StepEditor:View {
                     ScrollView(.vertical) {
                         StepGridCanvas(store:store,grid:grid,page:min(state.page,grid.pageCount-1),pitches:pitches,focusTarget:focusTarget,rowRequest:rowRequest)
                             .frame(height:CGFloat(max(1,pitches.count)*28))
+                            .rememberEditorScroll($scroll)
                     }
                     if pitches.isEmpty {Text("일치하는 드럼 행이 없습니다").foregroundStyle(StudioTheme.secondary).padding(.vertical,8)}
                 }.frame(minHeight:100,maxHeight:.infinity)
             }
-            .onAppear{reveal()}
             .onChange(of:selected){_,_ in reveal()}
             .onChange(of:store.editorBeats){_,_ in state.page=min(state.page,(self.grid?.pageCount ?? 1)-1)}
             .onChange(of:store.stepRowScope){_,_ in rowRequest=nil}
@@ -130,10 +131,15 @@ struct StepGridCanvas:NSViewRepresentable {
     let focusTarget:MIDIEditorFocus
     let rowRequest:StepRowRequest?
     @Environment(\.isEnabled) private var enabled
-    func makeNSView(context:Context)->StepGridView {let view=StepGridView(store:store,grid:grid,page:page,pitches:pitches);focusTarget.view=view;return view}
+    func makeNSView(context:Context)->StepGridView {
+        let view=StepGridView(store:store,grid:grid,page:page,pitches:pitches)
+        view.lastSelection=store.currentLane?.notes.first{$0.id==store.selectedNoteID}
+        focusTarget.view=view;return view
+    }
     func updateNSView(_ view:StepGridView,context:Context) {
         let note=store.currentLane?.notes.first{$0.id==store.selectedNoteID}
-        let changed=view.grid != grid || view.page != page || view.pitches != pitches || view.lastSelection != note
+        let selectionChanged=view.lastSelection != note
+        let changed=view.grid != grid || view.page != page || view.pitches != pitches || selectionChanged
         let cursorPitch=view.pitches.indices.contains(view.row) ? view.pitches[view.row]:nil
         view.grid=grid;view.page=page;view.pitches=pitches;view.allowsEditing=enabled
         view.row=cursorPitch.flatMap{pitches.firstIndex(of:$0)} ?? 0
@@ -141,7 +147,7 @@ struct StepGridCanvas:NSViewRepresentable {
         if changed,let note,let index=grid.index(at:note.beat),index/16==page,let row=pitches.firstIndex(of:note.pitch) {
             view.row=row;view.column=index%16
         }
-        if changed,!pitches.isEmpty {
+        if selectionChanged,!pitches.isEmpty {
             let identity=store.numberEditIdentity
             DispatchQueue.main.async{[weak view] in
                 guard let view,view.window != nil,view.store.numberEditIdentity==identity,

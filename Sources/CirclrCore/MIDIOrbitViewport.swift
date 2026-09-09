@@ -1,7 +1,7 @@
 import Foundation
 
 /// Local editing view only; the complete lane and its note times remain unchanged.
-public struct MIDIOrbitViewport:Equatable {
+public struct MIDIOrbitViewport:Codable,Equatable {
     public var topPitch=71
     public var pitchRows=12
     public var barsPerPage=4 // Zero means the complete circle.

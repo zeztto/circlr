@@ -13,6 +13,7 @@ extension AppStore {
 struct MIDIOrbitWorkspace:View {
     @ObservedObject var store:AppStore
     @Binding var viewport:MIDIOrbitViewport
+    @Binding var scroll:EditorScrollPosition
     @State private var focusTarget=MIDIEditorFocus()
     var notes:[Note] {store.currentLane?.notes ?? []}
     var selected:Note? {notes.first{$0.id==store.selectedNoteID}}
@@ -55,7 +56,7 @@ struct MIDIOrbitWorkspace:View {
                         else if outside>0 {Text("범위 밖 \(outside)개").font(.system(size:12)).foregroundStyle(StudioTheme.secondary).lineLimit(1)}
                     }
                 }
-            }.frame(maxWidth:.infinity,alignment:.leading).padding(.trailing,6)
+            }.frame(maxWidth:.infinity,alignment:.leading).padding(.trailing,6).rememberEditorScroll($scroll)
             }.frame(maxHeight:.infinity)
                 HStack(spacing:7) {
                     Button{browse(-1)}label:{Image(systemName:"backward.end")}.accessibilityLabel("이전 MIDI 노트").help("이전 노트 선택·표시").disabled(notes.isEmpty)
@@ -75,7 +76,6 @@ struct MIDIOrbitWorkspace:View {
             MIDINoteInspector(store:store,focusTarget:focusTarget,hint:"Tab 선택 · 방향키 편집",keyHelp:keyHelp)
         }
         .environment(\.numberEditing,NumberEditingContext(snapshot:store.numberEditIdentity,current:{store.numberEditIdentity},focusCanvas:{focusTarget.focus()}))
-        .onAppear{reveal()}
         .onChange(of:selected){_,_ in reveal()}
     }
     func act(_ action:()->Void){action();focusTarget.focus()}

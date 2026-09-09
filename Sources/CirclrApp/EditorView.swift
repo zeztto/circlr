@@ -102,10 +102,14 @@ struct PianoRoll:NSViewRepresentable {
     @ObservedObject var store:AppStore;let topPitch:Int
     var focusTarget:MIDIEditorFocus?=nil
     @Environment(\.isEnabled) private var enabled
-    func makeNSView(context:Context)->PianoRollView{let view=PianoRollView(store:store);focusTarget?.view=view;return view}
+    func makeNSView(context:Context)->PianoRollView {
+        let view=PianoRollView(store:store)
+        view.lastSelection=store.currentLane?.notes.first{$0.id==store.selectedNoteID};view.lastBeat=store.selectedBeat
+        focusTarget?.view=view;return view
+    }
     func updateNSView(_ view:PianoRollView,context:Context){
         let note=store.currentLane?.notes.first{$0.id==store.selectedNoteID}
-        let changed=view.topPitch != topPitch || view.lastSelection != note || (note==nil && view.lastBeat != store.selectedBeat)
+        let changed=view.lastSelection != note || (note==nil && view.lastBeat != store.selectedBeat)
         if !enabled || view.topPitch != topPitch || (view.dragIdentity != nil && !view.dragIsCurrent) {view.cancelDrag()}
         if view.contentIdentity != store.numberEditIdentity || view.topPitch != topPitch {view.accessibilityNotes=[:]}
         if !enabled {view.releaseHeldNote()}
@@ -135,7 +139,7 @@ struct PianoRoll:NSViewRepresentable {
             self.scrollObserver=NotificationCenter.default.addObserver(forName:NSView.boundsDidChangeNotification,object:clip,queue:.main){[weak self] _ in MainActor.assumeIsolated{self?.needsDisplay=true}}
         }
         guard self.allowsEditing,!(window.firstResponder is NSTextView) else{return}
-        window.makeFirstResponder(self);self.revealSelection()
+        window.makeFirstResponder(self)
     }}
     override func viewWillMove(toWindow newWindow:NSWindow?){if newWindow==nil{releaseHeldNote();cancelDrag();if let scrollObserver{NotificationCenter.default.removeObserver(scrollObserver);self.scrollObserver=nil}};super.viewWillMove(toWindow:newWindow)}
     deinit{if let scrollObserver{NotificationCenter.default.removeObserver(scrollObserver)}}

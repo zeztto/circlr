@@ -1,7 +1,7 @@
 import Foundation
 
 /// Source-time presentation state only; fitting never changes or follows a trim.
-public struct AudioSourceViewport:Equatable {
+public struct AudioSourceViewport:Codable,Equatable {
     public private(set) var fitted:ClosedRange<Double>?
     public init(){}
     public func range(assetDuration:Double)->ClosedRange<Double> {
@@ -15,6 +15,13 @@ public struct AudioSourceViewport:Equatable {
         fitted=max(0,clip.sourceStart-padding)...min(max(0.001,assetDuration),clip.sourceStart+clip.duration+padding)
     }
     public mutating func showAll(){fitted=nil}
+    public mutating func clamp(to assetDuration:Double) {
+        guard assetDuration.isFinite,assetDuration>0 else {showAll();return}
+        if let fitted {
+            guard fitted.lowerBound.isFinite,fitted.upperBound.isFinite else {showAll();return}
+            self.fitted=range(assetDuration:assetDuration)
+        }
+    }
     /// Keep the time under the pointer fixed while changing the displayed duration.
     public mutating func zoom(by factor:Double,around source:Double,assetDuration:Double) {
         guard factor.isFinite,factor>0,source.isFinite,assetDuration.isFinite,assetDuration>0 else{return}

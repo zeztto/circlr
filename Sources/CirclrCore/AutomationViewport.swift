@@ -1,7 +1,7 @@
 import Foundation
 
-/// A fitted range belongs to the editing session, not the document or audio clock.
-public struct AutomationViewport:Equatable {
+/// A fitted range is view state, independent of the musical clock and edit history.
+public struct AutomationViewport:Codable,Equatable {
     public private(set) var fittedBeats:Double?
     public init(){}
     public func displayedBeats(base:Double)->Double {max(base,fittedBeats ?? base)}
@@ -13,4 +13,9 @@ public struct AutomationViewport:Equatable {
         fittedBeats=beat
     }
     public mutating func reset(){fittedBeats=nil}
+    public var validated:Self {
+        var next=self
+        if let fittedBeats, !fittedBeats.isFinite || !(0...1_048_576).contains(fittedBeats) {next.reset()}
+        return next
+    }
 }

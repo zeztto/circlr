@@ -9,6 +9,8 @@ extension AppStore {
         else if automationVisible {saved.page = .automation}
         saved.original=editOriginal
         saved.transitionID=recentTransitionID;saved.automationParameter=automationParameter
+        saved.automationViewport=automationViewport.validated
+        if let key=editorWorkspaceKey,let value=editorViewStates[key] {saved.editor=validatedEditorViewport(value)}
         if let address=hierarchySelection {
             saved.connection=connectionWorkspaceStates[.init(node:address,original:editOriginal)]
             return saved.restored(at:address,in:project)
@@ -19,6 +21,9 @@ extension AppStore {
         guard let address=hierarchySelection else{return}
         let view=saved.restored(at:address,in:project)
         editOriginal=view.original;automationParameter=view.automationParameter
+        if let key=editorWorkspaceKey,let editor=view.editor {editorViewStates[key]=validatedEditorViewport(editor)}
+        if let viewport=view.automationViewport {automationViewport=viewport.validated}
+        if let key=automationWorkspaceKey {automationViewStates[key]=automationViewport.validated}
         connectionEditorIntent=nil;connectionsOpen=view.page == .connections
         hierarchySettingsOpen=view.page == .settings || view.page == .transition
         automationOpen=view.page == .automation;embeddedPlugin=nil
