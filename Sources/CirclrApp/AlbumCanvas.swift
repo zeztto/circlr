@@ -76,7 +76,7 @@ struct AlbumCanvas: NSViewRepresentable {
         self.store = store; super.init(frame: .zero)
         store.captureHierarchyViewport = { [weak self] in
             guard let self,self.initialized,self.bounds.width>0 else{return nil}
-            return HierarchyViewport(camera:self.camera,width:self.bounds.width,height:self.bounds.height,selection:self.store.hierarchySelection ?? .album,settingsOpen:self.store.hierarchySettingsOpen,midiStepMode:self.store.midiStepMode)
+            return HierarchyViewport(camera:self.camera,width:self.bounds.width,height:self.bounds.height,selection:self.store.hierarchySelection ?? .album,settingsOpen:self.store.hierarchySettingsOpen,midiStepMode:self.store.midiStepMode,workspace:self.store.capturedStudioWorkspace)
         }
         store.captureMovieFrame = { [weak self] in
             guard let self,self.bounds.width>=64,self.bounds.height>=64 else{return nil}
@@ -175,8 +175,14 @@ struct AlbumCanvas: NSViewRepresentable {
             case .restore:
                 connecting=nil;orbitDrag=nil;clearCableSelection()
                 circleAccessibility=[:];portAccessibility=[:];cableAccessibility=[:]
-                if let saved=store.project.hierarchyView,(try? StudioNavigation.scene(revealing:saved.selection,in:store.project)) != nil,let restored=saved.restored(width:bounds.width,height:bounds.height) {
-                    store.selectHierarchy(saved.selection);scene=store.hierarchyScene;store.hierarchySettingsOpen=saved.settingsOpen;store.midiStepMode=saved.midiStepMode ?? false;setCamera(restored)
+                if let saved=store.project.hierarchyView,let restored=saved.restored(width:bounds.width,height:bounds.height) {
+                    let selection=StudioWorkspace.restoredSelection(saved.selection,in:store.project)
+                    store.selectHierarchy(selection);scene=store.hierarchyScene;store.midiStepMode=saved.midiStepMode ?? false
+                    if selection==saved.selection {
+                        store.restoreStudioWorkspace(saved.workspace ?? .init(page:saved.settingsOpen ? .settings:.content));setCamera(restored)
+                    } else {
+                        store.restoreStudioWorkspace(.init());focus(selection)
+                    }
                 } else {store.selectHierarchy(.album);store.hierarchySettingsOpen=false;focus(.album)}
             case .zoom(let factor): setCamera(camera.zoomed(to: camera.zoom*factor, around: Point(bounds.midX, bounds.midY)), animated: true)
             }

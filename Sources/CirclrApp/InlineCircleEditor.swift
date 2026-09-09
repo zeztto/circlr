@@ -46,7 +46,7 @@ struct InlineCircleEditor: View {
     }
     @ViewBuilder private var editorContent:some View {
         VStack(alignment:.leading,spacing:12) {
-            if store.connectionsOpen { PortConnectionsEditor(store: store,keyboard:connectionKeyboard).id(store.hierarchySelection) }
+            if store.connectionsOpen { PortConnectionsEditor(store: store,keyboard:connectionKeyboard).id(store.hierarchySelection).id(store.mediaImportGeneration) }
             else if let draft=store.midiImportDraft {MIDIImportView(store:store,draft:draft).id(draft.id)} else if let id=store.hierarchyTransitionID,let edge=store.project.active.edges.first(where:{$0.id==id}) {
                 TransitionWorkspace(store:store,edgeID:edge.id)
             } else if let plugin = store.embeddedPlugin {

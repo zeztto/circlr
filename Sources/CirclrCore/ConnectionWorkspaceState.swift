@@ -1,7 +1,7 @@
 import Foundation
 
-/// Session-only UI state. It is deliberately not Codable or part of Project.
-public struct ConnectionWorkspaceState:Equatable {
+/// UI intentions, validated again before reuse. Only the selected workspace is saved with the view.
+public struct ConnectionWorkspaceState:Codable,Equatable {
     public var ownPortID=""
     public var target:CirclePortEndpoint?
     public var firstOctant=PortOctant.east

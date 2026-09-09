@@ -96,6 +96,7 @@ struct PortConnectionsEditor: View {
                 if isGroup {
                     HStack {
                         Text("노출 포트 \(ports.count)개").fontWeight(.semibold)
+                        scopeLabel
                         Spacer()
                         if !ports.isEmpty {PortActionButton(title:managing ? "연결 편집":"노출 포트 관리",keyboard:keyboard,order:-100) {
                             workspace.managingGroupPorts.toggle();focusSearch()
@@ -131,8 +132,15 @@ struct PortConnectionsEditor: View {
     private var connectionHeading:some View {
         HStack {
             Text("연결 \(listedConnections.count)개").fontWeight(.semibold)
+            scopeLabel
             Spacer()
             PortChoice(label:"연결 표시 범위",selection:$workspace.currentPortOnly,options:[(false,"전체 포트"),(true,"현재 포트")],keyboard:keyboard,order:70).frame(width:120)
+        }
+    }
+    @ViewBuilder private var scopeLabel:some View {
+        if store.selectedMusic != nil || isGroup && store.selectedUse != nil {
+            Text(store.editOriginal ? "공유 원본":"이번 사용").font(.system(size:12)).foregroundStyle(StudioTheme.secondary)
+                .help(store.editOriginal ? "같은 원본을 사용하는 서클에 반영":"이 섹션의 이번 사용에만 반영")
         }
     }
     private var connectionList: some View {

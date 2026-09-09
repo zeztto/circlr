@@ -13,6 +13,7 @@ public enum CircleHistory {
         var result = saved; result.musicRevision = current.musicRevision + 1
         // Viewing preferences are saved with the document, independently of edit history.
         result.circleLayout = current.circleLayout
+        result.hierarchyView = current.hierarchyView
         if let album = current.album, result.album?.id == album.id {
             result.album?.layout.grid = album.layout.grid
             result.album?.layout.snap = album.layout.snap
