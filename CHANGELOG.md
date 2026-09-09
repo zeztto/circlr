@@ -1,5 +1,10 @@
 # 변경 이력
 
+## 개발 중 — 0.20.0 build98 섹션 연결 메뉴
+
+- `AlbumCanvas` 우클릭 체크를 `SectionFlowSelection.isSelected`로 통일하고 isEnd의 ‘끝 해제 후 재생할 연결’ 안내 추가. 기존 선택 동작 유지.
+- Core6개 실패0·0.004초·Release39.03초·패키지 strict 서명 통과. 실제 단일 선택 무변경·끝 해제 안내/선택·Undo 확인. 체크 glyph 시각은 미검증이며 AX highlight와 구분. 앞선 `UnifiedSectionView`는 rg 검색에서 생성 참조를 찾지 못해 실제 수정 대상을 정정. [계약](docs/113-section-flow-menu.md).
+
 ## 개발 중 — 0.20.0 build97 MIDI 작업 도구
 
 - Orbit/Grid의 mode·MIDI 메뉴·bounce·record를 전체 편집 폭에 배치하고 Orbit 이전/다음·count 이동. 기존 canvas 유지.

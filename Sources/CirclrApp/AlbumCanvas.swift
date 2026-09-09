@@ -711,10 +711,14 @@ extension AlbumCanvasView {
                 for target in a.uses where target.id != use {action(target.name,in:child){[weak self] in self?.store.connectHierarchy(node.id,.section(arrangementID:arrangement,useID:target.id))}}
                 let outgoing=a.edges.filter{$0.from==use}
                 if !outgoing.isEmpty {
-                    let choose=submenu("재생할 연결"),transition=submenu("전환 편집"),remove=submenu("연결 해제")
+                    let isEnd=a.uses.first{$0.id==use}?.isEnd == true
+                    let choose=submenu(isEnd ? "끝 해제 후 재생할 연결":"재생할 연결"),transition=submenu("전환 편집"),remove=submenu("연결 해제")
                     for edge in outgoing {
                         let name=a.uses.first{$0.id==edge.to}?.name ?? "다음 섹션"
-                        action((a.chosenEdges[use]==edge.id ? "✓ ":"")+name,in:choose){[weak self] in self?.store.chooseHierarchyEdge(node.id,edgeID:edge.id)}
+                        let connection=CircleConnectionID(edgeID:edge.id,from:node.id,to:.section(arrangementID:arrangement,useID:edge.to))
+                        action(name,in:choose){[weak self] in self?.store.chooseHierarchyEdge(node.id,edgeID:edge.id)}
+                        choose.items.last?.state=SectionFlowSelection.isSelected(connection,in:store.project) ? .on:.off
+                        choose.items.last?.toolTip=isEnd ? "끝 섹션 지정을 해제하고 이 연결로 재생을 이어갑니다":"이 연결로 다음 섹션을 재생합니다"
                         action(name,in:transition){[weak self] in self?.store.openHierarchyTransition(node.id,edgeID:edge.id)}
                         action(name,in:remove){[weak self] in self?.store.disconnectHierarchy(node.id,edgeID:edge.id)}
                     }

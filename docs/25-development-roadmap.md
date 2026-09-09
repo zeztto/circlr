@@ -1,12 +1,18 @@
 # 써클러 개발 방향과 실행 계획
 
-갱신: 2026-09-10. 계획 시작 기준: 0.11 native 앱, 0.12 음악 에이전트 키트 소스. 기존 출고 표기는 0.19.0이며 실행 중 사용자 앱의 별도 관측 버전은0.14다. 개발 검증 후보는 0.20.0 build 97이다. 목표는 송폼 중심의 전문 음악 제작을 먼저 완성하고, 이를 아티스트의 작품·세계관 관리로 확장하는 것이다.
+갱신: 2026-09-10. 계획 시작 기준: 0.11 native 앱, 0.12 음악 에이전트 키트 소스. 기존 출고 표기는 0.19.0이며 실행 중 사용자 앱의 별도 관측 버전은0.14다. 개발 검증 후보는 0.20.0 build 98이다. 목표는 송폼 중심의 전문 음악 제작을 먼저 완성하고, 이를 아티스트의 작품·세계관 관리로 확장하는 것이다.
+
+## 현재 검증 — build98 섹션 연결 메뉴
+
+실제 `AlbumCanvas` 우클릭 메뉴의 체크를 `SectionFlowSelection.isSelected`로 통일하고 isEnd에 ‘끝 해제 후 재생할 연결’을 안내한다. 기존 선택 동작은 유지한다. Core6개 실패0·0.004초·Release39.03초·패키지 strict 서명과 실제 단일 선택 무변경·끝 해제/Undo를 확인했다. 체크 glyph 시각은 미검증으로 AX highlight와 구분하며 판정은 Core/source 근거에 한정한다. output/audition0회다. [계약](113-section-flow-menu.md).
+
+앞서 지목한 `UnifiedSectionView`는 rg 검색에서 생성 참조를 찾지 못했으므로 그 소스 상태를 실제 UI 재현으로 해석하지 않는다. 다른 편곡 candidate 직접 복제는 아직 미구현이다.
 
 ## 현재 검증 완료 — build97 MIDI 작업 도구
 
 전체 편집 폭 toolbar로 작은 창의 Orbit·step·drum step·piano에서 메뉴·bounce·record를 표시한다. Release38.38초와 native 노트/직접⌘A 편집·Undo·34초 바운스/Undo·revision30 strict 저장 재열기를 확인했다. QA20개 상태·AX 내용6개·원본 자산2개·offline bounce1개·physical0 대조도 통과했다. 메뉴 click 동작은 미확정으로 노출 검사와 구분하고 실제 MIDI 녹음·물리 출력은 실행하지 않았다. [계약](112-midi-workspace-actions.md) · [QA](../qa/workflow-visibility-review.md).
 
-다음 UI 과제는 isEnd 상태와 active 다음 edge 표시의 compiler 의미 일치, 그리고 다른 편곡 candidate를 현재 안으로 적용하지 않고 복제하는 동선이다. 둘 다 미구현이며 이번 toolbar 검증에 포함하지 않는다. 사용자 dist 앱을 보존하고 검증 앱을 종료했다.
+isEnd 메뉴 표시는 위 build98의 실제 AlbumCanvas 경로에서 검증한다. 다른 편곡 candidate를 현재 안으로 적용하지 않고 복제하는 동선은 미구현이며 build97 toolbar 검증에 포함하지 않는다. 사용자 dist 앱을 보존하고 검증 앱을 종료했다.
 
 ## 현재 검증 완료 — build96 offline AU effect 격리
 
@@ -112,7 +118,7 @@ build81에서 종류별 색상과 사용자 지정·복원을 구현하고 검�
 
 이펙트→오토메이션→바운스 산출물을 해시·PCM으로 재검증하고, build81에서 저장 프로젝트 전체 복원을 확인했다. 궤도 화면에서도 음악 데이터가 유지된다. [통합 근거와 검증 경계](../qa/automation-flow-review.md). 다음은 실제 장치 출력 재점검과 같은 곡의 편곡 대안이다.
 
-## 현행 실행 순서 — build97 기준
+## 현행 실행 순서 — build98 기준
 
 build80에서 바운스 대상명과 연결 사전 검사를 통합하고 실제 UI 바운스·복원·MCP 즉시 거절을 확인했다. [QA](../qa/bounce-target-review.md). 이후 같은 곡에서 이펙트와 오토메이션을 적용한 바운스·저장/재열기는 위 통합 흐름 QA에서 확인했다. 개별 기능 검증을 한 곡 제작 완료로 계산하지 않는다.
 
