@@ -15,8 +15,10 @@ public struct PlaybackTransportStatus:Equatable,Codable,Sendable {
 
 public enum PlaybackTransportError:LocalizedError {
     case busy,timedOut,invalidPosition
+    case workerFailed(String)
     public var errorDescription:String? {
         switch self {
+        case .workerFailed(let message):return message
         case .busy:return "이전 출력 작업을 정리하고 있습니다. 정리가 끝나면 다시 재생하세요."
         case .timedOut:return "출력 시작이 지연되어 재생 요청을 취소했습니다. 장치 정리가 끝나면 다시 재생하세요."
         case .invalidPosition:return "재생 시작 위치가 올바르지 않습니다"

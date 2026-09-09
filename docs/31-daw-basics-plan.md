@@ -16,7 +16,9 @@ build 60: 에이전트 한도 해제 요청 후 read-only 조사 dispatch를 재
 
 ## 상태와 남은 완료 조건
 
-build75: 검색 가능한 키보드 도움말과 제목 일치 우선 명령 검색. native7상태/9화면과 음악·자산 보존 [QA](../qa/shortcut-search-review.md). 현재 우선순위는 [로드맵의 현행 실행 순서](25-development-roadmap.md#현행-실행-순서-build75-기준)를 따른다.
+build76: 기본 출력 helper 연결, 시간 초과 후새session 재시도·Space 취소·대기 중음악편집/Undo 검증. 정상 출력·입력·audition·MP4는 여전히 별도 완료 조건이다. [QA](../qa/output-host-review.md).
+
+build75: 검색 가능한 키보드 도움말과 제목 일치 우선 명령 검색. native7상태/9화면과 음악·자산 보존 [QA](../qa/shortcut-search-review.md). 현재 우선순위는 [로드맵의 현행 실행 순서](25-development-roadmap.md#현행-실행-순서--build76-기준)를 따른다.
 
 build74: 파형 Tab/Shift+Tab·수치 입력 버튼, Core 공유 복제 공간 사전 안내. Swift498개·Python29개·native7상태 [QA](../qa/audio-keyboard-review.md). 도움말/명령 검색 동선은 build75에서 구현·검증했다.
 

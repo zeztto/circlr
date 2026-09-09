@@ -2,6 +2,12 @@
 
 0.1–0.3은 설계 문서 revision이며, 0.4.0부터 로컬 실행 프로토타입을 포함한다.
 
+## 개발 중 — 0.20.0 build76 출력 대기 복구
+
+- 기본 곡 재생을 별도 helper에 연결. STOP/시간 초과 뒤 자식 종료와 임시파일 정리 후 새 재생 허용.
+- 준비 초수·정리·다시 재생 가능 표시를12pt로 확대. 앱/helper 함께 빌드·서명.
+- Swift513개·MCP/kit29개·helper16개 및 실제 timeout/재시도/Space 취소 검증. 정상 장치 출력은 미완료. [QA](qa/output-host-review.md).
+
 ## 개발 중 — 출력 helper 기반
 
 - 고정 private PCM 파일·bounded wire를 사용하는 별도 출력 실행 파일 추가.

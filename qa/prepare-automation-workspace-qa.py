@@ -50,6 +50,8 @@ def main():
     info.pop('CFBundleDocumentTypes', None)
     (APP / 'Contents/MacOS').mkdir(parents=True)
     shutil.copy2(ROOT / '.build/integration-release/release/circlr', APP / 'Contents/MacOS/circlr')
+    shutil.copy2(ROOT / '.build/integration-release/release/circlr-output-worker', APP / 'Contents/MacOS/circlr-output-worker')
+    subprocess.run(['codesign', '--force', '--sign', '-', str(APP / 'Contents/MacOS/circlr-output-worker')], check=True)
     (APP / 'Contents/Info.plist').write_bytes(plistlib.dumps(info))
     resources = APP / 'Contents/Resources'
     resources.mkdir()

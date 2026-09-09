@@ -8,10 +8,12 @@ import CirclrCore
     public private(set) var offset:Double=0
     public private(set) var prepared:PreparedAudio?
     private let transport:PlaybackTransport
+    private let outputWorker:OutputWorkerProcess?
     private var activeID:UUID?
     private var generation=0
     public var onOutputChange:(()->Void)?
     public var outputStatus:PlaybackOutputStatus {
+        if let outputWorker {return outputWorker.status}
         var value=outputConnection.status;value.transport=transport.status;return value
     }
     private lazy var outputConnection:PlaybackOutputConnection = {
@@ -20,11 +22,13 @@ import CirclrCore
         connection.onChange = {[weak self] in self?.onOutputChange?()}
         return connection
     }()
-    public init(){transport=PlaybackTransport()}
-    init(factory:@escaping @Sendable()->any PlaybackBackend){transport=PlaybackTransport(factory:factory)}
-    deinit{transport.shutdown()}
-    public var playing:Bool {let state=transport.status;return state.id==activeID && state.phase == .playing}
+    public init(){transport=PlaybackTransport();outputWorker=OutputWorkerProcess()}
+    init(factory:@escaping @Sendable()->any PlaybackBackend){transport=PlaybackTransport(factory:factory);outputWorker=nil}
+    init(outputWorker:OutputWorkerProcess){transport=PlaybackTransport();self.outputWorker=outputWorker}
+    deinit{outputWorker?.cancel();transport.shutdown()}
+    public var playing:Bool {if let outputWorker {return outputWorker.status.transport.phase == .playing};let state=transport.status;return state.id==activeID && state.phase == .playing}
     public var seconds:Double {
+        if let outputWorker {let state=outputWorker.status.transport;return state.phase == .playing ? min(prepared?.mix.duration ?? .greatestFiniteMagnitude,offset+state.seconds):0}
         let state=transport.status
         guard state.id==activeID,state.phase == .playing else{return 0}
         return min(prepared?.mix.duration ?? .greatestFiniteMagnitude,offset+state.seconds)
@@ -37,6 +41,7 @@ import CirclrCore
         try Task.checkCancellation()
         stop();prepared=audio;offset=min(audio.mix.duration,from)
         guard Int((offset*PCM.rate).rounded())<audio.mix.count else{return}
+        if let outputWorker {try await outputWorker.play(audio.mix,from:offset,timeout:timeout);return}
         generation+=1;let ticket=generation
         try await outputConnection.waitUntilReady(timeout:timeout)
         try Task.checkCancellation()
@@ -61,7 +66,9 @@ import CirclrCore
         }
     }
     public func stop() {
-        generation+=1;outputConnection.cancelWait()
+        generation+=1
+        if let outputWorker {outputWorker.cancel();activeID=nil;offset=0;return}
+        outputConnection.cancelWait()
         if let activeID{transport.cancel(activeID)}
         activeID=nil;offset=0
     }

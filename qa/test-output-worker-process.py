@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Real child-process protocol/file tests; never sends play or uses an audio device."""
+"""Real child-process protocol/file tests; does not start an audio device; coalesced play/STOP is cancelled before engine creation."""
 import json
 import math
 import os
@@ -78,6 +78,17 @@ class OutputWorkerProcessTests(unittest.TestCase):
         c.send({'prepare': {'frames': 32}}); self.assertEqual(c.event(), {'prepared': {}})
         run = str(uuid.uuid4()).upper()
         c.send({'stop': {'run': run}}); self.assertEqual(c.event(), {'stopped': {'run': run}})
+        c.process.stdin.close(); self.assertEqual(c.process.wait(timeout=3), 0)
+    def testCoalescedStopCancelsBeforeDeviceCreation(self):
+        self.audio(); c = self.start(); run = str(uuid.uuid4()).upper()
+        payloads = [{'prepare': {'frames': 32}}, {'play': {'run': run}}, {'stop': {'run': run}}]
+        packets = []
+        for payload in payloads:
+            c.sequence += 1
+            packets.append(json.dumps(dict(version=1, session=c.session, sequence=c.sequence, payload=payload)).encode() + b'\n')
+        c.process.stdin.write(b''.join(packets))
+        self.assertEqual(c.event(), {'prepared': {}})
+        self.assertEqual(c.event(), {'stopped': {'run': run}})
         c.process.stdin.close(); self.assertEqual(c.process.wait(timeout=3), 0)
     def testEOFBeforePreparation(self):
         c = self.start(); c.process.stdin.close(); self.assertEqual(c.process.wait(timeout=3), 0)

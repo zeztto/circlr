@@ -191,11 +191,11 @@ struct TransportControls:View {
             VStack(alignment:.leading,spacing:3) {
                 Text(time).font(.system(size:13,design:.monospaced)).foregroundStyle(StudioTheme.text)
                 if let label=store.outputLabel {
-                    Text(label).font(.system(size:10,weight:.medium)).lineLimit(1).minimumScaleFactor(0.8)
+                    Text(label).font(.system(size:12,weight:.medium)).lineLimit(1)
                         .foregroundStyle(StudioTheme.text).help(store.outputDetail)
                         .accessibilityLabel(store.outputDetail)
                 }
-            }.frame(width:82,alignment:.leading)
+            }.frame(width:108,alignment:.leading)
             Button { store.playbackFollow = store.playbackFollow.toggled() } label: {
                 Label(store.playbackFollow == .suspended ? "팔로우 재개" : "재생 팔로우", systemImage: store.playbackFollow == .following ? "scope" : "location.slash")
                     .font(.system(size:11)).lineLimit(1).fixedSize(horizontal:true,vertical:false)

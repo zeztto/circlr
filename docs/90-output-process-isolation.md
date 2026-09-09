@@ -23,3 +23,5 @@ planning-gate-v1: 2026-09-10, development-lead → planner → native utility. �
 현재 구현: 1단계의 internal wire 타입과7개 테스트 통과. [검토 기록](../qa/output-protocol-review.md). 실제 앱 출력 경로에는 아직 연결하지 않았다. 나머지는 구현·실행 증거가 있어야 완료로 올린다. UI 도움말 QA나 독립 무음 진단은 실제 helper 통합과 음악 출력 증거를 대체하지 않는다.
 
 실행 파일 구현:2단계 helper를 추가하고 실제 준비/파일 오류/EOF15개 검사와 wire7개를 통과했다. 출력 무응답 상태에서 parent EOF로 약9ms 종료 및 다음 child hello를 확인했다. 정상 start/clock은 아직 관측되지 않았고 앱 호스트 연결도 남아 있다. [검토](../qa/output-worker-service-review.md).
+
+build76: 호스트와 기본 Playback·패키징을 연결하고 실제 앱의 timeout→정리→새session 재시도·Space 취소를 검증했다. 기존 단계별 ‘미연결’ 문장은 해당 단계의 이력이다. 정상 출력/clock/영상과 MIDI audition 연결은 아직 미완료다. [통합 계약](91-output-recovery.md) · [QA](../qa/output-host-review.md).

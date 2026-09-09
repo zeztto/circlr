@@ -2,7 +2,7 @@ import Foundation
 import AVFAudio
 import CirclrCore
 
-public struct PCM {
+public struct PCM: Sendable {
     public static let rate = 48_000.0
     public var left: [Float]
     public var right: [Float]

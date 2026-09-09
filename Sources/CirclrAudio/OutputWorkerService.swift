@@ -22,6 +22,7 @@ private final class Worker: @unchecked Sendable {
     private let session: UUID
     private let directory: URL
     private let outputLock = NSLock()
+    private let control = MediaPreviewCancellation()
     private var sequence: UInt64 = 0
     private var file: AVAudioFile?
     private var engine: AVAudioEngine?
@@ -60,6 +61,7 @@ private final class Worker: @unchecked Sendable {
                     }
                     if count == 0 { break }
                     let packets = try wire.receive(Data(buffer.prefix(count)))
+                    if packets.contains(where: { if case .stop = $0.payload { return true }; return false }) { self.control.cancel() }
                     guard slots.wait(timeout: .now() + 2) == .success else { throw WorkerError.backpressure }
                     DispatchQueue.main.async {
                         defer { slots.signal() }
@@ -116,10 +118,14 @@ private final class Worker: @unchecked Sendable {
                 guard let file, active == nil, !used else { throw WorkerError.invalidState }
                 used = true
                 active = run
+                try checkCancellation()
                 let engine = AVAudioEngine(), player = AVAudioPlayerNode()
                 self.engine = engine; self.player = player
                 engine.attach(player)
-                engine.connect(player, to: engine.mainMixerNode, format: file.processingFormat)
+                let mixer = engine.mainMixerNode
+                try checkCancellation()
+                engine.connect(player, to: mixer, format: file.processingFormat)
+                try checkCancellation()
                 player.volume = 0
                 player.scheduleFile(file, at: nil, completionCallbackType: .dataPlayedBack) { [weak self] _ in
                     DispatchQueue.main.async {
@@ -129,8 +135,11 @@ private final class Worker: @unchecked Sendable {
                     }
                 }
                 try engine.start()
+                try checkCancellation()
                 player.play()
+                try checkCancellation()
                 player.volume = 1
+                try checkCancellation()
                 emit(.started(run: run))
                 timer = Timer.scheduledTimer(withTimeInterval: 0.02, repeats: true) { [weak self] _ in self?.tick(run) }
             case .stop(let run):
@@ -140,6 +149,8 @@ private final class Worker: @unchecked Sendable {
                 emit(.stopped(run: run))
             default: throw WorkerError.invalidState
             }
+        } catch is CancellationError {
+            clear()
         } catch {
             let run = active
             // Report before device cleanup, which itself may block.
@@ -147,6 +158,10 @@ private final class Worker: @unchecked Sendable {
             clear()
             exit(70)
         }
+    }
+
+    private func checkCancellation() throws {
+        if control.isCancelled { throw CancellationError() }
     }
 
     private func tick(_ run: UUID) {

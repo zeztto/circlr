@@ -15,13 +15,14 @@ extension AppStore {
     }
     var outputLabel:String? {
         switch outputStatus.transport.phase {
-        case .starting:return "출력 시작 중"
+        case .starting:return "재생 준비 \(outputStatus.elapsedSeconds)초"
         case .stopping:return "출력 정리 중"
         case .failed:return "출력 시작 실패"
         default:break
         }
         if outputStatus.phase == .connecting {return "출력 \(outputStatus.request == .waiting ? "연결":"대기") \(outputStatus.elapsedSeconds)초"}
         if outputStatus.phase == .ready,[.timedOut,.cancelled].contains(outputStatus.request) {return "출력 준비됨"}
+        if outputStatus.phase == .idle,outputStatus.attempts>0,[.timedOut,.cancelled].contains(outputStatus.request) {return "다시 재생 가능"}
         return auditionLabel
     }
     var outputDetail:String {
@@ -42,6 +43,7 @@ extension AppStore {
             return step+" · \(outputStatus.elapsedSeconds)초. "+(outputStatus.request == .waiting ? "Space로 재생 준비를 취소할 수 있습니다.":"재생 요청은 멈췄으며 장치 응답을 기다립니다. 준비되면 다시 재생하세요.")
         }
         if outputStatus.phase == .ready,[.timedOut,.cancelled].contains(outputStatus.request) {return "출력 준비 완료. Space로 다시 재생하세요."}
+        if outputStatus.phase == .idle,outputStatus.attempts>0,[.timedOut,.cancelled].contains(outputStatus.request) {return "이전 출력 정리가 끝났습니다. Space로 새 출력을 연결해 재생하세요."}
         return auditionDetail
     }
     func handlePlaybackError(_ error:Error) {
