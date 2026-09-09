@@ -1,5 +1,24 @@
 import Foundation
 
+public struct PlaybackOutputTraceEvent: Equatable, Codable, Sendable {
+    public enum Stage: String, Codable, Sendable, CaseIterable {
+        case cafWrite, helperHello, fileValidation, engineCreation, mixerAcquisition, routing, scheduling, engineStart, playerPlay
+    }
+    public enum Phase: String, Codable, Sendable { case entered, completed }
+    public let stage: Stage
+    public let phase: Phase
+    /// Host monotonic elapsed time since this play attempt began.
+    public let elapsedSeconds: Double
+    /// Helper monotonic elapsed time, used for precise entered/completed durations.
+    public let workerElapsedSeconds: Double?
+}
+public struct PlaybackOutputTrace: Equatable, Codable, Sendable {
+    public static let maximumEvents = 18
+    public let sessionID: UUID
+    public var events: [PlaybackOutputTraceEvent] = []
+    public var helperReportsStages = false
+}
+
 public struct PlaybackOutputStatus:Equatable,Codable,Sendable {
     public enum Phase:String,Codable,Sendable {case idle,connecting,ready}
     public enum Step:String,Codable,Sendable {case player,device,routing,ready}
@@ -11,6 +30,8 @@ public struct PlaybackOutputStatus:Equatable,Codable,Sendable {
     public var transport=PlaybackTransportStatus()
     public var attempts=0
     public var elapsedSeconds=0
+    /// Optional for compatibility with older saved status packets. Retained after cleanup.
+    public var trace:PlaybackOutputTrace?
     public init() {}
 }
 

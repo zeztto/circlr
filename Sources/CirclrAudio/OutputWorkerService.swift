@@ -31,6 +31,7 @@ private final class Worker: @unchecked Sendable {
     private var used = false
     private var timer: Timer?
     private var lastSeconds = 0.0
+    private let traceOrigin = ProcessInfo.processInfo.systemUptime
 
     init(session: UUID, directory: URL) throws {
         self.session = session
@@ -94,6 +95,7 @@ private final class Worker: @unchecked Sendable {
             switch payload {
             case .prepare(let frames):
                 guard file == nil, !used else { throw WorkerError.invalidState }
+                trace(.fileValidation, .entered)
                 let url = directory.appendingPathComponent("audio.caf")
                 try Self.validateOwned(url, directory: false)
                 let input = try AVAudioFile(forReading: url, commonFormat: .pcmFormatFloat32, interleaved: false)
@@ -113,19 +115,27 @@ private final class Worker: @unchecked Sendable {
                 }
                 input.framePosition = 0
                 file = input
+                trace(.fileValidation, .completed)
                 emit(.prepared)
             case .play(let run):
                 guard let file, active == nil, !used else { throw WorkerError.invalidState }
                 used = true
                 active = run
                 try checkCancellation()
+                trace(.engineCreation, .entered)
                 let engine = AVAudioEngine(), player = AVAudioPlayerNode()
                 self.engine = engine; self.player = player
                 engine.attach(player)
+                trace(.engineCreation, .completed)
+                trace(.mixerAcquisition, .entered)
                 let mixer = engine.mainMixerNode
+                trace(.mixerAcquisition, .completed)
                 try checkCancellation()
+                trace(.routing, .entered)
                 engine.connect(player, to: mixer, format: file.processingFormat)
+                trace(.routing, .completed)
                 try checkCancellation()
+                trace(.scheduling, .entered)
                 player.volume = 0
                 player.scheduleFile(file, at: nil, completionCallbackType: .dataPlayedBack) { [weak self] _ in
                     DispatchQueue.main.async {
@@ -134,12 +144,17 @@ private final class Worker: @unchecked Sendable {
                         self.emit(.finished(run: run))
                     }
                 }
+                trace(.scheduling, .completed)
+                trace(.engineStart, .entered)
                 try engine.start()
+                trace(.engineStart, .completed)
                 try checkCancellation()
+                trace(.playerPlay, .entered)
                 player.play()
                 try checkCancellation()
                 player.volume = 1
                 try checkCancellation()
+                trace(.playerPlay, .completed)
                 emit(.started(run: run))
                 timer = Timer.scheduledTimer(withTimeInterval: 0.02, repeats: true) { [weak self] _ in self?.tick(run) }
             case .stop(let run):
@@ -162,6 +177,9 @@ private final class Worker: @unchecked Sendable {
 
     private func checkCancellation() throws {
         if control.isCancelled { throw CancellationError() }
+    }
+    private func trace(_ stage: PlaybackOutputTraceEvent.Stage, _ phase: PlaybackOutputTraceEvent.Phase) {
+        emit(.trace(stage: stage, phase: phase, elapsedSeconds: max(0, ProcessInfo.processInfo.systemUptime - traceOrigin)))
     }
 
     private func tick(_ run: UUID) {

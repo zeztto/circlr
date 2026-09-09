@@ -1,6 +1,12 @@
 # 써클러 개발 방향과 실행 계획
 
-갱신: 2026-09-10. 계획 시작 기준: 0.11 native 앱, 0.12 음악 에이전트 키트 소스. 사용 앱은 0.19.0, 개발 검증 후보는 0.20.0 build 87이다. 목표는 송폼 중심의 전문 음악 제작을 먼저 완성하고, 이를 아티스트의 작품·세계관 관리로 확장하는 것이다.
+갱신: 2026-09-10. 계획 시작 기준: 0.11 native 앱, 0.12 음악 에이전트 키트 소스. 기존 출고 표기는 0.19.0이며 실행 중 사용자 앱의 별도 관측 버전은0.14다. 개발 검증 후보는 0.20.0 build 88이다. 목표는 송폼 중심의 전문 음악 제작을 먼저 완성하고, 이를 아티스트의 작품·세계관 관리로 확장하는 것이다.
+
+## 현재 상태 — build88 섹션 삽입 완료·출력 지연 진단
+
+선택 섹션 뒤 연결을 유지하는 원자적 삽입과 출력 준비 trace를 추가했다. Audio26개·Core7개·MCP23개·kit9개·file worker16개·Release52.87초와 실제 MIDI 편집 중 명령 삽입·Undo/Redo를 확인했다. 섹션 QA22개 상태·자산2개 보존 대조도 통과했다. [섹션 QA](../qa/section-insertion-review.md). [계약](102-section-insertion-and-output-preparation.md).
+
+raw Release 무음 helper2회는 started0.533/0.122초·자연 finished·command EOF 후 exit0으로 끝났다. 패키지 worker는 앱 host의 무음 fixture와 독립 CLI 실행 모두 각각 두 번 mixerAcquisition 진입에서 timeout했다. raw Release와 패키지 binary의 UUID·기계코드 섹션은 같고 codesign·.app 위치가 다르지만 원인은 아직 확정되지 않았다. 실제 믹서 준비6초·Space 안내와 세 번째 시작의 즉시 취소·정리를 확인했지만 host 정상 출력은 여전히 실패한다. [관측](../qa/output-preparation-native-review.md). 원본을 보존한 추가 matrix에서 패키지 byte 동일 외부 사본·재서명 raw 외부 사본이 각2회 mixerAcquisition에서 timeout하고 EOF exit0으로 정리됐다. .app 위치만으로는 설명되지 않으며 서명 가설은 강화되지만 동시간 raw control이 없어 인과는 미확정이다. 다음은 worker 재서명을 생략한 QA 사본의 outer codesign strict 검사와 실제 출력 대조 계획이다. 독립 성공을 host 복구로 일반화하지 않으며 timeout/retry/device 정책·물리 I/O 출고 조건·사용자 앱을 유지한다.
 
 ## 현재 검증 완료 — build87 렌더 tail 정책
 
@@ -40,7 +46,7 @@ build81에서 종류별 색상과 사용자 지정·복원을 구현하고 검�
 
 이펙트→오토메이션→바운스 산출물을 해시·PCM으로 재검증하고, build81에서 저장 프로젝트 전체 복원을 확인했다. 궤도 화면에서도 음악 데이터가 유지된다. [통합 근거와 검증 경계](../qa/automation-flow-review.md). 다음은 실제 장치 출력 재점검과 같은 곡의 편곡 대안이다.
 
-## 현행 실행 순서 — build87 기준
+## 현행 실행 순서 — build88 기준
 
 build80에서 바운스 대상명과 연결 사전 검사를 통합하고 실제 UI 바운스·복원·MCP 즉시 거절을 확인했다. [QA](../qa/bounce-target-review.md). 이후 같은 곡에서 이펙트와 오토메이션을 적용한 바운스·저장/재열기는 위 통합 흐름 QA에서 확인했다. 개별 기능 검증을 한 곡 제작 완료로 계산하지 않는다.
 

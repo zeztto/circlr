@@ -86,4 +86,29 @@ final class OutputWorkerProtocolTests: XCTestCase {
         var stream = OutputWorkerWire(session: session)
         XCTAssertThrowsError(try stream.receive(changed)) { XCTAssertEqual($0 as? OutputWorkerWireError, .invalidPacket) }
     }
+    func testTraceOrderTimingBoundsAndEventLimit() throws {
+        let id = UUID()
+        func packet(_ n: Int, _ stage: PlaybackOutputTraceEvent.Stage, _ phase: PlaybackOutputTraceEvent.Phase, _ time: Double) throws -> Data {
+            try OutputWorkerWire.encode(.init(session: id, sequence: UInt64(n), payload: .trace(stage: stage, phase: phase, elapsedSeconds: time)))
+        }
+        var wire = OutputWorkerWire(session: id)
+        for (index, stage) in OutputWorkerWire.traceStages.enumerated() {
+            let bytes = try packet(index * 2 + 1, stage, .entered, Double(index)) + packet(index * 2 + 2, stage, .completed, Double(index) + 0.1)
+            XCTAssertTrue(try wire.receive(bytes.prefix(7)).isEmpty)
+            XCTAssertEqual(try wire.receive(bytes.dropFirst(7)).count, 2)
+        }
+        XCTAssertThrowsError(try wire.receive(packet(15, .playerPlay, .completed, 8)))
+        for (stage, phase, time) in [(PlaybackOutputTraceEvent.Stage.fileValidation, PlaybackOutputTraceEvent.Phase.entered, 1.0), (.fileValidation, .completed, 0.5), (.engineCreation, .entered, 2)] {
+            var invalid = OutputWorkerWire(session: id)
+            _ = try invalid.receive(packet(1, .fileValidation, .entered, 1))
+            XCTAssertThrowsError(try invalid.receive(packet(2, stage, phase, time)))
+        }
+        for time in [-1.0, Double.nan, Double.infinity, 14401] {
+            XCTAssertThrowsError(try packet(1, .fileValidation, .entered, time))
+        }
+        XCTAssertThrowsError(try packet(1, .cafWrite, .entered, 0))
+        var commands = OutputWorkerWire(session: id, receiving: .commands)
+        XCTAssertThrowsError(try commands.receive(packet(1, .fileValidation, .entered, 0)))
+    }
+
 }

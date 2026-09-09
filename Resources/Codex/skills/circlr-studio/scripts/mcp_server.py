@@ -81,8 +81,10 @@ OPERATION["oneOf"] = [
     {"type": "object", "properties": {"kind": {"enum": ["select_arrangement"]}},
      "required": ["compositionID", "arrangementID"]},
 ]
-OPERATION["properties"]["kind"]["enum"].extend(ARRANGEMENT_OPERATIONS + ["select_arrangement"])
-OPERATION["description"] = "duplicate_arrangement and rename_arrangement require explicit compositionID, arrangementID and name (1–120 characters after trimming whitespace). Duplicate shares section sources and assets, preserving every owner's playback choice and the editing canvas. Rename changes only the arrangement name. select_arrangement requires compositionID and arrangementID (no name needed); it deliberately changes the owner's playback choice and visible editing branch."
+OPERATION["properties"]["at"] = schema({"x": {"type": "number", "exclusiveMinimum": -10000000, "exclusiveMaximum": 10000000}, "y": {"type": "number", "exclusiveMinimum": -10000000, "exclusiveMaximum": 10000000}}, ["x", "y"])
+OPERATION["oneOf"].append({"type": "object", "properties": {"kind": {"enum": ["insert_section"]}}, "required": ["arrangementID", "useID", "name", "bars", "at"]})
+OPERATION["properties"]["kind"]["enum"].extend(ARRANGEMENT_OPERATIONS + ["select_arrangement", "insert_section"])
+OPERATION["description"] = "insert_section requires arrangementID, useID (insert after), name (1–120 trimmed characters), bars (1–4096), and at {x,y}; it atomically inserts a new section into a linear path, preserving editing selection. Branches, loops and non-default transitions fail without changes. duplicate_arrangement and rename_arrangement require explicit compositionID, arrangementID and name (1–120 characters after trimming whitespace). Duplicate shares section sources and assets, preserving every owner's playback choice and the editing canvas. Rename changes only the arrangement name. select_arrangement requires compositionID and arrangementID (no name needed); it deliberately changes the owner's playback choice and visible editing branch."
 
 
 def tool(name, method, description, properties=None, required=(), write=False):
@@ -169,7 +171,7 @@ def validate(value, spec, path="arguments"):
         if not spec.get("minLength", 0) <= len(value) <= spec.get("maxLength", MAX_MESSAGE):
             raise ValueError(f"{path}: string length out of range")
     elif kind in {"number", "integer"}:
-        if (isinstance(value, float) and not math.isfinite(value)) or value < spec.get("minimum", float("-inf")) or value > spec.get("maximum", float("inf")) or value <= spec.get("exclusiveMinimum", float("-inf")):
+        if (isinstance(value, float) and not math.isfinite(value)) or value < spec.get("minimum", float("-inf")) or value > spec.get("maximum", float("inf")) or value <= spec.get("exclusiveMinimum", float("-inf")) or value >= spec.get("exclusiveMaximum", float("inf")):
             raise ValueError(f"{path}: number out of range")
 
 

@@ -1,5 +1,12 @@
 # 변경 이력
 
+## 개발 중 — 0.20.0 build88 섹션 삽입·출력 준비 기록
+
+- 선택 섹션 뒤 원자적 삽입·끝 표시 이전·독립 추가 유지. 분기/합류/loop/비기본 transition 거절. MCP는 `circlr_apply`의 `insert_section` 작업 사용.
+- bounded typed 출력 준비 trace와 현재 단계 표시 추가. timeout/retry/device 정책 유지.
+- Audio26개·Core7개·MCP23개·kit9개·file worker16개·Release52.87초 통과. 실제 MIDI 편집 중 명령 삽입·Undo/Redo 확인. 섹션 QA22개 상태·자산2개 보존 대조 통과. [섹션 QA](qa/section-insertion-review.md). [계약](docs/102-section-insertion-and-output-preparation.md).
+- raw Release 무음 helper2회 started0.533/0.122초·자연 finished·command EOF 뒤 exit0 확인. 패키지 worker는 앱 host와 독립 CLI 실행 모두 각각 두 번 믹서 준비 단계에서 timeout. 실제6초 표시·Space 안내, 세 번째 시작의 즉시 취소·idle/didStart=false 확인. 추가 matrix의 패키지 byte 동일 외부 사본·재서명 raw 외부 사본도 각2회 timeout·EOF exit0. .app 위치만으로 설명되지 않으며 동시간 raw control이 없어 서명 인과는 미확정. 정상 앱 출력·청취 품질은 미해결. [관측](qa/output-preparation-native-review.md). 사용자 앱 변경 없음.
+
 ## 개발 중 — 0.20.0 build87 렌더 잔향 길이
 
 - 공통 `RenderTailPlanner`로 자동 감쇠 추정·직접0–120초·상한/AU 미확정 안내·메모리 사전 거절. 보존 클립 실제 끝을 반영하며 section 시각 유지.

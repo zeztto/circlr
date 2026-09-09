@@ -14,7 +14,7 @@ import uuid
 import wave
 
 ROOT = Path(__file__).resolve().parents[1]
-BINARY = ROOT / '.build/output-protocol-tests/debug/circlr-output-worker'
+BINARY = Path(os.environ.get('CIRCLR_OUTPUT_WORKER', str(ROOT / '.build/output-protocol-tests/debug/circlr-output-worker')))
 
 class Child:
     def __init__(self, directory):
@@ -22,6 +22,7 @@ class Child:
         self.sequence = 0
         self.event_sequence = 0
         self.pending = b''
+        self.trace_events = []
         self.process = subprocess.Popen([str(BINARY), '--session', self.session, '--directory', str(directory)],
                                         stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, bufsize=0)
     def event(self):
@@ -40,6 +41,20 @@ class Child:
         self.event_sequence += 1
         assert packet['sequence'] == self.event_sequence
         return packet['payload']
+    def control_event(self):
+        # The file-only suite must never reach engine creation. Validate every
+        # trace packet rather than silently skipping arbitrary diagnostic output.
+        while True:
+            payload = self.event()
+            if 'trace' not in payload: return payload
+            event = payload['trace']
+            expected = [('fileValidation', 'entered'), ('fileValidation', 'completed')]
+            assert len(self.trace_events) < len(expected)
+            assert (event['stage'], event['phase']) == expected[len(self.trace_events)]
+            elapsed = event['elapsedSeconds']
+            assert isinstance(elapsed, (int, float)) and math.isfinite(elapsed) and 0 <= elapsed <= 14400
+            if self.trace_events: assert elapsed >= self.trace_events[-1]['elapsedSeconds']
+            self.trace_events.append(event)
     def send(self, payload):
         self.sequence += 1
         packet = dict(version=1, session=self.session, sequence=self.sequence, payload=payload)
@@ -71,13 +86,14 @@ class OutputWorkerProcessTests(unittest.TestCase):
         self.assertEqual(self.child.event(), {'hello': {}})
         return self.child
     def failure(self, child):
-        self.assertIn('failure', child.event())
+        self.assertIn('failure', child.control_event())
         self.assertNotEqual(child.process.wait(timeout=3), 0)
     def testPrepareStopAndParentEOF(self):
         self.audio(); c = self.start()
-        c.send({'prepare': {'frames': 32}}); self.assertEqual(c.event(), {'prepared': {}})
+        c.send({'prepare': {'frames': 32}}); self.assertEqual(c.control_event(), {'prepared': {}})
+        self.assertEqual(len(c.trace_events), 2)
         run = str(uuid.uuid4()).upper()
-        c.send({'stop': {'run': run}}); self.assertEqual(c.event(), {'stopped': {'run': run}})
+        c.send({'stop': {'run': run}}); self.assertEqual(c.control_event(), {'stopped': {'run': run}})
         c.process.stdin.close(); self.assertEqual(c.process.wait(timeout=3), 0)
     def testCoalescedStopCancelsBeforeDeviceCreation(self):
         self.audio(); c = self.start(); run = str(uuid.uuid4()).upper()
@@ -87,8 +103,9 @@ class OutputWorkerProcessTests(unittest.TestCase):
             c.sequence += 1
             packets.append(json.dumps(dict(version=1, session=c.session, sequence=c.sequence, payload=payload)).encode() + b'\n')
         c.process.stdin.write(b''.join(packets))
-        self.assertEqual(c.event(), {'prepared': {}})
-        self.assertEqual(c.event(), {'stopped': {'run': run}})
+        self.assertEqual(c.control_event(), {'prepared': {}})
+        self.assertEqual(len(c.trace_events), 2)
+        self.assertEqual(c.control_event(), {'stopped': {'run': run}})
         c.process.stdin.close(); self.assertEqual(c.process.wait(timeout=3), 0)
     def testEOFBeforePreparation(self):
         c = self.start(); c.process.stdin.close(); self.assertEqual(c.process.wait(timeout=3), 0)
@@ -115,7 +132,8 @@ class OutputWorkerProcessTests(unittest.TestCase):
         self.assertEqual(self.child.process.wait(timeout=3), 65)
     def testRepeatedPrepare(self):
         self.audio(); c = self.start(); c.send({'prepare': {'frames': 32}})
-        self.assertEqual(c.event(), {'prepared': {}})
+        self.assertEqual(c.control_event(), {'prepared': {}})
+        self.assertEqual(len(c.trace_events), 2)
         c.send({'prepare': {'frames': 32}}); self.failure(c)
     def testHardLinkedFile(self):
         p = self.audio(); os.link(p, self.directory/'second.wav')
@@ -124,7 +142,8 @@ class OutputWorkerProcessTests(unittest.TestCase):
         self.audio(channels=1); c = self.start(); c.send({'prepare': {'frames': 32}}); self.failure(c)
     def testFiniteFloatPCM(self):
         self.float_audio(0.125); c = self.start(); c.send({'prepare': {'frames': 32}})
-        self.assertEqual(c.event(), {'prepared': {}})
+        self.assertEqual(c.control_event(), {'prepared': {}})
+        self.assertEqual(len(c.trace_events), 2)
     def float_audio(self, value):
         samples = struct.pack('<ff', value, 0.0) * 32
         fmt = struct.pack('<HHIIHH', 3, 2, 48000, 48000*8, 8, 32)

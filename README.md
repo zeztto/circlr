@@ -6,7 +6,9 @@ macOS용 앨범·송폼 궤도 편집기. **앨범 → 곡·악장 → 섹션 �
 
 연결 UI는 [서클 둘레 8방향 IN/OUT과 다중 입출력](docs/22-eight-direction-ports.md)으로 확장 중이다. 포트의 신호 의미와 연결점 배치를 분리한다. 아래 일반 사용법은 배포된 0.19 앱 기준이며 새 포트 기능은 독립 개발 브랜치에서 검증한다.
 
-현재 **`codex/daw-integration`의 0.20.0 build 87**에 녹음 lifecycle과 8방향·다중 bus·그룹 포트를 통합했다. 같은 캔버스의 연결 편집·녹음 상태·스텝·오토메이션이 공존하며, 녹음 시작·정리 중 음악 편집과 Undo의 경쟁을 차단한다. build 23의 실제 편집·바운스·Undo·저장/재열기·닫기 최소화 및 출력별 모션 검증은 [통합 QA](qa/daw-integration-review.md)에 기록했다.
+현재 **`codex/daw-integration`의 0.20.0 build 88**에 녹음 lifecycle과 8방향·다중 bus·그룹 포트를 통합했다. 같은 캔버스의 연결 편집·녹음 상태·스텝·오토메이션이 공존하며, 녹음 시작·정리 중 음악 편집과 Undo의 경쟁을 차단한다. build 23의 실제 편집·바운스·Undo·저장/재열기·닫기 최소화 및 출력별 모션 검증은 [통합 QA](qa/daw-integration-review.md)에 기록했다.
+
+**build88은 선택 섹션 뒤에 연결을 유지하며 삽입하고 출력 준비 단계를 기록한다.** 기존 A→B를 A→새 섹션→B로 바꾸며 불명확한 연결은 거절한다. Audio26개·Core7개·MCP23개·kit9개·file worker16개·Release52.87초를 통과했고 실제 MIDI 편집 중 명령 삽입·Undo/Redo를 확인했다. 섹션 QA22개 상태·자산2개 보존 대조도 통과했다. raw Release helper2회는 성공했으나 패키지 worker는 앱 host와 독립 CLI 실행 모두 각각 두 번 mixerAcquisition에서 timeout했다. 패키지 byte 동일 외부 사본·재서명한 raw 외부 사본도 각2회 timeout했다. 실제 단계 표시·Space 취소·정리는 확인했으며 서명 관련 인과는 미확정이다. [계약](docs/102-section-insertion-and-output-preparation.md) · [섹션 QA](qa/section-insertion-review.md) · [출력 관측](qa/output-preparation-native-review.md).
 
 **build87은 바운스·export의 잔향 길이를 자동 추정하거나0–120초로 지정한다.** 상한·미확정 안내와 끝 구간 측정을 제공하고 긴 보존 클립의 끝을 유지한다. Audio30개·Core3개·MCP22개·kit9개·Release52.98초를 통과했다. 실제 자동74초/직접34초 렌더의 앞34초 PCM 일치와 바운스·export의 재열기 전후 바이트 일치, 입력 거절·취소를 확인했다. QA checker22개 문서 캡처와 RPC 오류·취소 기록 대조도 통과했다. 자동 추정은 무손실 보장이 아니며 실제 청취는 미검증이다. [계약](docs/101-render-tail-policy.md) · [QA](qa/render-tail-review.md).
 

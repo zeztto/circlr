@@ -13,6 +13,22 @@ SPEC.loader.exec_module(server)
 
 
 class MCPTests(unittest.TestCase):
+    def test_insert_section_requires_explicit_valid_target_and_point(self):
+        operation = {'kind': 'insert_section', 'arrangementID': 'arr', 'useID': 'after', 'name': '새 섹션', 'bars': 4, 'at': {'x': 500, 'y': 0}}
+        base = {'projectID': 'p', 'expectedRevision': 1, 'operations': [operation]}
+        with patch.object(server, 'rpc', return_value={'ok': True}) as ipc:
+            server.call_tool('/qa.sock', 'circlr_apply', base)
+            self.assertEqual(ipc.call_args.args[1]['arguments']['operations'], [operation])
+        invalids = [{k: v for k, v in operation.items() if k != required}
+                    for required in ('arrangementID', 'useID', 'name', 'bars', 'at')]
+        invalids += [{**operation, 'at': point} for point in ({'x': 0}, {'x': True, 'y': 0}, {'x': float('nan'), 'y': 0}, {'x': 10000000, 'y': 0}, {'x': 0, 'y': -10000000})]
+        invalids += [{**operation, 'bars': bars} for bars in (0, 4097, True)]
+        for invalid in invalids:
+            with self.subTest(invalid=invalid), patch.object(server, 'rpc') as ipc:
+                with self.assertRaises(ValueError):
+                    server.call_tool('/unused.sock', 'circlr_apply', {**base, 'operations': [operation, invalid]})
+                ipc.assert_not_called()
+
     def test_render_tail_is_optional_bounded_and_forwarded_without_ui_defaults(self):
         for method, scope in [('bounce', {'useID': 'use', 'trackID': 'track'}),
                               ('export', {'path': '/tmp/new-tail.wav'})]:

@@ -224,6 +224,9 @@ struct TransportControls:View {
                         .foregroundStyle(StudioTheme.text).help(store.outputDetail)
                         .accessibilityLabel(store.outputDetail)
                 }
+                if store.outputCanCancel {
+                    Text("Space로 취소").font(.system(size:10)).foregroundStyle(StudioTheme.secondary)
+                }
             }.frame(width:108,alignment:.leading)
             Button { store.playbackFollow = store.playbackFollow.toggled() } label: {
                 Label(store.playbackFollow == .suspended ? "팔로우 재개" : "재생 팔로우", systemImage: store.playbackFollow == .following ? "scope" : "location.slash")

@@ -47,6 +47,15 @@ extension AppStore {
                 add("bounce-current-track","현재 트랙 바운스"){[weak self] in self?.runCurrentTrackBounce(identity:identity)}
             }
         }
+        if let context=sectionInsertionContext(),!sectionInsertionLocked {
+            let assessment=sectionInsertionAssessment(context)
+            if let issue=assessment.issue {
+                commands.append(StudioCommand(id:"insert-section-connections",title:"삽입 전 연결 확인",detail:issue.message,
+                    run:{[weak self] in self?.recoverSectionInsertion(context)}))
+            }else{
+                add("insert-section-after","이 섹션 뒤에 삽입"){[weak self] in self?.insertSection(after:context)}
+            }
+        }
         if selectedUse != nil { add("router", "오디오 라우터 서클 만들기") { [weak self] in self?.addMusicRouter() } }
         add("movie","영상 녹화 시작 / 마치기…","⇧⌘R"){[weak self] in self?.toggleMovieRecording()}
         add("wav","앨범 WAV 내보내기…","⌘E"){[weak self] in self?.export()}
@@ -134,6 +143,20 @@ extension AlbumCanvasView {
                 action(self.store,owner==scope ? position:self.localCreationPoint(point,owner:owner))
             }
             (target ?? menu).addItem(item)
+        }
+        if let context=store.sectionInsertionContext(at:selected ?? hit(point)?.id ?? store.hierarchySelection) {
+            let assessment=store.sectionInsertionAssessment(context)
+            if let issue=assessment.issue {
+                let reason=NSMenuItem(title:issue.message,action:nil,keyEquivalent:"")
+                reason.isEnabled=false;menu.addItem(reason)
+            }
+            let item=NSMenuItem(title:assessment.issue==nil ? "이 섹션 뒤에 삽입":"삽입 전 연결 확인",action:#selector(runCircleMenu(_:)),keyEquivalent:"")
+            item.target=self;item.isEnabled = !store.sectionInsertionLocked
+            item.representedObject=CircleMenuAction{[weak self] in
+                guard let self else{return}
+                if assessment.issue==nil {self.store.insertSection(after:context)}else{self.store.recoverSectionInsertion(context)}
+            }
+            menu.addItem(item);menu.addItem(.separator())
         }
         switch scope {
         case .album:

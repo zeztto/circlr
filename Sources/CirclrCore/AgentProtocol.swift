@@ -44,6 +44,7 @@ public struct AgentArguments:Codable {
 }
 public struct AgentOperation:Codable {
     public var kind:String
+    public var at:Point?
     public var compositionID:ID?
     public var arrangementID:ID?
     public var useID:ID?
@@ -133,6 +134,11 @@ public enum AgentProjectEditing {
             case "set_track":
                 guard let id=op.trackID,let i=p.tracks.firstIndex(where:{$0.id==id}) else {throw CirclrError("trackID가 필요합니다")}
                 if let gain=op.gain{p.tracks[i].gain=gain};if let muted=op.muted{p.tracks[i].muted=muted};if let name=op.name{p.tracks[i].name=name}
+            case "insert_section":
+                guard let arrangementID=op.arrangementID,let useID=op.useID,let name=op.name,let bars=op.bars,let at=op.at else {
+                    throw CirclrError("insert_section에는 arrangementID, useID, name, bars, at이 필요합니다")
+                }
+                try SectionInsertion.insert(arrangementID:arrangementID,afterUseID:useID,name:name,bars:bars,at:at,in:&p)
             case "add_section":
                 guard let name=op.name,!name.isEmpty else {throw CirclrError("name이 필요합니다")}
                 _=p.addSection(name:name,at:Point(Double(p.active.uses.count)*1000,0),bars:op.bars ?? 8);p=try SectionGraphMigration.migrate(p)

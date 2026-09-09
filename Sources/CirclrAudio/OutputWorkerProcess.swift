@@ -20,9 +20,19 @@ final class OutputWorkerProcess: @unchecked Sendable {
     private var sequence: UInt64 = 0
     private var stage = Stage.boot
     private var frames = 0
+    private var helperTraceEvents = 0
+    private var terminationObserved = false
+    private var eventsDrained = false
+    // Internal scheduling hooks allow deterministic pipe/termination race tests.
+    private let beforeEventDelivery: (@Sendable ([OutputWorkerPacket]) -> Void)?
+    private let onTerminationObserved: (@Sendable () -> Void)?
 
-    init(executable: URL? = Bundle.main.executableURL?.deletingLastPathComponent().appendingPathComponent("circlr-output-worker")) {
+    init(executable: URL? = Bundle.main.executableURL?.deletingLastPathComponent().appendingPathComponent("circlr-output-worker"),
+         beforeEventDelivery: (@Sendable ([OutputWorkerPacket]) -> Void)? = nil,
+         onTerminationObserved: (@Sendable () -> Void)? = nil) {
         self.executable = executable
+        self.beforeEventDelivery = beforeEventDelivery
+        self.onTerminationObserved = onTerminationObserved
     }
     var status: PlaybackOutputStatus {
         lock.lock(); defer { lock.unlock() }
@@ -32,6 +42,16 @@ final class OutputWorkerProcess: @unchecked Sendable {
     }
     private func update(_ body: (inout PlaybackOutputStatus) -> Void) {
         lock.lock(); body(&value); lock.unlock()
+    }
+    private func trace(_ id: UUID, _ stage: PlaybackOutputTraceEvent.Stage, _ phase: PlaybackOutputTraceEvent.Phase,
+                       workerElapsed: Double? = nil) {
+        lock.lock(); defer { lock.unlock() }
+        guard value.transport.id == id, value.transport.phase == .starting,
+              let startedAt, value.trace?.sessionID == id,
+              let count = value.trace?.events.count, count < PlaybackOutputTrace.maximumEvents else { return }
+        let elapsed = max(0, ProcessInfo.processInfo.systemUptime - startedAt)
+        value.trace?.events.append(.init(stage: stage, phase: phase, elapsedSeconds: elapsed, workerElapsedSeconds: workerElapsed))
+        if workerElapsed != nil { value.trace?.helperReportsStages = true }
     }
 
     func play(_ pcm: PCM, from: Double, timeout: Double) async throws {
@@ -71,6 +91,7 @@ final class OutputWorkerProcess: @unchecked Sendable {
         value = PlaybackOutputStatus(); value.attempts = attempts
         value.attemptID = id; value.phase = .connecting; value.step = .player; value.request = .waiting
         value.transport.id = id; value.transport.phase = .starting
+        value.trace = PlaybackOutputTrace(sessionID: id)
         startedAt = ProcessInfo.processInfo.systemUptime
     }
     func cancel(expectedID: UUID? = nil, timedOut: Bool = false) {
@@ -87,7 +108,8 @@ final class OutputWorkerProcess: @unchecked Sendable {
     }
 
     private func launch(_ id: UUID, control: MediaPreviewCancellation, pcm: PCM, first: Int) {
-        session = id; sequence = 0; stage = .boot; frames = pcm.count - first
+        session = id; sequence = 0; stage = .boot; frames = pcm.count - first; helperTraceEvents = 0
+        terminationObserved = false; eventsDrained = false
         do {
             guard !control.isCancelled else { throw CancellationError() }
             guard let executable, FileManager.default.isExecutableFile(atPath: executable.path) else {
@@ -96,7 +118,9 @@ final class OutputWorkerProcess: @unchecked Sendable {
             let root = FileManager.default.temporaryDirectory.appendingPathComponent("circlr-output-" + id.uuidString, isDirectory: true)
             try FileManager.default.createDirectory(at: root, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700])
             directory = root
+            trace(id, .cafWrite, .entered)
             try write(pcm, first: first, to: root.appendingPathComponent("audio.caf"), control: control)
+            trace(id, .cafWrite, .completed)
             guard !control.isCancelled else { throw CancellationError() }
             let process = Process(), incoming = Pipe(), outgoing = Pipe(), diagnostic = Pipe()
             process.executableURL = executable
@@ -109,6 +133,7 @@ final class OutputWorkerProcess: @unchecked Sendable {
             process.terminationHandler = { [weak self] process in
                 self?.queue.async { self?.exited(id, process: process) }
             }
+            trace(id, .helperHello, .entered)
             do { try process.run() }
             catch {
                 try? incoming.fileHandleForReading.close(); try? outgoing.fileHandleForWriting.close(); try? diagnostic.fileHandleForWriting.close()
@@ -152,7 +177,10 @@ final class OutputWorkerProcess: @unchecked Sendable {
     private func read(_ handle: FileHandle, session id: UUID, decode: Bool) {
         let slots = DispatchSemaphore(value: 8)
         DispatchQueue(label: decode ? "circlr.output-events" : "circlr.output-stderr").async {
-            defer { try? handle.close() }
+            defer {
+                try? handle.close()
+                if decode { self.queue.async { self.didDrainEvents(id) } }
+            }
             var buffer = [UInt8](repeating: 0, count: 4096), wire = OutputWorkerWire(session: id)
             do {
                 while true {
@@ -162,6 +190,7 @@ final class OutputWorkerProcess: @unchecked Sendable {
                     // Drain diagnostics without retaining arbitrary child output.
                     guard decode else { continue }
                     let packets = try wire.receive(Data(buffer.prefix(count)))
+                    self.beforeEventDelivery?(packets)
                     guard slots.wait(timeout: .now() + 2) == .success else { throw OutputWorkerWireError.oversizedChunk }
                     self.queue.async {
                         defer { slots.signal() }
@@ -192,12 +221,15 @@ final class OutputWorkerProcess: @unchecked Sendable {
         do {
             switch payload {
             case .hello where stage == .boot:
+                trace(id, .helperHello, .completed)
                 stage = .preparing; update { $0.step = .routing }
                 try send(.prepare(frames: frames))
             case .prepared where stage == .preparing:
+                guard helperTraceEvents == 0 || helperTraceEvents == 2 else { throw OutputWorkerWireError.invalidPacket }
                 stage = .starting; update { $0.step = .device }
                 try send(.play(run: id))
             case .started(let run) where run == id && stage == .starting:
+                guard helperTraceEvents == 0 || helperTraceEvents == OutputWorkerWire.traceStages.count * 2 else { throw OutputWorkerWireError.invalidPacket }
                 stage = .playing
                 update {
                     guard $0.transport.phase == .starting else { return }
@@ -210,6 +242,12 @@ final class OutputWorkerProcess: @unchecked Sendable {
                 update { $0.transport.phase = .stopping; $0.transport.seconds = 0 }
                 close(id, graceful: false)
             case .failure(let run, let message) where run == nil || run == id: fail(id, message: message)
+            case .trace(let step, let phase, let elapsed):
+                guard (step == .fileValidation && stage == .preparing) || (step != .fileValidation && stage == .starting) else {
+                    throw OutputWorkerWireError.invalidPacket
+                }
+                helperTraceEvents += 1
+                trace(id, step, phase, workerElapsed: elapsed)
             default: throw OutputWorkerWireError.invalidPacket
             }
         } catch { fail(id, message: "출력 응답 처리에 실패했습니다. 다시 재생하세요.") }
@@ -239,6 +277,24 @@ final class OutputWorkerProcess: @unchecked Sendable {
     }
     private func exited(_ id: UUID, process: Process) {
         guard session == id, child === process else { return }
+        terminationObserved = true
+        onTerminationObserved?()
+        if eventsDrained { finalizeAfterDrain(id); return }
+        // A descendant could keep stdout open after the helper exits. Do not
+        // retain this session indefinitely, but normally consume all queued EOF
+        // diagnostics before clearing its identity and status.
+        queue.asyncAfter(deadline: .now() + 2) {
+            guard self.session == id, self.terminationObserved else { return }
+            self.finalizeAfterDrain(id)
+        }
+    }
+    private func didDrainEvents(_ id: UUID) {
+        guard session == id else { return }
+        eventsDrained = true
+        if terminationObserved { finalizeAfterDrain(id) }
+    }
+    private func finalizeAfterDrain(_ id: UUID) {
+        guard session == id else { return }
         if stage != .closing { update { $0.transport.message = "출력 프로세스가 종료됐습니다. 다시 재생하세요." } }
         finalize(id)
     }

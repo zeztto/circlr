@@ -19,6 +19,7 @@ struct OutputWorkerPacket: Codable, Equatable {
         case stopped(run: UUID)
         case finished(run: UUID)
         case failure(run: UUID?, message: String)
+        case trace(stage: PlaybackOutputTraceEvent.Stage, phase: PlaybackOutputTraceEvent.Phase, elapsedSeconds: Double)
     }
 
     init(session: UUID, sequence: UInt64, payload: Payload) {
@@ -38,6 +39,9 @@ struct OutputWorkerPacket: Codable, Equatable {
                   seconds <= Double(OutputWorkerWire.maximumFrames) / 48_000 else { throw OutputWorkerWireError.invalidPacket }
         case .failure(_, let message):
             guard !message.isEmpty, message.utf8.count <= 1024 else { throw OutputWorkerWireError.invalidPacket }
+        case .trace(let stage, _, let elapsed):
+            guard OutputWorkerWire.traceStages.contains(stage), elapsed.isFinite, elapsed >= 0,
+                  elapsed <= Double(OutputWorkerWire.maximumFrames) / 48_000 else { throw OutputWorkerWireError.invalidPacket }
         default: break
         }
     }
@@ -54,11 +58,14 @@ struct OutputWorkerWire {
     static let maximumChunkBytes = 64 * 1024
     static let maximumFrameBytes = 16 * 1024
     static let maximumFrames = 48_000 * 60 * 60 * 4
+    static let traceStages: [PlaybackOutputTraceEvent.Stage] = [.fileValidation, .engineCreation, .mixerAcquisition, .routing, .scheduling, .engineStart, .playerPlay]
     private let session: UUID
     private let direction: Direction
     private var lastSequence: UInt64 = 0
     private var pending = Data()
     private var closed = false
+    private var traceIndex = 0
+    private var traceElapsed = 0.0
 
     init(session: UUID, receiving direction: Direction = .events) {
         self.session = session
@@ -105,6 +112,13 @@ struct OutputWorkerWire {
                 default: command = false
                 }
                 guard command == (direction == .commands) else { throw OutputWorkerWireError.wrongDirection }
+                if case .trace(let stage, let phase, let elapsed) = packet.payload {
+                    guard traceIndex < Self.traceStages.count * 2, stage == Self.traceStages[traceIndex / 2],
+                          phase == (traceIndex % 2 == 0 ? .entered : .completed), elapsed >= traceElapsed else {
+                        throw OutputWorkerWireError.invalidPacket
+                    }
+                    traceIndex += 1; traceElapsed = elapsed
+                }
                 lastSequence = packet.sequence
                 result.append(packet)
                 pending.removeAll(keepingCapacity: true)
