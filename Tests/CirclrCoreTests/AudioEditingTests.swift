@@ -13,6 +13,33 @@ final class AudioEditingTests:XCTestCase {
         let u=p.active.uses[0],s=p.sections[0]
         return (try XCTUnwrap(SectionGraphEditing.effective(section:s,use:u)),try ArrangementCompiler.effectiveLanes(section:s,use:u)[0].audio)
     }
+    func testDuplicatePreflightMatchesMutationAndTempo()throws {
+        var p=try fixture();let use=p.active.uses[0]
+        let (section,context,clock)=try ArrangementCompiler.context(project:p,use:use)
+        let node=try XCTUnwrap(section.graph?.nodes.first{if case .audio=$0.content{return true};return false})
+        var clip=section.lanes[0].audio[0]
+        let timing=AudioClipTiming(node:node,context:context,clock:clock)
+        let start=try timing.duplicateBeat(clip)
+        _=try AudioEditing.apply(.duplicate(beatOffset:nil),nodeID:node.id,useID:use.id,in:&p)
+        XCTAssertEqual(try audio(p).1.last?.beat,start)
+        clip.followsTempo=true;clip.sourceBPM=context.tempo/2
+        XCTAssertEqual(try timing.duplicateBeat(clip),clip.beat+clip.duration*context.tempo/120,accuracy:1e-8)
+        XCTAssertThrowsError(try timing.duplicateBeat(clip,offset:.nan))
+        XCTAssertThrowsError(try timing.duplicateBeat(clip,offset:1000))
+        XCTAssertEqual(try timing.duplicateBeat(clip,offset:-clip.beat),0)
+    }
+    func testDuplicatePreflightRepeatsAndExplicitLength()throws {
+        let p=try fixture(),use=p.active.uses[0]
+        let (section,context,clock)=try ArrangementCompiler.context(project:p,use:use)
+        var node=try XCTUnwrap(section.graph?.nodes.first{if case .audio=$0.content{return true};return false})
+        let clip=section.lanes[0].audio[0]
+        node.repeatCount=2
+        XCTAssertEqual(try AudioClipTiming(node:node,context:context,clock:clock).duplicateBeat(clip),9,accuracy:1e-8)
+        node.lengthBeats=3
+        XCTAssertEqual(try AudioClipTiming(node:node,context:context,clock:clock).duplicateBeat(clip),7,accuracy:1e-8)
+        node.repeatCount=8
+        XCTAssertThrowsError(try AudioClipTiming(node:node,context:context,clock:clock).duplicateBeat(clip))
+    }
     func testSplitPreservesSourceFadeRoutingAndSharedUse()throws {
         var p=try fixture();let use=p.active.uses[0].id
         _=try ProjectEditing.reuse(use,in:&p,at:Point(100,0))

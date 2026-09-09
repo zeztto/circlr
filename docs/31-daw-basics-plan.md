@@ -16,6 +16,8 @@ build 60: 에이전트 한도 해제 요청 후 read-only 조사 dispatch를 재
 
 ## 상태와 남은 완료 조건
 
+build74: 파형 Tab/Shift+Tab·수치 입력 버튼, Core 공유 복제 공간 사전 안내. Swift498개·Python29개·native7상태 [QA](../qa/audio-keyboard-review.md). 도움말/명령 검색 동선은 후속이다.
+
 build 73: 좌우 오디오 폼을 두 줄 수치 입력으로 통합하고 전체 폭 파형/상단 분할을 제공한다. 관련14개 테스트·native11상태 [QA](../qa/audio-layout-review.md). 파형에서 수치 입력 진입과 복제 사전 안내는 후속이다.
 
 build 72: 피아노 롤 선택 보기/F, 작은 창의 눈금 가림과 넓은 선택 기준 노트 복귀를 구현했다. Swift496개·Python29개·native9상태 [QA](../qa/selection-reveal-review.md). 오디오 정밀 UI와 물리 입출력 출고 조건은 남아 있다.

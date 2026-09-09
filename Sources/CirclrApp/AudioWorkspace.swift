@@ -8,7 +8,15 @@ extension AppStore {
     var audioCommandAvailable:Bool {currentAudioClip != nil && !automationVisible && !(NSApp.keyWindow?.firstResponder is NSTextView) && !libraryOpen && !navigationOpen && commandPalette==nil && !keyboardHelp && !hierarchySettingsOpen}
     var audioCutOffset:Double {guard let clip=currentAudioClip else{return 0};return min(clip.duration,max(0,audioSplitOffset ?? clip.duration/2))}
     func splitAudio(){applyAudioEdit(.split(sourceOffset:audioCutOffset),label:"오디오 분할")}
-    func duplicateAudio(){applyAudioEdit(.duplicate(beatOffset:nil),label:"오디오 복제")}
+    var audioDuplicateIssue:String? {
+        guard let clip=currentAudioClip,let node=selectedMusic,let clock=sectionClock else{return "편집할 오디오 서클을 선택하세요"}
+        do {_ = try AudioClipTiming(node:node,context:currentContext,clock:clock).duplicateBeat(clip);return nil}
+        catch {return error.localizedDescription}
+    }
+    func duplicateAudio(){
+        if let issue=audioDuplicateIssue {status=issue;return}
+        applyAudioEdit(.duplicate(beatOffset:nil),label:"오디오 복제")
+    }
     func applyAudioEdit(_ change:AudioEditing.Change,label:String) {
         guard let use=selectedUse,let node=selectedMusic,currentAudioClip != nil else{return}
         let original=editOriginal,revision=project.musicRevision
@@ -80,7 +88,7 @@ struct AudioWorkspaceView:View {
                 Button("분할"){act{store.splitAudio()}}
                     .disabled(store.audioCutOffset<=0 || store.audioCutOffset>=liveClip.duration)
                     .help("선택 시작 기준 커서에서 두 서클로 분할 · ⌘T")
-                Button("복제"){act{store.duplicateAudio()}}.help("구간 뒤로 복제 · ⌘D")
+                Button(store.audioDuplicateIssue==nil ? "복제":"복제 · 공간 없음"){act{store.duplicateAudio()}}.disabled(store.audioDuplicateIssue != nil).help(store.audioDuplicateIssue ?? "구간 뒤로 복제 · ⌘D")
                 Button("트랙 바운스"){store.bounceTrack()}.disabled(store.preparing || store.selectedTrack == nil)
                 if store.selectedMusic?.bounce != nil {Button("원본 복원"){act{store.restoreBounce()}}}
                 Toggle("템포 추종",isOn:Binding(get:{liveClip.followsTempo},set:{value in store.editAudioClip(liveClip){$0.followsTempo=value}}))
@@ -90,6 +98,8 @@ struct AudioWorkspaceView:View {
             OrbitAudioEditor(store:store,clip:liveClip,asset:asset,viewport:$viewport,focusTarget:focusTarget)
                 .frame(maxWidth:.infinity,maxHeight:.infinity)
             HStack(spacing:10) {
+                Button("수치 입력"){_ = fieldFocus.enter(in:focusTarget.view?.window)}
+                    .help("파형에서 Tab 첫 수치 · ⇧Tab 마지막 수치 · Return/Esc 파형 복귀")
                 Button("전체 파일"){viewport.showAll();focusTarget.focus()}.disabled(viewport.fitted==nil)
                     .help("전체 원본 시간 표시 · 파형에서 0")
                 Button("선택 구간"){viewport.fit(liveClip,assetDuration:asset.duration);focusTarget.focus()}

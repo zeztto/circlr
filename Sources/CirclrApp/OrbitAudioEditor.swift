@@ -9,6 +9,7 @@ struct OrbitAudioEditor:NSViewRepresentable {
     @Binding var viewport:AudioSourceViewport
     let focusTarget:AudioEditorFocus
     @Environment(\.isEnabled) private var enabled
+    @Environment(\.numberEditing) private var numberEditing
     func makeNSView(context:Context)->OrbitAudioView {
         let view=OrbitAudioView(store:store,clip:clip,asset:asset);focusTarget.view=view;return view
     }
@@ -17,6 +18,11 @@ struct OrbitAudioEditor:NSViewRepresentable {
         view.clip=clip;view.asset=asset;view.viewport=viewport;view.allowsEditing=enabled;view.needsDisplay=true
         let identity=store.numberEditIdentity
         view.editIdentity=identity
+        let fields=numberEditing.fieldFocus
+        view.focusFields={ [weak view] last in
+            guard let view,view.isCurrent else{return false}
+            return fields?.enter(last:last,in:view.window) ?? false
+        }
         view.viewportChanged={value in guard store.numberEditIdentity==identity else{return};viewport=value}
         let range=viewport.range(assetDuration:asset.duration)
         view.setAccessibilityLabel(store.project.usesOrbits ? "오디오 궤도 편집기":"오디오 파형 편집기")
@@ -28,6 +34,7 @@ struct OrbitAudioEditor:NSViewRepresentable {
     var clip:AudioClip,asset:Asset
     var viewport=AudioSourceViewport()
     var editIdentity:NumberEditIdentity?
+    var focusFields:(Bool)->Bool={_ in false}
     var viewportChanged:(AudioSourceViewport)->Void={_ in}
     var original:AudioClip?,preview:AudioClip?
     var editingEnd=false,previousPhase=0.0,travel=0.0,allowsEditing=true
@@ -46,7 +53,7 @@ struct OrbitAudioEditor:NSViewRepresentable {
     init(store:AppStore,clip:AudioClip,asset:Asset) {
         self.store=store;self.clip=clip;self.asset=asset;super.init(frame:.zero)
         setAccessibilityElement(true);setAccessibilityRole(.group)
-        toolTip="휠: 확대·축소 · 가로 휠/⇧휠: 시간 이동 · −/+: 확대·축소 · Page Up/Down: 이동 · Home/End: 파일 처음/끝 · 0: 전체 · F: 선택 · C: 커서 보기 · 파형 클릭: 분할 위치 · ← →: 시작 trim · ⌥← →: 끝 trim · ⇧: 0.1초 · ⌘T: 분할 · ⌘D: 복제"
+        toolTip="휠: 확대·축소 · 가로 휠/⇧휠: 시간 이동 · −/+: 확대·축소 · Page Up/Down: 이동 · Home/End: 파일 처음/끝 · 0: 전체 · F: 선택 · C: 커서 보기 · 파형 클릭: 분할 위치 · ← →: 시작 trim · ⌥← →: 끝 trim · ⇧: 0.1초 · Tab: 수치 입력 · ⇧Tab: 마지막 수치 · ⌘T: 분할 · ⌘D: 복제"
         setAccessibilityHelp(toolTip)
     }
     required init?(coder:NSCoder){fatalError()}
@@ -205,6 +212,7 @@ struct OrbitAudioEditor:NSViewRepresentable {
         guard isCurrent else{return}
         if store.handleAudioEditKey(event){needsDisplay=true;return}
         if event.modifierFlags.contains(.command) || event.modifierFlags.contains(.control) {super.keyDown(with:event);return}
+        if event.keyCode==48,!event.modifierFlags.contains(.option),focusFields(event.modifierFlags.contains(.shift)){return}
         if handleViewportKey(event){return}
         if store.handleAudioTrimKey(event,clipID:clip.id){needsDisplay=true;return}
         if event.keyCode==53 {cancelDrag();store.focusCanvas?();store.hierarchyParent()}

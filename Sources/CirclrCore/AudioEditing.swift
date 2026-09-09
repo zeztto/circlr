@@ -52,6 +52,18 @@ public struct AudioClipTiming {
     public func time(_ beat:Double)->Double {ownTempo ? clock.seconds(at:node.startBeat)+beat*60/context.tempo:clock.seconds(at:node.startBeat+beat)}
     public func beat(at time:Double)->Double {ownTempo ? (time-clock.seconds(at:node.startBeat))*context.tempo/60:clock.beat(atSeconds:time)-node.startBeat}
     public func rate(_ clip:AudioClip)->Double {clip.followsTempo ? (ownTempo ? context.tempo:clock.bpm(at:node.startBeat+clip.beat))/clip.sourceBPM:1}
+    /// Shared preflight for UI and mutation; source duration, repeats and explicit loop length agree.
+    public func duplicateBeat(_ clip:AudioClip,offset:Double?=nil)throws->Double {
+        let speed=rate(clip)
+        guard speed.isFinite,speed>0 else{throw CirclrError("오디오 템포를 확인하세요")}
+        let delta:Double
+        if let offset {guard offset.isFinite else{throw CirclrError("복제 이동 박을 확인하세요")};delta=offset}
+        else if let length=node.lengthBeats {delta=Double(node.repeatCount)*length}
+        else {delta=beat(at:time(clip.beat)+(Double(node.repeatCount-1)*clip.loopSourceDuration+clip.duration)/speed)-clip.beat}
+        let start=clip.beat+delta
+        guard start>=0,time(start)<clock.seconds else{throw CirclrError("복제할 공간이 없습니다. 섹션 길이를 늘리거나 이동 박을 줄이세요")}
+        return start
+    }
     public func position(_ clip:AudioClip,iteration:Int)->Double {
         if let length=node.lengthBeats {
             guard let origin=clip.renderWindow?.cycleBeat else{return time(Double(iteration)*length+clip.beat)}
@@ -111,12 +123,7 @@ public enum AudioEditing {
             var other=node;other.id=newID();other.name += " · 뒤";other.content = .audio(laneID:laneID,clipID:right.id)
             append(other,after:node,in:&graph);result=other.id
         case .duplicate(let offset):
-            let delta:Double
-            if let offset {guard offset.isFinite else{throw CirclrError("복제 이동 박을 확인하세요")};delta=offset}
-            else if let length=node.lengthBeats {delta=Double(node.repeatCount)*length}
-            else {delta=timing.beat(at:timing.time(clip.beat)+(Double(node.repeatCount-1)*clip.loopSourceDuration+clip.duration)/rate)-clip.beat}
-            let start=clip.beat+delta
-            guard start>=0,timing.time(start)<clock.seconds else{throw CirclrError("복제할 공간이 없습니다. 섹션 길이를 늘리거나 이동 박을 줄이세요")}
+            let start=try timing.duplicateBeat(clip,offset:offset),delta=start-clip.beat
             var copy=clip;copy.id=newID();copy.beat=start
             if copy.renderWindow != nil {copy.renderWindow?.cycleBeat += delta}
             lane.audio.append(copy)
