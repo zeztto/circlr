@@ -6,7 +6,9 @@ macOS용 앨범·송폼 궤도 편집기. **앨범 → 곡·악장 → 섹션 �
 
 연결 UI는 [서클 둘레 8방향 IN/OUT과 다중 입출력](docs/22-eight-direction-ports.md)으로 확장 중이다. 포트의 신호 의미와 연결점 배치를 분리한다. 아래 일반 사용법은 배포된 0.19 앱 기준이며 새 포트 기능은 독립 개발 브랜치에서 검증한다.
 
-현재 **`codex/daw-integration`의 0.20.0 build 51**에 녹음 lifecycle과 8방향·다중 bus·그룹 포트를 통합했다. 같은 캔버스의 연결 편집·녹음 상태·스텝·오토메이션이 공존하며, 녹음 시작·정리 중 음악 편집과 Undo의 경쟁을 차단한다. build 23의 실제 편집·바운스·Undo·저장/재열기·닫기 최소화 및 출력별 모션 검증은 [통합 QA](qa/daw-integration-review.md)에 기록했다.
+현재 **`codex/daw-integration`의 0.20.0 build 52**에 녹음 lifecycle과 8방향·다중 bus·그룹 포트를 통합했다. 같은 캔버스의 연결 편집·녹음 상태·스텝·오토메이션이 공존하며, 녹음 시작·정리 중 음악 편집과 Undo의 경쟁을 차단한다. build 23의 실제 편집·바운스·Undo·저장/재열기·닫기 최소화 및 출력별 모션 검증은 [통합 QA](qa/daw-integration-review.md)에 기록했다.
+
+build 52는 **샘플 라이브러리에서 여러 오디오를 한 번에 가져온다.** 체크박스·⇧↑↓ 범위·모두 선택/해제로 최대 64개를 고르고 각 새 트랙의 같은 시작 박에 배치한다. 선택 수·현재 파일·대상을 표시하며 MIDI 혼합과 손상 파일의 부분 적용을 막는다. Swift **391개**·Python **26개**, 두 폴더의 실제 가져오기→한 번 Undo/Redo→저장·재열기와 원본 보존을 확인했다. [사용법](docs/66-library-batch-import.md) · [QA](qa/library-batch-review.md).
 
 build 51은 **같은 음높이·같은 시작 박의 노트를 한 번에 선택**한다. 피아노 롤·궤도·스텝의 속성 영역에 선택 메뉴와 해제를 표시한다. ⌥P 음높이, ⌥T 시작 박, ⌥I 반전, ⇧⌘A 해제를 지원하며 화면 밖 노트도 포함한다. Swift **386개**·Python **26개**, 실제 선택→음악 편집/Undo·대상 분리·저장 복원을 확인했다. [사용법](docs/65-midi-selection-tools.md) · [QA](qa/midi-selection-tools-review.md).
 

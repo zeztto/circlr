@@ -249,6 +249,7 @@ struct CommandSearchField:NSViewRepresentable {
     let onSubmit:()->Void
     let onCancel:()->Void
     var placeholder="명령 또는 서클 이름 검색"
+    var onExtend:((Int)->Void)?
     func makeCoordinator()->Coordinator {Coordinator(self)}
     func makeNSView(context:Context)->NSSearchField {
         let field=NSSearchField();field.placeholderString=placeholder;field.isBordered=false;field.focusRingType = .none
@@ -263,6 +264,8 @@ struct CommandSearchField:NSViewRepresentable {
         func controlTextDidChange(_ notification:Notification){if let field=notification.object as? NSSearchField {parent.text=field.stringValue}}
         func control(_ control:NSControl,textView:NSTextView,doCommandBy selector:Selector)->Bool {
             if textView.hasMarkedText(){return false}
+            if selector==#selector(NSResponder.moveDownAndModifySelection(_:)),let extend=parent.onExtend{extend(1);return true}
+            if selector==#selector(NSResponder.moveUpAndModifySelection(_:)),let extend=parent.onExtend{extend(-1);return true}
             if selector==#selector(NSResponder.moveDown(_:)){parent.onMove(1);return true}
             if selector==#selector(NSResponder.moveUp(_:)){parent.onMove(-1);return true}
             if selector==#selector(NSResponder.insertNewline(_:)){parent.onSubmit();return true}

@@ -23,22 +23,22 @@ extension AppStore {
         case .pattern(let id,let beat):return "\(project.patterns.first{$0.id==id}?.name ?? "리듬") · \(beat.formatted())박"
         case .section(let a,let u,let track,let beat,_,let original):
             let name=project.arrangements.first{$0.id==a}?.uses.first{$0.id==u}?.name ?? "섹션"
-            let lane=project.tracks.first{$0.id==track}?.name ?? "새 트랙"
+            let lane=library.chosenIDs.count>1 ? "새 트랙 \(library.chosenIDs.count)개":project.tracks.first{$0.id==track}?.name ?? "새 트랙"
             return "\(name) › \(lane) · \(beat.formatted())박"+(original ? " · 공유 원본":"")
         }
     }
     func importLibrarySelection() {
         guard libraryOpen,!library.searching,canStartMediaImport,libraryDestinationCurrent,let request=libraryDestination else{library.notice="가져오기 대상을 갱신하고 재생·녹음을 정지하세요";return}
         do {
-            let (entry,access,url)=try library.accessSelected()
+            let (entries,access,urls)=try library.accessSelection()
             library.stopPreview()
-            if entry.kind == .midi {
+            if entries[0].kind == .midi {
                 guard case .section(let a,let u,_,let beat,let position,_)=request.destination else{throw CirclrError("MIDI를 넣을 섹션을 선택하세요")}
-                guard previewMIDIImport(url,projectID:request.projectID,revision:request.revision,generation:request.generation,arrangementID:a,useID:u,beat:beat,position:position) else{library.notice=status;return}
+                guard previewMIDIImport(urls[0],projectID:request.projectID,revision:request.revision,generation:request.generation,arrangementID:a,useID:u,beat:beat,position:position) else{library.notice=status;return}
                 withExtendedLifetime(access){}
                 closeMediaLibrary()
             } else {
-                beginAudioImport([url],request:request,retaining:access);closeMediaLibrary()
+                beginAudioImport(urls,request:request,retaining:access);closeMediaLibrary()
             }
         } catch {library.notice="가져오기 실패: \(mediaLibraryError(error))"}
     }
@@ -48,7 +48,7 @@ struct MediaLibraryView:View {
     @ObservedObject var store:AppStore
     @ObservedObject var library:MediaLibraryController
     init(store:AppStore) {self.store=store;self.library=store.library}
-    private var canImport:Bool {store.canStartMediaImport && store.libraryDestinationCurrent && library.selected != nil && !library.searching}
+    private var canImport:Bool {store.canStartMediaImport && store.libraryDestinationCurrent && !library.chosenIDs.isEmpty && library.selectionIssue==nil && !library.searching}
     var body:some View {
         VStack(alignment:.leading,spacing:0) {
             HStack {
@@ -59,7 +59,7 @@ struct MediaLibraryView:View {
             }.padding(18)
             HStack(spacing:10) {
                 Image(systemName:"magnifyingglass").foregroundStyle(StudioTheme.secondary)
-                CommandSearchField(text:$library.query,onMove:library.move,onSubmit:store.importLibrarySelection,onCancel:store.closeMediaLibrary,placeholder:"파일명 · 하위 폴더 · 형식 검색")
+                CommandSearchField(text:$library.query,onMove:library.move,onSubmit:store.importLibrarySelection,onCancel:store.closeMediaLibrary,placeholder:"파일명 · 하위 폴더 · 형식 검색",onExtend:library.extend)
             }.padding(.horizontal,18).padding(.bottom,14)
             HStack(spacing:16) {
                 Menu {
@@ -74,6 +74,8 @@ struct MediaLibraryView:View {
                     Button("모든 형식"){library.kindFilter=nil};Button("오디오"){library.kindFilter = .audio};Button("MIDI"){library.kindFilter = .midi}
                 }label:{Text(library.kindFilter.map{$0 == .audio ? "오디오":"MIDI"} ?? "모든 형식")}.accessibilityLabel("샘플 형식 선택")
                 Spacer()
+                Button("모두 선택"){library.selectAll()}.disabled(library.searching || library.results.isEmpty || library.results.count>64).help("검색 결과 전체 선택 · 한 번에 최대 64개")
+                Button("해제"){library.clearSelection()}.disabled(library.searching || library.chosenIDs.isEmpty).accessibilityLabel("샘플 선택 해제")
                 Text(library.scanning ? "폴더 읽는 중":library.searching ? "검색 중":"\(library.results.count)개 파일").foregroundStyle(StudioTheme.secondary).monospacedDigit()
             }.menuStyle(.borderlessButton).padding(.horizontal,18).padding(.vertical,10).background(StudioTheme.raised)
             if !library.notice.isEmpty {Text(library.notice).font(.system(size:12)).foregroundStyle(StudioTheme.accent).fixedSize(horizontal:false,vertical:true).lineLimit(3).help(library.notice).padding(.horizontal,18).padding(.vertical,8)}
@@ -87,13 +89,18 @@ struct MediaLibraryView:View {
                     }
                     LazyVStack(spacing:1) {
                         ForEach(library.results){entry in
-                            LibraryResultRow(entry:entry,selected:library.selectedID==entry.id){library.select(entry.id)}
+                            LibraryResultRow(entry:entry,selected:library.chosenIDs.contains(entry.id),focused:library.selectedID==entry.id,select:{library.select(entry.id)},toggle:{library.toggleSelection(entry.id)}).disabled(library.searching)
                         }
                     }
                 }.onChange(of:library.selectedID){_,id in if let id{proxy.scrollTo(id,anchor:.center)}}
             }
             Divider().overlay(StudioTheme.line)
             VStack(alignment:.leading,spacing:12) {
+                HStack(spacing:12) {
+                    Text("\(library.chosenIDs.count)개 선택").monospacedDigit()
+                    Text(library.selectionIssue ?? library.selected.map{"현재 파일 · "+$0.name} ?? "파일을 선택하세요")
+                        .foregroundStyle(library.selectionIssue==nil ? StudioTheme.secondary:StudioTheme.accent).lineLimit(1).truncationMode(.middle).help(library.selectionIssue ?? library.selected?.name ?? "")
+                }.font(.system(size:12))
                 HStack(spacing:12) {
                     Button{library.togglePreview()}label:{Label(library.previewPreparing ? "준비 취소":library.previewing ? "미리 듣기 정지":"미리 듣기",systemImage:library.previewPreparing || library.previewing ? "stop.fill":"play.fill")}
                         .disabled(library.selected?.kind != .audio || !store.canStartMediaImport || (library.previewPending && !library.previewPreparing && !library.previewing))
@@ -107,9 +114,9 @@ struct MediaLibraryView:View {
                     Text(store.libraryDestinationText).font(.system(size:12)).lineLimit(1).truncationMode(.middle)
                     if !store.libraryDestinationCurrent {Button("대상 갱신"){store.refreshLibraryDestination()}.help("현재 선택과 최신 음악 상태를 가져오기 대상으로 사용")}
                     Spacer(minLength:4)
-                    Button(library.selected?.kind == .midi ? "MIDI 트랙 선택 →":"가져오기 · Return"){store.importLibrarySelection()}.disabled(!canImport)
+                    Button(library.chosen.count==1 && library.chosen.first?.kind == .midi ? "MIDI 트랙 선택 →":"\(library.chosenIDs.count)개 가져오기 · Return"){store.importLibrarySelection()}.disabled(!canImport)
                 }
-                Text(store.libraryDestination != nil && !store.libraryDestinationCurrent ? "곡이나 선택이 변경되었습니다. 가져오기 대상을 확인하고 갱신하세요":"↑↓ 선택 · Return 가져오기 · ⌥Space 미리 듣기 · Esc 닫기").font(.system(size:11)).foregroundStyle(StudioTheme.secondary)
+                Text(store.libraryDestination != nil && !store.libraryDestinationCurrent ? "곡이나 선택이 변경되었습니다. 가져오기 대상을 확인하고 갱신하세요":"체크박스 여러 파일 · ↑↓ 한 파일 · ⇧↑↓ 범위 · Return 가져오기 · ⌥Space 현재 파일 듣기").font(.system(size:11)).foregroundStyle(StudioTheme.secondary)
             }.padding(18)
         }.frame(width:850,height:560).background(StudioTheme.surface,in:RoundedRectangle(cornerRadius:10))
             .overlay{RoundedRectangle(cornerRadius:10).stroke(StudioTheme.line,lineWidth:1)}
@@ -121,10 +128,15 @@ struct MediaLibraryView:View {
 private struct LibraryResultRow:View {
     let entry:LibraryEntry
     let selected:Bool
+    let focused:Bool
     let select:()->Void
+    let toggle:()->Void
     private var path:String {entry.folderName+" / "+entry.relativePath}
     private var typeName:String {entry.kind == .midi ? "MIDI":(entry.name as NSString).pathExtension.uppercased()}
     var body:some View {
+        HStack(spacing:0) {
+            Toggle("가져오기 선택",isOn:Binding(get:{selected},set:{_ in toggle()})).toggleStyle(.checkbox).labelsHidden()
+                .accessibilityLabel("\(path) 가져오기 선택").padding(.leading,18)
         Button(action:select) {
             HStack(spacing:12) {
                 Image(systemName:entry.kind == .audio ? "waveform":"pianokeys").foregroundStyle(StudioTheme.secondary).frame(width:20)
@@ -135,9 +147,9 @@ private struct LibraryResultRow:View {
                 Spacer(minLength:12)
                 Text(typeName).font(.system(size:11)).foregroundStyle(StudioTheme.secondary)
                 Text(ByteCountFormatter.string(fromByteCount:entry.bytes,countStyle:.file)).font(.system(size:12)).monospacedDigit().frame(width:72,alignment:.trailing)
-            }.padding(.horizontal,18).padding(.vertical,10).frame(maxWidth:.infinity,alignment:.leading)
-                .background(selected ? StudioTheme.raised:Color.clear)
-                .overlay(alignment:.leading){if selected{Rectangle().fill(StudioTheme.accent).frame(width:3)}}
-        }.buttonStyle(.plain).id(entry.id).help(path).accessibilityLabel(path).accessibilityAddTraits(selected ? .isSelected:[])
+            }.padding(.horizontal,12).padding(.vertical,10).frame(maxWidth:.infinity,alignment:.leading)
+        }.buttonStyle(.plain).help(path).accessibilityLabel(path).accessibilityAddTraits(focused ? .isSelected:[])
+        }.background(selected ? StudioTheme.raised:Color.clear)
+            .overlay(alignment:.leading){if focused{Rectangle().fill(StudioTheme.accent).frame(width:3)}}.id(entry.id)
     }
 }

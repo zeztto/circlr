@@ -37,6 +37,8 @@ func mediaLibraryError(_ error:Error)->String {
     @Published var folderFilter:String? {didSet{filter()}}
     @Published var kindFilter:LibraryMediaKind? {didSet{filter()}}
     @Published private(set) var selectedID:String?
+    @Published private(set) var chosenIDs:Set<String>=[]
+    private var rangeAnchor:String?
     @Published private(set) var scanning=false
     @Published private(set) var searching=false
     @Published var notice=""
@@ -56,6 +58,12 @@ func mediaLibraryError(_ error:Error)->String {
     private let defaults:UserDefaults
     private let key="circlr.mediaLibrary.folders.v1"
     var selected:LibraryEntry? {entries.first{$0.id==selectedID}}
+    var chosen:[LibraryEntry] {results.filter{chosenIDs.contains($0.id)}}
+    var selectionIssue:String? {
+        guard !chosenIDs.isEmpty else{return nil}
+        do {try MediaLibrarySelection.validate(MediaLibrarySelection.entries(results,ids:chosenIDs));return nil}
+        catch{return mediaLibraryError(error)}
+    }
     init(defaults:UserDefaults = .standard) {
         self.defaults=defaults
         if let data=defaults.data(forKey:key) {
@@ -128,10 +136,15 @@ func mediaLibraryError(_ error:Error)->String {
             let result=await worker.value
             guard self.searchGeneration==generation,!Task.isCancelled else{return}
             self.results=result;self.searching=false
-            self.select(result.contains(where:{$0.id==self.selectedID}) ? self.selectedID:result.first?.id,force:true)
+            self.chosenIDs.formIntersection(Set(result.map(\.id)))
+            let focus=result.contains(where:{$0.id==self.selectedID}) ? self.selectedID:result.first?.id
+            if self.chosenIDs.isEmpty {self.chosenIDs=focus.map{[$0]} ?? []}
+            self.rangeAnchor=focus;self.select(focus,force:true,preserving:true)
         }
     }
-    func select(_ id:String?,force:Bool=false) {
+    func select(_ id:String?,force:Bool=false,preserving:Bool=false) {
+        guard !searching else{return}
+        if !preserving {let next:Set<String>=id.map{[$0]} ?? [];if chosenIDs != next{stopPreview()};chosenIDs=next;rangeAnchor=id}
         guard force || id != selectedID else{return}
         stopPreview();selectedID=id;selectionGeneration+=1;let generation=selectionGeneration
         detailTask?.cancel();detailWorker?.cancel()
@@ -153,10 +166,34 @@ func mediaLibraryError(_ error:Error)->String {
         let index=results.firstIndex{$0.id==selectedID} ?? 0
         select(results[max(0,min(results.count-1,index+delta))].id)
     }
-    func accessSelected()throws->(LibraryEntry,LibraryAccess,URL) {
-        guard let entry=selected,let folder=folders.first(where:{$0.id==entry.folderID}) else{throw CirclrError("가져올 파일을 선택하세요")}
-        let access=try LibraryAccess(folder)
-        return (entry,access,try MediaLibrary.file(entry,under:access.url))
+    func toggleSelection(_ id:String) {
+        guard !searching,results.contains(where:{$0.id==id}) else{return}
+        do {let next=try MediaLibrarySelection.toggling(id,in:chosenIDs);stopPreview();chosenIDs=next;rangeAnchor=id;select(id,preserving:true)}
+        catch{notice=mediaLibraryError(error)}
+    }
+    func extend(_ delta:Int) {
+        guard !searching,!results.isEmpty else{return}
+        let index=results.firstIndex{$0.id==selectedID} ?? 0,target=results[max(0,min(results.count-1,index+delta))].id
+        let anchor=rangeAnchor ?? selectedID ?? target
+        do {let next=try MediaLibrarySelection.range(results.map(\.id),anchor:anchor,target:target);stopPreview();chosenIDs=next;rangeAnchor=anchor;select(target,preserving:true)}
+        catch{notice=mediaLibraryError(error)}
+    }
+    func selectAll() {
+        guard !searching else{return}
+        guard results.count<=MediaLibrarySelection.limit else{notice="한 번에 최대 64개 파일을 선택하세요. 검색 범위를 줄이세요";return}
+        stopPreview();chosenIDs=Set(results.map(\.id))
+    }
+    func clearSelection(){guard !searching else{return};stopPreview();chosenIDs=[]}
+    func accessSelection()throws->([LibraryEntry],[LibraryAccess],[URL]) {
+        let entries=try MediaLibrarySelection.entries(results,ids:chosenIDs)
+        try MediaLibrarySelection.validate(entries)
+        var access:[String:LibraryAccess]=[:],urls:[URL]=[]
+        for entry in entries {
+            guard let folder=folders.first(where:{$0.id==entry.folderID}) else{throw CirclrError("등록 폴더가 변경됐습니다. 파일을 다시 선택하세요")}
+            if access[folder.id]==nil {access[folder.id]=try LibraryAccess(folder)}
+            urls.append(try MediaLibrary.file(entry,under:access[folder.id]!.url))
+        }
+        return (entries,Array(access.values),urls)
     }
     func watchKeyboard(canPreview:@escaping()->Bool) {
         if let keyMonitor{NSEvent.removeMonitor(keyMonitor)}
