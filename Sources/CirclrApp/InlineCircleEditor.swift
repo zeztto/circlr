@@ -84,7 +84,8 @@ struct InlineCircleEditor: View {
                         }
                         HStack(spacing: 22) {
                             Toggle("음소거",isOn:Binding(get:{node.muted},set:{value in store.updateMusic("음소거"){$0.muted=value}}))
-                            ValueField(title:"출력 볼륨",value:Binding(get:{store.selectedMusic?.gain ?? node.gain},set:{value in store.updateMusic("출력 볼륨"){$0.gain=value}}),range:0...4)
+                            ValueField(title:"출력 볼륨 dB",value:Binding(get:{store.selectedMusic?.gain ?? node.gain},set:{value in store.updateMusic("출력 볼륨"){$0.gain=value}}),range:0...4,presentation:.gainDecibels)
+                                .help("0 dB 원래 레벨 · −∞ 무음")
                             Spacer(minLength:8)
                             TrackBounceButton(store:store)
                         }.frame(maxWidth:660,alignment:.leading)
@@ -94,7 +95,13 @@ struct InlineCircleEditor: View {
                 case .output:
                     if let track = store.selectedTrack { ScrollView { OutputEditor(store:store,track:track).rememberEditorScroll(scroll("output")) } }
                 case .mix: signalControls(node); Spacer()
-                case .router(let router): AudioRouterEditor(store: store, router: router); signalControls(node); Spacer()
+                case .router(let router):
+                    ScrollView {
+                        VStack(alignment:.leading,spacing:14) {
+                            AudioRouterEditor(store:store,router:router)
+                            signalControls(node)
+                        }.padding(.trailing,8).rememberEditorScroll(scroll("router"))
+                    }
                 case .rhythmAudio: Text("리듬 패턴의 오디오 클립"); AudioLane(store: store); Spacer()
                 }
             }
@@ -143,7 +150,8 @@ struct InlineCircleEditor: View {
     @ViewBuilder func signalControls(_ node: MusicCircle) -> some View {
         Toggle("음소거", isOn: Binding(get: { node.muted }, set: { value in store.updateMusic("음소거") { $0.muted=value } }))
         TrackBounceButton(store:store)
-        ValueField(title: "출력 볼륨", value: Binding(get: { store.selectedMusic?.gain ?? node.gain }, set: { value in store.updateMusic("출력 볼륨") { $0.gain=value } }), range: 0...4)
+        ValueField(title: "출력 볼륨 dB", value: Binding(get: { store.selectedMusic?.gain ?? node.gain }, set: { value in store.updateMusic("출력 볼륨") { $0.gain=value } }), range: 0...4, presentation: .gainDecibels)
+            .help("0 dB 원래 레벨 · −∞ 무음")
     }
 }
 

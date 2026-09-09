@@ -6,7 +6,9 @@ macOS용 앨범·송폼 궤도 편집기. **앨범 → 곡·악장 → 섹션 �
 
 연결 UI는 [서클 둘레 8방향 IN/OUT과 다중 입출력](docs/22-eight-direction-ports.md)으로 확장 중이다. 포트의 신호 의미와 연결점 배치를 분리한다. 아래 일반 사용법은 배포된 0.19 앱 기준이며 새 포트 기능은 독립 개발 브랜치에서 검증한다.
 
-현재 **`codex/daw-integration`의 0.20.0 build 90**에 녹음 lifecycle과 8방향·다중 bus·그룹 포트를 통합했다. 같은 캔버스의 연결 편집·녹음 상태·스텝·오토메이션이 공존하며, 녹음 시작·정리 중 음악 편집과 Undo의 경쟁을 차단한다. build 23의 실제 편집·바운스·Undo·저장/재열기·닫기 최소화 및 출력별 모션 검증은 [통합 QA](qa/daw-integration-review.md)에 기록했다.
+현재 **`codex/daw-integration`의 0.20.0 build 91**에 녹음 lifecycle과 8방향·다중 bus·그룹 포트를 통합했다. 같은 캔버스의 연결 편집·녹음 상태·스텝·오토메이션이 공존하며, 녹음 시작·정리 중 음악 편집과 Undo의 경쟁을 차단한다. build 23의 실제 편집·바운스·Undo·저장/재열기·닫기 최소화 및 출력별 모션 검증은 [통합 QA](qa/daw-integration-review.md)에 기록했다.
+
+**build91은 effect·mix·router 출력 볼륨을 dB로 통일하고 작은 창의 router 하단 접근을 복구했다.** 선형 저장값은 유지한다. 최종 관련17개 테스트·Release20.04초와 실제 하단 위치의 편집기 왕복·gain/Undo·저장 재열기 보존을 확인했다. 앞선 후보에서 광범위 dB 입력을 검증했으며 QA 최종 대조도 통과했다. physical 출력0회로 사용자 앱을 유지한다. [계약](docs/105-signal-level-decibels.md) · [QA](qa/signal-level-review.md).
 
 **build90은 포트별 출력 경로와 탐색 대상의 판정을 통일한다.** router 실제 route·mute/gain0 구조 연결·sidechain 제외·lane 소유 미연결 대상을 구분한다. 대상 Swift36개·Release73.47초와 실제 독립 bus·현재 트랙 추론·router 교차 변경/Undo를 확인했다. QA10개 상태·AX7개·자산2개 보존과 저장/재열기 manifest 전체 일치도 통과했다. 읽기 전용 장치 조사로 출력 원인을 확정하거나 정상 재생을 확인하지 않았다. [계약](docs/104-port-aware-navigation.md) · [QA](qa/port-navigation-review.md) · [장치 관측](qa/output-device-review.md).
 

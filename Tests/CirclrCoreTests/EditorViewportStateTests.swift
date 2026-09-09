@@ -44,6 +44,15 @@ final class EditorViewportStateTests:XCTestCase {
         XCTAssertEqual(EditorScrollPosition(x:.nan,y:.infinity).clamped(width:1000,height:600,visibleWidth:500,visibleHeight:300),.init())
         XCTAssertEqual(EditorScrollPosition(x:100,y:100).clamped(width:50,height:50,visibleWidth:500,visibleHeight:300),.init())
     }
+    func testRouterScrollRoundTripRestoresItsPositionAndRejectsUnknownKeys()throws {
+        var view=EditorViewportState()
+        view.scrolls=["router":.init(x:24,y:360),"output":.init(y:80),"futureRouter":.init(y:999)]
+        let decoded=try JSONDecoder().decode(EditorViewportState.self,from:JSONEncoder().encode(view))
+        let restored=decoded.restored(beats:16,clock:try clock(),assetID:nil,assetDuration:nil)
+        XCTAssertEqual(restored.scrolls,["router":.init(x:24,y:360),"output":.init(y:80)])
+        XCTAssertEqual(restored.restored(beats:16,clock:try clock(),assetID:nil,assetDuration:nil).scrolls,restored.scrolls)
+        XCTAssertEqual(view.scrolls["futureRouter"],.init(y:999))
+    }
     func testPersistedScrollKeysAndValuesAreBounded() {
         var view=EditorViewportState();view.scrolls=["piano":.init(x:.infinity,y:20),"steps":.init(y:-5),"unknown":.init(x:10)]
         let restored=view.restored(beats:16,clock:nil,assetID:nil,assetDuration:nil)

@@ -62,7 +62,7 @@ public struct EditorViewportState:Codable,Equatable {
         if audioAssetID != assetID {next.audio.showAll()}
         next.audioAssetID=assetID
         if let duration=assetDuration,duration.isFinite,duration>0 {next.audio.clamp(to:duration)} else {next.audio.showAll()}
-        next.scrolls=scrolls.filter{["piano","steps","settings","instrument","effect","output","orbitControls"].contains($0.key)}
+        next.scrolls=scrolls.filter{["piano","steps","settings","instrument","effect","output","router","orbitControls"].contains($0.key)}
             .mapValues{.init(x:$0.x.isFinite ? max(0,min(1e9,$0.x)):0,y:$0.y.isFinite ? max(0,min(1e9,$0.y)):0)}
         return next
     }

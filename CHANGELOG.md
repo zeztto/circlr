@@ -1,5 +1,12 @@
 # 변경 이력
 
+## 개발 중 — 0.20.0 build91 출력 dB·router 스크롤
+
+- effect/mix/router 출력 볼륨을 기존 `.gainDecibels`로 통일. 저장·MCP·renderer·automation의 선형 값 유지.
+- 1020×768 콘솔 열림의 router 하단 접근과 scroll 복원 whitelist 누락 수정. 최종 관련17개 테스트·Release20.04초 통과.
+- 최종7개 상태·AX4개에서 하단 위치1의 mix 왕복·gain/Undo·저장 재열기 유지와 strict manifest 동일 확인. QA 최종 대조 통과·routerScroll{x:0,y:169} 확인. [계약](docs/105-signal-level-decibels.md) · [QA](qa/signal-level-review.md).
+- 앞선38.99초 후보19개 상태·AX16개는 dB 입력 검증과 스크롤 누락 발견 이력으로 구분. physical 출력0회·사용자 앱 유지.
+
 ## 개발 중 — 0.20.0 build90 포트별 탐색
 
 - 공통 Core structural port reachability로 `StudioNavigation.build`·`outputTracks`·`BounceAssessment` 분류 통일.
