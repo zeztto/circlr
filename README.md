@@ -8,6 +8,8 @@ macOS용 앨범·송폼 궤도 편집기. **앨범 → 곡·악장 → 섹션 �
 
 현재 **`codex/daw-integration`의 0.20.0 build 75**에 녹음 lifecycle과 8방향·다중 bus·그룹 포트를 통합했다. 같은 캔버스의 연결 편집·녹음 상태·스텝·오토메이션이 공존하며, 녹음 시작·정리 중 음악 편집과 Undo의 경쟁을 차단한다. build 23의 실제 편집·바운스·Undo·저장/재열기·닫기 최소화 및 출력별 모션 검증은 [통합 QA](qa/daw-integration-review.md)에 기록했다.
 
+출력 복구를 위한 내부 `circlr-output-worker`를 구현 중이다. 별도 프로세스의 파일 준비·종료를 검증했으며 앱 재생 경로에는 아직 연결하지 않았다. [설계와 남은 범위](docs/90-output-process-isolation.md) · [실행 검증](qa/output-worker-service-review.md).
+
 **build 75에서 키보드 사용법을 검색한다.** 현재 작업의 조작을 먼저 보여주고 전체/MIDI/오디오/오토메이션 등으로 좁힌다. 명령 검색은 단축키도 찾고 제목 일치를 우선 표시한다. [계약](docs/89-searchable-shortcuts.md) · [QA](qa/shortcut-search-review.md).
 
 **build 74에서 오디오 수치를 키보드로 바로 편집한다.** 파형의 Tab/Shift+Tab과 수치 입력 버튼으로 진입하고 Return/Esc로 복귀한다. 복제 공간이 부족하면 실행 전에 이유를 표시한다. [계약](docs/88-audio-keyboard-preflight.md) · [QA](qa/audio-keyboard-review.md).

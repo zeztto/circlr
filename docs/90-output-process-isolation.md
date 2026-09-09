@@ -21,3 +21,5 @@ planning-gate-v1: 2026-09-10, development-lead → planner → native utility. �
 최대 JSON 프레임16KiB(줄바꿈 제외), 수신 chunk64KiB. protocol version1, session UUID, 방향별1부터 연속 증가하는 sequence, typed payload. prepare는 총 frames만 보내며 파일 위치는 고정한다. play/started/clock/stop/stopped/finished는 run UUID로 재생을 구분한다. seconds는 유한한0이상, PCM 최대 길이는 별도 worker와 호스트가 같은 한도를 공유한다. error는 최대1024byte UTF-8과 run UUID optional. 입력 chunk가 여러 프레임이거나 JSON 중간에서 나뉘어도 처리하며 잘못된 스트림을 성공으로 부분 적용하지 않는다.
 
 현재 구현: 1단계의 internal wire 타입과7개 테스트 통과. [검토 기록](../qa/output-protocol-review.md). 실제 앱 출력 경로에는 아직 연결하지 않았다. 나머지는 구현·실행 증거가 있어야 완료로 올린다. UI 도움말 QA나 독립 무음 진단은 실제 helper 통합과 음악 출력 증거를 대체하지 않는다.
+
+실행 파일 구현:2단계 helper를 추가하고 실제 준비/파일 오류/EOF15개 검사와 wire7개를 통과했다. 출력 무응답 상태에서 parent EOF로 약9ms 종료 및 다음 child hello를 확인했다. 정상 start/clock은 아직 관측되지 않았고 앱 호스트 연결도 남아 있다. [검토](../qa/output-worker-service-review.md).
