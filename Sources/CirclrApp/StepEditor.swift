@@ -54,23 +54,28 @@ struct StepEditor:View {
     var body:some View {
         if let grid {
             VStack(spacing:8) {
-                HStack(spacing:8) {
+                MIDIWorkspaceToolbarLayout {
+                    HStack(spacing:8) {
                     Picker("스텝 행",selection:$state.drumMode){Text("드럼").tag(true);Text("음정").tag(false)}.pickerStyle(.segmented).labelsHidden().frame(width:110)
                     Menu(resolution(state.subdivisions)) {ForEach(StepGrid.resolutions,id:\.self){value in Button(resolution(value)){state.subdivisions=value;state.page=0;reveal();focusTarget.focus()}}}
-                        .accessibilityLabel("스텝 분할").help("표시 격자만 바꿉니다. 기존 노트의 타이밍은 유지됩니다")
+                        .fixedSize().accessibilityLabel("스텝 분할").help("표시 격자만 바꿉니다. 기존 노트의 타이밍은 유지됩니다")
+                    }
+                    HStack(spacing:8) {
+                    if state.drumMode {
+                        Text("\(pitches.count)/\(store.stepRows(extra:state.extraPitches).count)행").fixedSize().monospacedDigit().foregroundStyle(StudioTheme.secondary).font(.system(size:11))
+                        CommittedNumberField(title:"드럼 행 MIDI 음높이",value:Binding(get:{Double(state.newPitch)},set:{state.newPitch=Int($0)}),range:0...127,integerOnly:true,width:48)
+                        Button{state.rowQuery="";state.extraPitches.insert(state.newPitch);rowRequest=StepRowRequest(pitch:state.newPitch)}label:{Image(systemName:"plus")}.accessibilityLabel("드럼 행 추가")
+                    }
+                    }
+                    HStack(spacing:8) {
                     Button{page(-1,grid:grid)}label:{Image(systemName:"chevron.left")}.accessibilityLabel("이전 스텝 페이지").disabled(state.page<=0)
                     CommittedNumberField(title:"스텝 페이지",value:Binding(get:{Double(min(state.page,grid.pageCount-1)+1)},set:{state.page=Int($0)-1;store.selectedNoteID=nil}),range:1...Double(grid.pageCount),integerOnly:true,width:48)
-                    Text("/ \(grid.pageCount)").monospacedDigit().foregroundStyle(StudioTheme.secondary)
+                    Text("/ \(grid.pageCount)").fixedSize().monospacedDigit().foregroundStyle(StudioTheme.secondary)
                     Button{page(1,grid:grid)}label:{Image(systemName:"chevron.right")}.accessibilityLabel("다음 스텝 페이지").disabled(state.page+1>=grid.pageCount)
                     Menu("페이지") {
                         Button("다음 페이지로 복제") {editPage(grid,copy:true)}.disabled(state.page+1>=grid.pageCount)
                         Button("이 페이지 비우기") {editPage(grid,copy:false)}
-                    }
-                    Spacer(minLength:0)
-                    if state.drumMode {
-                        Text("\(pitches.count)/\(store.stepRows(extra:state.extraPitches).count)행").monospacedDigit().foregroundStyle(StudioTheme.secondary).font(.system(size:11))
-                        CommittedNumberField(title:"드럼 행 MIDI 음높이",value:Binding(get:{Double(state.newPitch)},set:{state.newPitch=Int($0)}),range:0...127,integerOnly:true,width:48)
-                        Button{state.rowQuery="";state.extraPitches.insert(state.newPitch);rowRequest=StepRowRequest(pitch:state.newPitch)}label:{Image(systemName:"plus")}.accessibilityLabel("드럼 행 추가")
+                    }.fixedSize()
                     }
                 }
                 VStack(spacing:0) {

@@ -13,6 +13,7 @@ struct MIDINoteInspector:View {
     let focusTarget:MIDIEditorFocus
     let hint:String
     let keyHelp:String
+    var width:CGFloat=252
     @State private var fieldFocus=NumberFieldFocus(["MIDI 음높이","MIDI 시작 박","MIDI 길이 박","MIDI 세기","MIDI 선택 음정 이동","MIDI 선택 시작 이동","MIDI 선택 길이 변경","MIDI 선택 세기 변경"])
     var notes:[Note] {store.currentLane?.notes ?? []}
     var selected:Note? {notes.first{$0.id==store.selectedNoteID}}
@@ -78,14 +79,14 @@ struct MIDINoteInspector:View {
             } else {Text("노트를 선택하면 음높이·시작·길이·세기를 편집합니다").foregroundStyle(StudioTheme.secondary)}
             if store.selectedMIDIIDs.isEmpty {Text(hint).font(.system(size:12)).foregroundStyle(StudioTheme.secondary).help(keyHelp)}
         }.frame(maxWidth:.infinity,alignment:.leading).padding(.trailing,6)
-        }.frame(width:252,alignment:.leading)
+        }.frame(width:width,alignment:.leading)
         .environment(\.numberEditing,NumberEditingContext(snapshot:store.numberEditIdentity,current:{store.numberEditIdentity},focusCanvas:{focusTarget.focus()},fieldFocus:fieldFocus))
     }
     func compactField(_ label:String,title:String,value:Binding<Double>,range:ClosedRange<Double>,integer:Bool=false,presentation:NumberEditPresentation = .number,validate:((Double)throws->Void)?=nil)->some View {
         VStack(alignment:.leading,spacing:3) {
-            Text(label).font(.system(size:12)).foregroundStyle(StudioTheme.secondary).lineLimit(1)
-            CommittedNumberField(title:title,value:value,range:range,integerOnly:integer,width:112,presentation:presentation,validate:validate)
-        }
+            Text(label).font(.system(size:12)).foregroundStyle(StudioTheme.secondary).fixedSize(horizontal:false,vertical:true)
+            CommittedNumberField(title:title,value:value,range:range,integerOnly:integer,width:min(112,(width-16)/2),presentation:presentation,validate:validate)
+        }.frame(width:min(112,(width-16)/2),alignment:.leading)
     }
     func deltaField(_ label:String,_ unit:String,range:ClosedRange<Double>,integer:Bool=false,change:@escaping(Double)->MIDIEditing.Change)->some View {
         let identity=store.numberEditIdentity

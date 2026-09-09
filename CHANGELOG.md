@@ -1,5 +1,11 @@
 # 변경 이력
 
+## 개발 중 — 0.20.0 build100 MIDI compact 배치
+
+- compact574·threshold700·inspector210·개별 field97/label wrap·adaptive toolbar 적용. 기존 진입 threshold·view identity 유지, Grid/StepEditor도 responsive로 수정.
+- 중간 Release41.96초 후보의 Orbit 검증 뒤 step header 잘림을 발견해 수정. 최종 Release41.85초에서 step4필드·1/16 수평 page·검색/줌 보존·3노트 이동/Undo·Orbit 초안·하단 스크롤 접근 확인.
+- 신규 Core 동작 없음. QA baseline2+first9+final7의18개 상태·AX5개·UUID와 revision36 saved/reopened/disk strict 일치·open 완료 통과. physical0·자산2개. 긴 셋잇단 적용 미검증·header 일부 잘림 잔여. [계약](docs/115-midi-compact-layout.md).
+
 ## 개발 중 — 0.20.0 build99 편곡 후보 직접 복제
 
 - 행에서 직접 복제·⇧⌘D 강조 candidate·현재 이름 변경 대상 명시. 원본 ID 고정·입력 중 행 잠금·취소 무변경·clone/select 한 mutate.

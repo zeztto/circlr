@@ -21,6 +21,8 @@ struct MIDIOrbitWorkspace:View {
     func name(_ pitch:Int)->String {Scale.roots[pitch%12]+String(pitch/12-1)}
     private let keyHelp="선택 노트 드래그: 함께 이동 · 끝 손잡이: 함께 길이 · ⇧클릭: 선택 추가/해제 · Tab 노트 선택 · 방향키 이동 · ⇧ 좌우 길이 · ⌥ 상하 세기 · Return 입력 · Delete 삭제"
     var body:some View {
+        GeometryReader { geometry in
+        let compact=geometry.size.width<700
         VStack(alignment:.leading,spacing:10) {
             MIDIWorkspaceToolbar(store:store,focusTarget:focusTarget) {
                 Spacer(minLength:0)
@@ -28,18 +30,17 @@ struct MIDIOrbitWorkspace:View {
                 Button{browse(-1)}label:{Image(systemName:"backward.end")}.accessibilityLabel("이전 MIDI 노트").help("이전 노트 선택·표시").disabled(notes.isEmpty)
                 Button{browse(1)}label:{Image(systemName:"forward.end")}.accessibilityLabel("다음 MIDI 노트").help("다음 노트 선택·표시").disabled(notes.isEmpty)
             }
-            HStack(alignment:.top,spacing:20) {
+            HStack(alignment:.top,spacing:compact ? 12:20) {
             ScrollView {
             VStack(alignment:.leading,spacing:8) {
                 HStack(spacing:8) {
                     Button{act{viewport.movePitches(-12)}}label:{Image(systemName:"minus")}.accessibilityLabel("표시 음역 한 옥타브 아래")
                     Text(name(viewport.lowest)+"–"+name(viewport.highest)).monospacedDigit()
                     Button{act{viewport.movePitches(12)}}label:{Image(systemName:"plus")}.accessibilityLabel("표시 음역 한 옥타브 위")
-                    Spacer(minLength:0)
-                    Button("맞춤"){act{viewport.fitPitches(notes)}}.fixedSize().accessibilityLabel("연주 음역 맞춤").help("연주의 음역에 맞춰 1옥타브 또는 2옥타브를 표시")
                 }
                 HStack(spacing:8) {
-                    Picker("표시 음역",selection:$viewport.pitchRows){Text("1옥타브").tag(12);Text("2옥타브").tag(24)}.pickerStyle(.segmented).labelsHidden().frame(width:132)
+                    Picker("표시 음역",selection:$viewport.pitchRows){Text("1옥타브").tag(12);Text("2옥타브").tag(24)}.pickerStyle(.segmented).labelsHidden().frame(width:compact ? 110:132)
+                    Button("맞춤"){act{viewport.fitPitches(notes)}}.buttonStyle(.plain).frame(width:compact ? 34:44,height:28).foregroundStyle(StudioTheme.accent).accessibilityLabel("연주 음역 맞춤").help("연주의 음역에 맞춰 1옥타브 또는 2옥타브를 표시")
                 }
                 MIDIPitchNavigator(viewport:$viewport,notes:notes,selected:selected,identity:store.numberEditIdentity,focusTarget:focusTarget).frame(height:37)
                 if let clock {
@@ -60,13 +61,14 @@ struct MIDIOrbitWorkspace:View {
                 }
             }.frame(maxWidth:.infinity,alignment:.leading).padding(.trailing,6).rememberEditorScroll($scroll)
             }.frame(maxHeight:.infinity)
-            .frame(width:228,alignment:.leading)
+            .frame(width:compact ? 160:228,alignment:.leading)
             OrbitMIDIEditor(store:store,viewport:viewport,focusTarget:focusTarget).frame(minWidth:180,maxWidth:.infinity,maxHeight:.infinity).help(keyHelp)
-            MIDINoteInspector(store:store,focusTarget:focusTarget,hint:"Tab 선택 · 방향키 편집",keyHelp:keyHelp)
+            MIDINoteInspector(store:store,focusTarget:focusTarget,hint:"Tab 선택 · 방향키 편집",keyHelp:keyHelp,width:compact ? 210:252)
             }
         }
         .environment(\.numberEditing,NumberEditingContext(snapshot:store.numberEditIdentity,current:{store.numberEditIdentity},focusCanvas:{focusTarget.focus()}))
         .onChange(of:selected){_,_ in reveal()}
+        }
     }
     func act(_ action:()->Void){action();focusTarget.focus()}
     func reveal(){if let selected,let clock {viewport.reveal(selected,clock:clock)}}
