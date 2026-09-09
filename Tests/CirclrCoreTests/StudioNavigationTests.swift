@@ -43,15 +43,15 @@ final class StudioNavigationTests:XCTestCase {
         let group=try HierarchyEditing.group([target.id,instrument.id],name:"접힌 연주",in:&p)
         guard case .group(let scope,let id)=group else{return XCTFail()}
         try HierarchyEditing.editLayout(scope,in:&p){layout in layout.groups[layout.groups.firstIndex{$0.id==id}!].collapsed=true}
-        let before=try AlbumCompiler.executionPlan(p),revision=p.musicRevision
+        let before=try AlbumCompiler.executionPlan(p),original=p
         XCTAssertNil(try HierarchySceneBuilder.build(p).node(target.id))
         XCTAssertTrue(try StudioNavigation.build(p)[0].tracks[0].destinations.contains{$0.id==target.id})
-        try StudioNavigation.reveal(target.id,in:&p)
-        XCTAssertNotNil(try HierarchySceneBuilder.build(p).node(target.id))
-        XCTAssertEqual(p.musicRevision,revision)
+        let scene=try StudioNavigation.scene(revealing:target.id,in:p)
+        XCTAssertNotNil(scene.node(target.id))
+        XCTAssertEqual(p,original)
         XCTAssertEqual(try AlbumCompiler.executionPlan(p).occurrences[0].signalPlan?.midi,before.occurrences[0].signalPlan?.midi)
-        let revealed=p;try StudioNavigation.reveal(target.id,in:&p);XCTAssertEqual(p,revealed)
-        XCTAssertThrowsError(try StudioNavigation.reveal(.music(arrangementID:p.activeArrangementID,useID:p.active.uses[0].id,nodeID:"missing"),in:&p));XCTAssertEqual(p,revealed)
+        XCTAssertNotNil(try StudioNavigation.scene(revealing:target.id,in:p).node(target.id))
+        XCTAssertThrowsError(try StudioNavigation.scene(revealing:.music(arrangementID:p.activeArrangementID,useID:p.active.uses[0].id,nodeID:"missing"),in:p));XCTAssertEqual(p,original)
     }
     func testDisconnectedSourceRemainsDiscoverable()throws {
         var p=try fixture();var g=try XCTUnwrap(SectionGraphEditing.effective(section:p.sections[0],use:p.active.uses[0]))

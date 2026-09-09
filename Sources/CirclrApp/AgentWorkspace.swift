@@ -101,7 +101,7 @@ extension AppStore {
             }
             let address:CircleAddress
             if let node=args.node {address=node}else if let use=args.useID {address=args.nodeID.map{.music(arrangementID:args.arrangementID ?? project.activeArrangementID,useID:use,nodeID:$0)} ?? .section(arrangementID:args.arrangementID ?? project.activeArrangementID,useID:use)}else if let id=args.compositionID {address = .composition(id)}else{address = .album}
-            guard hierarchyScene?.node(address) != nil else {throw CirclrError("서클을 찾을 수 없습니다")}
+            _ = try StudioNavigation.scene(revealing:address,in:project)
             hierarchySettingsOpen=false;focusHierarchy(address,detail:args.detail ?? false);return ["selection":json(address)]
         default:break
         }

@@ -2,6 +2,12 @@
 
 0.1–0.3은 설계 문서 revision이며, 0.4.0부터 로컬 실행 프로토타입을 포함한다.
 
+## 개발 중 — 0.20.0 build 57 접힌 그룹 작업 이동
+
+- ⌘J·트랙 역할 버튼·MCP focus가 선택 경로의 그룹만 scene에서 펼친다. 이동은 그룹의 collapsed/layout override·dirty·음악/포트 revision·Undo/Redo를 바꾸지 않는다.
+- Esc/다른 경로 선택 시 저장된 접힘 상태를 보여주며 현재 scene에 맞춰 복귀한다. 명시적 그룹 펼치기/접기의 Undo는 유지한다. 접힌 그룹 내부 선택과 편집 화면을 저장·재열기에서 복원한다.
+- 깨끗한 Swift 419개·Python 26개, 최종 경로 테스트 6개, native 오디오 편집/Undo/Redo·상위 복귀·명시적 그룹 편집·MCP·저장 복원·패키지 검증 통과. [계약](docs/71-navigation-group-reveal.md) · [QA와 메뉴 전환 입력 범위](qa/navigation-reveal-review.md).
+
 ## 개발 중 — 0.20.0 build 56 보기 설정과 음악 이력 분리
 
 - 궤도/자유 배치·그리드·스냅의 메뉴와 명령 검색은 dirty/recovery를 갱신하며 저장된다. Undo를 추가하거나 Redo를 지우지 않고 음악/포트 revision을 바꾸지 않는다.

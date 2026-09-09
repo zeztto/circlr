@@ -21,3 +21,5 @@ Native QA는 authored 두-use 사본을 쓴다. 보기만 변경한 뒤 Undo 부
 build 56에서 계약을 구현했다. 보기 메뉴 또는 ⇧⌘P의 궤도/그리드/스냅 명령은 즉시 반영하고 ⌘S로 저장한다. 음악 편집 뒤 보기를 바꿔도 ⌘Z는 마지막 편집을 되돌린다. Undo 뒤 보기를 바꿔도 ⇧⌘Z로 음악을 다시 실행할 수 있다. 서클 이동·정렬·그룹·포트 편집은 여전히 Undo 대상이다.
 
 Swift 413개·Python 26개, 실제 MIDI 편집/Undo/Redo, 키보드 서클 이동/Undo, 저장·재열기와 패키지 검사를 통과했다. 메뉴 screenshot 1장 unavailable 및 실제 출력/녹음·VoiceOver 범위를 포함한 근거는 [QA](../qa/view-history-review.md)에 기록했다. 다음 작업은 작업 이동 시 자동으로 펼쳐지는 그룹의 이력과 사용자 그룹 편집을 구별하는 계약이다.
+
+후속 자동 그룹 펼침은 [build 57](71-navigation-group-reveal.md)에서 선택 경로의 scene 표시로 분리하고 실제 작업 이동·복귀·Undo·저장 복원을 검증했다.

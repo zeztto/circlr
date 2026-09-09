@@ -73,22 +73,25 @@ public enum StudioNavigation {
         }
         try visit(album.children);return result
     }
-    /// Expand only containing layout groups; use candidate copy so a failed route stays atomic.
-    public static func reveal(_ target:CircleAddress,in project:inout Project)throws {
-        var candidate=project,cursor=target,seen=Set<CircleAddress>()
+    /// Reveal a selection path in the scene without creating document layout overrides.
+    public static func containingGroups(of target:CircleAddress?,in project:Project)throws->Set<CircleAddress> {
+        guard var cursor=target else{return []}
+        var seen=Set<CircleAddress>(),groups=Set<CircleAddress>()
         while cursor != .album,seen.insert(cursor).inserted {
-            let scope=try HierarchyEditing.scope(of:cursor,in:candidate)
+            let scope=try HierarchyEditing.scope(of:cursor,in:project)
             if let member=HierarchyEditing.memberID(cursor) {
-                let layout=try HierarchyEditing.layout(for:scope,in:candidate)
-                if layout.groups.contains(where:{$0.collapsed && $0.members.contains(member)}) {
-                    try HierarchyEditing.editLayout(scope,in:&candidate) {layout in
-                        for i in layout.groups.indices where layout.groups[i].members.contains(member) {layout.groups[i].collapsed=false}
-                    }
+                let layout=try HierarchyEditing.layout(for:scope,in:project)
+                for group in layout.groups where group.collapsed && group.members.contains(member) {
+                    groups.insert(.group(parent:scope,id:group.id))
                 }
             }
             cursor=scope
         }
-        guard try HierarchySceneBuilder.build(candidate).node(target) != nil else{throw CirclrError("이 서클은 현재 편곡에서 사용할 수 없습니다")}
-        project=candidate
+        return groups
+    }
+    public static func scene(revealing target:CircleAddress,in project:Project)throws->HierarchyScene {
+        let scene=try HierarchySceneBuilder.build(project,revealing:target)
+        guard scene.node(target) != nil else{throw CirclrError("이 서클은 현재 편곡에서 사용할 수 없습니다")}
+        return scene
     }
 }

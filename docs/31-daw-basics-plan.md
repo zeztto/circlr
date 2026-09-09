@@ -6,6 +6,8 @@
 
 2026-09-09 build 56: 독립 검토 dispatch도 같은 thread limit으로 거절되어 순차 검토했다. 궤도·그리드·스냅을 음악 Undo/Redo와 분리하고 실제 MIDI·서클 이동·저장 복원을 검증했다. [보기 이력 계약](70-canvas-view-history.md) · [QA](../qa/view-history-review.md).
 
+build 57: 접힌 그룹 내부 작업 이동을 scene에만 적용하고 음악 이력을 보존했다. 상위 복귀·명시적 그룹 Undo·MCP·저장된 편집 화면 재열기를 검증했다. [계약](71-navigation-group-reveal.md) · [QA](../qa/navigation-reveal-review.md).
+
 ## 상태와 남은 완료 조건
 
 | 작업 | 현재 구현 | 확장·완료 조건 |

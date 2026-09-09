@@ -16,7 +16,7 @@ import CirclrAudio
     var hierarchyRevision = 0
     var hierarchyCacheRevision = -1
     var hierarchyCache: HierarchyScene?
-    @Published var hierarchySelection: CircleAddress? = .album {didSet{if oldValue != hierarchySelection{automationViewport.reset()}}}
+    @Published var hierarchySelection: CircleAddress? = .album {didSet{if oldValue != hierarchySelection{automationViewport.reset();hierarchyRevision += 1}}}
     @Published var hierarchySelections: Set<CircleAddress> = [.album]
     @Published var hierarchyCommand: HierarchyCommand?
     @Published var moviePreparing=false

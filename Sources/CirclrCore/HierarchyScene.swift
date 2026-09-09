@@ -84,10 +84,11 @@ public enum HierarchySceneBuilder {
         var childScale = HierarchySceneBuilder.childScale
         var layoutRadius: Double?
     }
-    public static func build(_ project: Project) throws -> HierarchyScene {
+    public static func build(_ project: Project, revealing selection: CircleAddress? = nil) throws -> HierarchyScene {
         try project.portLayout?.validate()
         guard let album = project.album else { throw CirclrError("앨범 서클 모델이 없습니다") }
         try album.validate(arrangements: project.arrangements)
+        let revealedGroups = (try? StudioNavigation.containingGroups(of: selection, in: project)) ?? []
         var edges: [CircleSceneEdge] = []
         var hiddenOwners: [CircleAddress: CircleAddress] = [:]
         func node(_ address: CircleAddress, title: String, subtitle: String, role: CircleRole,
@@ -144,13 +145,15 @@ public enum HierarchySceneBuilder {
                 let members = tree.children.filter { child in HierarchyEditing.memberID(child.node.id).map(group.members.contains) == true }
                 guard !members.isEmpty else { continue }
                 let center = Point(members.map(\.position.x).reduce(0,+)/Double(members.count), members.map(\.position.y).reduce(0,+)/Double(members.count))
-                var container = Tree(node: node(.group(parent: tree.node.id, id: group.id), title: group.name,
-                                                subtitle: "\(members.count)개 서클" + (group.collapsed ? " · 접힘" : ""), role: .group, context: tree.node.context), position: center)
+                let address = CircleAddress.group(parent: tree.node.id, id: group.id)
+                let collapsed = group.collapsed && !revealedGroups.contains(address)
+                var container = Tree(node: node(address, title: group.name,
+                                                subtitle: "\(members.count)개 서클" + (collapsed ? " · 접힘" : ""), role: .group, context: tree.node.context), position: center)
                 container.childScale = 1
                 container.node.exposedPorts = try? GroupPortEditing.ports(at:container.node.id,in:project)
                 container.children = members.map { item in var copy = item; copy.position = Point(item.position.x-center.x,item.position.y-center.y); return copy }
                 container = finish(container)
-                if group.collapsed {
+                if collapsed {
                     func hide(_ child: Tree) { hiddenOwners[child.node.id] = container.node.id; for nested in child.children { hide(nested) } }
                     for child in container.children { hide(child) }
                     container.children = []; container.node.radius = 100; container.node.childCount = 0

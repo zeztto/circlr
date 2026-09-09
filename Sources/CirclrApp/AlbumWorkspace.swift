@@ -13,7 +13,7 @@ extension AppStore {
     var hierarchyScene: HierarchyScene? {
         if hierarchyCacheRevision != hierarchyRevision {
             hierarchyCacheRevision = hierarchyRevision
-            hierarchyCache = try? HierarchySceneBuilder.build(project)
+            hierarchyCache = try? HierarchySceneBuilder.build(project,revealing:hierarchySelection)
         }
         return hierarchyCache
     }

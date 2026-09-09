@@ -175,8 +175,8 @@ struct AlbumCanvas: NSViewRepresentable {
             case .restore:
                 connecting=nil;orbitDrag=nil;clearCableSelection()
                 circleAccessibility=[:];portAccessibility=[:];cableAccessibility=[:]
-                if let saved=store.project.hierarchyView,scene?.node(saved.selection) != nil,let restored=saved.restored(width:bounds.width,height:bounds.height) {
-                    store.selectHierarchy(saved.selection);store.hierarchySettingsOpen=saved.settingsOpen;store.midiStepMode=saved.midiStepMode ?? false;setCamera(restored)
+                if let saved=store.project.hierarchyView,(try? StudioNavigation.scene(revealing:saved.selection,in:store.project)) != nil,let restored=saved.restored(width:bounds.width,height:bounds.height) {
+                    store.selectHierarchy(saved.selection);scene=store.hierarchyScene;store.hierarchySettingsOpen=saved.settingsOpen;store.midiStepMode=saved.midiStepMode ?? false;setCamera(restored)
                 } else {store.selectHierarchy(.album);store.hierarchySettingsOpen=false;focus(.album)}
             case .zoom(let factor): setCamera(camera.zoomed(to: camera.zoom*factor, around: Point(bounds.midX, bounds.midY)), animated: true)
             }
@@ -189,8 +189,8 @@ struct AlbumCanvas: NSViewRepresentable {
         placeEditor(); needsDisplay = true
     }
     func focus(_ address: CircleAddress, detail: Bool = false) {
-        guard let node = scene?.node(address), bounds.width > 100 else { return }
-        if !detail,node.role == .section,let scene,
+        guard let scene=store.hierarchyScene,let node = scene.node(address), bounds.width > 100 else { return }
+        if !detail,node.role == .section,
            let target=PlaybackFraming.camera(for:node,in:scene,viewport:workspaceViewport) {
             setCamera(target,animated:true);return
         }

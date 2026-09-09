@@ -17,8 +17,7 @@ extension AppStore {
     func showNavigation(){libraryOpen=false;commandPalette=nil;keyboardHelp=false;navigationOpen=true}
     func navigateStudio(_ destination:CircleAddress,track:ID?=nil) {
         do {
-            var revealed=project;try StudioNavigation.reveal(destination,in:&revealed)
-            if revealed != project {mutate("작업 경로 펼치기",musical:false){$0=revealed}}
+            _ = try StudioNavigation.scene(revealing:destination,in:project)
             navigationOpen=false;hierarchySettingsOpen=false;hierarchyTransitionID=nil
             if let track {selectedTrackID=track}
             focusCanvas?();focusHierarchy(destination,detail:{if case .music=destination{return true};return false}())
