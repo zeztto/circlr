@@ -10,6 +10,7 @@ struct AgentConsoleBoundsKey:PreferenceKey {
 struct AgentConsole:View {
     @ObservedObject var store:AppStore
     @State private var command=""
+    @State private var resizeStart:Double?
     @FocusState private var inputFocused:Bool
     var body:some View {
         VStack(alignment:.leading,spacing:0) {
@@ -18,6 +19,16 @@ struct AgentConsole:View {
                     .keyboardShortcut("`",modifiers:.control).help("콘솔 접기·펼치기 · Ctrl `")
                 Circle().fill(store.agentSocket == nil ? StudioTheme.secondary:StudioTheme.accent).frame(width:5,height:5)
                 Text(store.agentSocket == nil ? "연결 없음":"MCP 연결 가능").font(.system(size:10)).foregroundStyle(StudioTheme.secondary)
+                if store.consoleOpen {
+                    Menu("로그 높이") {
+                        Button("작게 · 40pt"){store.setConsoleLogHeight(40)}
+                        Button("기본 · 122pt"){store.setConsoleLogHeight(122)}
+                        Button("크게 · 180pt"){store.setConsoleLogHeight(180)}
+                    }.fixedSize().menuStyle(.borderlessButton)
+                        .font(.system(size:11))
+                        .help("로그 높이 · 작게 ⌃⌘1 · 기본 ⌃⌘2 · 크게 ⌃⌘3 · 상단 손잡이를 위아래로 드래그")
+                        .accessibilityValue("현재 \(Int(store.consoleLogHeight))포인트")
+                }
                 Spacer()
                 if let job=store.agentJob,job.state=="running" {
                     if job.kind=="bounce" {
@@ -56,7 +67,7 @@ struct AgentConsole:View {
                                 }.font(.system(size:11,design:.monospaced)).id(event.id)
                             }
                         }.padding(.horizontal,14).padding(.vertical,10)
-                    }.frame(height:122)
+                    }.frame(height:store.consoleLogHeight)
                         .onAppear{DispatchQueue.main.async{if let id=store.activity.last?.id{proxy.scrollTo(id,anchor:.bottom)}}}
                         .onChange(of:store.activitySequence){ if let id=store.activity.last?.id{proxy.scrollTo(id,anchor:.bottom)}}
                 }
@@ -71,6 +82,29 @@ struct AgentConsole:View {
         }
         .frame(maxWidth:820).background(StudioTheme.canvas.opacity(0.97),in:RoundedRectangle(cornerRadius:10))
         .overlay(RoundedRectangle(cornerRadius:10).strokeBorder(StudioTheme.line))
+        .overlay(alignment:.top) {
+            if store.consoleOpen {
+                Capsule().fill(StudioTheme.secondary).frame(width:38,height:3)
+                    .frame(width:90,height:10).contentShape(Rectangle())
+                    .gesture(DragGesture(minimumDistance:1,coordinateSpace:.global)
+                        .onChanged{value in
+                            if resizeStart==nil {resizeStart=store.consoleLogHeight}
+                            store.setConsoleLogHeight((resizeStart ?? 122)-Double(value.translation.height))
+                        }
+                        .onEnded{_ in resizeStart=nil})
+                    .help("콘솔 로그 높이 조절 · 위로 늘리기 · 아래로 줄이기")
+                    .accessibilityLabel("콘솔 로그 높이 조절")
+                    .accessibilityValue("\(Int(store.consoleLogHeight))포인트")
+                    .accessibilityAdjustableAction{direction in
+                        switch direction {
+                        case .increment:store.setConsoleLogHeight(store.consoleLogHeight+20)
+                        case .decrement:store.setConsoleLogHeight(store.consoleLogHeight-20)
+                        @unknown default:break
+                        }
+                    }
+            }
+        }
+        .onChange(of:store.consoleOpen){_,_ in resizeStart=nil}
         .onExitCommand{inputFocused=false;store.consoleOpen=false}
     }
 }

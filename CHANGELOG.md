@@ -1,5 +1,12 @@
 # 변경 이력
 
+## 개발 중 — 0.20.0 build94 콘솔 로그 높이
+
+- 세션40–180px·기본122px, drag와 ⌃⌘1/2/3 지원. header·명령 입력·초안 유지.
+- 초기41.28초 후보의 입력창 단축키 실패를 `CirclrAppCommands` 등록으로 수정. 최종 parse·Release40.59초와 native 단축키·clamp·접힘/펼침·편집기 왕복·wheel·명령 확인.
+- 모든 music revision62 유지·saved/reopened 전체 manifest strict 동일·같은 세션 높이40 유지. QA18개 상태·최종AX10개·자산2개·physical0·높이82px 감소 확인. 신규 unit 테스트 없음. [계약](docs/109-console-height.md) · [QA](qa/console-height-review.md).
+- 실행 중 job 취소 버튼은 이번 native 미검증. 앱 재시작 후 높이는122px이며 프로젝트 재열기와 구분.
+
 ## 개발 중 — 0.20.0 build93 음악 그래프 편집 범위
 
 - scope snapshot·복합 effect 원본 읽기·AU 비동기 대상 guard·use-only 안내·직접 범위 선택. reviewer가 발견한 group router 생성 회귀의 parent 해석 수정.

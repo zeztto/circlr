@@ -85,6 +85,11 @@ import CirclrAudio
     @Published var status = "섹션을 만들어 곡 구성을 시작하세요" {didSet{if status != oldValue{recordActivity("앱",status)}}}
     @Published var activity:[ActivityEvent]=[]
     @Published var consoleOpen=true
+    @Published var consoleLogHeight:Double=122
+    func setConsoleLogHeight(_ height:Double) {
+        guard height.isFinite else{return}
+        consoleLogHeight=min(180,max(40,height))
+    }
     @Published var consoleBounds = CGRect.zero
     @Published var agentJob:AgentJob? {didSet{if let job=agentJob {
         if agentJobs[job.id]==nil {agentJobOrder.append(job.id)}
