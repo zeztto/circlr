@@ -88,19 +88,48 @@ struct StudioRouteButtons:View {
 }
 struct StudioRouteBar:View {
     @ObservedObject var store:AppStore
+    private var showsBounceStatus:Bool {
+        store.trackBounceAssessment.map{store.trackBounceStatus($0) != nil} ?? false
+    }
     var body:some View {
         if let route=store.currentStudioTrack {
-            HStack(spacing:8) {
-                Button{store.showNavigation()}label:{Label(route.name,systemImage:"arrow.left.arrow.right").lineLimit(1)}
-                    .help("다른 트랙으로 이동 · ⌘J")
-                Spacer(minLength:4)
-                StudioRouteButtons(store:store,route:route).buttonStyle(.plain)
-                if store.canInsertMusicEffect {
-                    Menu("이펙트 추가") {
-                        ForEach(EffectKind.allCases,id:\.self) {kind in Button(AppStore.effectName(kind)){store.addMusicEffect(kind)}}
-                    }.menuStyle(.borderlessButton).fixedSize().help("선택한 오디오 경로에 이펙터 추가")
-                }
-            }.padding(.vertical,2)
+            if showsBounceStatus {
+                ViewThatFits(in:.horizontal) {
+                    HStack(spacing:8) {
+                        trackButton(route).frame(maxWidth:110)
+                        TrackBounceStatus(store:store).frame(minWidth:280)
+                        routeControls(route).fixedSize(horizontal:true,vertical:false)
+                    }
+                    HStack(spacing:8) {
+                        trackButton(route).frame(maxWidth:110)
+                        TrackBounceStatus(store:store).frame(minWidth:280)
+                        ScrollView(.horizontal) {routeControls(route)}
+                            .frame(width:250,height:32)
+                    }
+                }.padding(.vertical,2)
+            }else{
+                HStack(spacing:8) {
+                    trackButton(route)
+                    Spacer(minLength:4)
+                    routeControls(route)
+                }.padding(.vertical,2)
+            }
+        }else if showsBounceStatus {
+            TrackBounceStatus(store:store)
+        }
+    }
+    private func trackButton(_ route:StudioTrackRoute)->some View {
+        Button{store.showNavigation()}label:{Label(route.name,systemImage:"arrow.left.arrow.right").lineLimit(1)}
+            .help(route.name+" · 다른 트랙으로 이동 · ⌘J")
+    }
+    private func routeControls(_ route:StudioTrackRoute)->some View {
+        HStack(spacing:8) {
+            StudioRouteButtons(store:store,route:route).buttonStyle(.plain)
+            if store.canInsertMusicEffect {
+                Menu("이펙트 추가") {
+                    ForEach(EffectKind.allCases,id:\.self) {kind in Button(AppStore.effectName(kind)){store.addMusicEffect(kind)}}
+                }.menuStyle(.borderlessButton).fixedSize().help("선택한 오디오 경로에 이펙터 추가")
+            }
         }
     }
 }

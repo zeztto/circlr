@@ -66,6 +66,16 @@ final class AudioRouterAudioTests: XCTestCase {
         try assertPCM(meter, sum)
         XCTAssertNotEqual(wet[p.tracks[0].id]?.left, wet[p.tracks[1].id]?.left)
         XCTAssertNotEqual(wet[p.tracks[0].id]?.left, wet[p.tracks[0].id]?.right)
+        // The structural assessment uses the same independent buses proven by PCM above.
+        for output in 0..<2 {
+            for source in 0..<2 {
+                let assessment = BounceAssessment.make(trackID: p.tracks[output].id, useID: p.active.uses[0].id,
+                    selectedNodeID: f.sources[source], in: p)
+                XCTAssertNil(assessment.issue)
+                XCTAssertEqual(assessment.target?.outputNodeID, f.outputs[output])
+                XCTAssertEqual(assessment.membership, source == output ? .mainPath : .outsidePath)
+            }
+        }
     }
 
     func testMatrixCrossesBusesAndFanInAppliesEachEdgeGainOnce() async throws {
@@ -81,6 +91,16 @@ final class AudioRouterAudioTests: XCTestCase {
         p.sections[0].graph = g; let crossed = try await render(p)
         var halfA = a, quarterB = b; halfA.multiply(0.5); quarterB.multiply(0.25)
         try assertPCM(crossed[p.tracks[0].id], quarterB); try assertPCM(crossed[p.tracks[1].id], halfA)
+        // Crossing the router matrix reverses membership along with the rendered PCM.
+        for output in 0..<2 {
+            for source in 0..<2 {
+                let assessment = BounceAssessment.make(trackID: p.tracks[output].id, useID: p.active.uses[0].id,
+                    selectedNodeID: f.sources[source], in: p)
+                XCTAssertNil(assessment.issue)
+                XCTAssertEqual(assessment.target?.outputNodeID, f.outputs[output])
+                XCTAssertEqual(assessment.membership, source != output ? .mainPath : .outsidePath)
+            }
+        }
         // Fan-in belongs only to input 1, and input 2 remains independent.
         g.nodes[i].content = .router(AudioRouter())
         try SectionGraphEditing.connect(from: f.sources[1], to: f.router, toPortID: AudioRouter.input1, in: &g)

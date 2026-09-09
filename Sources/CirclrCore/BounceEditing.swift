@@ -15,14 +15,22 @@ public struct BounceTarget:Equatable {
 public enum BounceEditing {
     /// Shared UI, agent and apply preflight; no render job or project mutation.
     public static func target(trackID:ID,useID:ID,arrangementID:ID?=nil,in project:Project)throws->BounceTarget {
-        guard project.tracks.contains(where:{$0.id==trackID}) else{throw CirclrError("바운스할 트랙을 찾을 수 없습니다")}
+        let graph=try targetGraph(trackID:trackID,useID:useID,arrangementID:arrangementID,in:project)
+        return try target(trackID:trackID,graph:graph)
+    }
+    static func targetGraph(trackID:ID,useID:ID,arrangementID:ID?,in project:Project)throws->SectionGraph {
+        guard project.tracks.contains(where:{$0.id==trackID}) else{throw BounceIssue.missingTrack}
         guard let use=project.arrangements.first(where:{$0.id==(arrangementID ?? project.activeArrangementID)})?.uses.first(where:{$0.id==useID}),
               let section=project.sections.first(where:{$0.id==use.sectionID}),
-              let graph=try SectionGraphEditing.effective(section:section,use:use) else{throw CirclrError("바운스할 섹션을 찾을 수 없습니다")}
+              let graph=try SectionGraphEditing.effective(section:section,use:use) else{throw BounceIssue.missingSection}
+        return graph
+    }
+    static func target(trackID:ID,graph:SectionGraph)throws->BounceTarget {
         let outputs=graph.nodes.filter{if case .output(let id)=$0.content{return id==trackID};return false}
-        guard outputs.count==1,let output=outputs.first else{throw CirclrError("바운스할 트랙의 출력 서클을 하나로 연결하세요")}
+        guard !outputs.isEmpty else{throw BounceIssue.noOutput}
+        guard outputs.count==1,let output=outputs.first else{throw BounceIssue.multipleOutputs}
         let inputs=graph.edges.filter{$0.to==output.id}
-        guard !inputs.isEmpty else{throw CirclrError("출력에 연결된 연주가 없습니다")}
+        guard !inputs.isEmpty else{throw BounceIssue.noInputs}
         return BounceTarget(outputNodeID:output.id,inputs:inputs)
     }
 

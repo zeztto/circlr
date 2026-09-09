@@ -6,7 +6,9 @@ macOS용 앨범·송폼 궤도 편집기. **앨범 → 곡·악장 → 섹션 �
 
 연결 UI는 [서클 둘레 8방향 IN/OUT과 다중 입출력](docs/22-eight-direction-ports.md)으로 확장 중이다. 포트의 신호 의미와 연결점 배치를 분리한다. 아래 일반 사용법은 배포된 0.19 앱 기준이며 새 포트 기능은 독립 개발 브랜치에서 검증한다.
 
-현재 **`codex/daw-integration`의 0.20.0 build 84**에 녹음 lifecycle과 8방향·다중 bus·그룹 포트를 통합했다. 같은 캔버스의 연결 편집·녹음 상태·스텝·오토메이션이 공존하며, 녹음 시작·정리 중 음악 편집과 Undo의 경쟁을 차단한다. build 23의 실제 편집·바운스·Undo·저장/재열기·닫기 최소화 및 출력별 모션 검증은 [통합 QA](qa/daw-integration-review.md)에 기록했다.
+현재 **`codex/daw-integration`의 0.20.0 build 85**에 녹음 lifecycle과 8방향·다중 bus·그룹 포트를 통합했다. 같은 캔버스의 연결 편집·녹음 상태·스텝·오토메이션이 공존하며, 녹음 시작·정리 중 음악 편집과 Undo의 경쟁을 차단한다. build 23의 실제 편집·바운스·Undo·저장/재열기·닫기 최소화 및 출력별 모션 검증은 [통합 QA](qa/daw-integration-review.md)에 기록했다.
+
+**build85는 바운스의 연결 문제와 현재 서클 제외 상태를 기존 편집 줄에서 보여준다.** 연결 보기·명령 검색으로 정확한 출력 IN에 이동한다. Core28개·AudioRouterAudio15개·최종 Release40.86초와 실제 연결 해제/Undo·오토메이션 경고·오래된 명령 거절·저장 재열기를 확인했다. QA checker의 native20개·compact12개 상태, 자산2개·재열기 manifest·source SHA 대조도 통과했다. 이번 범위에서 바운스 렌더·실제 출력·audition은 실행하지 않았으며 사용자 앱과 물리 I/O 출고 조건을 유지한다. [계약](docs/99-bounce-visibility.md) · [QA](qa/bounce-visibility-review.md).
 
 **build84는 편곡안 목록에서 연결 순서·반복·경로 제외 섹션과 오류를 보여준다.** `ArrangementCompiler`와 경로 cursor를 공유한다. Swift401개·Release68.85초와 실제 작은 창의 같은 이름 비교·키보드 전환·연결 수정 반영·Undo·재열기를 확인했다. QA checker의 native15개 상태·자산2개·source SHA 대조도 통과했으며 오디오 시작은 모두0회다. [계약](docs/98-arrangement-route-preview.md) · [QA](qa/arrangement-route-review.md).
 

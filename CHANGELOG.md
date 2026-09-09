@@ -1,5 +1,12 @@
 # 변경 이력
 
+## 개발 중 — 0.20.0 build85 바운스 상태·연결 복구
+
+- typed assessment로 포트·router·sidechain을 고려한 대상/문제/현재 서클 포함 여부를 제공. 기존 route bar에 원인·경로 제외·연결 보기 표시, 명령 검색에서 출력 IN으로 이동.
+- 초기 후보의 추가 행이 파형을 축소하는 native 회귀를 발견해 기존 한 줄로 통합하고 최종 compact 후보에서 파형 공간 복원.
+- Core28개·AudioRouterAudio15개·최종 Release40.86초 통과. 실제 출력1 IN 이동·연결 해제/Undo·오토메이션 경고·MCP 이름 변경 뒤 stale 명령 거절/Undo·저장 재열기 확인. QA checker native20개·compact12개 상태·자산2개·manifest/source SHA 대조 통과. [계약](docs/99-bounce-visibility.md) · [QA](qa/bounce-visibility-review.md).
+- 사용자 앱 유지. 실제 출력·audition0회, 이번 범위 바운스 렌더 미실행. 물리 I/O 출고 조건 미완료.
+
 ## 개발 중 — 0.20.0 build84 편곡 연결 경로 미리보기
 
 - 기존 편곡안 행에 연결 순서·반복 횟수·경로 제외·분기 오류·빈 경로 표시. `ArrangementCompiler`의 경로 cursor 공유.
