@@ -10,6 +10,8 @@ build 57: 접힌 그룹 내부 작업 이동을 scene에만 적용하고 음악 
 
 build 58: 추가 에이전트 재시도가 실제 `agent thread limit reached`로 거절되어 순차 역할 전환을 유지했다. 오디오 대상 트랙 검색·번호 구분과 요청 충돌 보호를 구현하고 99트랙 native import/Undo/Redo·저장 재열기를 검증했다. [계약](72-library-track-search.md) · [QA](../qa/library-track-search-review.md).
 
+build 59: 작업 검색에서 실제 섹션·서클로 직접 이동하고 섹션·트랙·종류 필터를 제공한다. 다중 역할 메뉴, 긴/동명 경로와 MIDI/오디오/이펙트 진입을 정리하고 편집 이력·외부 변경·저장 복원을 검증했다. [계약](73-direct-work-navigation.md) · [QA](../qa/direct-work-navigation-review.md).
+
 ## 상태와 남은 완료 조건
 
 | 작업 | 현재 구현 | 확장·완료 조건 |

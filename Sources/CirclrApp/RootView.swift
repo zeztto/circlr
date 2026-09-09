@@ -16,7 +16,7 @@ struct RootView: View {
                 .coordinateSpace(name:"albumCanvas")
                 .onPreferenceChange(AgentConsoleBoundsKey.self){if store.consoleBounds != $0 {store.consoleBounds=$0}}
         }
-        .accessibilityHidden(store.libraryOpen)
+        .accessibilityHidden(store.libraryOpen || store.navigationOpen)
         .overlay(alignment:.top) {
             if let palette=store.commandPalette {
                 ZStack(alignment:.top) {
@@ -29,7 +29,7 @@ struct RootView: View {
             if store.navigationOpen {
                 ZStack(alignment:.top) {
                     Color.black.opacity(0.3).contentShape(Rectangle()).onTapGesture{store.navigationOpen=false;store.focusCanvas?()}
-                    StudioNavigationView(store:store).padding(.top,85)
+                    StudioNavigationView(store:store).id(store.navigationIntent.id).padding(.top,85)
                 }
             }
         }

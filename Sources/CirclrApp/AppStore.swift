@@ -30,12 +30,14 @@ import CirclrAudio
     @Published var keyboardHelp=false
     @Published var commandPalette: StudioPalette?
     @Published var navigationOpen=false
+    @Published var navigationIntent=StudioNavigationIntent()
     let library=MediaLibraryController()
     @Published var libraryOpen=false {didSet{if !libraryOpen{library.suspend()}}}
     @Published var libraryDestination:MediaImportRequest?
     @Published var midiStepMode=false
     var navigationCacheRevision = -1
     var navigationCache:[StudioSectionRoute]=[]
+    var navigationEntryCache:[StudioNavigationEntry]=[]
     var canvasCommands: (() -> [StudioCommand])?
     var focusCanvas: (() -> Void)?
     let nameEditing=NameEditingRegistry()
