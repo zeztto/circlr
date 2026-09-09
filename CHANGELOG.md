@@ -1,5 +1,10 @@
 # 변경 이력
 
+## 개발 중 — 0.20.0 build89 트랙 단축키·출력 재대조
+
+- 현재 section/track의0/1/multi 대상과 혼합 MIDI/audio를 일관되게 선택하도록 ⌘1/⌘2/⌘3 개선. parser·Release42.42초·실제 대상 선택/종류 전환/현재 찾기 통과. 저장·재열기의 음악/선택/camera 보존과 QA13개 캡처·AX7개 대조 통과. [단축키 QA](qa/track-shortcut-review.md). 신규 Swift unit 테스트 없음.
+- 동시간 raw control2회와 서명 보존 helper2회 모두 mixerAcquisition timeout·started=false·EOF exit0. strict 서명 보존은 통과하지만 timeout 해결은 미입증. [계약](docs/103-track-shortcuts-and-output-recheck.md) · [출력 근거](qa/output-signature-review.md).
+
 ## 개발 중 — 0.20.0 build88 섹션 삽입·출력 준비 기록
 
 - 선택 섹션 뒤 원자적 삽입·끝 표시 이전·독립 추가 유지. 분기/합류/loop/비기본 transition 거절. MCP는 `circlr_apply`의 `insert_section` 작업 사용.

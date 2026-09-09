@@ -7,6 +7,7 @@ struct StudioNavigationIntent {
     var sectionID:CircleAddress?
     var trackID:ID?
     var role:StudioNavigationRole?
+    var roles:[StudioNavigationRole]?
 }
 
 extension AppStore {
@@ -24,10 +25,10 @@ extension AppStore {
         return studioRoutes.first{$0.id == .section(arrangementID:project.activeArrangementID,useID:use.id)}
     }
     var currentStudioTrack:StudioTrackRoute? {currentStudioSection?.tracks.first{$0.id==selectedTrackID}}
-    func showNavigation(section:CircleAddress?=nil,track:ID?=nil,role:StudioNavigationRole?=nil) {
+    func showNavigation(section:CircleAddress?=nil,track:ID?=nil,role:StudioNavigationRole?=nil,roles:[StudioNavigationRole]?=nil) {
         arrangementPickerRequest=nil
         soundPickerRequest=nil;libraryOpen=false;commandPalette=nil;keyboardHelp=false
-        navigationIntent=StudioNavigationIntent(anchorSectionID:section ?? currentStudioSection?.id,sectionID:section,trackID:track,role:role)
+        navigationIntent=StudioNavigationIntent(anchorSectionID:section ?? currentStudioSection?.id,sectionID:section,trackID:track,role:role,roles:roles)
         navigationOpen=true
     }
     func navigateStudio(_ destination:CircleAddress,track:ID?=nil) {
@@ -39,10 +40,20 @@ extension AppStore {
         }catch{fail(error)}
     }
     func openTrackComponent(_ index:Int) {
-        guard let track=currentStudioTrack else{return}
-        let roles=index==0 ? ["MIDI","오디오"]:index==1 ? ["악기"]:["이펙터"]
-        let choices=track.destinations.filter{roles.contains($0.role)}
-        if let destination=choices.first(where:\.connected) ?? choices.first {navigateStudio(destination.id,track:track.id)}
+        guard (0...2).contains(index),let track=currentStudioTrack else{status="작업할 섹션과 트랙을 선택하세요";return}
+        let roles:[StudioNavigationRole]=index==0 ? [.midi,.audio]:index==1 ? [.instrument]:[.effect]
+        openTrackRoles(roles,trackID:track.id)
+    }
+    func openTrackRoles(_ roles:[StudioNavigationRole],trackID:ID) {
+        guard nameEditing.resolve(),let section=currentStudioSection,let track=currentStudioTrack,track.id==trackID else{return}
+        let choices=track.destinations.filter{destination in
+            StudioNavigationRole(source:destination.role).map{roles.contains($0)} ?? false
+        }
+        if choices.count==1,let destination=choices.first {navigateStudio(destination.id,track:track.id)}
+        else {
+            showNavigation(section:section.id,track:track.id,role:roles.count==1 ? roles.first:nil,
+                           roles:roles.count>1 ? roles:nil)
+        }
     }
 }
 
@@ -55,7 +66,7 @@ struct StudioRouteButtons:View {
                 let items=route.destinations.filter{$0.role==role}
                 if let first=items.first {
                     if items.count==1 {
-                        Button{store.navigateStudio(first.id,track:route.id)}label:{title(role,selected:store.hierarchySelection==first.id)}
+                        Button{if let kind=StudioNavigationRole(source:role){store.openTrackRoles([kind],trackID:route.id)}}label:{title(role,selected:store.hierarchySelection==first.id)}
                             .help(first.name+(first.connected ? "":" · 출력에 연결되지 않은 원본"))
                             .accessibilityLabel(route.name+" · "+displayName(role))
                     } else {
@@ -69,8 +80,8 @@ struct StudioRouteButtons:View {
         let name=displayName(role),count=String(items.count)
         let label=route.name+" · "+name+" 검색 · "+count+"개"
         return Button {
-            guard let first=items.first,case .music(let a,let u,_)=first.id else{return}
-            store.showNavigation(section:.section(arrangementID:a,useID:u),track:route.id,role:StudioNavigationRole(source:role))
+            guard let kind=StudioNavigationRole(source:role) else{return}
+            store.openTrackRoles([kind],trackID:route.id)
         } label:{
             Label(name+" · "+count,systemImage:"magnifyingglass").font(.system(size:12,weight:.medium))
                 .foregroundStyle(items.contains{$0.id==store.hierarchySelection} ? StudioTheme.accent:StudioTheme.text)
@@ -142,6 +153,7 @@ struct StudioNavigationView:View {
     @State private var sectionID:CircleAddress?
     @State private var trackID:ID?
     @State private var role:StudioNavigationRole?
+    @State private var roles:[StudioNavigationRole]?
     @State private var highlighted:StudioNavigationEntryID?
     @State private var searchFocus=UUID()
     @State private var notice=""
@@ -150,9 +162,19 @@ struct StudioNavigationView:View {
         _sectionID=State(initialValue:store.navigationIntent.sectionID)
         _trackID=State(initialValue:store.navigationIntent.trackID)
         _role=State(initialValue:store.navigationIntent.role)
+        _roles=State(initialValue:store.navigationIntent.roles)
     }
     private var rows:[StudioNavigationEntry] {
         StudioNavigationSearch.search(store.studioNavigationEntries,query:query,sectionID:sectionID,trackID:trackID,role:role)
+            .filter{entry in roles.map{$0.contains(entry.role)} ?? true}
+    }
+    private var emptyDescription:String {
+        if store.studioRoutes.isEmpty {return "섹션을 만들면 작업할 서클이 표시됩니다"}
+        if query.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty,trackID != nil {
+            let kinds=roles?.map(\.label).joined(separator:"·") ?? role?.label ?? "선택한 종류의"
+            return "이 트랙에 "+kinds+" 작업이 없습니다. 종류·범위를 바꿔보세요."
+        }
+        return "일치하는 작업이 없습니다. 검색어나 종류·범위를 바꿔보세요."
     }
     private var currentEntry:StudioNavigationEntry? {store.studioNavigationEntries.first{$0.target==store.hierarchySelection && ($0.trackID==nil || $0.trackID==store.selectedTrackID)}}
     private var active:StudioNavigationEntryID? {rows.contains{$0.id==highlighted} ? highlighted:rows.first?.id}
@@ -174,12 +196,15 @@ struct StudioNavigationView:View {
                 filterButton("전체 앨범",selected:sectionID==nil){sectionID=nil;refocus()}
                 filterButton("이 섹션",selected:sectionID != nil){sectionID=anchorSectionID;refocus()}.disabled(anchorSectionID==nil)
                 Spacer()
-                Button("현재 서클 찾기"){query="";sectionID=nil;trackID=nil;role=nil;selectCurrent();searchFocus=UUID()}
+                Button("현재 서클 찾기"){query="";sectionID=nil;trackID=nil;role=nil;roles=nil;selectCurrent();searchFocus=UUID()}
                     .disabled(currentEntry==nil).help("검색과 필터를 해제하고 현재 선택을 목록에서 찾습니다")
             }.padding(.horizontal,18).padding(.bottom,10)
             HStack(spacing:4) {
-                filterButton("전체 종류",selected:role==nil){role=nil;refocus()}
-                ForEach(StudioNavigationRole.allCases){item in filterButton(item.label,selected:role==item){role=item;refocus()}}
+                filterButton("전체 종류",selected:role==nil && roles==nil){role=nil;roles=nil;refocus()}
+                if let group=roles {
+                    filterButton(group.map(\.label).joined(separator:"·"),selected:true){role=nil;refocus()}
+                }
+                ForEach(StudioNavigationRole.allCases){item in filterButton(item.label,selected:role==item && roles==nil){role=item;roles=nil;refocus()}}
             }.padding(.horizontal,18).padding(.bottom,10)
             HStack(alignment:.top,spacing:8) {
                 Text(scopeName+(trackID.map{" › "+AudioImportPlacement.trackLabel($0,in:store.project)} ?? ""))
@@ -191,7 +216,7 @@ struct StudioNavigationView:View {
             ScrollViewReader { proxy in
                 ScrollView {
                     if rows.isEmpty {
-                        Text(store.studioRoutes.isEmpty ? "섹션을 만들면 작업할 서클이 표시됩니다":"일치하는 작업이 없습니다. 검색어나 종류·범위를 바꿔보세요.")
+                        Text(emptyDescription)
                             .foregroundStyle(StudioTheme.secondary).font(.system(size:13)).padding(30)
                     }
                     LazyVStack(spacing:1) {
