@@ -68,7 +68,7 @@ struct MIDIOrbitWorkspace:View {
                         Button("전체 선택 · ⌘A"){act{store.chooseMIDINotes(.all)}}
                         Button("선택 해제 · ⇧⌘A"){act{store.chooseMIDINotes(.clear)}}
                     }
-                    Button("바운스"){store.bounceTrack()}.disabled(store.preparing)
+                    TrackBounceButton(store:store)
                     Button{store.startMIDIRecording()}label:{Image(systemName:store.midiRecording ? "stop.circle":"record.circle")}.accessibilityLabel(store.midiRecording ? "MIDI 녹음 정지":"MIDI 녹음").disabled(store.editPatternID != nil)
                 }
             }.frame(width:228,alignment:.leading)

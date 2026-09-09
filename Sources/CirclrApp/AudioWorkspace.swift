@@ -89,7 +89,7 @@ struct AudioWorkspaceView:View {
                     .disabled(store.audioCutOffset<=0 || store.audioCutOffset>=liveClip.duration)
                     .help("선택 시작 기준 커서에서 두 서클로 분할 · ⌘T")
                 Button(store.audioDuplicateIssue==nil ? "복제":"복제 · 공간 없음"){act{store.duplicateAudio()}}.disabled(store.audioDuplicateIssue != nil).help(store.audioDuplicateIssue ?? "구간 뒤로 복제 · ⌘D")
-                Button("트랙 바운스"){store.bounceTrack()}.disabled(store.preparing || store.selectedTrack == nil)
+                TrackBounceButton(store:store)
                 if store.selectedMusic?.bounce != nil {Button("원본 복원"){act{store.restoreBounce()}}}
                 Toggle("템포 추종",isOn:Binding(get:{liveClip.followsTempo},set:{value in store.editAudioClip(liveClip){$0.followsTempo=value}}))
                 Toggle("음소거",isOn:Binding(get:{store.selectedMusic?.muted ?? false},set:{v in store.updateMusic("오디오 음소거"){$0.muted=v}}))

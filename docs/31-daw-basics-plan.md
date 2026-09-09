@@ -120,3 +120,7 @@ build 61: 실제 Sound Bank 이름·계열·변형·드럼 킷 검색과 optiona
 ## build79 오디오 입력 위치
 
 섹션에서 파일 가져오기는 새 트랙을 기본으로 한다. 파일 선택 전 대상·시작 박·편집 범위를 표시한다. [검증](../qa/import-destination-review.md).
+
+## build80 바운스 대상
+
+공통 버튼에서 대상 트랙을 표시하고 UI/MCP/적용에서 같은 연결 검사를 수행한다. 출력 레벨/자동화는 남겨 두는 범위를 안내한다. [검증](../qa/bounce-target-review.md).

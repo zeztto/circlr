@@ -8,26 +8,41 @@ public struct BounceSource: Codable, Equatable {
     public var tailSeconds:Double
     public var familyID:ID?
 }
+public struct BounceTarget:Equatable {
+    public let outputNodeID:ID
+    public let inputs:[MusicConnection]
+}
 public enum BounceEditing {
+    /// Shared UI, agent and apply preflight; no render job or project mutation.
+    public static func target(trackID:ID,useID:ID,arrangementID:ID?=nil,in project:Project)throws->BounceTarget {
+        guard project.tracks.contains(where:{$0.id==trackID}) else{throw CirclrError("바운스할 트랙을 찾을 수 없습니다")}
+        guard let use=project.arrangements.first(where:{$0.id==(arrangementID ?? project.activeArrangementID)})?.uses.first(where:{$0.id==useID}),
+              let section=project.sections.first(where:{$0.id==use.sectionID}),
+              let graph=try SectionGraphEditing.effective(section:section,use:use) else{throw CirclrError("바운스할 섹션을 찾을 수 없습니다")}
+        let outputs=graph.nodes.filter{if case .output(let id)=$0.content{return id==trackID};return false}
+        guard outputs.count==1,let output=outputs.first else{throw CirclrError("바운스할 트랙의 출력 서클을 하나로 연결하세요")}
+        let inputs=graph.edges.filter{$0.to==output.id}
+        guard !inputs.isEmpty else{throw CirclrError("출력에 연결된 연주가 없습니다")}
+        return BounceTarget(outputNodeID:output.id,inputs:inputs)
+    }
+
     /// Captures a track's section output before track gain and global routing.
     /// Disconnects its former inputs without destroying their nodes or note data.
     @discardableResult public static func apply(asset:Asset,trackID:ID,useID:ID,bodySeconds:Double,tailSeconds:Double,in project:inout Project) throws -> ID {
         var candidate=project
         guard let use=candidate.active.uses.first(where:{$0.id==useID}),let section=candidate.sections.first(where:{$0.id==use.sectionID}),var graph=try SectionGraphEditing.effective(section:section,use:use) else {throw CirclrError("바운스할 섹션을 찾을 수 없습니다")}
-        let outputs=graph.nodes.filter{if case .output(let id)=$0.content{return id==trackID};return false}
-        guard outputs.count==1,let output=outputs.first else {throw CirclrError("바운스할 트랙의 출력 서클을 하나로 연결하세요")}
-        let inputs=graph.edges.filter{$0.to==output.id}
-        guard !inputs.isEmpty else {throw CirclrError("출력에 연결된 연주가 없습니다")}
+        let target=try target(trackID:trackID,useID:useID,in:candidate)
+        let inputs=target.inputs,outputID=target.outputNodeID
         var lane=Lane(trackID:trackID),clip=AudioClip(assetID:asset.id,duration:asset.duration)
         clip.preservesTail=true;lane.audio=[clip]
         var node=MusicCircle(name:"\(asset.name)",content:.audio(laneID:lane.id,clipID:clip.id))
-        node.bounce=BounceSource(outputNodeID:output.id,replacedInputs:inputs,sourceRevision:project.musicRevision,bodySeconds:bodySeconds,tailSeconds:tailSeconds)
+        node.bounce=BounceSource(outputNodeID:outputID,replacedInputs:inputs,sourceRevision:project.musicRevision,bodySeconds:bodySeconds,tailSeconds:tailSeconds)
         candidate.assets.append(asset)
         // Lane edit can introduce automatic routes; finish with our exact graph below.
         try ProjectEditing.setLane(lane,for:useID,original:false,in:&candidate)
-        graph.edges.removeAll{$0.to==output.id}
-        graph.nodes.append(node);graph.edges.append(MusicConnection(from:node.id,to:output.id,signal:.audio))
-        let position=graph.layout.positions[output.id] ?? Point();graph.layout.positions[node.id]=Point(position.x-240,position.y-220)
+        graph.edges.removeAll{$0.to==outputID}
+        graph.nodes.append(node);graph.edges.append(MusicConnection(from:node.id,to:outputID,signal:.audio))
+        let position=graph.layout.positions[outputID] ?? Point();graph.layout.positions[node.id]=Point(position.x-240,position.y-220)
         try SectionGraphEditing.set(graph,useID:useID,original:false,in:&candidate)
         try ProjectStore.validateStructure(candidate);project=candidate;return node.id
     }

@@ -6,7 +6,9 @@ macOS용 앨범·송폼 궤도 편집기. **앨범 → 곡·악장 → 섹션 �
 
 연결 UI는 [서클 둘레 8방향 IN/OUT과 다중 입출력](docs/22-eight-direction-ports.md)으로 확장 중이다. 포트의 신호 의미와 연결점 배치를 분리한다. 아래 일반 사용법은 배포된 0.19 앱 기준이며 새 포트 기능은 독립 개발 브랜치에서 검증한다.
 
-현재 **`codex/daw-integration`의 0.20.0 build 79**에 녹음 lifecycle과 8방향·다중 bus·그룹 포트를 통합했다. 같은 캔버스의 연결 편집·녹음 상태·스텝·오토메이션이 공존하며, 녹음 시작·정리 중 음악 편집과 Undo의 경쟁을 차단한다. build 23의 실제 편집·바운스·Undo·저장/재열기·닫기 최소화 및 출력별 모션 검증은 [통합 QA](qa/daw-integration-review.md)에 기록했다.
+현재 **`codex/daw-integration`의 0.20.0 build 80**에 녹음 lifecycle과 8방향·다중 bus·그룹 포트를 통합했다. 같은 캔버스의 연결 편집·녹음 상태·스텝·오토메이션이 공존하며, 녹음 시작·정리 중 음악 편집과 Undo의 경쟁을 차단한다. build 23의 실제 편집·바운스·Undo·저장/재열기·닫기 최소화 및 출력별 모션 검증은 [통합 QA](qa/daw-integration-review.md)에 기록했다.
+
+**build80은 바운스 대상과 연결 문제를 실행 전에 보여준다.** 편집기의 공통 버튼에 트랙명을 표시하고, 연결 없는 출력은 UI·MCP에서 렌더 시작 전에 거절한다. 관련17개 테스트·실제 바운스/원본 복원/Undo·native7상태를 검증했다. [계약](docs/95-bounce-target-preflight.md) · [QA](qa/bounce-target-review.md).
 
 **build79은 오디오 가져오기 대상을 파일 창에서 보여준다.** 섹션에서는 새 트랙, 개별 음악 서클에서는 선택 트랙을 사용해 이전 트랙에 뜻하지 않게 섞이는 일을 막는다. 관련16개 테스트와 실제 파일 가져오기·Undo·재열기를 확인했다. [계약](docs/94-audio-import-destination.md) · [QA](qa/import-destination-review.md).
 

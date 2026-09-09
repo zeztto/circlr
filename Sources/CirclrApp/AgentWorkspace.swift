@@ -188,7 +188,10 @@ extension AppStore {
         let file:URL?
         if isBounce{file=nil}else{guard let path=args.path,path.hasSuffix(".wav") else {throw CirclrError(".wav 절대 경로가 필요합니다")};file=try agentPath(path);guard !FileManager.default.fileExists(atPath:file!.path) else {throw CirclrError("기존 파일을 보존하려면 새 WAV 이름을 사용하세요")}}
         let use=project.arrangements.first{$0.id==arrangementID}?.uses.first{$0.id==args.useID}
-        if isBounce {guard use != nil,args.trackID != nil else {throw CirclrError("바운스에는 useID와 trackID가 필요합니다")}}
+        if isBounce {
+            guard let use,let trackID=args.trackID else {throw CirclrError("바운스에는 useID와 trackID가 필요합니다")}
+            _=try BounceEditing.target(trackID:trackID,useID:use.id,arrangementID:arrangementID,in:project)
+        }
         productionGeneration+=1;let generation=productionGeneration,jobID=newID()
         agentJob=AgentJob(id:jobID,kind:request.method,state:"running",message:isBounce ? "이펙트 포함 바운스":"앨범 WAV 렌더")
         preparing=true;progress=0;status=agentJob!.message

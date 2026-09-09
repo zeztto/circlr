@@ -23,7 +23,7 @@ struct MIDIGridWorkspace:View {
                         Button("선택 해제 · ⇧⌘A"){store.chooseMIDINotes(.clear);focusTarget.focus()}
                     }
                     if !store.midiStepMode {Button("선택 보기"){revealSelectedNotes()}.disabled(selected==nil).help("선택한 MIDI 노트로 이동 · F")}
-                    Button("바운스"){store.bounceTrack()}.disabled(store.preparing)
+                    TrackBounceButton(store:store)
                     Button{store.startMIDIRecording()}label:{Image(systemName:store.midiRecording ? "stop.circle":"record.circle")}.accessibilityLabel(store.midiRecording ? "MIDI 녹음 정지":"MIDI 녹음").disabled(store.editPatternID != nil)
                     Spacer(minLength:0)
                     if store.midiStepMode && steps.drumMode {StepRowSearch(store:store,state:$steps,focusTarget:focusTarget)}

@@ -19,8 +19,7 @@ struct OutputEditor:View {
                     Spacer()
                     Button("볼륨 오토메이션"){openAutomation(.gain)}
                     Button("팬 오토메이션"){openAutomation(.pan)}
-                    Button("트랙 바운스"){store.bounceTrack()}.disabled(store.preparing)
-                        .help("출력 레벨과 오토메이션을 유지하며 앞의 오디오 경로를 바운스합니다")
+                    TrackBounceButton(store:store)
                 }
             }
         }.frame(maxWidth:720,alignment:.leading).frame(maxWidth:.infinity,alignment:.leading)

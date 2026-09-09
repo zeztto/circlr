@@ -86,7 +86,7 @@ struct InlineCircleEditor: View {
                             Toggle("음소거",isOn:Binding(get:{node.muted},set:{value in store.updateMusic("음소거"){$0.muted=value}}))
                             ValueField(title:"출력 볼륨",value:Binding(get:{store.selectedMusic?.gain ?? node.gain},set:{value in store.updateMusic("출력 볼륨"){$0.gain=value}}),range:0...4)
                             Spacer(minLength:8)
-                            Button("트랙 바운스"){store.bounceTrack()}.disabled(store.preparing || store.selectedTrack == nil)
+                            TrackBounceButton(store:store)
                         }.frame(maxWidth:660,alignment:.leading)
                     }.padding(.trailing, 8).rememberEditorScroll(scroll("effect")) }
                 case .instrument:
@@ -127,7 +127,7 @@ struct InlineCircleEditor: View {
     func clipBinding(_ clip: AudioClip, _ key: WritableKeyPath<AudioClip, Double>) -> Binding<Double> { Binding(get: { store.currentLane?.audio.first{$0.id==clip.id}?[keyPath:key] ?? clip[keyPath:key] }, set: { value in editClip(clip) { $0[keyPath:key]=value } }) }
     @ViewBuilder func signalControls(_ node: MusicCircle) -> some View {
         Toggle("음소거", isOn: Binding(get: { node.muted }, set: { value in store.updateMusic("음소거") { $0.muted=value } }))
-        Button("트랙 바운스"){store.bounceTrack()}.disabled(store.preparing || store.selectedTrack == nil)
+        TrackBounceButton(store:store)
         ValueField(title: "출력 볼륨", value: Binding(get: { store.selectedMusic?.gain ?? node.gain }, set: { value in store.updateMusic("출력 볼륨") { $0.gain=value } }), range: 0...4)
     }
 }
