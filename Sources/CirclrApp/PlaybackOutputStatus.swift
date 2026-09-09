@@ -22,7 +22,7 @@ extension AppStore {
         }
         if outputStatus.phase == .connecting {return "출력 \(outputStatus.request == .waiting ? "연결":"대기") \(outputStatus.elapsedSeconds)초"}
         if outputStatus.phase == .ready,[.timedOut,.cancelled].contains(outputStatus.request) {return "출력 준비됨"}
-        return nil
+        return auditionLabel
     }
     var outputDetail:String {
         switch outputStatus.transport.phase {
@@ -42,7 +42,7 @@ extension AppStore {
             return step+" · \(outputStatus.elapsedSeconds)초. "+(outputStatus.request == .waiting ? "Space로 재생 준비를 취소할 수 있습니다.":"재생 요청은 멈췄으며 장치 응답을 기다립니다. 준비되면 다시 재생하세요.")
         }
         if outputStatus.phase == .ready,[.timedOut,.cancelled].contains(outputStatus.request) {return "출력 준비 완료. Space로 다시 재생하세요."}
-        return ""
+        return auditionDetail
     }
     func handlePlaybackError(_ error:Error) {
         refreshOutputStatus()

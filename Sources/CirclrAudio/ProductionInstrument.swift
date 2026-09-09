@@ -92,18 +92,22 @@ public final class LiveSampler {
     private let sample:SampleInstrument
     private var sources:[ID:PCM]=[:]
     private var held:[Int:[AVAudioPlayerNode]]=[:]
-    public init(settings:SampleInstrument,project:Project,root:URL?) throws {
+    public init(settings:SampleInstrument,project:Project,root:URL?,isCurrent:@Sendable()->Bool = {true}) throws {
         sample=settings
         for id in Set((settings.zones ?? []).map(\.assetID)+[settings.assetID]) {
+            guard isCurrent() else{throw CancellationError()}
             guard let asset=project.assets.first(where:{$0.id==id}) else {throw CirclrError("샘플 원본을 찾을 수 없습니다")}
             sources[id]=try PCM.read(ProjectStore.assetURL(asset,root:root))
         }
         let format=AVAudioFormat(standardFormatWithSampleRate:PCM.rate,channels:2)!
-        for _ in 0..<32 {let p=AVAudioPlayerNode();audio.attach(p);audio.connect(p,to:audio.mainMixerNode,format:format);players.append(p)}
+        for _ in 0..<32 {guard isCurrent() else{throw CancellationError()};let p=AVAudioPlayerNode();audio.attach(p);audio.connect(p,to:audio.mainMixerNode,format:format);players.append(p)}
+        guard isCurrent() else{throw CancellationError()}
         try audio.start()
+        if !isCurrent(){audio.stop();throw CancellationError()}
     }
-    public func note(_ pitch:Int,velocity:Int,on:Bool) throws {
+    public func note(_ pitch:Int,velocity:Int,on:Bool,isCurrent:@Sendable()->Bool = {true}) throws {
         if !on {if !sample.oneShot {held[pitch]?.forEach{$0.stop()};held[pitch]=nil};return}
+        guard isCurrent() else{return}
         let zone=sample.zones?.first{$0.pitch==pitch}
         if sample.zones?.isEmpty == false && zone == nil {return}
         guard let source=sources[zone?.assetID ?? sample.assetID] else {return}
@@ -112,7 +116,11 @@ public final class LiveSampler {
         let length=min(60,source.duration/pow(2,Double(pitch-root)/12))
         let clock=try MusicClock(beats:max(0.01,length*2),context:context)
         let pcm=try ProductionInstrument.sampler([Note(beat:0,length:clock.beats,pitch:pitch,velocity:velocity)],source:source,settings:SampleInstrument(assetID:sample.assetID,rootPitch:root),clock:clock,tail:0)
-        let player=players[cursor];cursor=(cursor+1)%players.count;player.stop();player.scheduleBuffer(try pcm.buffer());player.play()
+        let buffer=try pcm.buffer();guard isCurrent() else{return}
+        let player=players[cursor];cursor=(cursor+1)%players.count;player.stop();player.volume=0;player.scheduleBuffer(buffer)
+        guard isCurrent() else{player.stop();return}
+        player.play();guard isCurrent() else{player.stop();return};player.volume=1
+        guard isCurrent() else{player.stop();return}
         if !sample.oneShot {held[pitch,default:[]].append(player)}
     }
     public func stop(){audio.stop()}
@@ -122,7 +130,7 @@ public final class LiveSampler {
 public final class LiveSynth {
     private let synth:SynthEngine
     private let audio=AVAudioEngine()
-    public init(patch:SynthPatch) throws {
+    public init(patch:SynthPatch,isCurrent:@Sendable()->Bool = {true}) throws {
         synth=try SynthEngine(patch);let engine=synth
         let format=AVAudioFormat(standardFormatWithSampleRate:PCM.rate,channels:2)!
         let source=AVAudioSourceNode(format:format) { _,_,frames,buffers in
@@ -130,7 +138,10 @@ public final class LiveSynth {
             guard list.count>=2,let l=list[0].mData?.assumingMemoryBound(to:Float.self),let r=list[1].mData?.assumingMemoryBound(to:Float.self) else {return -1}
             l.initialize(repeating:0,count:Int(frames));r.initialize(repeating:0,count:Int(frames));engine.render(left:l,right:r,frames:frames);return 0
         }
-        audio.attach(source);audio.connect(source,to:audio.mainMixerNode,format:format);try audio.start()
+        guard isCurrent() else{throw CancellationError()}
+        audio.attach(source);audio.connect(source,to:audio.mainMixerNode,format:format)
+        guard isCurrent() else{throw CancellationError()}
+        try audio.start();if !isCurrent(){audio.stop();throw CancellationError()}
     }
     public func note(_ pitch:Int,velocity:Int,on:Bool){synth.note(pitch,velocity:velocity,on:on)}
     public func stop(){audio.stop()}

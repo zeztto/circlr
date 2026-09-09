@@ -6,7 +6,9 @@ macOS용 앨범·송폼 궤도 편집기. **앨범 → 곡·악장 → 섹션 �
 
 연결 UI는 [서클 둘레 8방향 IN/OUT과 다중 입출력](docs/22-eight-direction-ports.md)으로 확장 중이다. 포트의 신호 의미와 연결점 배치를 분리한다. 아래 일반 사용법은 배포된 0.19 앱 기준이며 새 포트 기능은 독립 개발 브랜치에서 검증한다.
 
-현재 **`codex/daw-integration`의 0.20.0 build 42**에 녹음 lifecycle과 8방향·다중 bus·그룹 포트를 통합했다. 같은 캔버스의 연결 편집·녹음 상태·스텝·오토메이션이 공존하며, 녹음 시작·정리 중 음악 편집과 Undo의 경쟁을 차단한다. build 23의 실제 편집·바운스·Undo·저장/재열기·닫기 최소화 및 출력별 모션 검증은 [통합 QA](qa/daw-integration-review.md)에 기록했다.
+현재 **`codex/daw-integration`의 0.20.0 build 43**에 녹음 lifecycle과 8방향·다중 bus·그룹 포트를 통합했다. 같은 캔버스의 연결 편집·녹음 상태·스텝·오토메이션이 공존하며, 녹음 시작·정리 중 음악 편집과 Undo의 경쟁을 차단한다. build 23의 실제 편집·바운스·Undo·저장/재열기·닫기 최소화 및 출력별 모션 검증은 [통합 QA](qa/daw-integration-review.md)에 기록했다.
+
+build 43은 **악기 미리 듣기를 UI 밖의 worker로 분리**했다. 준비 중 놓은 건반·취소된 요청을 폐기하고, 같은 건반 재누르기·악기 교체·정리·timeout을 관리한다. 기존 transport 줄의 준비/정리 표시와 Space 취소, MCP 상태 조회를 제공한다. Swift **345개**·Python **26개**, 실제 장치 대기 중 노트/숫자 편집·취소·Undo·저장/재열기를 검증했다. 정상 음원 출력과 HAL 지연 해결은 아직 확인하지 못했다. [계약](docs/57-audition-worker.md) · [QA](qa/audition-worker-review.md).
 
 build 42는 **MIDI 가져오기의 시작 위치를 직접 확인·수정**한다. 메뉴·라이브러리·궤도 drop이 같은 시작 박을 전달하고 파일의 선행 쉼표·노트 간격을 보존한다. 길이 초과 안내와 이번 섹션 연장, 단일 서클 편집/다중 서클 전체 보기, 외부 변경 거절을 지원한다. [작업 계약](docs/56-midi-import-placement.md) · [검증과 제한](qa/midi-placement-review.md).
 

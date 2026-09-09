@@ -116,7 +116,6 @@ import CirclrAudio
     var mediaImportGeneration=0
     var productionGeneration = 0
     var productionMediaRoot:URL {storageRoot.appendingPathComponent("Bounces")}
-    private var liveTask: Task<Void,Never>?
     private var recordRepeats = 1
     private var undoStack: [(String,Project,Bool)] = []
     private var redoStack: [(String,Project,Bool)] = []
@@ -124,12 +123,8 @@ import CirclrAudio
     @Published var connectionEditorIntent: ConnectionEditorIntent?
     private var timer: Timer?
     private var midiInput: MIDIInput?
-    private var liveSynth: LiveSynth?
-    private var liveSampler: LiveSampler?
-    private var liveEngine: AVAudioEngine?
-    private var liveUnit: AVAudioUnit?
-    private var liveTrackKey = ""
-    private var liveGeneration = 0
+    let auditionOutput=AuditionTransport()
+    @Published var auditionStatus=AuditionStatus()
     @Published var audioRecordPending=false
     @Published var audioCapturePhase:AudioRecorder.Phase = .idle
     @Published var audioCaptureMessage=""
@@ -216,7 +211,9 @@ import CirclrAudio
     }
     var isPlaying: Bool { playback.playing }
     var hasPendingMusic: Bool { playback.playing && prepared?.plan.revision != project.musicRevision }
+    deinit {auditionOutput.shutdown()}
     func tick() {
+        refreshAuditionStatus()
         refreshOutputStatus()
         meter.update(seconds:playback.seconds,playing:playback.playing)
         captureMovieTick()
@@ -367,9 +364,10 @@ import CirclrAudio
     func addNote(beat:Double,pitch:Int,length:Double = 0.5) {
         guard let trackID = selectedTrackID else { return }; var lane = currentLane ?? Lane(trackID:trackID)
         let note = Note(beat:max(0,beat),length:max(0.03125,min(length,editorBeats-beat)),pitch:max(0,min(127,pitch)))
-        lane.notes.append(note); setLane(lane); selectedNoteID = note.id; audition(pitch:note.pitch,velocity:note.velocity,on:true)
-        let auditionGeneration=liveGeneration
-        Task { try? await Task.sleep(nanoseconds:180_000_000); guard liveGeneration==auditionGeneration else{return}; audition(pitch:note.pitch,velocity:0,on:false) }
+        lane.notes.append(note); setLane(lane); selectedNoteID = note.id
+        if let token=audition(pitch:note.pitch,velocity:note.velocity,on:true) {
+            Task { try? await Task.sleep(nanoseconds:180_000_000); auditionOutput.release(token) }
+        }
     }
     func removeNote() {editMIDINotes(.delete)}
     func makePattern() {
@@ -386,6 +384,8 @@ import CirclrAudio
     }
     func play(onlySelection:Bool = false) {
         library.stopPreview()
+        if auditionOutput.status.pending {stop();return}
+        cancelAudition()
         if moviePreparing {stop();return}
         if midiRecording || audioRecording || audioRecordPending {stop();return}
         if playback.playing { stop(); return }
@@ -476,65 +476,6 @@ import CirclrAudio
         let alert = NSAlert(); alert.messageText = "저장되지 않은 곡을 복구할까요?"; alert.informativeText = recovery.project.name; alert.addButton(withTitle:"복구"); alert.addButton(withTitle:"새로 시작")
         if alert.runModal() == .alertFirstButtonReturn { do { var restored = recovery.project; restored.enableAlbum(); project = try SectionGraphMigration.migrate(restored) } catch { fail(error); return }; mediaRoot = recovery.root; selectedTrackID = project.tracks.first?.id; dirty = true; status = "복구 완료 · 새 위치에 저장하세요" }
         else { try? FileManager.default.removeItem(at:recoveryURL) }
-    }
-    func cancelAudition() {
-        liveGeneration += 1
-        let engine = liveEngine,synth=liveSynth,sampler=liveSampler
-        liveSynth=nil;liveSampler=nil
-        liveEngine = nil; liveUnit = nil; liveTrackKey = ""
-        Task.detached { engine?.stop();synth?.stop();sampler?.stop() }
-    }
-    func audition(pitch:Int,velocity:Int,on:Bool) {
-        guard let track = selectedTrack else { return }
-        let key = track.id + ((try? JSONEncoder().encode(track.instrument).base64EncodedString()) ?? "")
-        let snapshot=project,root=mediaRoot
-        let previous = liveTask, generation = liveGeneration
-        liveTask = Task {
-            await previous?.value
-            guard generation == liveGeneration else { return }
-            do {
-                if track.instrument.kind == .synthesizer {
-                    if liveTrackKey != key {
-                        let old=liveSynth
-                        let synth=try await Task.detached(priority:.userInitiated) {old?.stop();return try LiveSynth(patch:track.instrument.synth ?? SynthPatch())}.value
-                        guard generation==liveGeneration else {synth.stop();return}
-                        liveSynth=synth;liveTrackKey=key
-                    }
-                    liveSynth?.note(pitch,velocity:velocity,on:on);return
-                }
-                if track.instrument.kind == .sampler {
-                    guard let settings=track.instrument.sample else {throw CirclrError("샘플을 선택하세요")}
-                    if liveTrackKey != key {
-                        let old=liveSampler
-                        let sampler=try await Task.detached(priority:.userInitiated) {old?.stop();return try LiveSampler(settings:settings,project:snapshot,root:root)}.value
-                        guard generation==liveGeneration else {sampler.stop();return}
-                        liveSampler=sampler;liveTrackKey=key
-                    }
-                    try liveSampler?.note(pitch,velocity:velocity,on:on);return
-                }
-                if liveTrackKey != key {
-                    let previousEngine = liveEngine
-                    liveUnit = nil; liveTrackKey = ""
-                    // Hardware IPC must not stall note editing on the main thread.
-                    let pair = try await Task.detached(priority:.userInitiated) {
-                        previousEngine?.stop()
-                        let unit = try await AudioUnitHost.instrument(track.instrument), engine = AVAudioEngine()
-                        engine.attach(unit)
-                        engine.connect(unit,to:engine.mainMixerNode,format:AVAudioFormat(standardFormatWithSampleRate:PCM.rate,channels:2))
-                        try engine.start()
-                        return (engine,unit)
-                    }.value
-                    guard generation == liveGeneration else {
-                        Task.detached { pair.0.stop() }
-                        return
-                    }
-                    liveEngine = pair.0; liveUnit = pair.1; liveTrackKey = key
-                }
-                guard let midi = liveUnit?.auAudioUnit.scheduleMIDIEventBlock else { return }
-                let bytes:[UInt8] = [(on ? 0x90 : 0x80) | (track.instrument.drums ? 9 : 0),UInt8(clamping:pitch),UInt8(clamping:velocity)]
-                bytes.withUnsafeBufferPointer{ midi(AUEventSampleTimeImmediate,0,3,$0.baseAddress!) }
-            } catch { if generation == liveGeneration { fail(error) } }
-        }
     }
     func midi(status:UInt8,pitch:Int,velocity:Int,time:Double) {
         let type = status & 0xF0
@@ -655,7 +596,7 @@ import CirclrAudio
                           (effect ? self.selectedSignal?.id==nodeID:self.selectedTrackID==trackID),
                           (effect ? self.selectedSignal?.effect.kind == .audioUnit:self.selectedTrack?.instrument.kind == .audioUnit),
                           (effect ? self.selectedSignal?.effect.plugin?.id:self.selectedTrack?.instrument.plugin?.id)==descriptor.id else { return }
-                    do { let state = try AudioUnitHost.capture(unit); self.mutate("Audio Unit 설정") { p in if effect,let i = p.signal.nodes.firstIndex(where:{$0.id == nodeID}) { p.signal.nodes[i].effect.plugin?.state = state } else if let i = p.tracks.firstIndex(where:{$0.id == trackID}) { p.tracks[i].instrument.plugin?.state = state } }; self.liveTrackKey = "" }
+                    do { let state = try AudioUnitHost.capture(unit); self.mutate("Audio Unit 설정") { p in if effect,let i = p.signal.nodes.firstIndex(where:{$0.id == nodeID}) { p.signal.nodes[i].effect.plugin?.state = state } else if let i = p.tracks.firstIndex(where:{$0.id == trackID}) { p.tracks[i].instrument.plugin?.state = state } }; self.cancelAudition() }
                     catch { self.fail(error) }
                 })
                 self.embeddedPlugin = wrapper

@@ -2,6 +2,12 @@
 
 0.1–0.3은 설계 문서 revision이며, 0.4.0부터 로컬 실행 프로토타입을 포함한다.
 
+## 개발 중 — 0.20.0 build 43 미리 듣기 worker
+
+- 신스·샘플러·Audio Unit 미리 듣기의 생성/노트/샘플 렌더/정리를 UI 밖으로 옮겼다. 현재 누른 노트만 보관하고 준비 중 release, 같은 pitch 재누르기, 오래된 자동 note-off와 target 변경을 구분한다.
+- 준비·정리 중 backend를 중복 생성하지 않으며 10초 timeout/Space 취소 상태를 transport 줄과 MCP snapshot에 표시한다. 새로운 요청이 진행 중인 장치 대기 시간을 초기화하지 않는다.
+- Swift 345개·Python 26개 및 실제 sampler 준비 대기 중 편집/취소·Undo/저장/재열기·worker/main stack·패키지를 검증했다. HAL 연결 완료·정상 소리·마이크·출고 MP4는 미검증으로 유지한다. [QA](qa/audition-worker-review.md).
+
 ## 개발 중 — 0.20.0 build 42 MIDI 가져오기 위치
 
 - MIDI의 시작 박과 자유 배치 좌표를 메뉴·라이브러리·drop에서 공통 초안으로 전달한다. 1부터 세는 4분음표 박 입력, 예상 끝 위치, 초과 시 확정 비활성화와 이번 섹션 연장을 같은 화면에 제공한다.
