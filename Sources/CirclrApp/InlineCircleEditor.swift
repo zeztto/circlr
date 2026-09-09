@@ -155,6 +155,17 @@ struct HierarchySettingsEditor: View {
     @ObservedObject var store: AppStore
     var body: some View {
         VStack(alignment:.leading,spacing:18) {
+            if case .section=store.hierarchySelection,let use=store.selectedUse {
+                Button{store.showConnections(portID:CirclePort.flowOutput)}label:{
+                    HStack(spacing:12) {
+                        VStack(alignment:.leading,spacing:5) {
+                            Text("섹션 순서·전환").font(.system(size:14,weight:.medium))
+                            Text("다음 섹션 연결 \(store.project.active.edges.filter{$0.from==use.id}.count)개 · 재생 경로와 전환 효과").font(.system(size:12)).foregroundStyle(StudioTheme.secondary)
+                        }.frame(maxWidth:.infinity,alignment:.leading)
+                        Image(systemName:"arrow.triangle.branch").foregroundStyle(StudioTheme.accent)
+                    }.padding(12).background(StudioTheme.raised,in:RoundedRectangle(cornerRadius:6))
+                }.buttonStyle(.plain).frame(maxWidth:660).accessibilityLabel("섹션 순서·전환 · "+use.name).help("다음 섹션 검색 · 재생 분기 · 전환 효과 · 연결 L")
+            }
             if case .composition(let id)=store.hierarchySelection,
                let composition=store.project.album?.composition(id),!composition.arrangementIDs.isEmpty {
                 ArrangementPickerButton(store:store,owner:composition)
@@ -176,11 +187,6 @@ struct HierarchySettingsEditor: View {
                 CountControl(title:"마디",value:Binding(get:{store.selectedUse?.barsOverride ?? store.project.sections.first{$0.id==use.sectionID}?.bars ?? 8},set:{v in store.updateUse("섹션 길이"){$0.barsOverride=v}}),range:1...1024)
                 CountControl(title:"반복",value:Binding(get:{store.selectedUse?.repeatCount ?? use.repeatCount},set:{v in store.updateUse("섹션 반복"){$0.repeatCount=v}}),range:1...256)
                 HStack{Button("시작 섹션으로 지정"){store.setStart()};Button("재사용"){store.reuse()};Button("독립 원본으로 분리"){store.detach()}}
-                let address=CircleAddress.section(arrangementID:store.project.activeArrangementID,useID:use.id)
-                Menu("다음 섹션 연결"){ForEach(store.project.active.uses.filter{$0.id != use.id}){target in Button(target.name){store.connectHierarchy(address,.section(arrangementID:store.project.activeArrangementID,useID:target.id))}}}
-                ForEach(store.project.active.edges.filter{$0.from==use.id}){edge in
-                    HStack{Text(store.project.active.uses.first{$0.id==edge.to}?.name ?? "다음 섹션");Spacer();Button(store.project.active.chosenEdges[use.id]==edge.id ? "재생 경로":"이 경로 재생"){store.chooseHierarchyEdge(address,edgeID:edge.id)};Button("전환 편집"){store.openHierarchyTransition(address,edgeID:edge.id)};Button("연결 해제"){store.disconnectHierarchy(address,edgeID:edge.id)}}
-                }
             }
             if let music=store.selectedMusic {
                 Toggle("음소거",isOn:Binding(get:{music.muted},set:{v in store.updateMusic("음소거"){$0.muted=v}}))

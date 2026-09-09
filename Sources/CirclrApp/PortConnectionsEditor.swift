@@ -12,7 +12,7 @@ struct ConnectionEditorIntent: Equatable, Codable {
 extension AppStore {
     var canEditCirclePorts:Bool {selectedCircle?.ports.isEmpty == false || selectedHierarchyGroup != nil}
     func showConnections(portID: String? = nil, replacing: CircleConnectionID? = nil) {
-        guard let node = selectedCircle, canEditCirclePorts else { return }
+        guard nameEditing.resolve(),let node = selectedCircle, canEditCirclePorts else { return }
         connectionEditorIntent = .init(projectID: project.id, node: node.id, portID: portID, connection: replacing)
         connectionsOpen = true; hierarchySettingsOpen = false; focusHierarchy(node.id, detail: true)
     }
@@ -72,13 +72,12 @@ struct PortConnectionsEditor: View {
     }
     private var targets: [PortTargetItem] {
         guard let own else { return [] }
-        return (store.hierarchyScene?.nodes ?? []).flatMap { n in n.ports.compactMap { port in
+        let choices=(store.hierarchyScene?.nodes ?? []).flatMap { n in n.ports.compactMap { port->PortTargetItem? in
             let endpoint = CirclePortEndpoint(node: n.id, portID: port.id)
             guard (try? CirclePortCatalog.normalize(own, endpoint, in: store.project)) != nil else { return nil }
-            let title = n.title + " · " + port.name
-            guard query.isEmpty || title.localizedCaseInsensitiveContains(query) else { return nil }
-            return PortTargetItem(endpoint:endpoint,title:n.title,port:port.name)
+            return ConnectionTargetSearch.choice(endpoint,name:n.title,port:port.name,in:store.project)
         } }
+        return ConnectionTargetSearch.search(choices,query:query)
     }
     private var listedConnections:[CirclePortConnection] {
         guard currentPortOnly,let own else{return connections}
@@ -156,7 +155,7 @@ struct PortConnectionsEditor: View {
                 Spacer()
             }.frame(height:14)
             HStack(spacing:8) {
-                PortSearchField(text:$query,keyboard:keyboard,order:20,moveSelection:moveTarget,submit:{commit();focusSearch()})
+                PortSearchField(text:$query,keyboard:keyboard,order:20,label:"대상 이름 · 경로 · #섹션 번호 검색",moveSelection:moveTarget,submit:{commit();focusSearch()})
                 Text("\(targets.count)개").font(.system(size:11)).foregroundStyle(StudioTheme.secondary).frame(width:36)
             }.frame(height:34)
             if targets.isEmpty {Text(query.isEmpty ? "연결 가능한 대상 포트가 없습니다":"검색 결과가 없습니다").foregroundStyle(StudioTheme.secondary).frame(maxWidth:.infinity).frame(height:max(60,height-148))}
@@ -173,7 +172,14 @@ struct PortConnectionsEditor: View {
         let endpoint=visible(presented(endpoint))
         let name = store.hierarchyScene?.node(endpoint.node)?.title ?? storedTitle(endpoint.node)
         let port = (try? CirclePortCatalog.ports(at: endpoint.node, in: store.project))?.first { $0.id == endpoint.portID }?.name ?? endpoint.portID
-        return name + " · " + port
+        let choice=ConnectionTargetSearch.choice(endpoint,name:name,port:port,in:store.project)
+        return choice.title + " · " + choice.detail
+    }
+    private func displayTitle(_ endpoint:CirclePortEndpoint)->String {
+        let endpoint=visible(presented(endpoint))
+        let name=store.hierarchyScene?.node(endpoint.node)?.title ?? storedTitle(endpoint.node)
+        let port=(try? CirclePortCatalog.ports(at:endpoint.node,in:store.project))?.first{$0.id==endpoint.portID}?.name ?? endpoint.portID
+        return ConnectionTargetSearch.choice(endpoint,name:name,port:port,in:store.project).title+" · "+port
     }
     private func storedTitle(_ address:CircleAddress)->String {
         switch address {
@@ -190,8 +196,22 @@ struct PortConnectionsEditor: View {
     }
     private func row(_ edge: CirclePortConnection, index: Int) -> some View {
         VStack(alignment: .leading, spacing: 5) {
-            Text(title(edge.from)).lineLimit(2).help(title(edge.from))
-            Label(title(edge.to), systemImage: "arrow.down.right").lineLimit(2).help(title(edge.to))
+            Text(displayTitle(edge.from)).lineLimit(2).help(title(edge.from)).accessibilityLabel(title(edge.from))
+            Label(displayTitle(edge.to), systemImage: "arrow.down.right").lineLimit(2).help(title(edge.to)).accessibilityLabel(title(edge.to))
+            if SectionFlowSelection.edge(edge.id,in:store.project) != nil {
+                HStack(spacing:8) {
+                    let selected=SectionFlowSelection.isSelected(edge.id,in:store.project)
+                    PortActionButton(title:selected ? "재생 경로":"이 경로 재생",keyboard:keyboard,order:98+index*10,
+                                     label:(selected ? "재생 경로 · ":"이 경로 재생 · ")+title(edge.to)) {
+                        store.mutate("재생할 분기 선택"){try SectionFlowSelection.choose(edge.id,in:&$0)}
+                    }.frame(width:110).disabled(selected)
+                    PortActionButton(title:"전환 편집",keyboard:keyboard,order:99+index*10,label:"전환 편집 · "+title(edge.from)+" → "+title(edge.to)) {
+                        guard SectionFlowSelection.edge(edge.id,in:store.project) != nil else{return}
+                        store.connectionsOpen=false;store.openHierarchyTransition(edge.from.node,edgeID:edge.id.edgeID)
+                    }.frame(width:90)
+                    Spacer(minLength:0)
+                }
+            }
             HStack(spacing:8) {
             if edge.signal != .flow || { if case .section = edge.from.node { return true }; return false }() {
                     PortActionButton(title: "재연결", keyboard: keyboard, order: 100+index*10, label: "재연결 · " + title(edge.from) + " → " + title(edge.to)) { populate(edge); focusSearch() }
@@ -203,7 +223,7 @@ struct PortConnectionsEditor: View {
                 PortChoice(label:"OUT 위치 · "+title(edge.from),selection:Binding(get:{store.project.portLayout?.placement(for:edge.id).from ?? .east},set:{store.moveConnection(edge.id,from:$0)}),options:PortOctant.allCases.map{($0,"OUT "+$0.label)},keyboard:keyboard,order:102+index*10).frame(width:110)
                 PortChoice(label:"IN 위치 · "+title(edge.to),selection:Binding(get:{store.project.portLayout?.placement(for:edge.id).to ?? .west},set:{store.moveConnection(edge.id,to:$0)}),options:PortOctant.allCases.map{($0,"IN "+$0.label)},keyboard:keyboard,order:103+index*10).frame(width:100)
             }
-            Text(edge.signal == .audio ? "오디오 · \(GainScale.text(edge.gain)) dB" : edge.signal == .midi ? "MIDI 연주" : "재생 경로").font(.system(size:11)).foregroundStyle(StudioTheme.secondary)
+            if edge.signal != .flow {Text(edge.signal == .audio ? "오디오 · \(GainScale.text(edge.gain)) dB" : "MIDI 연주").font(.system(size:11)).foregroundStyle(StudioTheme.secondary)}
             Divider()
         }.padding(6).background(replacing==edge.id ? StudioTheme.raised:Color.clear,in:RoundedRectangle(cornerRadius:5))
     }

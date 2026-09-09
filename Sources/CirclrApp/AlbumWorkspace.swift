@@ -284,9 +284,11 @@ extension AppStore {
         }
     }
     func chooseHierarchyEdge(_ address: CircleAddress, edgeID: ID) {
+        guard case .section(let ai,let use)=address,
+              let edge=project.arrangements.first(where:{$0.id==ai})?.edges.first(where:{$0.id==edgeID && $0.from==use}) else{return}
+        let id=CircleConnectionID(edgeID:edgeID,from:address,to:.section(arrangementID:ai,useID:edge.to))
         selectHierarchy(address)
-        guard case .section(_,let use)=address else{return}
-        mutate("재생할 분기 선택") { p in p.arrangements[p.activeIndex].chosenEdges[use]=edgeID; if let i=p.arrangements[p.activeIndex].uses.firstIndex(where:{$0.id==use}){p.arrangements[p.activeIndex].uses[i].isEnd=false} }
+        mutate("재생할 분기 선택") {try SectionFlowSelection.choose(id,in:&$0)}
     }
     func openHierarchyTransition(_ address: CircleAddress, edgeID: ID) {
         focusHierarchy(address,detail:true); self.edgeSelection=edgeID; hierarchyTransitionID=edgeID; hierarchySettingsOpen=true

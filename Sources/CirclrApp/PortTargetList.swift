@@ -2,11 +2,7 @@ import AppKit
 import SwiftUI
 import CirclrCore
 
-struct PortTargetItem:Equatable {
-    let endpoint:CirclePortEndpoint
-    let title:String
-    let port:String
-}
+typealias PortTargetItem=ConnectionTargetChoice
 
 /// Visible search results, sharing the connection editor's local keyboard loop.
 struct PortTargetList:NSViewRepresentable {
@@ -28,7 +24,7 @@ struct PortTargetList:NSViewRepresentable {
         table.wantsLayer=true
         let column=NSTableColumn(identifier:NSUserInterfaceItemIdentifier("target"))
         column.resizingMask = .autoresizingMask;table.addTableColumn(column)
-        table.headerView=nil;table.rowHeight=46;table.intercellSpacing=NSSize(width:0,height:2)
+        table.headerView=nil;table.rowHeight=62;table.intercellSpacing=NSSize(width:0,height:2)
         table.backgroundColor=StudioTheme.raisedNS;table.allowsEmptySelection=true
         table.columnAutoresizingStyle = .uniformColumnAutoresizingStyle
         table.dataSource=context.coordinator;table.delegate=context.coordinator
@@ -75,15 +71,18 @@ struct PortTargetList:NSViewRepresentable {
         func tableView(_ tableView:NSTableView,viewFor tableColumn:NSTableColumn?,row:Int)->NSView? {
             guard items.indices.contains(row) else{return nil}
             let item=items[row],cell=NSTableCellView()
-            let name=NSTextField(labelWithString:item.title),port=NSTextField(labelWithString:item.port)
+            let name=NSTextField(labelWithString:item.title),port=NSTextField(labelWithString:item.detail)
             name.font = .systemFont(ofSize:13,weight:.medium);name.textColor=StudioTheme.textNS
             port.font = .systemFont(ofSize:11);port.textColor=StudioTheme.secondaryNS
             for field in [name,port] {field.lineBreakMode = .byTruncatingTail;field.translatesAutoresizingMaskIntoConstraints=false;cell.addSubview(field)}
+            name.maximumNumberOfLines=2;name.usesSingleLineMode=false;name.cell?.wraps=true
             NSLayoutConstraint.activate([
                 name.leadingAnchor.constraint(equalTo:cell.leadingAnchor,constant:8),name.trailingAnchor.constraint(equalTo:cell.trailingAnchor,constant:-8),name.topAnchor.constraint(equalTo:cell.topAnchor,constant:5),
+                name.heightAnchor.constraint(equalToConstant:32),
                 port.leadingAnchor.constraint(equalTo:name.leadingAnchor),port.trailingAnchor.constraint(equalTo:name.trailingAnchor),port.topAnchor.constraint(equalTo:name.bottomAnchor,constant:3)
             ])
-            cell.textField=name;cell.toolTip=item.title+" · "+item.port
+            cell.textField=name;cell.toolTip=item.title+" · "+item.detail
+            cell.setAccessibilityLabel(item.title+" · "+item.detail)
             return cell
         }
         func tableViewSelectionDidChange(_ notification:Notification) {

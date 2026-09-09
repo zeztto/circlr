@@ -84,12 +84,14 @@ struct TransitionWorkspace:View {
         }
     }
     func endpoint(_ id:ID,label:String)->some View {
-        Button {
+        let endpoint=CirclePortEndpoint(node:.section(arrangementID:arrangementID,useID:id),portID:CirclePort.flowInput)
+        let choice=ConnectionTargetSearch.choice(endpoint,name:use(id)?.name ?? "섹션 없음",port:label,in:store.project)
+        return Button {
             guard isCurrent else{return}
             store.hierarchyTransitionID=nil;store.hierarchySettingsOpen=false
             store.focusHierarchy(.section(arrangementID:arrangementID,useID:id),detail:false)
-        } label: {Text(use(id)?.name ?? "섹션 없음").lineLimit(1)}
-            .accessibilityLabel(label+" · "+(use(id)?.name ?? "섹션 없음")).help(label+"으로 이동")
+        } label: {Text(choice.title).lineLimit(2)}
+            .accessibilityLabel(label+" · "+choice.title).help(choice.title+" · "+choice.detail+" · 섹션으로 이동")
     }
     @ViewBuilder func timingSummary(_ edge:FlowEdge)->some View {
         switch timing(edge) {

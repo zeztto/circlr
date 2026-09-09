@@ -23,3 +23,5 @@ Core 테스트 후 전체 Swift(기존 물리 playback 제외)/Python/키트/rel
 build63 구현·검증 완료. Swift457개·Python28개와 최종 release, 실제 2곡/67편곡·26상태·24화면을 검사했다. 설정 검색 버튼이 스크롤 아래 가려지는 것을 발견해 설정 맨 위로 옮겼다. 현재 재선택/Redo, 다른 곡 범위, 이름 확정, 오래된 요청, 빈 편곡, 저장/재열기와 최종 소스·앱 보존 근거는 [QA 보고서](../qa/arrangement-search-review.md)에 있다. 사용자 재요청에 따른 독립 review dispatch도 실제 thread limit으로 거절돼 순차 검토했다.
 
 다음 UI slice는 `HierarchySettingsEditor`의 `다음 섹션 연결` 메뉴다. 많은 섹션과 동명 사용을 번호·경로로 구분하고, 기존 연결의 생성/재생 경로/전환/해제를 한 화면에서 찾는 UX를 먼저 정한다. 기존 PortConnectionsEditor의 직접 연결 흐름을 확인해 중복 검색 화면을 만들지 않는다. 음악 설정의 스크롤 깊이는 현재 출처/유효값·직접 입력/Undo·원본 범위를 보존하는 별도 계약으로 다룬다. 물리 I/O 출고 조건은 이 UI 완료와 분리해 유지한다.
+
+섹션 연결의 후속 slice는 [build64 계약](78-section-connection-workspace.md)과 [QA](../qa/section-connection-review.md)에서 구현·검증했다. 음악 설정/작업 복귀는 다음 범위로 유지한다.
