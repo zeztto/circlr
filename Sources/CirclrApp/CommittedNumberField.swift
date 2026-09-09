@@ -89,12 +89,13 @@ struct CommittedNumberField: View {
     var width: CGFloat=72
     var alignment: TextAlignment = .trailing
     var presentation:NumberEditPresentation = .number
+    var validate:((Double)throws->Void)?
     @Environment(\.numberEditing) private var context
     @State private var error=""
     @State private var editing=false
 
     var body: some View {
-        NativeNumberField(title:title,value:$value,range:range,integerOnly:integerOnly,alignment:alignment,presentation:presentation,context:context,error:$error,editing:$editing)
+        NativeNumberField(title:title,value:$value,range:range,integerOnly:integerOnly,alignment:alignment,presentation:presentation,validate:validate,context:context,error:$error,editing:$editing)
             .id(presentation).frame(height:18).padding(.horizontal,8).frame(width:width,height:32)
             .background(StudioTheme.raised,in:RoundedRectangle(cornerRadius:5))
             .overlay(RoundedRectangle(cornerRadius:5).strokeBorder(error.isEmpty ? (editing ? StudioTheme.accent:StudioTheme.line):Color.red,lineWidth:editing || !error.isEmpty ? 1.5:1))
@@ -112,6 +113,7 @@ private struct NativeNumberField: NSViewRepresentable {
     let integerOnly:Bool
     let alignment:TextAlignment
     let presentation:NumberEditPresentation
+    let validate:((Double)throws->Void)?
     let context:NumberEditingContext
     @Binding var error:String
     @Binding var editing:Bool
@@ -186,6 +188,7 @@ private struct NativeNumberField: NSViewRepresentable {
         @discardableResult func commit() -> Bool {
             do {
                 let next=try draft.resolve(value:parent.value,context:parent.context.current(),range:parent.range,integerOnly:parent.integerOnly)
+                if let next {try parent.validate?(next)}
                 draft.reset(value:next ?? parent.value);parent.error=""
                 if let next {parent.value=next}
                 return true

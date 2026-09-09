@@ -2,7 +2,7 @@ import AppKit
 import CirclrCore
 import CirclrAudio
 
-struct MediaImportRequest {
+struct MediaImportRequest:Equatable {
     let projectID:ID
     let revision:Int
     let generation:Int

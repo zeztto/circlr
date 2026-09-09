@@ -1,6 +1,6 @@
 import Foundation
 
-public enum AudioImportDestination {
+public enum AudioImportDestination:Equatable {
     case section(arrangementID:ID,useID:ID,trackID:ID?,beat:Double,position:Point?,original:Bool)
     case pattern(id:ID,beat:Double)
 }

@@ -39,7 +39,11 @@ func mediaLibraryError(_ error:Error)->String {
     @Published private(set) var selectedID:String?
     @Published private(set) var chosenIDs:Set<String>=[]
     private var rangeAnchor:String?
-    @Published var foldersVisible=false {didSet{if foldersVisible{stopPreview()}}}
+    enum Workspace {case files,folders,destination}
+    @Published var workspace=Workspace.files {didSet{if workspace != .files{stopPreview()}}}
+    @Published var searchFocus=UUID()
+    var foldersVisible:Bool {get{workspace == .folders}set{workspace=newValue ? .folders:.files}}
+    var choosingDestination:Bool {get{workspace == .destination}set{workspace=newValue ? .destination:.files}}
     @Published private(set) var scanning=false
     @Published private(set) var searching=false
     @Published var notice=""
@@ -225,7 +229,7 @@ func mediaLibraryError(_ error:Error)->String {
         }
     }
     func togglePreview() {
-        guard !foldersVisible else{return}
+        guard workspace == .files else{return}
         if previewPreparing || previewing {stopPreview();return}
         guard !previewPending else{notice="이전 출력 준비를 정리하고 있습니다. 잠시 뒤 다시 시도하세요";return}
         guard let entry=selected,entry.kind == .audio,let folder=folders.first(where:{$0.id==entry.folderID}) else{return}

@@ -20,17 +20,18 @@ extension AppStore {
     var libraryDestinationText:String {
         guard let target=libraryDestination else{return "가져올 섹션을 선택하세요"}
         switch target.destination {
-        case .pattern(let id,let beat):return "\(project.patterns.first{$0.id==id}?.name ?? "리듬") · \(beat.formatted())박"
+        case .pattern(let id,let beat):return "\(project.patterns.first{$0.id==id}?.name ?? "리듬") · \((beat+1).formatted())박"
         case .section(let a,let u,let track,let beat,_,let original):
-            let name=project.arrangements.first{$0.id==a}?.uses.first{$0.id==u}?.name ?? "섹션"
-            let lane=library.chosenIDs.count>1 ? "새 트랙 \(library.chosenIDs.count)개":project.tracks.first{$0.id==track}?.name ?? "새 트랙"
-            return "\(name) › \(lane) · \(beat.formatted())박"+(original ? " · 공유 원본":"")
+            let name=studioRoutes.first{$0.id == .section(arrangementID:a,useID:u)}.map{$0.path+" › "+$0.name} ?? project.arrangements.first{$0.id==a}?.uses.first{$0.id==u}?.name ?? "섹션"
+            let lane=library.chosen.count==1 && library.chosen.first?.kind == .midi ? "새 MIDI 트랙":library.chosenIDs.count>1 ? "새 트랙 \(library.chosenIDs.count)개":project.tracks.first{$0.id==track}?.name ?? "새 트랙"
+            return "\(name) › \(lane) · \((beat+1).formatted())박"+(original ? " · 공유 원본":"")
         }
     }
     func importLibrarySelection() {
         library.notice=""
         guard libraryOpen,!library.searching,canStartMediaImport,libraryDestinationCurrent,let request=libraryDestination else{library.notice="가져오기 대상을 갱신하고 재생·녹음을 정지하세요";return}
         do {
+            if let issue=libraryPlacementIssue {throw CirclrError(issue)}
             let (entries,access,urls)=try library.accessSelection()
             library.stopPreview()
             if entries[0].kind == .midi {
@@ -49,21 +50,23 @@ struct MediaLibraryView:View {
     @ObservedObject var store:AppStore
     @ObservedObject var library:MediaLibraryController
     init(store:AppStore) {self.store=store;self.library=store.library}
-    private var canImport:Bool {store.canStartMediaImport && store.libraryDestinationCurrent && !library.chosenIDs.isEmpty && library.selectionIssue==nil && !library.searching}
+    private var canImport:Bool {store.canStartMediaImport && store.libraryDestinationCurrent && !library.chosenIDs.isEmpty && library.selectionIssue==nil && store.libraryPlacementIssue==nil && !library.searching}
     var body:some View {
         VStack(alignment:.leading,spacing:0) {
             HStack {
                 Text("샘플 라이브러리").font(.system(size:18,weight:.semibold))
                 Spacer()
-                Button(library.foldersVisible ? "파일 검색":"폴더 관리 · \(library.folders.count)"){library.foldersVisible.toggle()}
+                Button(library.workspace != .files ? "파일 검색":"폴더 관리 · \(library.folders.count)"){library.workspace = library.workspace == .files ? .folders:.files}
                 Button("폴더 추가…"){library.chooseFolder()}
                 Button{library.refresh()}label:{Image(systemName:"arrow.clockwise")}.help("등록 폴더 새로고침").accessibilityLabel("라이브러리 새로고침")
-                Button("닫기 · Esc"){store.closeMediaLibrary()}.keyboardShortcut(.escape,modifiers:[]).foregroundStyle(StudioTheme.secondary)
+                Button(library.choosingDestination ? "파일 목록 · Esc":"닫기 · Esc"){if library.choosingDestination{library.choosingDestination=false}else{store.closeMediaLibrary()}}.keyboardShortcut(.escape,modifiers:[]).foregroundStyle(StudioTheme.secondary)
             }.padding(18)
-            if library.foldersVisible {folderWorkspace} else {
+            if library.foldersVisible {folderWorkspace} else if library.choosingDestination {
+                LibrarySectionChooser(store:store,library:library,projectID:store.project.id,revision:store.project.musicRevision,generation:store.mediaImportGeneration,selection:store.hierarchySelection)
+            } else {
             HStack(spacing:10) {
                 Image(systemName:"magnifyingglass").foregroundStyle(StudioTheme.secondary)
-                CommandSearchField(text:$library.query,onMove:library.move,onSubmit:store.importLibrarySelection,onCancel:store.closeMediaLibrary,placeholder:"파일명 · 하위 폴더 · 형식 검색",onExtend:library.extend)
+                CommandSearchField(text:$library.query,onMove:library.move,onSubmit:store.importLibrarySelection,onCancel:store.closeMediaLibrary,placeholder:"파일명 · 하위 폴더 · 형식 검색",onExtend:library.extend).id(library.searchFocus)
             }.padding(.horizontal,18).padding(.bottom,14)
             HStack(spacing:16) {
                 Menu {
@@ -109,14 +112,14 @@ struct MediaLibraryView:View {
                     Text(library.previewPreparing ? "출력 준비 중 · 취소할 수 있습니다":library.previewPending && !library.previewing ? "이전 출력 준비를 정리하고 있습니다":library.previewing ? String(format:"%.1f초 · ",library.previewSeconds)+library.detail:library.detail).font(.system(size:12)).foregroundStyle(StudioTheme.secondary).lineLimit(2)
                 }
                 HStack(spacing:12) {
-                    Menu("대상 섹션") {
-                        ForEach(store.studioRoutes){section in Button(section.path+" › "+section.name){store.navigateStudio(section.id);store.refreshLibraryDestination()}}
-                    }.menuStyle(.borderlessButton).fixedSize()
-                    Text(store.libraryDestinationText).font(.system(size:12)).lineLimit(1).truncationMode(.middle)
+                    Button("대상 섹션…"){library.notice="";library.choosingDestination=true}.help("곡·섹션 검색으로 가져오기 위치 선택")
+                    Text(store.libraryDestinationText).font(.system(size:12)).lineLimit(1).truncationMode(.middle).help(store.libraryDestinationText)
                     if !store.libraryDestinationCurrent {Button("대상 갱신"){store.refreshLibraryDestination()}.help("현재 선택과 최신 음악 상태를 가져오기 대상으로 사용")}
                     Spacer(minLength:4)
                     Button(library.chosen.count==1 && library.chosen.first?.kind == .midi ? "MIDI 트랙 선택 →":"\(library.chosenIDs.count)개 가져오기 · Return"){store.importLibrarySelection()}.disabled(!canImport)
                 }
+                if let request=store.libraryDestination {LibraryPlacementControls(store:store,library:library,request:request)}
+                if let issue=store.libraryPlacementIssue,store.libraryDestination != nil {Text(issue).font(.system(size:12)).foregroundStyle(StudioTheme.accent)}
                 Text(store.libraryDestination != nil && !store.libraryDestinationCurrent ? "곡이나 선택이 변경되었습니다. 가져오기 대상을 확인하고 갱신하세요":"체크박스 여러 파일 · ↑↓ 한 파일 · ⇧↑↓ 범위 · Return 가져오기 · ⌥Space 현재 파일 듣기").font(.system(size:11)).foregroundStyle(StudioTheme.secondary)
             }.padding(18)
             }
