@@ -25,6 +25,7 @@ extension AppStore {
     }
     var currentStudioTrack:StudioTrackRoute? {currentStudioSection?.tracks.first{$0.id==selectedTrackID}}
     func showNavigation(section:CircleAddress?=nil,track:ID?=nil,role:StudioNavigationRole?=nil) {
+        arrangementPickerRequest=nil
         soundPickerRequest=nil;libraryOpen=false;commandPalette=nil;keyboardHelp=false
         navigationIntent=StudioNavigationIntent(anchorSectionID:section ?? currentStudioSection?.id,sectionID:section,trackID:track,role:role)
         navigationOpen=true

@@ -27,6 +27,7 @@ extension AppStore {
         showSoundPicker(.instrument)
     }
     func showSoundPicker(_ target:SoundPickerTarget) {
+        arrangementPickerRequest=nil
         let name:String,destination:String,choice:SoundChoice?
         switch target {
         case .instrument:

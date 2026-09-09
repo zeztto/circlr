@@ -16,7 +16,7 @@ struct RootView: View {
                 .coordinateSpace(name:"albumCanvas")
                 .onPreferenceChange(AgentConsoleBoundsKey.self){if store.consoleBounds != $0 {store.consoleBounds=$0}}
         }
-        .accessibilityHidden(store.libraryOpen || store.navigationOpen || store.soundPickerRequest != nil)
+        .accessibilityHidden(store.libraryOpen || store.navigationOpen || store.soundPickerRequest != nil || store.arrangementPickerRequest != nil)
         .overlay(alignment:.top) {
             if let palette=store.commandPalette {
                 ZStack(alignment:.top) {
@@ -57,10 +57,18 @@ struct RootView: View {
                 }
             }
         }
+        .overlay(alignment:.top) {
+            if let request=store.arrangementPickerRequest {
+                ZStack(alignment:.top) {
+                    Color.black.opacity(0.3).contentShape(Rectangle()).onTapGesture{store.closeArrangementPicker()}
+                    ArrangementPickerView(store:store,request:request).id(request.id).padding(.top,85)
+                }
+            }
+        }
         .frame(minWidth:1024,minHeight:740).background(StudioTheme.canvas)
         .font(.system(size:12)).foregroundStyle(StudioTheme.text).buttonStyle(CanvasButtonStyle())
         .numberEditing(in:store)
-        .onExitCommand{if store.soundPickerRequest != nil {store.closeSoundPicker()} else if store.libraryOpen {store.closeMediaLibrary()} else if store.connectionsOpen {store.connectionsOpen=false;store.focusCanvas?()} else if store.navigationOpen {store.navigationOpen=false;store.focusCanvas?()} else if store.commandPalette != nil {store.commandPalette=nil;store.focusCanvas?()} else if store.keyboardHelp {store.keyboardHelp=false} else {store.hierarchySettingsOpen=false;store.hierarchyParent()}}
+        .onExitCommand{if store.arrangementPickerRequest != nil {store.closeArrangementPicker()} else if store.soundPickerRequest != nil {store.closeSoundPicker()} else if store.libraryOpen {store.closeMediaLibrary()} else if store.connectionsOpen {store.connectionsOpen=false;store.focusCanvas?()} else if store.navigationOpen {store.navigationOpen=false;store.focusCanvas?()} else if store.commandPalette != nil {store.commandPalette=nil;store.focusCanvas?()} else if store.keyboardHelp {store.keyboardHelp=false} else {store.hierarchySettingsOpen=false;store.hierarchyParent()}}
         .alert("작업을 완료하지 못했습니다",isPresented:Binding(get:{store.errorMessage != nil},set:{if !$0{store.errorMessage=nil}})){Button("확인"){store.errorMessage=nil}}message:{Text(store.errorMessage ?? "")}
     }
     private var header:some View {
@@ -127,6 +135,10 @@ struct RootView: View {
     private var actions:some View {
         HStack(spacing:5) {
             if let address=store.hierarchySelection {
+                if case .composition=address,let owner=store.arrangementPickerOwner {
+                    Button{store.showArrangementPicker(compositionID:owner.id)}label:{Label("편곡안",systemImage:"magnifyingglass")}
+                        .help("이 곡·악장의 편곡안 찾기 · ⌥⌘J")
+                }
                 if store.canEditCirclePorts { Button("연결") { store.showConnections() }.help("IN/OUT·대상·8방향 위치 편집 · L") }
                 Button{store.connectionsOpen=false;store.hierarchyTransitionID=nil;store.focusHierarchy(address,detail:true);store.hierarchySettingsOpen=true}label:{Image(systemName:"slider.horizontal.3")}.help("선택 서클의 이름·음악 설정")
                 if store.selectedUse != nil {

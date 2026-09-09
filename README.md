@@ -6,7 +6,9 @@ macOS용 앨범·송폼 궤도 편집기. **앨범 → 곡·악장 → 섹션 �
 
 연결 UI는 [서클 둘레 8방향 IN/OUT과 다중 입출력](docs/22-eight-direction-ports.md)으로 확장 중이다. 포트의 신호 의미와 연결점 배치를 분리한다. 아래 일반 사용법은 배포된 0.19 앱 기준이며 새 포트 기능은 독립 개발 브랜치에서 검증한다.
 
-현재 **`codex/daw-integration`의 0.20.0 build 62**에 녹음 lifecycle과 8방향·다중 bus·그룹 포트를 통합했다. 같은 캔버스의 연결 편집·녹음 상태·스텝·오토메이션이 공존하며, 녹음 시작·정리 중 음악 편집과 Undo의 경쟁을 차단한다. build 23의 실제 편집·바운스·Undo·저장/재열기·닫기 최소화 및 출력별 모션 검증은 [통합 QA](qa/daw-integration-review.md)에 기록했다.
+현재 **`codex/daw-integration`의 0.20.0 build 63**에 녹음 lifecycle과 8방향·다중 bus·그룹 포트를 통합했다. 같은 캔버스의 연결 편집·녹음 상태·스텝·오토메이션이 공존하며, 녹음 시작·정리 중 음악 편집과 Undo의 경쟁을 차단한다. build 23의 실제 편집·바운스·Undo·저장/재열기·닫기 최소화 및 출력별 모션 검증은 [통합 QA](qa/daw-integration-review.md)에 기록했다.
+
+**build 63에서 편곡안을 바로 검색한다.** 곡·악장 서클의 `편곡안`, 설정 맨 위의 현재 편곡, ⌥⌘J·명령 검색에서 같은 캔버스의 목록을 연다. 이름·#번호·섹션 수·재생 선택으로 동명 대안을 구분하고, 현재 재선택은 편집 위치와 Undo/Redo를 유지한다. 실제 2곡/67편곡의 선택·충돌 거절·저장 복원과 작은 창 가시성을 확인했다. Swift457개·Python28개, [계약](docs/77-arrangement-search.md) · [QA](qa/arrangement-search-review.md). 사용자 앱0.19.0 build21은 유지하며 물리 I/O 검증은 남아 있다.
 
 build 62는 **에이전트가 화면 조작 없이 실제 음색을 검색한다.** 읽기 전용 `circlr_sounds`로 내장 신스·Sound Bank·설치된 AU의 이름·계열·번호·변형을 조회한다. 페이지와 목록 변경 감지, 정확한 적용 주소, 전문 역할 사용 지침을 함께 제공한다. Swift **451개**·Python **28개**, 실제 MCP 3회 검증과 최소화·적용/Undo·재열기·GUI 대조를 통과했다. [연결 계약](docs/76-agent-sound-catalog.md) · [QA](qa/agent-sounds-review.md).
 

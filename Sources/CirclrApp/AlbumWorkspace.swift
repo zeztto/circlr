@@ -323,11 +323,6 @@ extension AppStore {
 }
 
 extension AppStore {
-    func chooseHierarchyArrangement(_ id: ID) {
-        guard let owner=project.album?.owner(of:id)?.id else{return}
-        mutate("편곡안 선택") { try AlbumEditing.selectArrangement(id,in:&$0) }
-        hierarchySettingsOpen=false;focusHierarchy(.composition(owner))
-    }
     func duplicateHierarchyArrangement() {
         guard let owner=project.album?.owner(of:project.activeArrangementID)?.id else{return}
         duplicateArrangement();hierarchySettingsOpen=false;focusHierarchy(.composition(owner))

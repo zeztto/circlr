@@ -21,6 +21,7 @@ extension AppStore {
         hierarchyTransitionID=nil;focusHierarchy(address,detail:true);hierarchySettingsOpen=true
     }
     func showCommands() {
+        arrangementPickerRequest=nil
         soundPickerRequest=nil
         libraryOpen=false
         navigationOpen=false
@@ -48,6 +49,7 @@ extension AppStore {
         if case .effect=selectedMusic?.content {add("effect-search","Audio Unit 이펙트 찾기"){[weak self] in self?.showSoundPicker(.musicEffect)}}
         if selectedSignal?.kind == .effect {add("signal-effect-search","전역 Audio Unit 이펙트 찾기"){[weak self] in self?.showSoundPicker(.signalEffect)}}
         add("navigation","섹션·트랙으로 바로 이동","⌘J"){[weak self] in self?.showNavigation()}
+        if let owner=arrangementPickerOwner {add("arrangement-search","편곡안 찾기","⌥⌘J"){[weak self] in self?.showArrangementPicker(compositionID:owner.id)}}
         add("parent","상위 서클로 이동","Esc"){[weak self] in self?.hierarchyParent()}
         add("fit","전체 앨범 보기","F"){[weak self] in self?.hierarchyCommand=HierarchyCommand(action:.fit)}
         add("follow","재생 팔로우 켜기 / 끄기"){[weak self] in guard let self else{return};self.playbackFollow=self.playbackFollow.toggled()}
@@ -282,6 +284,7 @@ struct CommandSearchField:NSViewRepresentable {
 struct KeyboardHelpView:View {
     @ObservedObject var store:AppStore
     private let rows:[(String,String)] = [
+        ("⌥⌘J","이 곡·악장의 편곡안 찾기"),
         ("⌥⌘L","로컬 샘플 라이브러리"),("⌘4","MIDI 스텝 편집"),("⌘J","섹션·트랙 바로 이동"),("⌘1 / ⌘2 / ⌘3","같은 트랙의 MIDI·오디오 / 음색 / 이펙터"),("⇧⌘P","명령·서클 검색"),("⌥⌘0","캔버스로 포커스 이동"),("A / C","서클 생성 / 선택 서클 메뉴"),("L","IN/OUT·대상·8방향 연결 편집"),
         ("Tab · ← → ↑ ↓","다음·이전 서클 선택"),("⇧ 방향키","여러 서클 선택"),("Return / Esc","서클 안으로 / 상위 서클"),
         ("K / ⇧K · P / ⇧P","다음·이전 케이블 · IN/OUT 포트 선택"),

@@ -4,7 +4,7 @@ import CirclrAudio
 
 extension AppStore {
     func showMediaLibrary() {
-        soundPickerRequest=nil;commandPalette=nil;navigationOpen=false;keyboardHelp=false
+        arrangementPickerRequest=nil;soundPickerRequest=nil;commandPalette=nil;navigationOpen=false;keyboardHelp=false
         library.foldersVisible=false;refreshLibraryDestination();libraryOpen=true;library.refresh()
         library.watchKeyboard{[weak self] in self?.libraryOpen == true && self?.canStartMediaImport == true}
     }

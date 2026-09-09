@@ -21,6 +21,7 @@ import OSLog
                 Button("영상 녹화 시작 / 마치기…"){store.toggleMovieRecording()}.keyboardShortcut("r",modifiers:[.command,.shift])
                 Button("샘플 라이브러리…"){store.showMediaLibrary()}.keyboardShortcut("l",modifiers:[.command,.option])
                 Button("작업 이동…"){store.showNavigation()}.keyboardShortcut("j")
+                Button("편곡안 찾기…"){store.showArrangementPicker()}.keyboardShortcut("j",modifiers:[.command,.option]).disabled(store.arrangementPickerOwner==nil)
                 Button("이 트랙의 MIDI·오디오"){store.openTrackComponent(0)}.keyboardShortcut("1").disabled(store.currentStudioTrack==nil)
                 Button("이 트랙의 음색"){store.openTrackComponent(1)}.keyboardShortcut("2").disabled(store.currentStudioTrack==nil)
                 Button("오디오 녹음 시작 / 정지"){store.startAudioRecording()}.keyboardShortcut("r",modifiers:[.command,.option]).disabled(store.audioRecordingLocked || (!store.audioRecordingAvailable && !store.audioRecordingBusy))
@@ -31,8 +32,8 @@ import OSLog
                 Button("이 트랙의 이펙트"){store.openTrackComponent(2)}.keyboardShortcut("3").disabled(store.currentStudioTrack==nil)
                 Divider()
                 Button("명령 검색…"){store.showCommands()}.keyboardShortcut("p",modifiers:[.command,.shift])
-                Button("키보드 사용법"){store.libraryOpen=false;store.commandPalette=nil;store.navigationOpen=false;store.keyboardHelp.toggle()}.keyboardShortcut("/")
-                Button("캔버스로 포커스 이동"){store.libraryOpen=false;store.commandPalette=nil;store.navigationOpen=false;store.focusCanvas?()}.keyboardShortcut("0",modifiers:[.command,.option])
+                Button("키보드 사용법"){store.arrangementPickerRequest=nil;store.libraryOpen=false;store.commandPalette=nil;store.navigationOpen=false;store.keyboardHelp.toggle()}.keyboardShortcut("/")
+                Button("캔버스로 포커스 이동"){store.arrangementPickerRequest=nil;store.libraryOpen=false;store.commandPalette=nil;store.navigationOpen=false;store.focusCanvas?()}.keyboardShortcut("0",modifiers:[.command,.option])
             }
             CommandMenu("곡 구성"){Button("섹션 추가"){store.addSection()}.keyboardShortcut("k");Button("선택 항목 복제"){store.duplicateFocusedContent()}.keyboardShortcut("d");Button("그룹 만들기"){store.makeHierarchyGroup()}.keyboardShortcut("g");Button("삭제"){store.removeHierarchy()};Divider();Button("재생 / 정지"){store.play()};Button("오디오 가져오기…"){store.importAudio()}.keyboardShortcut("i")}
         }

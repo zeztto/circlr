@@ -155,6 +155,10 @@ struct HierarchySettingsEditor: View {
     @ObservedObject var store: AppStore
     var body: some View {
         VStack(alignment:.leading,spacing:18) {
+            if case .composition(let id)=store.hierarchySelection,
+               let composition=store.project.album?.composition(id),!composition.arrangementIDs.isEmpty {
+                ArrangementPickerButton(store:store,owner:composition)
+            }
             if let group=store.selectedHierarchyGroup {
                 Text("\(group.members.count)개 서클 · 음악과 연결을 유지하는 배치 그룹")
                 Button(group.collapsed ? "그룹 펼치기" : "그룹 접기") {store.updateHierarchyGroup{$0.collapsed.toggle()};store.hierarchySettingsOpen=false;store.hierarchyCommand=HierarchyCommand(action:.focus(store.hierarchySelection ?? .album,false))}
@@ -189,7 +193,6 @@ struct HierarchySettingsEditor: View {
             if case .composition(let id)=store.hierarchySelection,let composition=store.project.album?.composition(id) {
                 CountControl(title:"곡·악장 반복",value:Binding(get:{store.project.album?.compositions.first{$0.id==id}?.repeatCount ?? composition.repeatCount},set:{value in store.mutate("곡·악장 반복"){p in if let i=p.album?.compositions.firstIndex(where:{$0.id==id}){p.album?.compositions[i].repeatCount=value}}}),range:1...256)
                 if !composition.arrangementIDs.isEmpty {
-                    StudioChoice("편곡안",selection:Binding(get:{composition.selectedArrangementID ?? ""},set:{store.chooseHierarchyArrangement($0)}),options:store.project.arrangements.filter{composition.arrangementIDs.contains($0.id)}.map{($0.id,$0.name)})
                     Button("편곡안 복제"){store.duplicateHierarchyArrangement()}
                 }
                 Button("악장 추가"){store.addComposition(.movement)}
