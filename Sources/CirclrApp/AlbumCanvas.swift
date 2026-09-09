@@ -20,6 +20,7 @@ struct AlbumCanvas: NSViewRepresentable {
     var initialized = false
     var previousSize = NSSize.zero
     var animation: Timer?
+    var animationDestination: HierarchyCamera?
     var scrollMonitor: Any?
     var editor: NSHostingView<InlineCircleEditor>?
     var editorAddress: CircleAddress?
@@ -76,7 +77,10 @@ struct AlbumCanvas: NSViewRepresentable {
         self.store = store; super.init(frame: .zero)
         store.captureHierarchyViewport = { [weak self] in
             guard let self,self.initialized,self.bounds.width>0 else{return nil}
-            return HierarchyViewport(camera:self.camera,width:self.bounds.width,height:self.bounds.height,selection:self.store.hierarchySelection ?? .album,settingsOpen:self.store.hierarchySettingsOpen,midiStepMode:self.store.midiStepMode,workspace:self.store.capturedStudioWorkspace)
+            // A save may arrive before SwiftUI consumes the latest focus command.
+            self.update()
+            let savedCamera = self.animation?.isValid == true ? (self.animationDestination ?? self.camera) : self.camera
+            return HierarchyViewport(camera:savedCamera,width:self.bounds.width,height:self.bounds.height,selection:self.store.hierarchySelection ?? .album,settingsOpen:self.store.hierarchySettingsOpen,midiStepMode:self.store.midiStepMode,workspace:self.store.capturedStudioWorkspace)
         }
         store.captureMovieFrame = { [weak self] in
             guard let self,self.bounds.width>=64,self.bounds.height>=64 else{return nil}
@@ -212,7 +216,9 @@ struct AlbumCanvas: NSViewRepresentable {
     func setCamera(_ target: HierarchyCamera, animated: Bool = false, manual: Bool = true) {
         if manual { interruptPlaybackFollow() }
         animation?.invalidate(); animation = nil
+        animationDestination = nil
         if animated {
+            animationDestination = target
             let start = camera, time = ProcessInfo.processInfo.systemUptime
             animation = Timer(timeInterval: 1/60, repeats: true) { [weak self] timer in
                 MainActor.assumeIsolated {
