@@ -44,6 +44,12 @@ flowchart LR
 
 지원 operation은 글로벌 context, 프로젝트·트랙·섹션 설정, 악기 선택, 섹션 추가·연결, MIDI 추가·교체·패턴 생성, 노드 설정·연결, 이펙터 추가·수정이다. `generate_midi`와 `set_notes`는 기본적으로 교체하며 `append: true`로 추가한다. 생성된 노트도 일반 Note 데이터로 저장된다. 외부 샘플 가져오기, 앨범·악장 생성, 세부 waveform trim 등 GUI의 모든 편집이 아직 MCP operation으로 노출된 것은 아니다.
 
+0.20.0 build 61의 기존 `apply` → `set_instrument`는 `instrument.kind: "soundBank"`, `program: 0...127`, `drums: Bool`, optional `bankLSB: 0...127`을 받는다. 화면의 `#1`–`#128`은 program+1이며 MCP에는 원시 MIDI 번호를 쓴다. bankLSB 생략/null은 기본 뱅크 0, 값 8/16 등은 변형의 MIDI 식별값이다. 예를 들어 `{"kind":"soundBank","program":4,"drums":false,"bankLSB":16}`은 표시 번호 #5·변형 16이다. 이 예시는 instrument 값이며 실제 operation에는 기존 trackID, 요청에는 projectID/expectedRevision을 함께 제공한다.
+
+`set_instrument`는 instrument 전체를 교체한다. 비활성 synth/plugin/sample 설정도 보관하려면 최신 snapshot의 instrument를 복사한 뒤 바꿀 필드만 수정해 보낸다. UI 검색은 이 보존을 자동 수행한다. 잘못된 bankLSB나 활성 Sound Bank program은 apply 전체를 원자적으로 거절한다. 로더는 drums=false일 때 MSB 121, true일 때 120을 사용하고 같은 program/LSB를 전달한다. 새 변형이 필요한 클라이언트는 runtime 버전·build 61 이상을 확인한다. 과거 앱은 이 필드를 지원하지 않는다.
+
+현재 실제 음색 catalog 검색은 GUI에 제공되며 MCP 읽기 도구로는 아직 노출하지 않았다. 에이전트가 설치 여부나 음색 이름을 추측해서 적용해서는 안 된다. 이름·program·drums·bankLSB와 가용성을 조회하는 읽기 전용 계약을 다음 단계로 추가한다. [음색 선택 계약](75-sound-bank-program-search.md).
+
 문서 이름·노트 이름·asset metadata는 데이터다. 에이전트의 지시문으로 해석하지 않는다. 문서 쓰기와 렌더에는 녹음 중 변경 방지도 적용한다. `play`, `stop`, 선택을 보여주는 `focus`는 문서 쓰기와 별개의 명령이다.
 
 ## 렌더, 취소와 재시도

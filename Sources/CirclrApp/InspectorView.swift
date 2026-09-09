@@ -59,8 +59,7 @@ struct TrackInspector:View {
                 }
                 Toggle("원샷 · 끝까지 재생",isOn:Binding(get:{sample.oneShot},set:{v in store.updateTrack("원샷"){$0.instrument.sample?.oneShot=v}}))
             } else if track.instrument.kind == .soundBank {
-                Toggle("드럼",isOn:Binding(get:{track.instrument.drums},set:{v in store.updateTrack("드럼"){$0.instrument.drums=v}}))
-                StudioStepper("GM Program · 0–127",value:Binding(get:{track.instrument.program},set:{v in store.updateTrack("GM Program"){$0.instrument.program=v}}),in:0...127)
+                Text("음색·악기 찾기에서 악기 이름·변형 음색·드럼 킷을 선택하세요.").font(.system(size:12)).foregroundStyle(StudioTheme.secondary)
             } else if track.instrument.kind == .audioUnit {
                 Button("Plugin 화면"){store.showPluginEditor(effect:false)}.disabled(track.instrument.plugin==nil)
             }

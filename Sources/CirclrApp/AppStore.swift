@@ -31,6 +31,8 @@ import CirclrAudio
     @Published var commandPalette: StudioPalette?
     @Published var soundPickerRequest:SoundPickerRequest?
     var instrumentChoices:[SoundCatalogItem]=[]
+    var soundBankPresets:[SoundBankPreset]=[]
+    var soundBankNotice=""
     var effectChoices:[SoundCatalogItem]=[]
     @Published var navigationOpen=false
     @Published var navigationIntent=StudioNavigationIntent()
@@ -180,7 +182,9 @@ import CirclrAudio
         let instrumentCatalog=AudioUnitHost.catalog(type:kAudioUnitType_MusicDevice)
         let effectCatalog=AudioUnitHost.catalog(type:kAudioUnitType_Effect)
         instruments=instrumentCatalog.map(\.descriptor);effects=effectCatalog.map(\.descriptor)
-        instrumentChoices=SoundSelection.instruments(instrumentCatalog);effectChoices=SoundSelection.effects(effectCatalog)
+        do {soundBankPresets=try AudioUnitHost.soundBankCatalog()}
+        catch {soundBankNotice=error.localizedDescription}
+        instrumentChoices=SoundSelection.instruments(instrumentCatalog,bank:soundBankPresets);effectChoices=SoundSelection.effects(effectCatalog)
         recorder.onChange = { [weak self] in self?.recordingStateChanged() }
         startAgentBridge()
     }

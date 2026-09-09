@@ -44,6 +44,8 @@ public enum ProjectStore {
         }
         try unique(p.tracks.map(\.id));try unique(p.sections.map(\.id));try unique(p.patterns.map(\.id));try unique(p.assets.map(\.id));try unique(p.arrangements.map(\.id));try unique(p.signal.nodes.map(\.id));try unique(p.signal.edges.map(\.id));try layout(p.signal.layout)
         for track in p.tracks {
+            if let bankLSB=track.instrument.bankLSB,!(0...127).contains(bankLSB) {throw CirclrError("Sound Bank 변형 번호는 0–127이어야 합니다")}
+            if track.instrument.kind == .soundBank,!(0...127).contains(track.instrument.program) {throw CirclrError("Sound Bank 음색 번호를 확인하세요")}
             if track.instrument.kind == .synthesizer {try (track.instrument.synth ?? SynthPatch()).validate()}
             if track.instrument.kind == .sampler {
                 guard let sample=track.instrument.sample,(0...127).contains(sample.rootPitch),p.assets.contains(where:{$0.id==sample.assetID}) else {throw CirclrError("샘플 악기의 원본·기준음을 확인하세요")}

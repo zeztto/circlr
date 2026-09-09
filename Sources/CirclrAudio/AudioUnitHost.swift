@@ -36,8 +36,8 @@ public enum AudioUnitHost {
             guard let plugin = config.plugin else { throw CirclrError("가상악기를 선택하세요") }
             return try await instantiate(plugin)
         }
-        let sampler = AVAudioUnitSampler()
-        try sampler.loadSoundBankInstrument(at: bankURL, program: UInt8(clamping: config.program), bankMSB: UInt8(config.drums ? kAUSampler_DefaultPercussionBankMSB : kAUSampler_DefaultMelodicBankMSB), bankLSB: UInt8(kAUSampler_DefaultBankLSB))
+        let address=try soundBankLoadAddress(config),sampler = AVAudioUnitSampler()
+        try sampler.loadSoundBankInstrument(at: bankURL, program:address.program, bankMSB:address.bankMSB, bankLSB:address.bankLSB)
         return sampler
     }
     public static func capture(_ unit: AVAudioUnit) throws -> Data? {

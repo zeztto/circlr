@@ -16,7 +16,9 @@ extension AppStore {
         switch instrument.kind {
         case .synthesizer:return (instrument.synth ?? SynthPatch()).voice.label
         case .sampler:return instrument.sample.flatMap{s in project.assets.first{$0.id==s.assetID}?.name} ?? "샘플 악기"
-        case .soundBank:return "기본 Sound Bank · \(instrument.program+1)"+(instrument.drums ? " · 드럼":"")
+        case .soundBank:
+            return soundBankPresets.first{$0.id==SoundSelection.choice(in:instrument)}?.selectionName
+                ?? "Sound Bank · #\(instrument.program+1)"+(instrument.drums ? " · 드럼 킷":"")+((instrument.bankLSB ?? 0)==0 ? "":" · 변형 \(instrument.bankLSB!)")
         case .audioUnit:return instrument.plugin?.name ?? "Audio Unit 선택 필요"
         }
     }
@@ -96,16 +98,19 @@ struct SoundPickerView:View {
     let request:SoundPickerRequest
     @State private var query=""
     @State private var category:SoundCategory?
+    @State private var bankDrums:Bool?
     @State private var highlighted:SoundChoice?
     @State private var searchFocus=UUID()
     @State private var notice=""
     private var catalog:[SoundCatalogItem] {store.soundCatalog(request)}
-    private var rows:[SoundCatalogItem] {SoundSelection.search(catalog,query:query,category:category)}
+    private var rows:[SoundCatalogItem] {SoundSelection.search(catalog,query:query,category:category,bankDrums:bankDrums)}
     private var active:SoundChoice? {rows.contains{$0.id==highlighted} ? highlighted:rows.first?.id}
     private var current:Bool {store.soundPickerCurrent(request)}
     private var missing:Bool {
-        if case .audioUnit=request.currentChoice{return !catalog.contains{$0.id==request.currentChoice}}
-        return false
+        switch request.currentChoice {
+        case .audioUnit,.soundBank:return !catalog.contains{$0.id==request.currentChoice}
+        default:return false
+        }
     }
     var body:some View {
         VStack(alignment:.leading,spacing:0) {
@@ -114,10 +119,11 @@ struct SoundPickerView:View {
                 Spacer();Button("닫기 · Esc"){store.closeSoundPicker()}.foregroundStyle(StudioTheme.secondary)
             }.padding(18)
             Text(request.destination).font(.system(size:12)).foregroundStyle(StudioTheme.secondary).lineLimit(2)
+                .fixedSize(horizontal:false,vertical:true)
                 .help(request.destination).padding(.horizontal,18).padding(.bottom,12)
             HStack(spacing:10) {
                 Image(systemName:"magnifyingglass").foregroundStyle(StudioTheme.secondary)
-                CommandSearchField(text:$query,onMove:move,onSubmit:applySelected,onCancel:{store.closeSoundPicker()},placeholder:"음색 · Audio Unit 이름 · 제조사 검색").id(searchFocus)
+                CommandSearchField(text:$query,onMove:move,onSubmit:applySelected,onCancel:{store.closeSoundPicker()},placeholder:"음색 · 계열 · 제조사 · #1–128 검색").id(searchFocus)
             }.padding(.horizontal,18).padding(.bottom,14)
             if request.target == .instrument {
                 HStack(spacing:8) {
@@ -125,20 +131,26 @@ struct SoundPickerView:View {
                     ForEach([SoundCategory.synth,.soundBank,.instrument]){value in filter(value.label,value:value)}
                 }.padding(.horizontal,18).padding(.bottom,12)
             }
+            if category == .soundBank {
+                HStack(spacing:8) {
+                    bankFilter("전체 뱅크",drums:nil);bankFilter("멜로디",drums:false);bankFilter("드럼 킷",drums:true)
+                    Spacer();Text("피아노·베이스 등 계열 또는 #번호로 검색").font(.system(size:12)).foregroundStyle(StudioTheme.secondary)
+                }.padding(.horizontal,18).padding(.bottom,12)
+            }
             HStack(alignment:.top,spacing:8) {
-                Text("현재 · "+request.currentName+(missing ? " · 설치 목록에 없음":"")).lineLimit(2).help(request.currentName)
+                Text("현재 · "+request.currentName+(missing ? " · 현재 목록에 없음":"")).lineLimit(2).fixedSize(horizontal:false,vertical:true).help(request.currentName)
                 Spacer(minLength:8)
-                Button("현재 음색 찾기"){query="";category=nil;highlighted=request.currentChoice;searchFocus=UUID()}
+                Button("현재 음색 찾기"){query="";category=nil;bankDrums=nil;highlighted=request.currentChoice;searchFocus=UUID()}
                     .disabled(!catalog.contains{$0.id==request.currentChoice})
                 Text("\(rows.count)개 결과").monospacedDigit().fixedSize()
             }.font(.system(size:12)).foregroundStyle(StudioTheme.secondary).padding(.horizontal,18).padding(.bottom,12)
             if !current || !notice.isEmpty {
                 Text(!current ? "대상이나 음악이 바뀌었거나 다른 작업 중입니다. 닫은 뒤 다시 열어주세요.":notice)
-                    .font(.system(size:12)).foregroundStyle(StudioTheme.accent).padding(.horizontal,18).padding(.bottom,12)
+                    .font(.system(size:12)).foregroundStyle(StudioTheme.accent).fixedSize(horizontal:false,vertical:true).padding(.horizontal,18).padding(.bottom,12)
             }
             ScrollViewReader {proxy in
                 ScrollView {
-                    if rows.isEmpty {Text(catalog.isEmpty ? "설치된 AU 이펙트가 없습니다. 설치 후 앱을 다시 열어주세요.":"일치하는 음색이 없습니다. 검색어나 종류를 바꿔보세요.")
+                    if rows.isEmpty {Text(emptyMessage)
                         .font(.system(size:13)).foregroundStyle(StudioTheme.secondary).padding(30)}
                     LazyVStack(spacing:1) {ForEach(rows){entry in row(entry)}}
                 }.onChange(of:active){_,id in if let id{proxy.scrollTo(id,anchor:.center)}}
@@ -149,7 +161,18 @@ struct SoundPickerView:View {
                 .font(.system(size:12)).foregroundStyle(StudioTheme.secondary).padding(18)
         }.frame(width:850,height:560).background(StudioTheme.surface,in:RoundedRectangle(cornerRadius:10))
             .overlay(RoundedRectangle(cornerRadius:10).strokeBorder(StudioTheme.line))
-            .onAppear{highlighted=request.currentChoice}
+            .onAppear{if case .soundBank=request.currentChoice{category = .soundBank};highlighted=request.currentChoice}
+    }
+    private var emptyMessage:String {
+        if category == .soundBank && store.soundBankPresets.isEmpty {return store.soundBankNotice.isEmpty ? "macOS Sound Bank에서 선택 가능한 음색을 찾지 못했습니다. 기존 설정은 유지됩니다.":store.soundBankNotice+". 기존 설정은 유지됩니다."}
+        return catalog.isEmpty ? "설치된 AU 이펙트가 없습니다. 설치 후 앱을 다시 열어주세요.":"일치하는 음색이 없습니다. 검색어나 종류를 바꿔보세요."
+    }
+    private func bankFilter(_ title:String,drums:Bool?)->some View {
+        Button{bankDrums=drums;highlighted=nil;notice="";searchFocus=UUID()}label:{
+            Text(title).font(.system(size:12,weight:bankDrums==drums ? .semibold:.medium))
+                .foregroundStyle(bankDrums==drums ? StudioTheme.accent:StudioTheme.text).padding(.horizontal,9).padding(.vertical,7)
+                .background(bankDrums==drums ? StudioTheme.raised:Color.clear,in:RoundedRectangle(cornerRadius:5))
+        }.buttonStyle(.plain).accessibilityAddTraits(bankDrums==drums ? .isSelected:[])
     }
     private func row(_ entry:SoundCatalogItem)->some View {
         Button{apply(entry.id)}label:{
@@ -165,7 +188,7 @@ struct SoundPickerView:View {
             .accessibilityAddTraits(active==entry.id ? .isSelected:[])
     }
     private func filter(_ title:String,value:SoundCategory?)->some View {
-        Button{category=value;highlighted=nil;notice="";searchFocus=UUID()}label:{
+        Button{category=value;bankDrums=nil;highlighted=nil;notice="";searchFocus=UUID()}label:{
             Text(title).font(.system(size:12,weight:category==value ? .semibold:.medium))
                 .foregroundStyle(category==value ? StudioTheme.accent:StudioTheme.text).padding(.horizontal,9).padding(.vertical,7)
                 .background(category==value ? StudioTheme.raised:Color.clear,in:RoundedRectangle(cornerRadius:5))

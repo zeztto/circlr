@@ -2,6 +2,12 @@
 
 0.1–0.3은 설계 문서 revision이며, 0.4.0부터 로컬 실행 프로토타입을 포함한다.
 
+## 개발 중 — 0.20.0 build 61 Sound Bank 이름·변형 검색
+
+- 설치된 macOS Sound Bank metadata에서 실제 음색을 읽어 이름·한글 계열·정확한 `#1`–`#128` 번호로 검색한다. 멜로디/드럼 킷과 같은 번호의 변형 뱅크를 구별하며 숫자 stepper와 별도 드럼 toggle을 검색으로 통합했다.
+- optional `Instrument.bankLSB`를 저장하고 재생 로더에 같은 주소를 전달한다. 생략은 기존 기본 뱅크 0이며 유효 범위는 0–127이다. 같은 선택은 no-op, 다른 선택은 비활성 patch/state를 보존하며 한 번의 Undo로 복원한다. 새 변형 음색은 build 61 이상이 필요하다.
+- 검색 화면의 적용 범위·현재 음색·충돌 안내가 압축돼 보이지 않던 높이를 수정했다. Swift 445개·Python 26개, 최종 release·native 16상태/18화면·저장 재열기·패키지 검사 통과. 물리 출력·실제 변형 음색 청취는 미검증이다. [계약](docs/75-sound-bank-program-search.md) · [QA](qa/sound-bank-search-review.md).
+
 ## 개발 중 — 0.20.0 build 60 음색·Audio Unit 검색
 
 - 악기 종류와 음색의 중첩 메뉴를 내장 신스·Sound Bank·설치된 AU 검색으로 합쳤다. 이름·제조사·종류 필터, 현재 음색 찾기, ↑↓·Return·Esc, 명령 검색 진입을 지원한다. 서클과 전역 이펙터도 같은 검색을 사용한다.

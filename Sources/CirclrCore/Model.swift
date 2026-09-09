@@ -105,10 +105,12 @@ public struct Instrument: Codable, Equatable {
     public var kind: Kind = .soundBank
     public var program: Int = 0
     public var drums = false
+    /// Missing in older songs means the original default Sound Bank variation.
+    public var bankLSB: Int?
     public var plugin: PluginDescriptor?
     public var synth: SynthPatch?
     public var sample: SampleInstrument?
-    public init(program: Int = 0, drums: Bool = false) { self.program = program; self.drums = drums }
+    public init(program: Int = 0, drums: Bool = false, bankLSB: Int? = nil) { self.program = program; self.drums = drums; self.bankLSB=bankLSB }
 }
 public struct Track: Codable, Equatable, Identifiable {
     public var id: ID = newID()

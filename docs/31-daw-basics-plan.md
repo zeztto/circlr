@@ -16,6 +16,8 @@ build 60: 에이전트 한도 해제 요청 후 read-only 조사 dispatch를 재
 
 ## 상태와 남은 완료 조건
 
+build 61: 실제 Sound Bank 이름·계열·변형·드럼 킷 검색과 optional bankLSB 저장/로드를 연결했다. 키보드 선택·no-op·Undo/Redo·충돌 거절·비활성 신스 보존·재열기와 작은 창 안내 표시를 확인했다. Swift 445개·Python 26개, native 16상태/18화면 통과. 독립 review dispatch를 다시 시도했으나 thread limit으로 거절돼 순차 검토했다. [계약](75-sound-bank-program-search.md) · [QA](../qa/sound-bank-search-review.md). 읽기 전용 MCP 음색 catalog와 편곡안 검색을 다음 독립 범위로 분리하며 물리 I/O gate는 유지한다.
+
 | 작업 | 현재 구현 | 확장·완료 조건 |
 |---|---|---|
 | 스텝 | 0.16 구현·native 검증 완료 | 일반 Note/Lane을 그대로 편집하는 16-step page, 드럼/음정 row, 해상도, 세기/길이, 키보드, MCP, Undo/바운스 |

@@ -10,7 +10,7 @@ public struct AudioUnitCatalogEntry: Equatable {
 }
 
 public enum SoundChoice: Hashable {
-    case synth(SynthVoice), soundBank, audioUnit(String)
+    case synth(SynthVoice), soundBank(program:Int,bankLSB:Int,drums:Bool), audioUnit(String)
 }
 public enum SoundCategory: String, CaseIterable, Identifiable {
     case synth, soundBank, instrument, effect
@@ -32,9 +32,9 @@ public enum SoundSelection {
     // AudioComponentDescription types: aumu (music device), aufx (effect).
     public static let instrumentType: UInt32 = 0x61756D75
     public static let effectType: UInt32 = 0x61756678
-    public static func instruments(_ plugins: [AudioUnitCatalogEntry]) -> [SoundCatalogItem] {
+    public static func instruments(_ plugins: [AudioUnitCatalogEntry],bank:[SoundBankPreset]=[]) -> [SoundCatalogItem] {
         SynthVoice.allCases.map {SoundCatalogItem(id:.synth($0),category:.synth,title:$0.label,detail:"내장 신스 · "+String(describing:$0),plugin:nil)}
-        + [.init(id:.soundBank,category:.soundBank,title:"기본 Sound Bank",detail:"GM Program · 멜로디 / 드럼",plugin:nil)]
+        + SoundBankPreset.ordered(bank).map{.init(id:$0.id,category:.soundBank,title:$0.name,detail:$0.detail,plugin:nil)}
         + audioUnits(plugins,type:instrumentType,category:.instrument)
     }
     public static func effects(_ plugins: [AudioUnitCatalogEntry]) -> [SoundCatalogItem] {
@@ -51,12 +51,21 @@ public enum SoundSelection {
             return ($0.detail,$0.plugin!.id)<($1.detail,$1.plugin!.id)
         }
     }
-    public static func search(_ entries:[SoundCatalogItem],query:String,category:SoundCategory?=nil)->[SoundCatalogItem] {
+    public static func search(_ entries:[SoundCatalogItem],query:String,category:SoundCategory?=nil,bankDrums:Bool?=nil)->[SoundCatalogItem] {
         let terms=folded(query).split(whereSeparator:{$0.isWhitespace})
         return entries.filter {entry in
             guard category==nil || category==entry.category else{return false}
+            if let bankDrums {
+                guard case .soundBank(_,_,let drums)=entry.id,drums==bankDrums else{return false}
+            }
             let text=folded(entry.title+" "+entry.detail+" "+entry.category.label)
-            return terms.allSatisfy{text.contains($0)}
+            return terms.allSatisfy {term in
+                if term.hasPrefix("#") {
+                    guard let number=Int(term.dropFirst()),case .soundBank(let program,_,_)=entry.id else{return false}
+                    return number==program+1
+                }
+                return text.contains(term)
+            }
         }
     }
     private static func folded(_ value:String)->String {
@@ -64,7 +73,8 @@ public enum SoundSelection {
     }
     public static func choice(in instrument:Instrument)->SoundChoice? {
         switch instrument.kind {case .synthesizer:return .synth((instrument.synth ?? SynthPatch()).voice)
-        case .soundBank:return .soundBank;case .audioUnit:return instrument.plugin.map{.audioUnit($0.id)};case .sampler:return nil}
+        case .soundBank:return .soundBank(program:instrument.program,bankLSB:instrument.bankLSB ?? 0,drums:instrument.drums)
+        case .audioUnit:return instrument.plugin.map{.audioUnit($0.id)};case .sampler:return nil}
     }
     public static func instrument(_ choice:SoundChoice,current:Instrument,catalog:[SoundCatalogItem]) throws -> Instrument {
         guard let entry=catalog.first(where:{$0.id==choice}),entry.category != .effect else{throw CirclrError("사용 가능한 악기를 다시 선택하세요")}
@@ -74,7 +84,9 @@ public enum SoundSelection {
         case .synth(let voice):
             next.kind = .synthesizer
             if current.synth?.voice != voice {next.synth=SynthPatch(voice)}
-        case .soundBank:next.kind = .soundBank
+        case .soundBank(let program,let bankLSB,let drums):
+            guard (0...127).contains(program),(0...127).contains(bankLSB) else{throw CirclrError("Sound Bank 음색을 다시 선택하세요")}
+            next.kind = .soundBank;next.program=program;next.drums=drums;next.bankLSB=bankLSB==0 ? nil:bankLSB
         case .audioUnit:
             guard let plugin=entry.plugin,plugin.type==instrumentType else{throw CirclrError("AU 악기를 선택하세요")}
             next.kind = .audioUnit
