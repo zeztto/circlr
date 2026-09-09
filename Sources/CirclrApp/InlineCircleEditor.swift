@@ -9,9 +9,10 @@ struct InlineCircleEditor: View {
     @State private var orbitViewport = MIDIOrbitViewport()
     @State private var stepState = StepEditorState()
     @State private var nameFocused=false
+    @StateObject private var connectionKeyboard=PortKeyboardFocus()
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            InlineEditorHeader(store:store,nameFocus:$nameFocused)
+            InlineEditorHeader(store:store,nameFocus:$nameFocused,connectionKeyboard:connectionKeyboard)
                 .fixedSize(horizontal:false,vertical:true)
             if store.selectedMusic != nil {StudioRouteBar(store:store)}
             if store.audioRecordingStatusVisible {AudioRecordingStatusView(store:store)}
@@ -45,7 +46,7 @@ struct InlineCircleEditor: View {
     }
     @ViewBuilder private var editorContent:some View {
         VStack(alignment:.leading,spacing:12) {
-            if store.connectionsOpen { PortConnectionsEditor(store: store).id(store.hierarchySelection) }
+            if store.connectionsOpen { PortConnectionsEditor(store: store,keyboard:connectionKeyboard).id(store.hierarchySelection) }
             else if let draft=store.midiImportDraft {MIDIImportView(store:store,draft:draft).id(draft.id)} else if let id=store.hierarchyTransitionID,let edge=store.project.active.edges.first(where:{$0.id==id}) {
                 TransitionWorkspace(store:store,edgeID:edge.id)
             } else if let plugin = store.embeddedPlugin {

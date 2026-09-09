@@ -16,6 +16,8 @@ build 60: 에이전트 한도 해제 요청 후 read-only 조사 dispatch를 재
 
 ## 상태와 남은 완료 조건
 
+build 66: 연결 검색·포트·대상·재연결과 최근 전환을 세션 내에서 복원한다. 서클/원본별 분리·명시적 요청 우선·삭제된 케이블 해제·실제 적용/Undo·상단/본문 키보드 복귀를 확인했다. Swift469개·Python28개·native27상태·상태 복원34화면·최종 키보드7화면 통과. [계약](80-workspace-return.md) · [QA](../qa/workspace-return-review.md). 전체 작업 페이지의 재실행 복원과 물리 입출력은 후속이다.
+
 build 65: 음악 설정 출처를 직접 버튼으로 바꾸고 길이·반복·리듬의 가시성을 개선했다. 키보드 전달 결함을 실제 앱에서 수정했으며 Swift463개·Python28개·23상태/21화면과 전체 음악 복원을 확인했다. [계약](79-music-settings-visibility.md) · [QA](../qa/music-settings-review.md). 작업 복귀의 전체 상태 계약과 물리 입출력은 후속이다.
 
 build 64: 섹션 연결 대상 검색·분기·전환을 기존 연결 화면으로 통합했다. 실제 32개 섹션과 다른 곡에서 번호/이름/경로 검색, 키보드 선택, 전환 왕복·재연결·해제와 음악 보존을 검증했다. Swift463개·Python28개, native27상태/22화면·저장 복원 통과. [계약](78-section-connection-workspace.md) · [QA](../qa/section-connection-review.md). 음악 설정 가시성은 build65에서 개선했으며 연결/전환/설정 작업 복귀의 전체 상태 보존은 후속이다.

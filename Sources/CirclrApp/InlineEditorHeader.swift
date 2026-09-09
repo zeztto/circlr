@@ -5,10 +5,11 @@ import CirclrCore
 struct InlineEditorHeader:View {
     @ObservedObject var store:AppStore
     var nameFocus:Binding<Bool>
-    enum Page {case content,connections,automation,settings}
-    var page:Page {store.connectionsOpen ? .connections:store.hierarchySettingsOpen && store.selectedMusic != nil ? .settings:store.automationVisible ? .automation:.content}
+    let connectionKeyboard:PortKeyboardFocus
+    enum Page {case content,connections,transition,automation,settings}
+    var showingTransition:Bool {store.hierarchyTransitionID != nil && store.hierarchyTransitionID==store.recentTransitionID}
+    var page:Page {store.connectionsOpen ? .connections:showingTransition ? .transition:store.hierarchySettingsOpen && store.selectedMusic != nil ? .settings:store.automationVisible ? .automation:.content}
     var contentName:String {
-        if store.hierarchyTransitionID != nil {return "전환"}
         guard let node=store.selectedMusic else{return "편집"}
         switch node.content {
         case .midi,.rhythmMIDI:return "MIDI"
@@ -26,7 +27,7 @@ struct InlineEditorHeader:View {
     }
     var body:some View {
         HStack(spacing:8) {
-            if store.hierarchyTransitionID != nil {
+            if showingTransition && !store.connectionsOpen {
                 Text("섹션 전환").font(.system(size:17,weight:.semibold)).frame(minWidth:80,alignment:.leading)
             } else if store.hierarchySelection == .sound {
                 Text(store.selectedCircle?.title ?? "앨범 사운드").font(.system(size:17,weight:.semibold)).frame(minWidth:80,alignment:.leading)
@@ -36,6 +37,7 @@ struct InlineEditorHeader:View {
             HStack(spacing:2) {
                 if store.selectedMusic != nil || store.canEditCirclePorts {mode(contentName,page:.content,help:store.selectedMusic==nil ? "이 서클의 편집으로 돌아가기":"이 서클의 "+contentName+" 편집으로 돌아가기")}
                 if store.canEditCirclePorts {mode("연결",page:.connections,help:"IN/OUT·대상·8방향 위치 편집 · L")}
+                if store.recentTransitionID != nil {mode("전환",page:.transition,help:"최근 편집한 섹션 전환으로 돌아가기")}
                 if store.selectedMusic != nil {
                     mode("오토메이션",page:.automation,help:"볼륨·팬 곡선 · ⌘5")
                     mode("설정",page:.settings,help:"템포·박자·스케일·반복 설정")
@@ -51,17 +53,21 @@ struct InlineEditorHeader:View {
         }.frame(minHeight:30)
     }
     func mode(_ title:String,page target:Page,help:String)->some View {
-        Button{select(target)}label:{Text(title).lineLimit(1).fixedSize().foregroundStyle(page==target ? StudioTheme.accent:StudioTheme.secondary)}
-            .background(page==target ? StudioTheme.raised:Color.clear,in:RoundedRectangle(cornerRadius:5))
-            .accessibilityLabel("작업 전환 · "+title).accessibilityAddTraits(page==target ? .isSelected:[]).help(help)
+        StudioModeButton(title:title,label:"작업 전환 · "+title,selected:page==target,help:help,keyboard:store.connectionsOpen ? connectionKeyboard:nil,order:order(target)){select(target)}
+            .frame(width:CGFloat(title.count)*13+18,height:30)
+    }
+    private func order(_ target:Page)->Int {
+        switch target {case .content:return -30;case .connections:return -20;case .transition:return -10;case .automation:return -9;case .settings:return -8}
     }
     func select(_ target:Page) {
-        guard store.midiImportDraft==nil else{return}
+        guard store.midiImportDraft==nil,store.nameEditing.resolve() else{return}
         switch target {
         case .content:
             store.connectionsOpen=false;store.hierarchySettingsOpen=store.selectedMusic==nil;store.automationOpen=false;store.embeddedPlugin=nil
-            if let edge=store.hierarchyTransitionID {store.edgeSelection=edge}
+            store.hierarchyTransitionID=nil;store.edgeSelection=nil
         case .connections:store.hierarchySettingsOpen=false;store.automationOpen=false;store.showConnections()
+        case .transition:
+            if let address=store.hierarchySelection,let id=store.recentTransitionID {store.openHierarchyTransition(address,edgeID:id)}
         case .automation:store.connectionsOpen=false;store.hierarchySettingsOpen=false;store.showAutomation()
         case .settings:store.connectionsOpen=false;store.automationOpen=false;store.embeddedPlugin=nil;store.hierarchySettingsOpen=true
         }

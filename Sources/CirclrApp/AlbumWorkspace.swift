@@ -290,8 +290,16 @@ extension AppStore {
         selectHierarchy(address)
         mutate("재생할 분기 선택") {try SectionFlowSelection.choose(id,in:&$0)}
     }
+    var recentTransitionID:ID? {
+        guard let address=hierarchySelection,case .section(let ai,let ui)=address,
+              let id=recentTransitions[address],project.arrangements.first(where:{$0.id==ai})?.edges.contains(where:{$0.id==id && $0.from==ui})==true else{return nil}
+        return id
+    }
     func openHierarchyTransition(_ address: CircleAddress, edgeID: ID) {
-        focusHierarchy(address,detail:true); self.edgeSelection=edgeID; hierarchyTransitionID=edgeID; hierarchySettingsOpen=true
+        guard nameEditing.resolve(),case .section(let ai,let ui)=address,
+              project.arrangements.first(where:{$0.id==ai})?.edges.contains(where:{$0.id==edgeID && $0.from==ui})==true else{return}
+        recentTransitions[address]=edgeID
+        connectionsOpen=false;focusHierarchy(address,detail:true);self.edgeSelection=edgeID;hierarchyTransitionID=edgeID;hierarchySettingsOpen=true
     }
 }
 

@@ -9,6 +9,11 @@ struct ConnectionEditorIntent: Equatable, Codable {
     var connection: CircleConnectionID?
 }
 
+struct ConnectionWorkspaceKey:Hashable {
+    let node:CircleAddress
+    let original:Bool
+}
+
 extension AppStore {
     var canEditCirclePorts:Bool {selectedCircle?.ports.isEmpty == false || selectedHierarchyGroup != nil}
     func showConnections(portID: String? = nil, replacing: CircleConnectionID? = nil) {
@@ -38,27 +43,26 @@ extension AppStore {
 /// Part of the inline canvas editor; no window or docked panel is created.
 struct PortConnectionsEditor: View {
     @ObservedObject var store: AppStore
-    @State private var ownPortID = ""
-    @State private var target: CirclePortEndpoint?
-    @State private var firstOctant = PortOctant.east
-    @State private var secondOctant = PortOctant.west
-    @State private var replacing: CircleConnectionID?
-    @State private var query = ""
-    @State private var currentPortOnly = false
-    @State private var managingGroupPorts = false
-    @StateObject private var keyboard = PortKeyboardFocus()
+    @State private var workspace=ConnectionWorkspaceState()
+    @State private var workspaceKey:ConnectionWorkspaceKey?
+    @State private var workspaceProjectID:ID?
+    @State private var workspaceGeneration:Int?
+    let keyboard:PortKeyboardFocus
+    private var isCurrentWorkspace:Bool {
+        workspaceProjectID==store.project.id && workspaceGeneration==store.mediaImportGeneration && workspaceKey?.node==node?.id && workspaceKey?.original==store.editOriginal
+    }
     private var node: CircleSceneNode? { store.selectedCircle }
     private var ports: [CirclePort] { node?.ports ?? [] }
     private var own: CirclePortEndpoint? {
-        guard let node, ports.contains(where: { $0.id == ownPortID }) else { return nil }
-        return .init(node: node.id, portID: ownPortID)
+        guard let node, ports.contains(where: { $0.id == workspace.ownPortID }) else { return nil }
+        return .init(node: node.id, portID: workspace.ownPortID)
     }
     private var connections: [CirclePortConnection] {
         guard let node else {return []}
         return ((try? AgentPortEditing.snapshot(at:node.id,in:store.project))?.connections ?? []).map(\.connection)
     }
     private var isGroup:Bool {store.selectedHierarchyGroup != nil}
-    private var managing:Bool {isGroup && (managingGroupPorts || ports.isEmpty)}
+    private var managing:Bool {isGroup && (workspace.managingGroupPorts || ports.isEmpty)}
     private func presented(_ endpoint:CirclePortEndpoint)->CirclePortEndpoint {
         guard let node else {return endpoint}
         return GroupPortEditing.presented(endpoint,at:node.id,in:store.project) ?? endpoint
@@ -70,21 +74,22 @@ struct PortConnectionsEditor: View {
         }
         return endpoint
     }
-    private var targets: [PortTargetItem] {
+    private var availableTargets: [PortTargetItem] {
         guard let own else { return [] }
         let choices=(store.hierarchyScene?.nodes ?? []).flatMap { n in n.ports.compactMap { port->PortTargetItem? in
             let endpoint = CirclePortEndpoint(node: n.id, portID: port.id)
             guard (try? CirclePortCatalog.normalize(own, endpoint, in: store.project)) != nil else { return nil }
             return ConnectionTargetSearch.choice(endpoint,name:n.title,port:port.name,in:store.project)
         } }
-        return ConnectionTargetSearch.search(choices,query:query)
+        return choices
     }
+    private var targets:[PortTargetItem] {ConnectionTargetSearch.search(availableTargets,query:workspace.query)}
     private var listedConnections:[CirclePortConnection] {
-        guard currentPortOnly,let own else{return connections}
+        guard workspace.currentPortOnly,let own else{return connections}
         let logical=(try? GroupPortEditing.resolve(own,in:store.project)) ?? own
         return connections.filter{$0.from==logical || $0.to==logical}
     }
-    private var canConnect:Bool {own != nil && target.map{id in targets.contains{$0.endpoint==id}} == true}
+    private var canConnect:Bool {own != nil && workspace.target.map{id in targets.contains{$0.endpoint==id}} == true}
     var body: some View {
         GeometryReader { geometry in
             VStack(alignment:.leading,spacing:12) {
@@ -93,13 +98,13 @@ struct PortConnectionsEditor: View {
                         Text("노출 포트 \(ports.count)개").fontWeight(.semibold)
                         Spacer()
                         if !ports.isEmpty {PortActionButton(title:managing ? "연결 편집":"노출 포트 관리",keyboard:keyboard,order:-100) {
-                            managingGroupPorts.toggle();focusSearch()
+                            workspace.managingGroupPorts.toggle();focusSearch()
                         }.frame(width:140)}
                     }.padding(.bottom,12)
                 }
                 if managing,let node {
                     ScrollView {GroupPortEditor(store:store,group:node.id,keyboard:keyboard) { id in
-                        managingGroupPorts=false;replacing=nil;target=nil;query="";ownPortID=id;focusSearch()
+                        workspace.managingGroupPorts=false;workspace.replacing=nil;workspace.target=nil;workspace.query="";workspace.ownPortID=id;focusSearch()
                     }}
                 } else if geometry.size.width >= 800 {
                     HStack(alignment: .top, spacing: 24) {
@@ -112,15 +117,13 @@ struct PortConnectionsEditor: View {
             }
         }
         .onAppear { loadIntent(); focusSearch() }
-        .onChange(of: store.connectionEditorIntent?.id) { _, _ in loadIntent(); focusSearch() }
-        .onChange(of: ownPortID) { _, _ in
-            if let own, let target, (try? CirclePortCatalog.normalize(own,target,in:store.project)) == nil { self.target = nil }
-            if replacing == nil, let port = ports.first(where: { $0.id == ownPortID }) {
-                firstOctant = port.defaultOctant; secondOctant = port.direction == .input ? .east : .west
-            }
-        }
-        .onChange(of: targets.map(\.endpoint)) { _, ids in if let target,!ids.contains(target) {self.target=nil} }
-        .onChange(of: ports.map(\.id)) {_,ids in if !ids.contains(ownPortID) {reset()} }
+        .onChange(of:workspace) { _,_ in rememberWorkspace() }
+        .onDisappear { rememberWorkspace() }
+        .onChange(of: store.connectionEditorIntent?.id) { _, id in if id != nil {loadIntent();focusSearch()} }
+        .onChange(of: store.editOriginal) { _,_ in rememberWorkspace();loadIntent();focusSearch() }
+        .onChange(of: connections) { _,_ in if isCurrentWorkspace {workspace=workspace.restored(ports:ports,targets:availableTargets,connections:connections)} }
+        .onChange(of: targets.map(\.endpoint)) { _, ids in if isCurrentWorkspace,let target=workspace.target,!ids.contains(target) {workspace.target=nil} }
+        .onChange(of: ports.map(\.id)) {_,ids in if isCurrentWorkspace,!ids.contains(workspace.ownPortID) {reset()} }
     }
     private var connectionWorkspace:some View {
         VStack(alignment:.leading,spacing:10) {connectionHeading;ScrollView {connectionList}}
@@ -129,44 +132,44 @@ struct PortConnectionsEditor: View {
         HStack {
             Text("연결 \(listedConnections.count)개").fontWeight(.semibold)
             Spacer()
-            PortChoice(label:"연결 표시 범위",selection:$currentPortOnly,options:[(false,"전체 포트"),(true,"현재 포트")],keyboard:keyboard,order:70).frame(width:120)
+            PortChoice(label:"연결 표시 범위",selection:$workspace.currentPortOnly,options:[(false,"전체 포트"),(true,"현재 포트")],keyboard:keyboard,order:70).frame(width:120)
         }
     }
     private var connectionList: some View {
         VStack(alignment: .leading, spacing: 12) {
-            if listedConnections.isEmpty {Text(currentPortOnly ? "이 포트에 연결된 케이블이 없습니다":"입력 또는 출력을 골라 첫 연결을 만드세요").foregroundStyle(StudioTheme.secondary)}
+            if listedConnections.isEmpty {Text(workspace.currentPortOnly ? "이 포트에 연결된 케이블이 없습니다":"입력 또는 출력을 골라 첫 연결을 만드세요").foregroundStyle(StudioTheme.secondary)}
             ForEach(Array(listedConnections.enumerated()), id: \.element.id) { index, edge in row(edge, index: index) }
         }.frame(maxWidth:.infinity,alignment:.leading)
     }
     private func compose(height:CGFloat)->some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing:8) {
-                PortChoice(label:"이 서클의 IN OUT 포트",selection:$ownPortID,options:ports.map{($0.id,$0.name)},keyboard:keyboard,order:10)
-                if replacing != nil { PortActionButton(title: "취소", keyboard: keyboard, order: 0) { reset(); focusSearch() }.frame(width:60) }
-                PortActionButton(title: replacing == nil ? "연결" : "재연결 적용", keyboard: keyboard, order: 60) { commit(); focusSearch() }
-                    .frame(width:replacing == nil ? 60:100).disabled(!canConnect)
+                PortChoice(label:"이 서클의 IN OUT 포트",selection:Binding(get:{workspace.ownPortID},set:{selectOwnPort($0)}),options:ports.map{($0.id,$0.name)},keyboard:keyboard,order:10)
+                if workspace.replacing != nil { PortActionButton(title: "취소", keyboard: keyboard, order: 0) { reset(); focusSearch() }.frame(width:60) }
+                PortActionButton(title: workspace.replacing == nil ? "연결" : "재연결 적용", keyboard: keyboard, order: 60) { commit(); focusSearch() }
+                    .frame(width:workspace.replacing == nil ? 60:100).disabled(!canConnect)
             }.frame(height:34)
             HStack(spacing:8) {
-                PortChoice(label:"시작 위치",selection:$firstOctant,options:PortOctant.allCases.map{($0,"시작 "+$0.label)},keyboard:keyboard,order:40)
-                PortChoice(label:"대상 위치",selection:$secondOctant,options:PortOctant.allCases.map{($0,"대상 "+$0.label)},keyboard:keyboard,order:50)
+                PortChoice(label:"시작 위치",selection:$workspace.firstOctant,options:PortOctant.allCases.map{($0,"시작 "+$0.label)},keyboard:keyboard,order:40)
+                PortChoice(label:"대상 위치",selection:$workspace.secondOctant,options:PortOctant.allCases.map{($0,"대상 "+$0.label)},keyboard:keyboard,order:50)
             }.frame(height:34)
             HStack {
                 Text("↑ ↓ 대상 선택 · Return 연결 · Tab 항목 이동").font(.system(size:11)).foregroundStyle(StudioTheme.secondary)
                 Spacer()
             }.frame(height:14)
             HStack(spacing:8) {
-                PortSearchField(text:$query,keyboard:keyboard,order:20,label:"대상 이름 · 경로 · #섹션 번호 검색",moveSelection:moveTarget,submit:{commit();focusSearch()})
+                PortSearchField(text:$workspace.query,keyboard:keyboard,order:20,label:"대상 이름 · 경로 · #섹션 번호 검색",moveSelection:moveTarget,submit:{commit();focusSearch()})
                 Text("\(targets.count)개").font(.system(size:11)).foregroundStyle(StudioTheme.secondary).frame(width:36)
             }.frame(height:34)
-            if targets.isEmpty {Text(query.isEmpty ? "연결 가능한 대상 포트가 없습니다":"검색 결과가 없습니다").foregroundStyle(StudioTheme.secondary).frame(maxWidth:.infinity).frame(height:max(60,height-148))}
-            else {PortTargetList(items:targets,selection:$target,keyboard:keyboard,order:30,activate:{commit();focusSearch()}).frame(height:max(60,height-148))}
+            if targets.isEmpty {Text(workspace.query.isEmpty ? "연결 가능한 대상 포트가 없습니다":"검색 결과가 없습니다").foregroundStyle(StudioTheme.secondary).frame(maxWidth:.infinity).frame(height:max(60,height-148))}
+            else {PortTargetList(items:targets,selection:$workspace.target,keyboard:keyboard,order:30,activate:{commit();focusSearch()}).frame(height:max(60,height-148))}
         }
     }
     private func moveTarget(_ step:Int) {
-        guard !targets.isEmpty else {target=nil;return}
-        let current=target.flatMap{id in targets.firstIndex{$0.endpoint==id}}
+        guard !targets.isEmpty else {workspace.target=nil;return}
+        let current=workspace.target.flatMap{id in targets.firstIndex{$0.endpoint==id}}
         let index=current.map{max(0,min(targets.count-1,$0+step))} ?? 0
-        target=targets[index].endpoint
+        workspace.target=targets[index].endpoint
     }
     private func title(_ endpoint: CirclePortEndpoint) -> String {
         let endpoint=visible(presented(endpoint))
@@ -225,39 +228,58 @@ struct PortConnectionsEditor: View {
             }
             if edge.signal != .flow {Text(edge.signal == .audio ? "오디오 · \(GainScale.text(edge.gain)) dB" : "MIDI 연주").font(.system(size:11)).foregroundStyle(StudioTheme.secondary)}
             Divider()
-        }.padding(6).background(replacing==edge.id ? StudioTheme.raised:Color.clear,in:RoundedRectangle(cornerRadius:5))
+        }.padding(6).background(workspace.replacing==edge.id ? StudioTheme.raised:Color.clear,in:RoundedRectangle(cornerRadius:5))
     }
     private func populate(_ edge: CirclePortConnection) {
-        replacing = edge.id; query = ""
+        workspace.replacing = edge.id; workspace.replacementSource=edge.from;workspace.replacementDestination=edge.to; workspace.query = ""
         let from=presented(edge.from),to=presented(edge.to)
         let incoming = to.node == node?.id
-        ownPortID = incoming ? to.portID : from.portID
-        target = visible(incoming ? edge.from : edge.to)
+        workspace.ownPortID = incoming ? to.portID : from.portID
+        workspace.target = visible(incoming ? edge.from : edge.to)
         let placement = store.project.portLayout?.placement(for: edge.id) ?? .init()
-        firstOctant = incoming ? placement.to : placement.from; secondOctant = incoming ? placement.from : placement.to
+        workspace.firstOctant = incoming ? placement.to : placement.from; workspace.secondOctant = incoming ? placement.from : placement.to
     }
     private func focusSearch() { DispatchQueue.main.async { keyboard.focus(managing ? -60:20) } }
-    private func loadIntent() {
-        reset()
-        guard let intent = store.connectionEditorIntent, intent.projectID == store.project.id, intent.node == node?.id else { return }
-        if let id = intent.connection, let edge = connections.first(where: { $0.id == id }) { populate(edge) }
-        else if let port = ports.first(where: { $0.id == intent.portID }) {
-            ownPortID = port.id; firstOctant = port.defaultOctant
-            secondOctant = port.direction == .input ? .east : .west
+    private func rememberWorkspace() {
+        guard let workspaceKey,workspaceProjectID==store.project.id,workspaceGeneration==store.mediaImportGeneration else{return}
+        store.connectionWorkspaceStates[workspaceKey]=workspace
+    }
+    private func selectOwnPort(_ id:String) {
+        workspace.ownPortID=id
+        if let own,let target=workspace.target,(try? CirclePortCatalog.normalize(own,target,in:store.project))==nil {workspace.target=nil}
+        if workspace.replacing==nil,let port=ports.first(where:{$0.id==id}) {
+            workspace.firstOctant=port.defaultOctant;workspace.secondOctant=port.direction == .input ? .east:.west
         }
     }
+    private func loadIntent() {
+        guard let node else{return}
+        workspaceKey=ConnectionWorkspaceKey(node:node.id,original:store.editOriginal)
+        workspaceProjectID=store.project.id;workspaceGeneration=store.mediaImportGeneration
+        let intent=store.connectionEditorIntent
+        let matches=intent?.projectID==store.project.id && intent?.node==node.id
+        defer {if matches {store.connectionEditorIntent=nil}}
+        if intent==nil || matches && intent?.connection==nil && intent?.portID==nil,let key=workspaceKey,let remembered=store.connectionWorkspaceStates[key] {
+            workspace=remembered
+            workspace=remembered.restored(ports:ports,targets:availableTargets,connections:connections)
+            return
+        }
+        workspace=ConnectionWorkspaceState();reset()
+        guard matches else{return}
+        if let id=intent?.connection,let edge=connections.first(where:{$0.id==id}) {populate(edge)}
+        else if let port=ports.first(where:{$0.id==intent?.portID}) {selectOwnPort(port.id)}
+    }
     private func reset() {
-        replacing = nil; target = nil; query = ""
+        workspace.replacing = nil;workspace.replacementSource=nil;workspace.replacementDestination=nil; workspace.target = nil; workspace.query = ""
         let port = ports.first { $0.direction == .output } ?? ports.first
-        ownPortID = port?.id ?? ""; firstOctant = port?.defaultOctant ?? .east
-        secondOctant = port?.direction == .input ? .east : .west
+        workspace.ownPortID = port?.id ?? ""; workspace.firstOctant = port?.defaultOctant ?? .east
+        workspace.secondOctant = port?.direction == .input ? .east : .west
     }
     private func commit() {
-        guard canConnect,let own, let target else { return }
+        guard canConnect,let own, let target=workspace.target else { return }
         let before = store.project, original = store.editOriginal
-        store.mutate(replacing == nil ? "포트 연결" : "케이블 재연결") { p in
-            try CircleConnectionEditing.connect(own, target, firstOctant: firstOctant, secondOctant: secondOctant,
-                replacing: replacing, original: original, in: &p)
+        store.mutate(workspace.replacing == nil ? "포트 연결" : "케이블 재연결") { p in
+            try CircleConnectionEditing.connect(own, target, firstOctant: workspace.firstOctant, secondOctant: workspace.secondOctant,
+                replacing: workspace.replacing, original: original, in: &p)
         }
         if store.project != before { reset() }
     }

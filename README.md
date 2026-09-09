@@ -6,7 +6,9 @@ macOS용 앨범·송폼 궤도 편집기. **앨범 → 곡·악장 → 섹션 �
 
 연결 UI는 [서클 둘레 8방향 IN/OUT과 다중 입출력](docs/22-eight-direction-ports.md)으로 확장 중이다. 포트의 신호 의미와 연결점 배치를 분리한다. 아래 일반 사용법은 배포된 0.19 앱 기준이며 새 포트 기능은 독립 개발 브랜치에서 검증한다.
 
-현재 **`codex/daw-integration`의 0.20.0 build 65**에 녹음 lifecycle과 8방향·다중 bus·그룹 포트를 통합했다. 같은 캔버스의 연결 편집·녹음 상태·스텝·오토메이션이 공존하며, 녹음 시작·정리 중 음악 편집과 Undo의 경쟁을 차단한다. build 23의 실제 편집·바운스·Undo·저장/재열기·닫기 최소화 및 출력별 모션 검증은 [통합 QA](qa/daw-integration-review.md)에 기록했다.
+현재 **`codex/daw-integration`의 0.20.0 build 66**에 녹음 lifecycle과 8방향·다중 bus·그룹 포트를 통합했다. 같은 캔버스의 연결 편집·녹음 상태·스텝·오토메이션이 공존하며, 녹음 시작·정리 중 음악 편집과 Undo의 경쟁을 차단한다. build 23의 실제 편집·바운스·Undo·저장/재열기·닫기 최소화 및 출력별 모션 검증은 [통합 QA](qa/daw-integration-review.md)에 기록했다.
+
+**build 66에서 연결 작업을 오가도 선택을 유지한다.** 같은 프로젝트 세션에서 서클별 검색·IN/OUT·대상·8방향·재연결을 기억하고, 상단 편집·연결·최근 전환으로 바로 돌아간다. 연결 본문과 상단 버튼을 Tab/Shift-Tab/Return으로 이동한다. 삭제된 케이블의 재연결은 해제하며 명시적 포트 요청이 기억보다 우선한다. Swift469개·Python28개, 실제27상태·상태 복원34화면·최종 키보드7화면과 전체 음악 보존을 확인했다. 임시 작업은 재실행 후 초기화한다. [계약](docs/80-workspace-return.md) · [QA](qa/workspace-return-review.md).
 
 **build 65에서 음악 설정의 조작 단계를 줄였다.** 마디·반복과 MIDI 시작·길이를 위로 모으고 리듬을 우선 표시한다. 기본값·앨범·개별 출처를 버튼으로 바로 바꾸며 보관값 도움말과 Tab/Shift-Tab/Return을 지원한다. Swift463개·Python28개, 실제23상태·최종21화면에서 출처 복원·직접 입력·Undo/Redo·연결 왕복·저장 재열기를 확인했다. [계약](docs/79-music-settings-visibility.md) · [QA](qa/music-settings-review.md).
 
