@@ -1,5 +1,11 @@
 # 변경 이력
 
+## 개발 중 — 0.20.0 build97 MIDI 작업 도구
+
+- Orbit/Grid의 mode·MIDI 메뉴·bounce·record를 전체 편집 폭에 배치하고 Orbit 이전/다음·count 이동. 기존 canvas 유지.
+- Release38.38초·실제1020×768 콘솔122/40에서 도구 가시성, 노트 편집/Undo·직접⌘A/Delete/Undo·34초 바운스/Undo·revision30 strict 저장 재열기 확인. QA20개 상태·AX 내용6개·원본 자산2개·offline bounce1개·physical0 대조 통과.
+- 메뉴 전체 선택 click 효과는 미확정이며 메뉴 Down이 노트로 전달돼 Undo 복원. 메뉴 노출과 실제 action을 구분. MIDI 녹음·물리 출력 미실행·사용자 앱 유지. [계약](docs/112-midi-workspace-actions.md) · [QA](qa/workflow-visibility-review.md).
+
 ## 개발 중 — 0.20.0 build96 offline AU effect worker
 
 - AU effect instantiate/render를 별도 process로 이동. bounded 입력/결과·취소·deadline·child/임시 파일 정리와 App 두 outer task의 즉시 STOP 진입 경쟁 수정.

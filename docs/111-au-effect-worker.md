@@ -7,7 +7,7 @@
 Offline effect의 Audio Unit instantiate·render를 별도 process에서 수행한다. 앱 안의 plugin hang/crash가 작업 전체를 무기한 막지 않도록 descriptor·state·PCM 전달과 결과 수신 경계를 정의한다.
 
 - descriptor·state·frame 수·결과 형식과 크기를 제한하고 입력/출력을 검증한다. state8MiB·request12MiB, maximumFrames268435456(기존2GiB/8byte 단일 PCM 호환 hard bound)을 사용한다. 실제 다중 buffer 예산은 기존 `RenderTailPlanner` memory preflight로 제한한다. truncated·nonfinite 결과를 정상 오디오로 적용하지 않는다.
-- 세션과 요청 ID를 구분하고 결과는 검증 완료 뒤 원자적으로 적용한다. 취소·대상 교체·deadline 이후 늦은 완료를 반영하지 않는다.
+- 요청마다 고유 세션 ID를 사용하고 결과는 검증 완료 뒤 원자적으로 적용한다. 취소·대상 교체·deadline 이후 늦은 완료를 반영하지 않는다.
 - deadline은 duration×4+15초를30–1800초로 제한한다. 취소·deadline·비정상 exit에서 소유한 child와 임시 파일을 정리한다. 성공 경로의 cleanup 실패는 error로 보고하고 실패 경로 cleanup은 best-effort다. 실제 삭제 여부는 검증 환경에서 별도로 확인한다. 실패를 보존하고 명시적인 재시도 경로를 검증한다.
 - `AppStore`·`AgentWorkspace` outer task에 진입 guard와 `withTaskCancellationHandler`를 적용해 즉시 STOP의 진입 경쟁과 취소 전파를 처리한다.
 - worker 배포·실행 가능성·서명과 현재 프로토콜의 호환성을 확인한다. 다른 프로세스나 사용자 앱을 변경하지 않는다.
@@ -28,7 +28,7 @@ Offline effect의 Audio Unit instantiate·render를 별도 process에서 수행�
 
 ## 최종 검증 근거
 
-- 최종 selected regression46개 실패0·18.491초 (`.build/au-effect-final-tests.log`), 최종46개는 신규18개(protocol10+process8)와 기존28개다. 앞선 boundary17개는 중첩 요청 추가 전의 결과이며 중복 합산하지 않는다.
+- 최종 selected regression46개 실패0·18.491초 (`.build/au-effect-final-tests.log`), 최종46개는 신규18개(protocol10+process8)와 기존28개다.
 - Release47.10초 (`.build/au-effect-release-final.log`), 패키지3개 실행 파일 검사 통과 (`.build/au-effect-packaging.log`). helper UUID `0EA9E83A-9DF1-3496-B931-0C021640B7C5`.
 - 패키지 실제 Apple AU1개 테스트0.700초 (`.build/au-effect-package-native.log`). default/captured state 두 설정에서 각12000-frame PCM maxError0·RMS error0, peak0.0938143/0.0849933 확인. 두 설정은 테스트2개가 아니며 selected46개와 별도 packaged1개를 합쳐 총47개 테스트다.
 - host cancel은 실제 테스트했지만 GUI App 즉시 STOP race는 source guard·compile만 확인했다. 두 범위를 합산하지 않는다.

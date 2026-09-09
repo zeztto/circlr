@@ -6,7 +6,9 @@ macOS용 앨범·송폼 궤도 편집기. **앨범 → 곡·악장 → 섹션 �
 
 연결 UI는 [서클 둘레 8방향 IN/OUT과 다중 입출력](docs/22-eight-direction-ports.md)으로 확장 중이다. 포트의 신호 의미와 연결점 배치를 분리한다. 아래 일반 사용법은 배포된 0.19 앱 기준이며 새 포트 기능은 독립 개발 브랜치에서 검증한다.
 
-현재 **`codex/daw-integration`의 0.20.0 build 96**에 녹음 lifecycle과 8방향·다중 bus·그룹 포트를 통합했다. 같은 캔버스의 연결 편집·녹음 상태·스텝·오토메이션이 공존하며, 녹음 시작·정리 중 음악 편집과 Undo의 경쟁을 차단한다. build 23의 실제 편집·바운스·Undo·저장/재열기·닫기 최소화 및 출력별 모션 검증은 [통합 QA](qa/daw-integration-review.md)에 기록했다.
+현재 **`codex/daw-integration`의 0.20.0 build 97**에 녹음 lifecycle과 8방향·다중 bus·그룹 포트를 통합했다. 같은 캔버스의 연결 편집·녹음 상태·스텝·오토메이션이 공존하며, 녹음 시작·정리 중 음악 편집과 Undo의 경쟁을 차단한다. build 23의 실제 편집·바운스·Undo·저장/재열기·닫기 최소화 및 출력별 모션 검증은 [통합 QA](qa/daw-integration-review.md)에 기록했다.
+
+**build97은 MIDI 작업 도구를 전체 편집 폭에 배치한다.** 작은 창의 Orbit·step·drum step·piano에서 메뉴·bounce·record 표시를 확인했다. Release38.38초와 실제 노트/직접 단축키 편집·Undo·바운스·strict 저장 재열기를 검증했으며 QA20개 상태·AX 내용6개·원본 자산2개·바운스1개·physical0 대조도 통과했다. 메뉴 항목 노출과 동작 검증은 구분하며 실제 MIDI 녹음·물리 출력은 실행하지 않았다. [계약](docs/112-midi-workspace-actions.md) · [QA](qa/workflow-visibility-review.md).
 
 **build96은 offline AU effect를 별도 process에서 처리한다.** 최종 관련46개 테스트·Release47.10초·패키지3개 실행 파일 검증을 통과했다. 패키지 helper의 실제 Apple AU 두 설정에서 각12000-frame PCM이 기준과 정확히 일치했다. host 취소는 테스트했으며 GUI 즉시 STOP race는 코드 guard·compile 확인에 한정한다. 보안 sandbox가 아닌 crash/hang 격리다. [계약](docs/111-au-effect-worker.md) · [QA](qa/au-effect-worker-review.md).
 

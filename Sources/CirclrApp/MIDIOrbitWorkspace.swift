@@ -21,12 +21,14 @@ struct MIDIOrbitWorkspace:View {
     func name(_ pitch:Int)->String {Scale.roots[pitch%12]+String(pitch/12-1)}
     private let keyHelp="선택 노트 드래그: 함께 이동 · 끝 손잡이: 함께 길이 · ⇧클릭: 선택 추가/해제 · Tab 노트 선택 · 방향키 이동 · ⇧ 좌우 길이 · ⌥ 상하 세기 · Return 입력 · Delete 삭제"
     var body:some View {
-        HStack(alignment:.top,spacing:20) {
-            VStack(spacing:8) {
-                HStack {
-                    Picker("MIDI 편집 방식",selection:$store.midiStepMode){Text("궤도").tag(false);Text("스텝").tag(true)}.pickerStyle(.segmented).labelsHidden().frame(width:110)
-                    Text("\(notes.count)개 노트").foregroundStyle(StudioTheme.secondary)
-                }
+        VStack(alignment:.leading,spacing:10) {
+            MIDIWorkspaceToolbar(store:store,focusTarget:focusTarget) {
+                Spacer(minLength:0)
+                Text("\(notes.count)개 노트").foregroundStyle(StudioTheme.secondary)
+                Button{browse(-1)}label:{Image(systemName:"backward.end")}.accessibilityLabel("이전 MIDI 노트").help("이전 노트 선택·표시").disabled(notes.isEmpty)
+                Button{browse(1)}label:{Image(systemName:"forward.end")}.accessibilityLabel("다음 MIDI 노트").help("다음 노트 선택·표시").disabled(notes.isEmpty)
+            }
+            HStack(alignment:.top,spacing:20) {
             ScrollView {
             VStack(alignment:.leading,spacing:8) {
                 HStack(spacing:8) {
@@ -58,22 +60,10 @@ struct MIDIOrbitWorkspace:View {
                 }
             }.frame(maxWidth:.infinity,alignment:.leading).padding(.trailing,6).rememberEditorScroll($scroll)
             }.frame(maxHeight:.infinity)
-                HStack(spacing:7) {
-                    Button{browse(-1)}label:{Image(systemName:"backward.end")}.accessibilityLabel("이전 MIDI 노트").help("이전 노트 선택·표시").disabled(notes.isEmpty)
-                    Button{browse(1)}label:{Image(systemName:"forward.end")}.accessibilityLabel("다음 MIDI 노트").help("다음 노트 선택·표시").disabled(notes.isEmpty)
-                    Menu("MIDI") {
-                        Button("MIDI 파일 가져오기"){store.chooseMIDIImport()}
-                        Button("MIDI 저장"){store.exportMIDI()}
-                        Menu("패턴 추가"){ForEach(MIDIPattern.allCases,id:\.self){pattern in Button(pattern.label){store.generateMIDI(pattern)}}}
-                        Button("전체 선택 · ⌘A"){act{store.chooseMIDINotes(.all)}}
-                        Button("선택 해제 · ⇧⌘A"){act{store.chooseMIDINotes(.clear)}}
-                    }
-                    TrackBounceButton(store:store)
-                    Button{store.startMIDIRecording()}label:{Image(systemName:store.midiRecording ? "stop.circle":"record.circle")}.accessibilityLabel(store.midiRecording ? "MIDI 녹음 정지":"MIDI 녹음").disabled(store.editPatternID != nil)
-                }
-            }.frame(width:228,alignment:.leading)
+            .frame(width:228,alignment:.leading)
             OrbitMIDIEditor(store:store,viewport:viewport,focusTarget:focusTarget).frame(minWidth:180,maxWidth:.infinity,maxHeight:.infinity).help(keyHelp)
             MIDINoteInspector(store:store,focusTarget:focusTarget,hint:"Tab 선택 · 방향키 편집",keyHelp:keyHelp)
+            }
         }
         .environment(\.numberEditing,NumberEditingContext(snapshot:store.numberEditIdentity,current:{store.numberEditIdentity},focusCanvas:{focusTarget.focus()}))
         .onChange(of:selected){_,_ in reveal()}
