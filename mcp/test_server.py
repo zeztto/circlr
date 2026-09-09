@@ -210,6 +210,18 @@ class MCPTests(unittest.TestCase):
             with self.subTest(key=key,value=value),self.assertRaises(ValueError):
                 server.validate({**packet,'operations':[{**op,key:value}]},spec)
 
+    def test_relative_note_edit_schema_rejects_invalid_delta_before_ipc(self):
+        spec=server.BY_NAME['circlr_apply']['inputSchema']
+        base={'kind':'edit_notes','useID':'u','laneID':'l','noteIDs':['n']}
+        def packet(op):return {'projectID':'p','expectedRevision':0,'operations':[dict(base,**op)]}
+        server.validate(packet({'edit':'length_delta','beatOffset':-.125}),spec)
+        server.validate(packet({'edit':'velocity_delta','velocityOffset':-10}),spec)
+        for value in [-127,127,True,1.5,float('nan')]:
+            with self.subTest(value=value),self.assertRaises(ValueError):
+                server.validate(packet({'edit':'velocity_delta','velocityOffset':value}),spec)
+        with self.assertRaises(ValueError):
+            server.validate(packet({'edit':'velocity','velocity':-1}),spec)
+
     def test_audio_edit_numbers_are_validated(self):
         spec=server.BY_NAME['circlr_apply']['inputSchema']
         op={'kind':'edit_audio','useID':'u','nodeID':'n','edit':'split','sourceOffset':0.5}

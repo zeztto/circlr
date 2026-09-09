@@ -6,7 +6,9 @@ macOS용 앨범·송폼 궤도 편집기. **앨범 → 곡·악장 → 섹션 �
 
 연결 UI는 [서클 둘레 8방향 IN/OUT과 다중 입출력](docs/22-eight-direction-ports.md)으로 확장 중이다. 포트의 신호 의미와 연결점 배치를 분리한다. 아래 일반 사용법은 배포된 0.19 앱 기준이며 새 포트 기능은 독립 개발 브랜치에서 검증한다.
 
-현재 **`codex/daw-integration`의 0.20.0 build 68**에 녹음 lifecycle과 8방향·다중 bus·그룹 포트를 통합했다. 같은 캔버스의 연결 편집·녹음 상태·스텝·오토메이션이 공존하며, 녹음 시작·정리 중 음악 편집과 Undo의 경쟁을 차단한다. build 23의 실제 편집·바운스·Undo·저장/재열기·닫기 최소화 및 출력별 모션 검증은 [통합 QA](qa/daw-integration-review.md)에 기록했다.
+현재 **`codex/daw-integration`의 0.20.0 build 69**에 녹음 lifecycle과 8방향·다중 bus·그룹 포트를 통합했다. 같은 캔버스의 연결 편집·녹음 상태·스텝·오토메이션이 공존하며, 녹음 시작·정리 중 음악 편집과 Undo의 경쟁을 차단한다. build 23의 실제 편집·바운스·Undo·저장/재열기·닫기 최소화 및 출력별 모션 검증은 [통합 QA](qa/daw-integration-review.md)에 기록했다.
+
+**build 69에서 여러 MIDI 노트를 수치로 함께 편집한다.** 단일/다중 선택을 같은2열 입력으로 정리하고 복제·삭제를 선택 개수 옆에 두었다. 다중 선택은 음정·시작·길이·세기를 입력한 차이만큼 함께 조절하며, 차이를 보존할 수 없으면 전체를 거절한다. MCP도 상대 길이·세기 편집을 지원한다. Swift491개·Python29개, native14상태/25화면·전체 음악/키트 비교 통과. [계약](docs/83-midi-selection-inspector.md) · [QA](qa/midi-inspector-review.md).
 
 **build 68에서 편집하던 페이지 안의 위치를 유지한다.** 서클·원본 범위별 스텝 페이지/행 검색·음역, 피아노롤 스크롤, 궤도 마디·음역, 오디오 확대 범위와 오토메이션 표시 길이를 기억한다. 현재 서클의 보기는 저장·재열기에서 복원하며 음악 이력과 분리한다. 길이가 줄면 범위를 보정한다. Swift485개·Python28개, native19상태·43화면과 음악/패키지 비교를 통과했다. [계약](docs/82-editor-view-position.md) · [QA](qa/editor-position-review.md).
 

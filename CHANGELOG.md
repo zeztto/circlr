@@ -2,6 +2,12 @@
 
 0.1–0.3은 설계 문서 revision이며, 0.4.0부터 로컬 실행 프로토타입을 포함한다.
 
+## 개발 중 — 0.20.0 build 69 MIDI 선택의 직접 수치 편집
+
+- 단일 선택의 실제 값과 다중 선택의 음정·시작·길이·세기 변화량을2열로 표시한다. 복제/삭제를 상단 선택 옆으로 옮겨 작은 창의 스크롤을 줄였다. Return/Tab 적용과 Esc 취소를 지원한다.
+- 상대 길이/세기 변경은 노트 사이 차이·ID·미선택 데이터를 보존하고 범위를 벗어나면 전체를 거절한다. MCP `edit_notes`에 `length_delta`/`velocity_delta`를 추가하고 배포 kit를 맞췄다. 기존 절대 세기 계약은 유지한다.
+- Swift491개·Python29개, native14상태/25화면·전체 음악/패키지 비교 통과. 실제 오류 무변경·항목별 Undo·MCP transaction·stale packet/GUI draft 거절을 확인했다. [계약](docs/83-midi-selection-inspector.md) · [QA](qa/midi-inspector-review.md).
+
 ## 개발 중 — 0.20.0 build 68 편집 위치 유지
 
 - 세션 내 서클·원본 범위별로 스텝 페이지/분할/행 검색·음역, 궤도 MIDI 마디·음역, 오디오 원본 범위와 편집 스크롤을 기억한다. 현재 서클의 보기와 현재 오토메이션 파라미터의 표시 길이는 문서에 저장한다.

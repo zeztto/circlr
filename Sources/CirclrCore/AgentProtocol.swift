@@ -74,6 +74,7 @@ public struct AgentOperation:Codable {
     public var enabled:Bool?
     public var noteIDs:[ID]?
     public var edit:String?
+    public var velocityOffset:Int?
     public var semitones:Int?
     public var beatOffset:Double?
     public var strength:Double?
@@ -174,9 +175,11 @@ public enum AgentProjectEditing {
                 case "move":guard let value=op.beatOffset else{throw CirclrError("beatOffset이 필요합니다")};change = .move(value)
                 case "duplicate":guard let value=op.beatOffset else{throw CirclrError("beatOffset이 필요합니다")};change = .duplicate(value)
                 case "quantize":change = .quantize(subdivisions:op.subdivisions ?? 4,strength:op.strength ?? 1)
+                case "length_delta":guard let value=op.beatOffset else{throw CirclrError("beatOffset이 필요합니다")};change = .lengthDelta(value)
+                case "velocity_delta":guard let value=op.velocityOffset else{throw CirclrError("velocityOffset이 필요합니다")};change = .velocityDelta(value)
                 case "velocity":guard let value=op.velocity else{throw CirclrError("velocity가 필요합니다")};change = .velocity(value)
                 case "delete":change = .delete
-                default:throw CirclrError("edit: transpose/move/duplicate/quantize/velocity/delete를 선택하세요")
+                default:throw CirclrError("edit: transpose/move/duplicate/quantize/velocity/length_delta/velocity_delta/delete를 선택하세요")
                 }
                 let next=try MIDIEditing.apply(change,to:lane,ids:Set(ids),beats:beats)
                 if next != lane {try ProjectEditing.setLane(next,for:id,original:false,in:&p)}

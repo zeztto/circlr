@@ -4,7 +4,7 @@ import Foundation
 public enum MIDIEditing {
     public enum Change {
         case transpose(Int), move(Double), quantize(subdivisions:Int,strength:Double)
-        case velocity(Int), duplicate(Double), delete
+        case velocity(Int), velocityDelta(Int), lengthDelta(Double), duplicate(Double), delete
     }
     public static func apply(_ change:Change,to lane:Lane,ids:Set<ID>,beats:Double)throws->Lane {
         guard beats.isFinite,beats>0,beats<=131072,!ids.isEmpty,ids.isSubset(of:Set(lane.notes.map(\.id))) else {throw CirclrError("편집할 MIDI 노트와 서클 길이를 확인하세요")}
@@ -25,6 +25,15 @@ public enum MIDIEditing {
                 if strength==0 {return n}
                 let target=(n.beat*Double(subdivisions)).rounded()/Double(subdivisions)
                 n.beat=max(0,min(max(0,beats-n.length),n.beat+(target-n.beat)*strength))
+            case .lengthDelta(let delta):
+                guard delta.isFinite,abs(delta)<=131072 else {throw CirclrError("길이 변화량은 유한한 박 수로 지정하세요")}
+                if delta != 0 {
+                    guard n.length+delta>=0.03125,n.beat+n.length+delta<=beats+1e-8 else {throw CirclrError("선택한 모든 노트의 길이를 1/32박 이상, 서클 끝 이내로 지정하세요")}
+                    n.length+=delta
+                }
+            case .velocityDelta(let delta):
+                guard (-126...126).contains(delta),(1...127).contains(n.velocity+delta) else {throw CirclrError("세기 차이를 유지하려면 모든 노트를 1–127 안에서 조절하세요")}
+                n.velocity+=delta
             case .velocity(let value):
                 guard (1...127).contains(value) else {throw CirclrError("MIDI 세기는 1–127입니다")};n.velocity=value
             case .delete:break
