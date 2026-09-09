@@ -2,7 +2,9 @@
 
 갱신: 2026-09-10. 계획 시작 기준: 0.11 native 앱, 0.12 음악 에이전트 키트 소스. 사용 앱은 0.19.0, 개발 검증 후보는 0.20.0 build 76이다. 목표는 송폼 중심의 전문 음악 제작을 먼저 완성하고, 이를 아티스트의 작품·세계관 관리로 확장하는 것이다.
 
-## 현행 실행 순서 — build76 기준
+## 현행 실행 순서 — build77 기준
+
+새 곡 제작 흐름의 첫 구간에서 생성 메뉴와 빈 드럼 입력을 개선했다. build77은 실제 MIDI 입력·생성·Undo와 저장한 스텝 편집기 복원을 검증했다. [QA](../qa/creation-interface-review.md). 다음은 같은 곡의 오디오 가져오기→연결→오토메이션→편곡→바운스 왕복이다. MCP focus 직후 저장 시 카메라 이동 완료 전 상태가 저장되는지 별도로 조사한다.
 
 출력 재점검: 독립 무음 엔진은 한 번 성공했으나 최종 앱과 재실행은 HAL에서 시간 초과했다. 스레드 원인은 입증되지 않았다. [9월10일 진단](../qa/output-recheck-review.md). 사용자 앱 출고 조건을 유지한다. [출력 프로세스 분리 설계](90-output-process-isolation.md)의 wire 계약과7개 경계 검사를 추가했으며 helper 실행 파일의 준비·파일 오류·EOF15개 검사와 출력 무응답 후 자식 종료/재실행을 확인했다. [검토](../qa/output-worker-service-review.md). build76에서 앱 호스트 연결·timeout 후정리·새session 재시도·Space 취소를 검증했다. [계약](91-output-recovery.md) · [QA](../qa/output-host-review.md). 정상 장치 출력/입력·audition·영상 시계는 여전히 남아 있다.
 

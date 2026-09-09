@@ -97,22 +97,48 @@ struct RootView: View {
                 HStack(spacing:compact ? 7:12){Text("\(store.project.global.tempo.formatted())").font(.system(size:18,weight:.medium,design:.rounded)).monospacedDigit();Text("BPM").font(.system(size:9)).foregroundStyle(StudioTheme.secondary);Text(store.project.global.meter.label);Text(store.project.global.scale.label).foregroundStyle(StudioTheme.secondary)}
             }.fixedSize(horizontal:true,vertical:false).help("앨범의 글로벌 음악 설정")
             Menu {
-                Button("곡 서클"){store.addComposition(.song)}
-                Button("악장 서클"){store.addComposition(.movement)}.disabled(store.selectedCompositionID==nil)
-                Button("섹션 서클"){store.addSection()}.disabled(store.selectedCompositionID==nil)
+                Text(creationTitle)
+                switch creationContainer {
+                case .composition(let id):
+                    if store.project.album?.composition(id)?.children.isEmpty != false {Button("섹션 서클"){store.addSection()}}
+                    Button("악장 서클"){store.addComposition(.movement)}
+                case .section:
+                    Button("MIDI 서클"){store.addMIDICircle()}
+                    Button("오디오 가져오기…"){store.importAudio()}
+                    Button("오디오 녹음"){store.startAudioRecording()}
+                    Button("오디오 라우터 서클"){store.addMusicRouter()}
+                    Menu("이펙터 서클"){ForEach(EffectKind.allCases,id:\.self){kind in Button(AppStore.effectName(kind)){store.addMusicEffect(kind)}}}
+                case .sound:
+                    Button("버스 서클"){store.addHierarchyBus()}
+                    Menu("전역 이펙터 서클"){ForEach(EffectKind.allCases,id:\.self){kind in Button(AppStore.effectName(kind)){store.addHierarchySignalEffect(kind)}}}
+                default:
+                    Button("곡 서클"){store.addComposition(.song)}
+                }
                 Divider()
-                Button("앨범 사운드"){store.hierarchySettingsOpen=false;store.focusHierarchy(.sound)}
-                Button("버스 서클"){store.addHierarchyBus()}
-                Menu("전역 이펙터 서클"){ForEach(EffectKind.allCases,id:\.self){kind in Button(AppStore.effectName(kind)){store.addHierarchySignalEffect(kind)}}}
-                Divider()
-                Button("MIDI 서클"){store.addMIDICircle()}.disabled(store.selectedUse==nil)
-                Button("오디오 라우터 서클"){store.addMusicRouter()}.disabled(store.selectedUse==nil)
-                Button("오디오 가져오기…"){store.importAudio()}.disabled(store.selectedUse==nil)
-                Button("오디오 녹음"){store.startAudioRecording()}.disabled(store.selectedUse==nil)
-                Menu("이펙터 서클"){ForEach(EffectKind.allCases,id:\.self){kind in Button(AppStore.effectName(kind)){store.addMusicEffect(kind)}}}.disabled(store.selectedUse==nil)
+                Menu("다른 위치") {
+                    if creationContainer != .album {Button("앨범에 곡 서클"){store.addComposition(.song)}}
+                    if case .composition = creationContainer {} else if store.selectedCompositionID != nil {
+                        Button("현재 곡에 섹션 서클"){store.addSection()}
+                        Button("현재 곡에 악장 서클"){store.addComposition(.movement)}
+                    }
+                    if creationContainer != .sound {
+                        Button("앨범 사운드로 이동"){store.hierarchySettingsOpen=false;store.focusHierarchy(.sound)}
+                        Button("앨범 사운드에 버스 서클"){store.addHierarchyBus()}
+                        Menu("앨범 사운드에 이펙터"){ForEach(EffectKind.allCases,id:\.self){kind in Button(AppStore.effectName(kind)){store.addHierarchySignalEffect(kind)}}}
+                    }
+                }
             }label:{Label("서클 추가",systemImage:"plus").font(.system(size:12,weight:.semibold)).foregroundStyle(StudioTheme.canvas).padding(.horizontal,8).padding(.vertical,5)}
                 .background(StudioTheme.accent,in:RoundedRectangle(cornerRadius:6))
         }.menuStyle(.borderlessButton).padding(.horizontal,22).frame(height:66).background(StudioTheme.surface)
+    }
+    private var creationContainer:CircleAddress {(store.hierarchySelection ?? .album).creationContainer}
+    private var creationTitle:String {
+        switch creationContainer {
+        case .composition:return "현재 곡·악장에 추가"
+        case .section:return "현재 섹션에 추가"
+        case .sound:return "앨범 사운드에 추가"
+        default:return "앨범에 추가"
+        }
     }
     private var breadcrumbs:some View {
         let path=store.hierarchyScene?.path(to:store.hierarchySelection ?? .album) ?? []

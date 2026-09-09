@@ -6,7 +6,9 @@ macOS용 앨범·송폼 궤도 편집기. **앨범 → 곡·악장 → 섹션 �
 
 연결 UI는 [서클 둘레 8방향 IN/OUT과 다중 입출력](docs/22-eight-direction-ports.md)으로 확장 중이다. 포트의 신호 의미와 연결점 배치를 분리한다. 아래 일반 사용법은 배포된 0.19 앱 기준이며 새 포트 기능은 독립 개발 브랜치에서 검증한다.
 
-현재 **`codex/daw-integration`의 0.20.0 build 76**에 녹음 lifecycle과 8방향·다중 bus·그룹 포트를 통합했다. 같은 캔버스의 연결 편집·녹음 상태·스텝·오토메이션이 공존하며, 녹음 시작·정리 중 음악 편집과 Undo의 경쟁을 차단한다. build 23의 실제 편집·바운스·Undo·저장/재열기·닫기 최소화 및 출력별 모션 검증은 [통합 QA](qa/daw-integration-review.md)에 기록했다.
+현재 **`codex/daw-integration`의 0.20.0 build 77**에 녹음 lifecycle과 8방향·다중 bus·그룹 포트를 통합했다. 같은 캔버스의 연결 편집·녹음 상태·스텝·오토메이션이 공존하며, 녹음 시작·정리 중 음악 편집과 Undo의 경쟁을 차단한다. build 23의 실제 편집·바운스·Undo·저장/재열기·닫기 최소화 및 출력별 모션 검증은 [통합 QA](qa/daw-integration-review.md)에 기록했다.
+
+**build77에서 생성 메뉴는 현재 위치의 작업을 먼저 표시한다.** 빈 Sound Bank 드럼도 기본 8행에서 바로 입력하며 검색·Undo·저장 복원을 유지한다. 관련 Swift7개와 실제 앱10상태를 검증했다. [계약](docs/92-creation-and-drum-entry.md) · [QA](qa/creation-interface-review.md).
 
 **build76은 출력이 응답하지 않아도 정리 후 다시 재생을 요청할 수 있다.** 별도 helper를 기본 재생에 연결하고 준비·정리·다시 재생 가능 표시를 키웠다. Swift513개·helper16개와 실제 앱의 timeout/재시도/Space 취소·음악 보존을 검증했다. 정상 장치 출력은 아직 미검증이다. [계약](docs/91-output-recovery.md) · [QA](qa/output-host-review.md).
 

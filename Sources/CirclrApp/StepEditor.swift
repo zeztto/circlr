@@ -6,13 +6,13 @@ import CirclrCore
 extension AppStore {
     var stepRowScope:String {"\(project.id):\(mediaImportGeneration):\(String(describing:hierarchySelection)):\(selectedLaneID ?? editPatternID ?? ""):\(editOriginal)"}
     func stepRows(extra:Set<Int>)->[StepRow] {
-        StepRows.pitches(observed:(currentLane?.notes ?? []).map(\.pitch),mapped:selectedTrack?.instrument.sample?.zones?.map(\.pitch) ?? [],extra:extra,fallback:selectedTrack?.instrument.sample?.rootPitch ?? 36)
+        StepRows.pitches(instrument:selectedTrack?.instrument,observed:(currentLane?.notes ?? []).map(\.pitch),extra:extra)
             .map{StepRow(pitch:$0,label:stepRowLabel($0))}
     }
     func stepRowLabel(_ pitch:Int)->String {
         if let instrument=selectedTrack?.instrument {
-            if let zone=instrument.sample?.zones?.first(where:{$0.pitch==pitch}),let asset=project.assets.first(where:{$0.id==zone.assetID}) {return "\(pitch) · \(asset.name)"}
-            if instrument.drums && instrument.kind == .soundBank,let name=[36:"킥",38:"스네어",39:"클랩",42:"닫힌 하이햇",46:"열린 하이햇",45:"톰",49:"크래시",51:"라이드"][pitch] {return "\(pitch) · \(name)"}
+            if instrument.kind == .sampler,let zone=instrument.sample?.zones?.first(where:{$0.pitch==pitch}),let asset=project.assets.first(where:{$0.id==zone.assetID}) {return "\(pitch) · \(asset.name)"}
+            if instrument.drums && instrument.kind == .soundBank,let name=StepRows.generalMIDIDrumNames[pitch] {return "\(pitch) · \(name)"}
         }
         return "\(pitch) · \(Scale.roots[pitch%12])\(pitch/12-1)"
     }

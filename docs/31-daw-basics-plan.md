@@ -112,3 +112,7 @@ build 61: 실제 Sound Bank 이름·계열·변형·드럼 킷 검색과 optiona
 ## 0.20 진행 상태
 
 [녹음 lifecycle 계약](34-recording-lifecycle.md)을 구현했다. Swift 160개와 별도의 CAF→테이크→portable 저장→바운스 통합 검사 1개, Python 23개가 통과했다. 실제 앱의 잘못된 녹음 요청 거부·문서 재열기·대기 상태 버튼/단축키 안내를 확인하고 이동 메뉴의 대비를 개선했다. 실제 입력 허용을 기다리며 [남은 native acceptance](../qa/0.20-review.md)를 유지한다. 현재 사용 앱은 0.19이며, 0.20 패키지 교체·로컬 키트 갱신은 아직 수행하지 않았다.
+
+## build77 제작 진입 개선
+
+현재 컨테이너 생성 메뉴와 Sound Bank 드럼 기본8행을 제공한다. 입력·생성 Undo와 저장 복원 검증은 [생성 QA](../qa/creation-interface-review.md)에 기록한다. 전체 한 곡 제작 및 물리 I/O 검증은 계속 남아 있다.

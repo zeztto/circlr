@@ -98,12 +98,7 @@ extension AppStore {
 extension AlbumCanvasView {
     func creationScope(at point:NSPoint, selected:CircleAddress?=nil)->CircleAddress {
         let address=selected ?? hit(point)?.id ?? store.hierarchySelection ?? .album
-        switch address {
-        case .music(let a,let u,_): return .section(arrangementID:a,useID:u)
-        case .signal: return .sound
-        case .group(let parent,_): return parent
-        default: return address
-        }
+        return address.creationContainer
     }
     func localCreationPoint(_ point:NSPoint, owner:CircleAddress)->Point {
         guard let parent=scene?.node(owner) else{return Point()}

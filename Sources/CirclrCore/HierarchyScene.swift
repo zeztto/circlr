@@ -9,6 +9,17 @@ public enum CircleAddress: Hashable, Codable, Sendable {
     case music(arrangementID: ID, useID: ID, nodeID: ID)
     indirect case group(parent: CircleAddress, id: ID)
 }
+extension CircleAddress {
+    /// Creation belongs to the musical container, including nested layout groups.
+    public var creationContainer: CircleAddress {
+        switch self {
+        case .music(let arrangement, let use, _): return .section(arrangementID: arrangement, useID: use)
+        case .signal: return .sound
+        case .group(let parent, _): return parent.creationContainer
+        default: return self
+        }
+    }
+}
 public enum CircleRole { case album, song, movement, section, music, group, sound }
 public struct CircleSceneNode: Identifiable {
     public var id: CircleAddress
