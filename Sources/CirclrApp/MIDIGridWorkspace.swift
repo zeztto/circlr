@@ -16,7 +16,7 @@ struct MIDIGridWorkspace:View {
     @Binding var steps:StepEditorState
     @State private var focusTarget=MIDIEditorFocus()
     var selected:Note? {store.currentLane?.notes.first{$0.id==store.selectedNoteID}}
-    var keyHelp:String {store.midiStepMode ? "방향키 셀 선택 · Return 켜기/끄기 · Delete 지우기 · 행 이름 선택 · Home/End 첫·끝 행 · PageUp/Down 화면 이동 · Tab 수치 입력":"Tab 노트 선택 · 방향키 이동 · ⇧ 좌우 길이 · ⌥ 상하 세기 · Return 입력 · Delete 삭제"}
+    var keyHelp:String {store.midiStepMode ? "방향키 셀 선택 · Return 켜기/끄기 · Delete 지우기 · 행 이름 선택 · Home/End 첫·끝 행 · PageUp/Down 화면 이동 · Tab 수치 입력":"선택 노트 드래그: 함께 이동 · 끝 손잡이: 함께 길이 · ⇧클릭: 선택 추가/해제 · Tab 노트 선택 · 방향키 이동 · ⇧ 좌우 길이 · ⌥ 상하 세기 · Return 입력 · Delete 삭제"}
     var body:some View {
         HStack(alignment:.top,spacing:20) {
             VStack(alignment:.leading,spacing:10) {

@@ -18,7 +18,7 @@ struct MIDIOrbitWorkspace:View {
     var selected:Note? {notes.first{$0.id==store.selectedNoteID}}
     var clock:MusicClock? {store.orbitMIDIClock}
     func name(_ pitch:Int)->String {Scale.roots[pitch%12]+String(pitch/12-1)}
-    private let keyHelp="Tab 노트 선택 · 방향키 이동 · ⇧ 좌우 길이 · ⌥ 상하 세기 · Return 입력 · Delete 삭제"
+    private let keyHelp="선택 노트 드래그: 함께 이동 · 끝 손잡이: 함께 길이 · ⇧클릭: 선택 추가/해제 · Tab 노트 선택 · 방향키 이동 · ⇧ 좌우 길이 · ⌥ 상하 세기 · Return 입력 · Delete 삭제"
     var body:some View {
         HStack(alignment:.top,spacing:20) {
             VStack(spacing:8) {

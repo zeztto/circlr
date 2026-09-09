@@ -20,6 +20,21 @@ extension AppStore {
         if let note=notes.first {selectedBeat=note.beat}
     }
     func toggleMIDISelection(_ id:ID) {var ids=selectedMIDIIDs;if ids.contains(id){ids.remove(id)}else{ids.insert(id)};selectMIDINotes(ids)}
+    func beginMIDINoteDrag(_ note:Note)->MIDINoteDrag? {
+        guard let lane=currentLane,lane.notes.contains(note) else{return nil}
+        let ids=selectedMIDIIDs.contains(note.id) ? selectedMIDIIDs:[note.id]
+        // Changing the anchor normally clears additional IDs; restore this gesture's selection.
+        selectedNoteID=note.id;additionalNoteIDs=ids.subtracting([note.id]);selectedBeat=note.beat
+        return try? MIDINoteDrag(lane:lane,ids:ids,beats:editorBeats,subdivisions:currentContext.beatGrid.subdivisions)
+    }
+    func commitMIDINoteDrag(_ lane:Lane,gesture:MIDINoteDrag) {
+        guard currentLane==gesture.original,lane != gesture.original else{return}
+        let anchor=selectedNoteID
+        setLane(lane)
+        if let anchor,gesture.ids.contains(anchor),let note=currentLane?.notes.first(where:{$0.id==anchor}) {
+            selectedNoteID=anchor;additionalNoteIDs=gesture.ids.subtracting([anchor]);selectedBeat=note.beat
+        }
+    }
     func editMIDINotes(_ change:MIDIEditing.Change) {
         guard let lane=currentLane,!selectedMIDIIDs.isEmpty else{return}
         let ids=selectedMIDIIDs
@@ -54,7 +69,7 @@ struct MIDISelectionControls:View {
     var gridLabel:String {[1:"1/4",2:"1/8",3:"1/8 셋잇단",4:"1/16",6:"1/16 셋잇단",8:"1/32"][store.midiQuantizeSubdivision] ?? "1/16"}
     var body:some View {
         HStack(spacing:8) {
-            Text("\(store.selectedMIDIIDs.count)개 선택").monospacedDigit()
+            Text("\(store.selectedMIDIIDs.count)개 선택").monospacedDigit().help("선택한 노트를 드래그하면 함께 이동 · 끝 손잡이로 함께 길이 조절")
             Button("퀀타이즈"){store.quantizeMIDI()}.help("선택 노트의 박자 맞춤 · Q")
             Menu {
                 ForEach(StepGrid.resolutions,id:\.self){v in Button([1:"1/4",2:"1/8",3:"1/8 셋잇단",4:"1/16",6:"1/16 셋잇단",8:"1/32"][v]!){store.midiQuantizeSubdivision=v}}

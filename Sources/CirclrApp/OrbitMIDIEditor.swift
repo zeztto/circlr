@@ -29,18 +29,19 @@ struct OrbitMIDIEditor:NSViewRepresentable {
     @Environment(\.isEnabled) private var enabled
     func makeNSView(context:Context)->OrbitMIDIView {let view=OrbitMIDIView(store:store);focusTarget.view=view;return view}
     func updateNSView(_ view:OrbitMIDIView,context:Context) {
-        if !enabled || view.viewport != viewport || (view.dragIdentity != nil && view.dragIdentity != store.numberEditIdentity) {view.cancelDrag()}
-        if view.viewport != viewport || view.contentIdentity != store.numberEditIdentity {view.hoverPitch=nil}
+        if !enabled || view.viewport != viewport || (view.dragIdentity != nil && !view.dragIsCurrent) {view.cancelDrag()}
+        if view.viewport != viewport || view.contentIdentity != store.numberEditIdentity {view.hoverPitch=nil;view.accessibilityNotes=[:]}
         view.contentIdentity=store.numberEditIdentity;view.viewport=viewport;view.allowsEditing=enabled;view.needsDisplay=true
     }
 }
 @MainActor final class OrbitMIDIView:NSView {
     let store:AppStore
     var viewport=MIDIOrbitViewport()
-    var original:Note?,preview:Note?
+    var original:Note?,gesture:MIDINoteDrag?,previewLane:Lane?
     var previousPhase=0.0,travel=0.0,downRadius=0.0
     var resizing=false,allowsEditing=true
     var dragIdentity:NumberEditIdentity?
+    var dragViewport:MIDIOrbitViewport?,dragFrame:NSRect?,dragOrbital:Bool?,dragGrid:Int?
     var contentIdentity:NumberEditIdentity?,hoverPitch:Int?
     var accessibilityNotes:[ID:OrbitNoteAccessibility]=[:]
     override var isFlipped:Bool {true}
@@ -53,15 +54,16 @@ struct OrbitMIDIEditor:NSViewRepresentable {
     var grid:Double {Double(max(1,store.currentContext.beatGrid.subdivisions))}
     init(store:AppStore) {self.store=store;super.init(frame:.zero);setAccessibilityElement(true);setAccessibilityRole(.group);setAccessibilityLabel("MIDI 궤도 편집기 · Tab 노트 선택 · 방향키 이동 · Shift 좌우 길이 · Option 상하 세기")}
     required init?(coder:NSCoder){fatalError()}
-    override func viewDidMoveToWindow(){super.viewDidMoveToWindow();DispatchQueue.main.async{[weak self] in guard let self,self.allowsEditing,let window=self.window,!(window.firstResponder is NSTextView) else{return};window.makeFirstResponder(self)}}
-    func cancelDrag(){original=nil;preview=nil;dragIdentity=nil}
+    override func viewDidMoveToWindow(){super.viewDidMoveToWindow();if window==nil{cancelDrag()};DispatchQueue.main.async{[weak self] in guard let self,self.allowsEditing,let window=self.window,!(window.firstResponder is NSTextView) else{return};window.makeFirstResponder(self)}}
+    var dragIsCurrent:Bool {allowsEditing && window != nil && dragIdentity==store.numberEditIdentity && dragViewport==viewport && dragFrame==convert(bounds,to:nil) && dragOrbital==store.project.usesOrbits && dragGrid==store.currentContext.beatGrid.subdivisions}
+    func cancelDrag(){original=nil;gesture=nil;previewLane=nil;dragIdentity=nil;dragViewport=nil;dragFrame=nil;dragOrbital=nil;dragGrid=nil}
     func radius(_ pitch:Int)->Double {outer-(Double(viewport.highest-pitch)+0.5)*row}
     func phase(_ point:NSPoint)->Double {OrbitTimeline.phase(Point(point.x-center.x,point.y-center.y))}
     func snap(_ value:Double)->Double {(value*grid).rounded()/grid}
     func pitchName(_ pitch:Int)->String {Scale.roots[pitch%12]+String(pitch/12-1)}
     var readoutPitch:Int? {
         if let hoverPitch {return hoverPitch}
-        guard let pitch=store.currentLane?.notes.first(where:{$0.id==store.selectedNoteID})?.pitch,(viewport.lowest...viewport.highest).contains(pitch) else{return nil}
+        guard let pitch=(previewLane ?? store.currentLane)?.notes.first(where:{$0.id==store.selectedNoteID})?.pitch,(viewport.lowest...viewport.highest).contains(pitch) else{return nil}
         return pitch
     }
     override func updateTrackingAreas() {
@@ -109,7 +111,7 @@ struct OrbitMIDIEditor:NSViewRepresentable {
             OrbitDrawing.text(String(bar+1),at:OrbitDrawing.point(center,radius:outer+13,phase:phase),size:11)
         }
         let selectedIDs=store.selectedMIDIIDs
-        let visible=(store.currentLane?.notes ?? []).map{preview?.id==$0.id ? preview!:$0}.filter{viewport.visible($0,clock:clock)}
+        let visible=((dragIsCurrent ? previewLane:nil) ?? store.currentLane)?.notes.filter{viewport.visible($0,clock:clock)} ?? []
         for note in visible.filter({!selectedIDs.contains($0.id)})+visible.filter({selectedIDs.contains($0.id)}) {
             let selected=selectedIDs.contains(note.id),path=arc(note,clock:clock)
             StudioTheme.accentNS.withAlphaComponent(selected ? 1:0.55+Double(note.velocity)/360).setStroke();path.lineWidth=max(3,row-1.2);path.stroke()
@@ -132,7 +134,7 @@ struct OrbitMIDIEditor:NSViewRepresentable {
             let ids=Set(visible.map(\.id));accessibilityNotes=accessibilityNotes.filter{ids.contains($0.key)}
             setAccessibilityChildren(MIDIOrbitViewport.ordered(visible).map{note -> NSAccessibilityElement in
                 let child=accessibilityNotes[note.id] ?? OrbitNoteAccessibility(parent:self,id:note.id);accessibilityNotes[note.id]=child
-                child.setAccessibilityLabel("\(pitchName(note.pitch)) · \(note.beat)박 · 길이 \(note.length)박 · 세기 \(note.velocity)"+(note.beat<range.lowerBound ? " · 앞에서 이어짐":"")+(!viewport.showsEnd(note,clock:clock) ? " · 다음 범위로 이어짐":""))
+                child.setAccessibilityLabel("\(pitchName(note.pitch)) · \(note.beat.formatted(.number.precision(.fractionLength(0...3))))박 · 길이 \(note.length.formatted(.number.precision(.fractionLength(0...3))))박 · 세기 \(note.velocity)"+(note.beat<range.lowerBound ? " · 앞에서 이어짐":"")+(!viewport.showsEnd(note,clock:clock) ? " · 다음 범위로 이어짐":""))
                 child.setAccessibilityValue(selectedIDs.contains(note.id) ? "선택됨":"")
                 child.setAccessibilityFrame(window.convertToScreen(convert(arc(note,clock:clock).bounds.insetBy(dx:-6,dy:-6),to:nil)))
                 return child
@@ -140,7 +142,7 @@ struct OrbitMIDIEditor:NSViewRepresentable {
         }
     }
     override func mouseDown(with event:NSEvent) {
-        guard allowsEditing else{return};window?.makeFirstResponder(self)
+        guard allowsEditing,window != nil,contentIdentity==store.numberEditIdentity else{return};window?.makeFirstResponder(self);cancelDrag()
         guard let clock else{return};let p=convert(event.locationInWindow,from:nil),r=hypot(p.x-center.x,p.y-center.y)
         guard r>=inner-3,r<=outer+3 else{return}
         previousPhase=phase(p);travel=0;downRadius=r
@@ -153,26 +155,28 @@ struct OrbitMIDIEditor:NSViewRepresentable {
         }.sorted{abs(radius($0.pitch)-r)<abs(radius($1.pitch)-r)}
         if let n=hits.first {
             if event.modifierFlags.contains(.shift) {store.toggleMIDISelection(n.id);cancelDrag();needsDisplay=true;return}
-            original=n;preview=n;store.selectedNoteID=n.id;store.selectedBeat=n.beat;dragIdentity=store.numberEditIdentity
+            original=n;gesture=store.beginMIDINoteDrag(n)
+            guard let gesture else{cancelDrag();return};previewLane=gesture.original;dragIdentity=store.numberEditIdentity
+            dragViewport=viewport;dragFrame=convert(bounds,to:nil);dragOrbital=store.project.usesOrbits;dragGrid=store.currentContext.beatGrid.subdivisions
             let end=endpoint(n,clock:clock)
             resizing=viewport.showsEnd(n,clock:clock) && hypot(p.x-end.x,p.y-end.y)<8
         } else if !event.modifierFlags.contains(.shift) {store.addNote(beat:max(range.lowerBound,min(range.upperBound-1/grid,snap(beat))),pitch:pitch,length:1/grid)}
         needsDisplay=true
     }
     override func mouseDragged(with event:NSEvent) {
-        guard allowsEditing,var n=original,let clock,dragIdentity==store.numberEditIdentity else{return}
+        guard dragIsCurrent,let n=original,let gesture,let clock else{cancelDrag();needsDisplay=true;return}
         let p=convert(event.locationInWindow,from:nil),next=phase(p),range=viewport.beats(clock)
         travel+=OrbitTimeline.phaseDelta(from:previousPhase,to:next);previousPhase=next
         let originalBeat=resizing ? n.beat+n.length:n.beat
-        let q=snap(clock.beat(atSeconds:clock.seconds(at:originalBeat)+travel*(clock.seconds(at:range.upperBound)-clock.seconds(at:range.lowerBound))))
-        if resizing {n.length=max(1/grid,min(clock.beats-n.beat,q-n.beat))}
-        else {n.beat=max(0,min(clock.beats-n.length,q));n.pitch=max(0,min(127,n.pitch+Int(((hypot(p.x-center.x,p.y-center.y)-downRadius)/row).rounded())))}
-        preview=n;needsDisplay=true
+        let delta=clock.beat(atSeconds:clock.seconds(at:originalBeat)+travel*(clock.seconds(at:range.upperBound)-clock.seconds(at:range.lowerBound)))-originalBeat
+        if resizing {previewLane=gesture.resizing(lengthDelta:delta)}
+        else {previewLane=gesture.moving(beatDelta:delta,pitchDelta:Int(((hypot(p.x-center.x,p.y-center.y)-downRadius)/row).rounded()))}
+        needsDisplay=true
     }
     override func mouseUp(with event:NSEvent) {
         defer{cancelDrag();needsDisplay=true}
-        guard allowsEditing,let n=preview,n != original,dragIdentity==store.numberEditIdentity,var lane=store.currentLane,let i=lane.notes.firstIndex(where:{$0.id==n.id}) else{return}
-        lane.notes[i]=n;store.setLane(lane)
+        guard dragIsCurrent,let lane=previewLane,let gesture else{return}
+        store.commitMIDINoteDrag(lane,gesture:gesture)
     }
     override func performKeyEquivalent(with event:NSEvent)->Bool {
         if allowsEditing,window?.firstResponder===self,event.modifierFlags.contains(.command),store.handleMIDIBatchKey(event){needsDisplay=true;return true}
@@ -189,9 +193,10 @@ struct OrbitMIDIEditor:NSViewRepresentable {
 @MainActor final class OrbitNoteAccessibility:NSAccessibilityElement {
     weak var plot:OrbitMIDIView?
     let noteID:ID
-    init(parent:OrbitMIDIView,id:ID){plot=parent;noteID=id;super.init();setAccessibilityParent(parent);setAccessibilityRole(.button);setAccessibilityEnabled(true)}
+    let identity:NumberEditIdentity
+    init(parent:OrbitMIDIView,id:ID){plot=parent;noteID=id;identity=parent.store.numberEditIdentity;super.init();setAccessibilityParent(parent);setAccessibilityRole(.button);setAccessibilityEnabled(true)}
     override func accessibilityPerformPress()->Bool {
-        guard let plot,plot.allowsEditing,let note=plot.store.currentLane?.notes.first(where:{$0.id==noteID}) else{return false}
+        guard let plot,plot.window != nil,plot.allowsEditing,identity==plot.store.numberEditIdentity,let clock=plot.clock,let note=plot.store.currentLane?.notes.first(where:{$0.id==noteID}),plot.viewport.visible(note,clock:clock) else{return false}
         plot.window?.makeFirstResponder(plot);plot.store.selectedNoteID=noteID;plot.store.selectedBeat=note.beat;plot.needsDisplay=true;return true
     }
 }

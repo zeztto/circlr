@@ -32,6 +32,13 @@ extension AppStore {
                 switch change {
                 case .pitch(let delta):editMIDINotes(.transpose(delta))
                 case .time(let delta):editMIDINotes(.move(delta))
+                case .length(let delta):
+                    do {
+                        let ids=selectedMIDIIDs,gesture=try MIDINoteDrag(lane:lane,ids:selectedMIDIIDs,beats:editorBeats,subdivisions:currentContext.beatGrid.subdivisions)
+                        let next=gesture.resizing(lengthDelta:delta)
+                        if next != lane {setLane(next)}
+                        selectMIDINotes(ids)
+                    }catch{fail(error)}
                 default:
                     let ids=selectedMIDIIDs
                     for index in lane.notes.indices where ids.contains(lane.notes[index].id) {lane.notes[index]=KeyboardEditing.changed(lane.notes[index],by:change,beats:editorBeats)}

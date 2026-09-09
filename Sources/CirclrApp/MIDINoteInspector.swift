@@ -42,7 +42,7 @@ struct MIDINoteInspector:View {
                 }
                 HStack(spacing:12){Text("\(store.selectedMIDIIDs.count)개 선택").foregroundStyle(StudioTheme.secondary);Button("복제"){act{store.duplicateMIDINotes()}};Button("삭제"){act{store.editMIDINotes(.delete)}}}
             } else {Text("노트를 선택하면 음높이·시작·길이·세기를 편집합니다").foregroundStyle(StudioTheme.secondary)}
-            Text(hint).font(.system(size:12)).foregroundStyle(StudioTheme.secondary).help(keyHelp)
+            Text(store.selectedMIDIIDs.count>1 && !store.midiStepMode ? "선택 노트를 함께 드래그\n끝 손잡이로 길이 조절":hint).font(.system(size:12)).foregroundStyle(StudioTheme.secondary).help(keyHelp)
         }.frame(maxWidth:.infinity,alignment:.leading).padding(.trailing,6)
         }.frame(width:252,alignment:.leading)
         .environment(\.numberEditing,NumberEditingContext(snapshot:store.numberEditIdentity,current:{store.numberEditIdentity},focusCanvas:{focusTarget.focus()},fieldFocus:fieldFocus))

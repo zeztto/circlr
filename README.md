@@ -6,7 +6,9 @@ macOS용 앨범·송폼 궤도 편집기. **앨범 → 곡·악장 → 섹션 �
 
 연결 UI는 [서클 둘레 8방향 IN/OUT과 다중 입출력](docs/22-eight-direction-ports.md)으로 확장 중이다. 포트의 신호 의미와 연결점 배치를 분리한다. 아래 일반 사용법은 배포된 0.19 앱 기준이며 새 포트 기능은 독립 개발 브랜치에서 검증한다.
 
-현재 **`codex/daw-integration`의 0.20.0 build 49**에 녹음 lifecycle과 8방향·다중 bus·그룹 포트를 통합했다. 같은 캔버스의 연결 편집·녹음 상태·스텝·오토메이션이 공존하며, 녹음 시작·정리 중 음악 편집과 Undo의 경쟁을 차단한다. build 23의 실제 편집·바운스·Undo·저장/재열기·닫기 최소화 및 출력별 모션 검증은 [통합 QA](qa/daw-integration-review.md)에 기록했다.
+현재 **`codex/daw-integration`의 0.20.0 build 50**에 녹음 lifecycle과 8방향·다중 bus·그룹 포트를 통합했다. 같은 캔버스의 연결 편집·녹음 상태·스텝·오토메이션이 공존하며, 녹음 시작·정리 중 음악 편집과 Undo의 경쟁을 차단한다. build 23의 실제 편집·바운스·Undo·저장/재열기·닫기 최소화 및 출력별 모션 검증은 [통합 QA](qa/daw-integration-review.md)에 기록했다.
+
+build 50은 **선택한 MIDI 코드·프레이즈를 피아노 롤과 궤도에서 함께 드래그**한다. 본문은 시간·음정, 끝 손잡이는 길이를 함께 바꾸며 기존 그루브와 노트 간격을 유지한다. 화면 밖 선택도 포함하고 한 번의 Undo로 복원한다. Swift **382개**·Python **26개**, 실제 두 편집기의 이동·길이·경계·단독 선택·저장 복원을 확인했다. [사용법과 계약](docs/64-midi-group-drag.md) · [QA와 제한](qa/midi-group-drag-review.md).
 
 build 49는 **파형 위 휠로 원본 시간을 확대·축소하고 키보드로 이동**한다. 화면 밖 분할 커서를 현재 배율로 찾고 편집/Undo·궤도 전환 중 배율을 유지한다. 하단 조작을 한 줄로 모아 작은 창의 원형 파형 높이를 확보했다. Swift **377개**·Python **26개**, 최종 앱의 실제 휠·트림/Undo·대상 전환·저장 복원을 확인했다. [사용법과 계약](docs/63-audio-source-navigation.md) · [QA](qa/audio-source-navigation-review.md).
 

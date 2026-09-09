@@ -112,20 +112,23 @@ struct PianoRoll:NSViewRepresentable {
     func updateNSView(_ view:PianoRollView,context:Context){
         let note=store.currentLane?.notes.first{$0.id==store.selectedNoteID}
         let changed=view.topPitch != topPitch || view.lastSelection != note || (note==nil && view.lastBeat != store.selectedBeat)
-        if !enabled || view.topPitch != topPitch || (view.dragIdentity != nil && view.dragIdentity != store.numberEditIdentity) {view.cancelDrag()}
+        if !enabled || view.topPitch != topPitch || (view.dragIdentity != nil && !view.dragIsCurrent) {view.cancelDrag()}
+        if view.contentIdentity != store.numberEditIdentity || view.topPitch != topPitch {view.accessibilityNotes=[:]}
         if !enabled {view.releaseHeldNote()}
         view.store=store;view.topPitch=max(0,min(127,topPitch));view.allowsEditing=enabled
+        view.contentIdentity=store.numberEditIdentity
         view.lastSelection=note;view.lastBeat=store.selectedBeat;view.needsDisplay=true
         if changed {DispatchQueue.main.async{[weak view] in view?.revealSelection()}}
     }
 }
 @MainActor final class PianoRollView:NSView {
     var store:AppStore;var topPitch=72;let row=20.0,unit=48.0,left=60.0
-    var original:Note?,preview:Note?,down=NSPoint.zero,resizing=false
+    var original:Note?,gesture:MIDINoteDrag?,previewLane:Lane?,down=NSPoint.zero,resizing=false
     var heldPitch:Int?
     var lastSelection:Note?,lastBeat=0.0
     var allowsEditing=true
     var dragIdentity:NumberEditIdentity?
+    var contentIdentity:NumberEditIdentity?,dragFrame:NSRect?,dragOrbital:Bool?,dragTopPitch:Int?,dragGrid:Int?
     var accessibilityNotes:[ID:PianoNoteAccessibility]=[:]
     var scrollObserver:NSObjectProtocol?
     override var isFlipped:Bool{true};override var acceptsFirstResponder:Bool{true}
@@ -142,7 +145,8 @@ struct PianoRoll:NSViewRepresentable {
     }}
     override func viewWillMove(toWindow newWindow:NSWindow?){if newWindow==nil{releaseHeldNote();cancelDrag();if let scrollObserver{NotificationCenter.default.removeObserver(scrollObserver);self.scrollObserver=nil}};super.viewWillMove(toWindow:newWindow)}
     deinit{if let scrollObserver{NotificationCenter.default.removeObserver(scrollObserver)}}
-    func cancelDrag(){original=nil;preview=nil;dragIdentity=nil}
+    var dragIsCurrent:Bool {allowsEditing && window != nil && dragIdentity==store.numberEditIdentity && dragFrame==convert(bounds,to:nil) && dragOrbital==store.project.usesOrbits && dragTopPitch==topPitch && dragGrid==store.currentContext.beatGrid.subdivisions}
+    func cancelDrag(){original=nil;gesture=nil;previewLane=nil;dragIdentity=nil;dragFrame=nil;dragOrbital=nil;dragTopPitch=nil;dragGrid=nil}
     func releaseHeldNote(){if let pitch=heldPitch{store.midi(status:0x80,pitch:pitch,velocity:0,time:ProcessInfo.processInfo.systemUptime);heldPitch=nil}}
     func revealSelection(){
         // A click can select near a viewport edge; keep the pointer's drag origin stable.
@@ -163,7 +167,7 @@ struct PianoRoll:NSViewRepresentable {
         let first=max(0,Int((visibleRect.minX-left)/unit/step)-1),last=min(count,max(0,Int((visibleRect.maxX-left)/unit/step)+1))
         for i in first...max(first,last) {let q=Double(i)*step,x=left+q*unit;let line=NSBezierPath();line.move(to:NSPoint(x:x,y:20));line.line(to:NSPoint(x:x,y:bounds.height));(i%ctx.beatGrid.subdivisions==0 ? NSColor(white:0.32,alpha:1):NSColor(white:0.16,alpha:1)).setStroke();line.lineWidth=0.5;line.stroke()}
         let selectedIDs=store.selectedMIDIIDs
-        let visible=(store.currentLane?.notes ?? []).map{preview?.id==$0.id ? preview!:$0}.filter{$0.pitch<=topPitch && $0.pitch>=max(0,topPitch-26)}
+        let visible=((dragIsCurrent ? previewLane:nil) ?? store.currentLane)?.notes.filter{$0.pitch<=topPitch && $0.pitch>=max(0,topPitch-26)} ?? []
         for n in visible.filter({!selectedIDs.contains($0.id)})+visible.filter({selectedIDs.contains($0.id)}) {let r=rect(n);(selectedIDs.contains(n.id) ? StudioTheme.accentNS:StudioTheme.accentNS.withAlphaComponent(0.60)).setFill();NSBezierPath(roundedRect:r,xRadius:2,yRadius:2).fill()}
         StudioTheme.accentNS.withAlphaComponent(0.5).setStroke();let cursor=NSBezierPath();cursor.move(to:NSPoint(x:left+store.selectedBeat*unit,y:20));cursor.line(to:NSPoint(x:left+store.selectedBeat*unit,y:bounds.height));cursor.stroke()
         drawPinnedAxes()
@@ -171,7 +175,7 @@ struct PianoRoll:NSViewRepresentable {
             let ids=Set(visible.map(\.id));accessibilityNotes=accessibilityNotes.filter{ids.contains($0.key)}
             setAccessibilityChildren(MIDIOrbitViewport.ordered(visible).map{note -> NSAccessibilityElement in
                 let child=accessibilityNotes[note.id] ?? PianoNoteAccessibility(parent:self,id:note.id);accessibilityNotes[note.id]=child
-                child.setAccessibilityLabel("\(Scale.roots[note.pitch%12])\(note.pitch/12-1) · \(note.beat)박 · 길이 \(note.length)박 · 세기 \(note.velocity)")
+                child.setAccessibilityLabel("\(Scale.roots[note.pitch%12])\(note.pitch/12-1) · \(note.beat.formatted(.number.precision(.fractionLength(0...3))))박 · 길이 \(note.length.formatted(.number.precision(.fractionLength(0...3))))박 · 세기 \(note.velocity)")
                 child.setAccessibilityValue(selectedIDs.contains(note.id) ? "선택됨":"")
                 child.setAccessibilityFrame(window.convertToScreen(convert(rect(note),to:nil)));return child
             })
@@ -195,16 +199,30 @@ struct PianoRoll:NSViewRepresentable {
         ("음높이" as NSString).draw(at:NSPoint(x:v.minX+4,y:v.minY+3),withAttributes:[.font:NSFont.systemFont(ofSize:11),.foregroundColor:StudioTheme.secondaryNS])
     }
     func snap(_ q:Double)->Double{let s=Double(max(1,store.currentContext.beatGrid.subdivisions));return (q*s).rounded()/s}
-    override func mouseDown(with event:NSEvent){guard allowsEditing else{return};window?.makeFirstResponder(self);down=convert(event.locationInWindow,from:nil);guard down.y>=visibleRect.minY+20,down.y<20+Double(min(27,topPitch+1))*row else{return}
+    override func mouseDown(with event:NSEvent){guard allowsEditing,window != nil,contentIdentity==store.numberEditIdentity else{return};window?.makeFirstResponder(self);cancelDrag();down=convert(event.locationInWindow,from:nil);guard down.y>=visibleRect.minY+20,down.y<20+Double(min(27,topPitch+1))*row else{return}
         if down.x<visibleRect.minX+left {
             let pitch=max(0,min(127,topPitch-Int((down.y-20)/row)));heldPitch=pitch;store.midi(status:0x90,pitch:pitch,velocity:100,time:ProcessInfo.processInfo.systemUptime);needsDisplay=true;return
         }
         store.selectedClipID=nil;let q=max(0,min(store.editorBeats-0.03125,snap((down.x-left)/unit)));store.selectedBeat=q
-        if let n=store.currentLane?.notes.reversed().first(where:{rect($0).contains(down)}) {if event.modifierFlags.contains(.shift){store.toggleMIDISelection(n.id);cancelDrag();needsDisplay=true;return};store.selectedNoteID=n.id;original=n;preview=n;dragIdentity=store.numberEditIdentity;resizing=down.x>rect(n).maxX-7}
+        if let n=store.currentLane?.notes.reversed().first(where:{rect($0).contains(down)}) {
+            if event.modifierFlags.contains(.shift){store.toggleMIDISelection(n.id);cancelDrag();needsDisplay=true;return}
+            original=n;gesture=store.beginMIDINoteDrag(n)
+            guard let gesture else{cancelDrag();return};previewLane=gesture.original;dragIdentity=store.numberEditIdentity
+            dragFrame=convert(bounds,to:nil);dragOrbital=store.project.usesOrbits;dragTopPitch=topPitch;dragGrid=store.currentContext.beatGrid.subdivisions
+            resizing=down.x>rect(n).maxX-7
+        }
         else if !event.modifierFlags.contains(.shift) {store.addNote(beat:q,pitch:topPitch-Int((down.y-20)/row),length:1/Double(store.currentContext.beatGrid.subdivisions))};needsDisplay=true
     }
-    override func mouseDragged(with event:NSEvent){guard allowsEditing,dragIdentity==store.numberEditIdentity,var n=original else{return};let p=convert(event.locationInWindow,from:nil);if resizing{n.length=max(1/Double(store.currentContext.beatGrid.subdivisions),min(store.editorBeats-n.beat,snap(n.length+(p.x-down.x)/unit)))}else{n.beat=max(0,min(store.editorBeats-n.length,snap(n.beat+(p.x-down.x)/unit)));n.pitch=max(0,min(127,n.pitch-Int(((p.y-down.y)/row).rounded())))};preview=n;needsDisplay=true}
-    override func mouseUp(with event:NSEvent){defer{cancelDrag();needsDisplay=true};releaseHeldNote();if allowsEditing,let n=preview,n != original,dragIdentity==store.numberEditIdentity,var lane=store.currentLane,let i=lane.notes.firstIndex(where:{$0.id==n.id}){lane.notes[i]=n;store.setLane(lane)}}
+    override func mouseDragged(with event:NSEvent){
+        guard dragIsCurrent,let gesture else{cancelDrag();needsDisplay=true;return}
+        let p=convert(event.locationInWindow,from:nil),delta=(p.x-down.x)/unit
+        previewLane=resizing ? gesture.resizing(lengthDelta:delta):gesture.moving(beatDelta:delta,pitchDelta:-Int(((p.y-down.y)/row).rounded()))
+        needsDisplay=true
+    }
+    override func mouseUp(with event:NSEvent){
+        defer{cancelDrag();needsDisplay=true};releaseHeldNote()
+        if dragIsCurrent,let lane=previewLane,let gesture {store.commitMIDINoteDrag(lane,gesture:gesture)}
+    }
     override func performKeyEquivalent(with event:NSEvent)->Bool {
         if allowsEditing,window?.firstResponder===self,event.modifierFlags.contains(.command),store.handleMIDIBatchKey(event){needsDisplay=true;return true}
         return super.performKeyEquivalent(with:event)
@@ -218,9 +236,10 @@ struct PianoRoll:NSViewRepresentable {
 @MainActor final class PianoNoteAccessibility:NSAccessibilityElement {
     weak var plot:PianoRollView?
     let noteID:ID
-    init(parent:PianoRollView,id:ID){plot=parent;noteID=id;super.init();setAccessibilityParent(parent);setAccessibilityRole(.button);setAccessibilityEnabled(true)}
+    let identity:NumberEditIdentity
+    init(parent:PianoRollView,id:ID){plot=parent;noteID=id;identity=parent.store.numberEditIdentity;super.init();setAccessibilityParent(parent);setAccessibilityRole(.button);setAccessibilityEnabled(true)}
     override func accessibilityPerformPress()->Bool {
-        guard let plot,plot.window != nil,plot.allowsEditing,let note=plot.store.currentLane?.notes.first(where:{$0.id==noteID}) else{return false}
+        guard let plot,plot.window != nil,plot.allowsEditing,identity==plot.store.numberEditIdentity,let note=plot.store.currentLane?.notes.first(where:{$0.id==noteID}),note.pitch<=plot.topPitch,note.pitch>=max(0,plot.topPitch-26) else{return false}
         plot.window?.makeFirstResponder(plot);plot.store.selectedNoteID=noteID;plot.store.selectedBeat=note.beat;plot.revealSelection();plot.needsDisplay=true;return true
     }
 }
