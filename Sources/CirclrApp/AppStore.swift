@@ -239,6 +239,15 @@ import CirclrAudio
             scheduleRecovery()
         } catch { fail(error) }
     }
+    /// Only viewing preferences bypass history; actual positions, groups and ports remain undoable.
+    func setCanvasViewPreferences(layout: CircleLayout? = nil, grid: Bool? = nil, snap: Bool? = nil) {
+        var candidate = project
+        if let layout { candidate.circleLayout = layout }
+        if let grid { candidate.album?.layout.grid = grid }
+        if let snap { candidate.album?.layout.snap = snap }
+        guard candidate != project else { return }
+        project = candidate; dirty = true; scheduleRecovery()
+    }
     func undo() {
         cancelRecordingRequest();guard !midiRecording && !audioRecordingBusy else{status="녹음 정지와 파일 마무리 후 실행 취소하세요";return}
         guard let (name,previous,layoutOnly) = undoStack.last else { return }

@@ -11,6 +11,12 @@ public enum CircleHistory {
             return result
         }
         var result = saved; result.musicRevision = current.musicRevision + 1
+        // Viewing preferences are saved with the document, independently of edit history.
+        result.circleLayout = current.circleLayout
+        if let album = current.album, result.album?.id == album.id {
+            result.album?.layout.grid = album.layout.grid
+            result.album?.layout.snap = album.layout.snap
+        }
         if saved.portLayout != current.portLayout {
             var layout = saved.portLayout ?? CirclePortLayout()
             layout.revision = (current.portLayout?.revision ?? 0) + 1

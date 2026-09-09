@@ -48,9 +48,9 @@ extension AppStore {
         add("fit","전체 앨범 보기","F"){[weak self] in self?.hierarchyCommand=HierarchyCommand(action:.fit)}
         add("follow","재생 팔로우 켜기 / 끄기"){[weak self] in guard let self else{return};self.playbackFollow=self.playbackFollow.toggled()}
         add("console","콘솔 접기 / 펼치기","⌃`"){[weak self] in self?.consoleOpen.toggle()}
-        add("layout","궤도 / 자유 배치 전환"){[weak self] in self?.mutate("캔버스 보기",musical:false){$0.circleLayout=$0.usesOrbits ? .freeform:.orbit}}
-        add("grid","그리드 켜기 / 끄기"){[weak self] in self?.mutate("그리드",musical:false){$0.album?.layout.grid.toggle()}}
-        add("snap","그리드 스냅 켜기 / 끄기"){[weak self] in self?.mutate("스냅",musical:false){$0.album?.layout.snap.toggle()}}
+        add("layout","궤도 / 자유 배치 전환"){[weak self] in guard let self else{return};self.setCanvasViewPreferences(layout:self.project.usesOrbits ? .freeform:.orbit)}
+        add("grid","그리드 켜기 / 끄기"){[weak self] in guard let self else{return};self.setCanvasViewPreferences(grid:!(self.project.album?.layout.grid ?? true))}
+        add("snap","그리드 스냅 켜기 / 끄기"){[weak self] in guard let self else{return};self.setCanvasViewPreferences(snap:!(self.project.album?.layout.snap ?? true))}
         if let movie=lastMovieURL {add("reveal-movie","저장한 영상 Finder에서 보기"){NSWorkspace.shared.activateFileViewerSelecting([movie])}}
         if hierarchySelections.count>=2 {
             add("group","선택한 서클로 그룹 만들기","⌘G"){[weak self] in self?.makeHierarchyGroup()}

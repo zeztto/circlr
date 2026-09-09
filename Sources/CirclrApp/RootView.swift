@@ -128,11 +128,11 @@ struct RootView: View {
             }
             Menu {
                 Toggle("궤도 타임라인",isOn:Binding(get:{store.project.usesOrbits},set:{value in
-                    store.mutate("캔버스 보기",musical:false){$0.circleLayout=value ? .orbit:.freeform}
+                    store.setCanvasViewPreferences(layout:value ? .orbit:.freeform)
                 }))
                 Divider()
-                Toggle("그리드",isOn:Binding(get:{store.project.album?.layout.grid ?? true},set:{value in store.mutate("그리드",musical:false){$0.album?.layout.grid=value}}))
-                Toggle("놓을 때 스냅",isOn:Binding(get:{store.project.album?.layout.snap ?? true},set:{value in store.mutate("스냅",musical:false){$0.album?.layout.snap=value}}))
+                Toggle("그리드",isOn:Binding(get:{store.project.album?.layout.grid ?? true},set:{value in store.setCanvasViewPreferences(grid:value)}))
+                Toggle("놓을 때 스냅",isOn:Binding(get:{store.project.album?.layout.snap ?? true},set:{value in store.setCanvasViewPreferences(snap:value)}))
                 Divider()
                 Button("가로 정렬"){store.alignHierarchy(0)}.disabled(store.project.usesOrbits || store.hierarchySelections.count<2)
                 Button("세로 정렬"){store.alignHierarchy(1)}.disabled(store.project.usesOrbits || store.hierarchySelections.count<2)

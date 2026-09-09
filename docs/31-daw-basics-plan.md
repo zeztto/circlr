@@ -4,6 +4,8 @@
 
 서브 에이전트 요청에 따라 독립적인 코드 조사를 실제 dispatch했으나 `agent thread limit reached`로 실패했다. 현재 총 1 slot이므로 사용자 요청을 작업 중단 사유로 삼지 않고 역할별로 순차 실행한다. 추가 slot이 제공되면 read-only 오디오/automation 조사부터 분담한다.
 
+2026-09-09 build 56: 독립 검토 dispatch도 같은 thread limit으로 거절되어 순차 검토했다. 궤도·그리드·스냅을 음악 Undo/Redo와 분리하고 실제 MIDI·서클 이동·저장 복원을 검증했다. [보기 이력 계약](70-canvas-view-history.md) · [QA](../qa/view-history-review.md).
+
 ## 상태와 남은 완료 조건
 
 | 작업 | 현재 구현 | 확장·완료 조건 |
