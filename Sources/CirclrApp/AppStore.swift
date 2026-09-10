@@ -134,6 +134,7 @@ import CirclrAudio
     @Published var bounceTailSeconds:Double? = nil
     @Published var bounceTailEditing = false
     var bounceTailCache:BounceTailCache?
+    var sharedAudioPreflightCache:[SharedAudioPreflightEntry]=[]
     var productionGeneration = 0
     var productionMediaRoot:URL {storageRoot.appendingPathComponent("Bounces")}
     private var recordRepeats = 1

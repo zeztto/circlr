@@ -127,7 +127,7 @@ struct InlineCircleEditor: View {
                             signalControls(node)
                         }.padding(.trailing,8).rememberEditorScroll(scroll("router"))
                     }
-                case .rhythmAudio: Text("리듬 패턴의 오디오 클립"); AudioLane(store: store); Spacer()
+                case .rhythmAudio: SharedRhythmAudioWorkspace(store:store,viewport:$viewState.audio)
                 }
             }
         }.frame(maxWidth:.infinity,maxHeight:.infinity,alignment:.topLeading)

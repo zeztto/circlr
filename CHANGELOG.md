@@ -1,5 +1,11 @@
 # 변경 이력
 
+## 검증 완료 — 0.20.0 build116 공유 리듬 오디오 편집
+
+- 같은 캔버스에서 공유 리듬의 클립 선택·파형/수치 편집·공유 범위 안내를 연결. trim/fades/volume/beat/tempo·split/duplicate/delete 구현.
+- 실제 baseline115 AudioLane2clip/파형·수치 부재를 PNG·AX·r14로 확보. Core7개(offline PCM1개 포함)·0.390초 통과, 반복 PCM max error<1e-6 및 graph/legacy cycle offset 확인. legacy 전체 PCM은 미검증.
+- 최대2개 keyed cache·공유 mute 안내, non-follow split의 다른/가변 tempo 거절 및 followsTempo sourceBPM/sample boundary 검사. final2 Release44.04초·regression32개·shared15/ordinary포함17 native 상태 확인. 마지막 삭제의 부모 복귀는 확인했으나99 초안의 clip 전환 잔류와 saved clip2→clip1 재열림을 발견해 identity/선택/viewport 복원을 수정. frozen final3 Release42.71초·UUID `7DD71FA1-C126-34EA-82C5-E1CF34853EDE`, source v6 review blocker0·보완5개 상태 확인. build 중 source 변경으로 실패한 이전 final3 로그는 성공 근거에서 제외하며 final2 17개+final3 5개 mixed-candidate checker·exact Undo/reopen/disk·signed main SHA/UUID guard·final3 PNG4장 검토 통과. draft-switched 수치는 AX only, QA 종료·PID86114 유지. [계약](docs/132-shared-rhythm-audio-workspace.md).
+
 ## 제한된 검증 완료 — 0.20.0 build115 미리 듣기 단계 진단
 
 - optional session trace64개·첫 interruption 보존·stale guard, sourceLoad/AU/engineCreation/mixerAcquisition/routing/engineStart/note/cleanup 계측. legacy factory/status decode 보존, 두 인자 factory는 generic backendPreparation.

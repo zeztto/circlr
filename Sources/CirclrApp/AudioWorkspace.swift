@@ -3,7 +3,16 @@ import SwiftUI
 import CirclrCore
 
 extension AppStore {
-    var currentAudioClip:AudioClip? {guard case .audio(_,let id)=selectedMusic?.content else{return nil};return currentLane?.audio.first{$0.id==id}}
+    var isSharedRhythmAudio:Bool {if case .rhythmAudio=selectedMusic?.content{return true};return false}
+    var sharedRhythmAudioPattern:RhythmPattern? {
+        guard case .rhythmAudio(let trackID)=selectedMusic?.content,let id=editPatternID else{return nil}
+        return project.patterns.first{$0.id==id && $0.trackID==trackID}
+    }
+    var currentAudioClip:AudioClip? {
+        if isSharedRhythmAudio {return sharedRhythmAudioPattern?.audio.first{$0.id==selectedClipID}}
+        guard case .audio(_,let id)=selectedMusic?.content else{return nil}
+        return currentLane?.audio.first{$0.id==id}
+    }
     var audioIsOutsideSharedOriginal:Bool {
         guard editOriginal,case .audio(let laneID,let clipID)=selectedMusic?.content,
               currentAudioClip==nil,let use=selectedUse,
@@ -30,9 +39,36 @@ extension AppStore {
     var audioEditorHasFocus:Bool {NSApp.keyWindow?.firstResponder is OrbitAudioView}
     var audioCommandAvailable:Bool {currentAudioClip != nil && !automationVisible && !(NSApp.keyWindow?.firstResponder is NSTextView) && !libraryOpen && !navigationOpen && commandPalette==nil && !keyboardHelp && !hierarchySettingsOpen}
     var audioCutOffset:Double {guard let clip=currentAudioClip else{return 0};return min(clip.duration,max(0,audioSplitOffset ?? clip.duration/2))}
-    func splitAudio(){applyAudioEdit(.split(sourceOffset:audioCutOffset),label:"오디오 분할")}
+    var audioSplitIssue:String? {
+        guard isSharedRhythmAudio else{return nil}
+        return sharedAudioIssue(.split(sourceOffset:audioCutOffset))
+    }
+    func sharedAudioIssue(_ change:AudioEditing.Change)->String? {
+        guard let pattern=sharedRhythmAudioPattern,let clip=currentAudioClip else{return "공유 오디오 클립을 선택하세요"}
+        let operation:SharedAudioPreflightKey.Operation
+        switch change {
+        case .split(let offset):operation = .split(offset)
+        case .duplicate(let offset):operation = .duplicate(offset)
+        default:return nil
+        }
+        let key=SharedAudioPreflightKey(projectID:project.id,revision:project.musicRevision,generation:mediaImportGeneration,
+            patternID:pattern.id,trackID:pattern.trackID,clipID:clip.id,operation:operation)
+        sharedAudioPreflightCache.removeAll{$0.key.projectID != key.projectID || $0.key.revision != key.revision || $0.key.generation != key.generation}
+        if let cached=sharedAudioPreflightCache.first(where:{$0.key==key}) {return cached.issue}
+        let issue:String?
+        do {var copy=project;_ = try SharedRhythmAudioEditing.apply(change,patternID:pattern.id,trackID:pattern.trackID,clipID:clip.id,in:&copy);issue=nil}
+        catch {issue=error.localizedDescription}
+        sharedAudioPreflightCache.append(.init(key:key,issue:issue))
+        if sharedAudioPreflightCache.count>2 {sharedAudioPreflightCache.removeFirst(sharedAudioPreflightCache.count-2)}
+        return issue
+    }
+    func splitAudio(){
+        if let issue=audioSplitIssue {status=issue;return}
+        applyAudioEdit(.split(sourceOffset:audioCutOffset),label:"오디오 분할")
+    }
     var audioDuplicateIssue:String? {
         guard let clip=currentAudioClip,let node=selectedMusic,let clock=sectionClock else{return "편집할 오디오 서클을 선택하세요"}
+        if isSharedRhythmAudio {return sharedAudioIssue(.duplicate(beatOffset:nil))}
         do {_ = try AudioClipTiming(node:node,context:currentContext,clock:clock).duplicateBeat(clip);return nil}
         catch {return error.localizedDescription}
     }
@@ -42,6 +78,24 @@ extension AppStore {
     }
     func applyAudioEdit(_ change:AudioEditing.Change,label:String) {
         guard let use=selectedUse,let node=selectedMusic,currentAudioClip != nil else{return}
+        if let pattern=sharedRhythmAudioPattern,let clip=currentAudioClip {
+            let revision=project.musicRevision,sourceCursor=audioSplitOffset.map{clip.sourceStart+$0}
+            var result:ID?
+            mutate(label){result=try SharedRhythmAudioEditing.apply(change,patternID:pattern.id,trackID:pattern.trackID,clipID:clip.id,in:&$0)}
+            guard project.musicRevision != revision else{return}
+            selectedClipID=result ?? sharedRhythmAudioPattern?.audio.first?.id
+            if selectedClipID==nil {
+                audioSplitOffset=nil
+                focusHierarchy(.section(arrangementID:project.activeArrangementID,useID:use.id),detail:false)
+                return
+            }
+            switch change {
+            case .fade:break
+            case .replace:if let sourceCursor,let current=currentAudioClip {audioSplitOffset=min(current.duration,max(0,sourceCursor-current.sourceStart))}
+            default:audioSplitOffset=nil
+            }
+            return
+        }
         let original=editOriginal,revision=project.musicRevision
         let sourceCursor=audioSplitOffset.map{(currentAudioClip?.sourceStart ?? 0)+$0}
         var result:ID?
@@ -57,6 +111,10 @@ extension AppStore {
         else if result==nil {focusHierarchy(.section(arrangementID:project.activeArrangementID,useID:use.id),detail:false)}
     }
     func editAudioClip(_ clip:AudioClip,_ edit:(inout AudioClip)->Void) {
+        if isSharedRhythmAudio {
+            guard currentAudioClip?.id==clip.id,var value=currentAudioClip else{return}
+            edit(&value);applyAudioEdit(.replace(value),label:"공유 리듬 오디오 편집");return
+        }
         guard var lane=currentLane,let i=lane.audio.firstIndex(where:{$0.id==clip.id}),let asset=project.assets.first(where:{$0.id==clip.assetID}) else{return}
         var value=lane.audio[i];edit(&value)
         if case .audio(let laneID,let clipID)=selectedMusic?.content,laneID==lane.id,clipID==clip.id {
@@ -109,11 +167,15 @@ struct AudioWorkspaceView:View {
         GeometryReader { geometry in
         VStack(alignment:.leading,spacing:8) {
             HStack(spacing:12) {
+                if store.isSharedRhythmAudio {
+                    Text("공유 패턴 · 모든 사용에 반영").font(.system(size:11)).fixedSize()
+                } else {
                 Toggle(store.editOriginal ? "공유 원본":"이번 사용",isOn:Binding(get:{store.editOriginal},set:{value in
                     if store.setAudioEditScope(original:value,identity:scopeIdentity) {focusTarget.focus()}
                 })).fixedSize().accessibilityLabel("오디오 공유 원본 편집")
                     .accessibilityValue(store.editOriginal ? "공유 원본":"이번 사용")
                     .help(store.editOriginal ? "같은 원본을 사용하는 다른 섹션 사용에도 오디오 편집이 반영됩니다":"오디오 편집은 이번 사용에만 반영됩니다. 체크하면 공유 원본을 편집합니다")
+                }
                 Text(asset.name).foregroundStyle(StudioTheme.secondary).lineLimit(1).help(asset.name)
                 Spacer(minLength:0)
             }
@@ -122,11 +184,15 @@ struct AudioWorkspaceView:View {
                 .frame(height:min(store.project.usesOrbits ? 160:140,max(80,geometry.size.height-100)))
             ScrollView {
             VStack(alignment:.leading,spacing:10) {
+                if store.isSharedRhythmAudio {
+                    if let issue=store.audioSplitIssue {Text("분할: "+issue).font(.system(size:11)).foregroundStyle(StudioTheme.secondary).fixedSize(horizontal:false,vertical:true)}
+                    if let issue=store.audioDuplicateIssue,issue != store.audioSplitIssue {Text("복제: "+issue).font(.system(size:11)).foregroundStyle(StudioTheme.secondary).fixedSize(horizontal:false,vertical:true)}
+                }
                 MIDIWorkspaceToolbarLayout {
                     HStack(spacing:10) {
                 Button("분할"){act{store.splitAudio()}}
-                    .disabled(store.audioCutOffset<=0 || store.audioCutOffset>=liveClip.duration)
-                    .help("선택 시작 기준 커서에서 두 서클로 분할 · ⌘T")
+                    .disabled(store.audioCutOffset<=0 || store.audioCutOffset>=liveClip.duration || store.audioSplitIssue != nil)
+                    .help(store.isSharedRhythmAudio ? "선택 시작 기준 커서에서 두 공유 클립으로 분할 · ⌘T":"선택 시작 기준 커서에서 두 서클로 분할 · ⌘T")
                 Button(store.audioDuplicateIssue==nil ? "복제":"복제 · 공간 없음"){act{store.duplicateAudio()}}.disabled(store.audioDuplicateIssue != nil).help(store.audioDuplicateIssue ?? "구간 뒤로 복제 · ⌘D")
                     }.fixedSize(horizontal:true,vertical:false)
                     HStack(spacing:10) {
@@ -135,7 +201,8 @@ struct AudioWorkspaceView:View {
                     }.fixedSize(horizontal:true,vertical:false)
                     HStack(spacing:10) {
                 Toggle("템포 추종",isOn:Binding(get:{liveClip.followsTempo},set:{value in store.editAudioClip(liveClip){$0.followsTempo=value}}))
-                Toggle("음소거",isOn:Binding(get:{store.musicEditingNode?.muted ?? false},set:{v in store.updateMusic("오디오 음소거"){$0.muted=v}}))
+                Toggle(store.isSharedRhythmAudio ? (store.editOriginal ? "공유 원본 서클 음소거":"이번 사용 서클 음소거"):"음소거",isOn:Binding(get:{store.musicEditingNode?.muted ?? false},set:{v in store.updateMusic("오디오 음소거"){$0.muted=v}}))
+                    .help(store.isSharedRhythmAudio ? (store.editOriginal ? "공유 원본 서클을 음소거합니다. 같은 원본을 사용하는 다른 섹션에도 반영되며 공유 패턴의 클립 볼륨은 바꾸지 않습니다":"이번 사용의 서클만 음소거합니다. 공유 패턴의 클립 볼륨은 바꾸지 않습니다"):"선택한 서클의 음소거")
                 Button("삭제"){act{store.applyAudioEdit(.delete,label:"오디오 삭제")}}
                     }.fixedSize(horizontal:true,vertical:false)
                 }

@@ -108,7 +108,7 @@ public enum SectionGraphCompiler {
                 note.beat += offset + (stepIndex % 2 == 1 ? grid.swing * step : 0)
                 if note.beat < length { note.length = min(note.length, length - note.beat); lane.notes.append(note) }
             }
-            for var clip in pattern.audio { clip.beat += offset; if clip.beat < length { lane.audio.append(clip) } }
+            for var clip in pattern.audio { clip.beat += offset; if clip.renderWindow != nil { clip.renderWindow?.cycleBeat += offset }; if clip.beat < length { lane.audio.append(clip) } }
             offset += pattern.length
         }
         return lane

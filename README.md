@@ -6,7 +6,9 @@ macOS용 앨범·송폼 궤도 편집기. **앨범 → 곡·악장 → 섹션 �
 
 연결 UI는 [서클 둘레 8방향 IN/OUT과 다중 입출력](docs/22-eight-direction-ports.md)으로 확장 중이다. 포트의 신호 의미와 연결점 배치를 분리한다. 아래 일반 사용법은 배포된 0.19 앱 기준이며 새 포트 기능은 독립 개발 브랜치에서 검증한다.
 
-현재 **`codex/daw-integration`의 0.20.0 build 115**에 녹음 lifecycle과 8방향·다중 bus·그룹 포트를 통합했다. 같은 캔버스의 연결 편집·녹음 상태·스텝·오토메이션이 공존하며, 녹음 시작·정리 중 음악 편집과 Undo의 경쟁을 차단한다. build 23의 실제 편집·바운스·Undo·저장/재열기·닫기 최소화 및 출력별 모션 검증은 [통합 QA](qa/daw-integration-review.md)에 기록했다.
+현재 **`codex/daw-integration`의 0.20.0 build 116**에 녹음 lifecycle과 8방향·다중 bus·그룹 포트를 통합했다. 같은 캔버스의 연결 편집·녹음 상태·스텝·오토메이션이 공존하며, 녹음 시작·정리 중 음악 편집과 Undo의 경쟁을 차단한다. build 23의 실제 편집·바운스·Undo·저장/재열기·닫기 최소화 및 출력별 모션 검증은 [통합 QA](qa/daw-integration-review.md)에 기록했다.
+
+**build116은 공유 리듬의 오디오 편집을 연결했다.** `.rhythmAudio`가 AudioLane만 보여 파형·수치를 편집할 수 없던 흐름을 같은 캔버스의 클립 선택·공유 범위 안내·trim/fade/volume/beat/tempo·분할/복제/삭제로 연결한다. Core는 pattern.audio만 원자적으로 변경하고 일반 graph를 보존하며 stale identity·Undo/재열기·noIO를 검증했다. 실제 build115 baseline의 파형/수치 부재를 확보했고 Core7개(offline PCM1개 포함)·0.390초를 통과했다. final2 Release44.04초·regression32개·native17개 상태를 확인했지만 clip 전환의 잘못된 초안 잔류와 저장 clip 선택 복원 문제가 발견돼 이를 수정한 frozen final3 Release42.71초와 clip2 전환/trim/Undo/재열기5개 상태를 확인했다. final2의17개와 final3의5개를 구분한 checker·정확한 Undo/재열기/disk·final3 PNG4장 검토를 통과했다. legacy 전체 PCM 동등성은 미검증이다. [계약](docs/132-shared-rhythm-audio-workspace.md).
 
 **build115는 악기 미리 듣기의 단계 진단과 상태 표시를 추가했다.** session별 optional64개 trace·첫 interruption 보존·stale guard를 적용하고 기존108pt readout에서 대기 중 audition을 과거 output 실패보다 우선 표시한다. mocked lifecycle17개·실제 diagnostics/presentation106개 검사와 공유 production widget의 dark offscreen15개 PNG를 검증했다. 앱 Release78.21초·source review와 offscreen15장 시각 검토도 통과했다. preparing은17초, stopping은123초 fixture이며 사용자 PID86114를 유지했다. 전체 앱/HAL·물리 재생·프로세스 격리 해결 증거는 아니다. [계약](docs/131-audition-stage-diagnostics.md).
 

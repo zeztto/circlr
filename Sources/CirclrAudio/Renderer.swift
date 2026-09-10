@@ -155,7 +155,7 @@ public enum ArrangementRenderer {
                 note.beat = offset + swung
                 if note.beat < length { note.length = min(note.length,length-note.beat); lane.notes.append(note) }
             }
-            for var clip in pattern.audio { clip.id = newID(); clip.beat += offset; if clip.beat < length { lane.audio.append(clip) } }
+            for var clip in pattern.audio { clip.id = newID(); clip.beat += offset; if clip.renderWindow != nil { clip.renderWindow?.cycleBeat += offset }; if clip.beat < length { lane.audio.append(clip) } }
             offset += pattern.length
         }
         return lane

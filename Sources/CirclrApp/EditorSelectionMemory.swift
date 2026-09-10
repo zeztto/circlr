@@ -30,7 +30,15 @@ extension AppStore {
     }
     func restoreEditorSelection(_ saved:EditorSelectionState?=nil) {
         guard !resettingEditorSelection else{return}
-        let value=validatedEditorSelection(saved ?? editorSelectionKey.flatMap{editorSelectionStates[$0]} ?? .init())
+        let stored=saved ?? editorSelectionKey.flatMap{editorSelectionStates[$0]} ?? .init()
+        if let pattern=sharedRhythmAudioPattern {
+            // Unlike ordinary audio nodes, a rhythm node owns several selectable clips.
+            // Resolve the saved clip before validation checks its asset and source cursor.
+            selectedClipID=pattern.audio.first(where:{$0.id==stored.audioClipID})?.id
+                ?? pattern.audio.first(where:{$0.id==selectedClipID})?.id
+                ?? pattern.audio.first?.id
+        }
+        let value=validatedEditorSelection(stored)
         selectedNoteID=value.anchorID;additionalNoteIDs=Set(value.noteIDs).subtracting(value.anchorID.map{[$0]} ?? [])
         selectedBeat=value.beat
         audioSplitOffset=value.audioSourcePosition.flatMap{position in currentAudioClip.map{position-$0.sourceStart}}
