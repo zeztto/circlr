@@ -180,6 +180,24 @@ struct AudioWorkspaceView:View {
                 Text(asset.name).foregroundStyle(StudioTheme.secondary).lineLimit(1).help(asset.name)
                 Spacer(minLength:0)
             }
+                MIDIWorkspaceToolbarLayout {
+                    HStack(spacing:10) {
+                Button("분할"){act{store.splitAudio()}}
+                    .disabled(store.audioCutOffset<=0 || store.audioCutOffset>=liveClip.duration || store.audioSplitIssue != nil)
+                    .help(store.isSharedRhythmAudio ? "선택 시작 기준 커서에서 두 공유 클립으로 분할 · ⌘T":"선택 시작 기준 커서에서 두 서클로 분할 · ⌘T")
+                Button(store.audioDuplicateIssue==nil ? "복제":"복제 · 공간 없음"){act{store.duplicateAudio()}}.disabled(store.audioDuplicateIssue != nil).help(store.audioDuplicateIssue ?? "구간 뒤로 복제 · ⌘D")
+                    }.fixedSize(horizontal:true,vertical:false)
+                    HStack(spacing:10) {
+                TrackBounceButton(store:store)
+                if store.selectedMusic?.bounce != nil {Button("원본 복원"){store.restoreBounce(identity:scopeIdentity)}}
+                    }.fixedSize(horizontal:true,vertical:false)
+                    HStack(spacing:10) {
+                Toggle("템포 추종",isOn:Binding(get:{liveClip.followsTempo},set:{value in store.editAudioClip(liveClip){$0.followsTempo=value}}))
+                Toggle(store.isSharedRhythmAudio ? (store.editOriginal ? "공유 원본 서클 음소거":"이번 사용 서클 음소거"):"음소거",isOn:Binding(get:{store.musicEditingNode?.muted ?? false},set:{v in store.updateMusic("오디오 음소거"){$0.muted=v}}))
+                    .help(store.isSharedRhythmAudio ? (store.editOriginal ? "공유 원본 서클을 음소거합니다. 같은 원본을 사용하는 다른 섹션에도 반영되며 공유 패턴의 클립 볼륨은 바꾸지 않습니다":"이번 사용의 서클만 음소거합니다. 공유 패턴의 클립 볼륨은 바꾸지 않습니다"):"선택한 서클의 음소거")
+                Button("삭제"){act{store.applyAudioEdit(.delete,label:"오디오 삭제")}}
+                    }.fixedSize(horizontal:true,vertical:false)
+                }
             OrbitAudioEditor(store:store,clip:liveClip,asset:asset,viewport:$viewport,focusTarget:focusTarget)
                 .frame(maxWidth:.infinity)
                 .frame(height:geometry.size.height < 320 ? 112:(store.project.usesOrbits ? 160:140))
@@ -201,24 +219,6 @@ struct AudioWorkspaceView:View {
                 if store.isSharedRhythmAudio {
                     if let issue=store.audioSplitIssue {Text("분할: "+issue).font(.system(size:11)).foregroundStyle(StudioTheme.secondary).fixedSize(horizontal:false,vertical:true)}
                     if let issue=store.audioDuplicateIssue,issue != store.audioSplitIssue {Text("복제: "+issue).font(.system(size:11)).foregroundStyle(StudioTheme.secondary).fixedSize(horizontal:false,vertical:true)}
-                }
-                MIDIWorkspaceToolbarLayout {
-                    HStack(spacing:10) {
-                Button("분할"){act{store.splitAudio()}}
-                    .disabled(store.audioCutOffset<=0 || store.audioCutOffset>=liveClip.duration || store.audioSplitIssue != nil)
-                    .help(store.isSharedRhythmAudio ? "선택 시작 기준 커서에서 두 공유 클립으로 분할 · ⌘T":"선택 시작 기준 커서에서 두 서클로 분할 · ⌘T")
-                Button(store.audioDuplicateIssue==nil ? "복제":"복제 · 공간 없음"){act{store.duplicateAudio()}}.disabled(store.audioDuplicateIssue != nil).help(store.audioDuplicateIssue ?? "구간 뒤로 복제 · ⌘D")
-                    }.fixedSize(horizontal:true,vertical:false)
-                    HStack(spacing:10) {
-                TrackBounceButton(store:store)
-                if store.selectedMusic?.bounce != nil {Button("원본 복원"){store.restoreBounce(identity:scopeIdentity)}}
-                    }.fixedSize(horizontal:true,vertical:false)
-                    HStack(spacing:10) {
-                Toggle("템포 추종",isOn:Binding(get:{liveClip.followsTempo},set:{value in store.editAudioClip(liveClip){$0.followsTempo=value}}))
-                Toggle(store.isSharedRhythmAudio ? (store.editOriginal ? "공유 원본 서클 음소거":"이번 사용 서클 음소거"):"음소거",isOn:Binding(get:{store.musicEditingNode?.muted ?? false},set:{v in store.updateMusic("오디오 음소거"){$0.muted=v}}))
-                    .help(store.isSharedRhythmAudio ? (store.editOriginal ? "공유 원본 서클을 음소거합니다. 같은 원본을 사용하는 다른 섹션에도 반영되며 공유 패턴의 클립 볼륨은 바꾸지 않습니다":"이번 사용의 서클만 음소거합니다. 공유 패턴의 클립 볼륨은 바꾸지 않습니다"):"선택한 서클의 음소거")
-                Button("삭제"){act{store.applyAudioEdit(.delete,label:"오디오 삭제")}}
-                    }.fixedSize(horizontal:true,vertical:false)
                 }
                 MIDIWorkspaceToolbarLayout {
                     HStack(spacing:10) {

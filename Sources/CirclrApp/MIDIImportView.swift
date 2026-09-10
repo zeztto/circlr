@@ -103,8 +103,11 @@ extension AppStore {
             candidate.musicRevision += 1
             guard project==candidate else{return "가져오기를 적용하지 못했습니다. 현재 작업 상태를 확인하세요"}
             midiImportDraft=nil
+            // Imported lanes belong to this use, irrespective of the previous editor's scope.
+            editOriginal=false;midiStepMode=false;pitchBendOpen=false
             if ids.count==1,let lane=ids.first {focusHierarchy(.music(arrangementID:draft.arrangementID,useID:draft.useID,nodeID:"midi:\(lane)"),detail:true)}
             else {focusHierarchy(.section(arrangementID:draft.arrangementID,useID:draft.useID),detail:false)}
+            restoreStudioWorkspace(.init(page:.content))
             selectedBeat=beat
             if ids.count==1 {requestEditorNavigationFocus()}
             return nil
@@ -169,8 +172,9 @@ struct MIDIImportView:View {
     }
     private var targetIdentity:String {"편곡 ID · \(draft.arrangementID) · 사용 ID · \(draft.useID)"}
     private var targetLabel:some View {
-        Text("대상 · "+target).fixedSize(horizontal:false,vertical:true)
-            .help(targetIdentity)
+        Text("대상 · "+target).lineLimit(1).truncationMode(.middle)
+            .help("대상 · "+target+" · "+targetIdentity)
+            .accessibilityLabel("대상 · "+target)
             .accessibilityHint(Text(targetIdentity))
     }
     private var errorSummary:String? {
@@ -196,6 +200,12 @@ struct MIDIImportView:View {
                     commitError=store.commitMIDIImport(draft,selected:selected,extend:extend,beat:start,tempoPolicy:tempoPolicy,expressionPolicy:expressionPolicy)
                 }.disabled(!ready)
             }
+            HStack(spacing:12) {
+                Text(draft.fileName).lineLimit(1).truncationMode(.middle)
+                    .help(draft.fileName).accessibilityLabel("파일 · "+draft.fileName)
+                    .frame(maxWidth:.infinity,alignment:.leading)
+                targetLabel.frame(maxWidth:.infinity,alignment:.leading)
+            }.font(.system(size:11)).foregroundStyle(StudioTheme.secondary)
             if let message=errorSummary {
                 Text(message).foregroundStyle(Color.orange).fixedSize(horizontal:false,vertical:true)
                     .accessibilityLabel("MIDI 가져오기 오류 · "+message)
@@ -206,8 +216,16 @@ struct MIDIImportView:View {
             }
             ScrollView {
                 VStack(alignment:.leading,spacing:12) {
-                    Text(draft.fileName).lineLimit(2).help(draft.fileName)
-                    targetLabel
+                    Text("가져올 트랙 · \(selected.count)/\(draft.document.tracks.count)").fontWeight(.semibold)
+                    ForEach(draft.document.tracks) {track in
+                        Toggle(isOn:Binding(get:{selected.contains(track.id)},set:{if $0{selected.insert(track.id)}else{selected.remove(track.id)}})) {
+                            VStack(alignment:.leading,spacing:4) {
+                                HStack {Text(track.name).lineLimit(2).help(track.name);Spacer();Text("\(track.notes.count)개 노트 · 채널 \(track.channel+1)").foregroundStyle(StudioTheme.secondary)}
+                                Text(expressionSummary(track)).foregroundStyle(StudioTheme.secondary).fixedSize(horizontal:false,vertical:true)
+                            }
+                        }
+                    }
+                    Divider()
                     MIDIWorkspaceToolbarLayout {
                         Text("시작 위치")
                         CommittedNumberField(title:"MIDI 가져오기 시작 박",value:$start,range:0...beats,width:80,presentation:.beatPosition,validate:{value in guard value<beats else{throw CirclrError("MIDI 시작 위치는 현재 섹션 안으로 지정하세요")}},commitTarget:startCommit,onValidityChange:{startError=$0})
@@ -243,16 +261,6 @@ struct MIDIImportView:View {
                         ForEach(Array(issues.enumerated()),id:\.offset) {_,issue in
                             let location=[issue.channel.map{"채널 \($0+1)"},issue.beat.map{BeatPosition.text($0)+"박"}].compactMap{$0}.joined(separator:" · ")
                             Text(location.isEmpty ? issue.message:location+" · "+issue.message).foregroundStyle(StudioTheme.secondary).fixedSize(horizontal:false,vertical:true)
-                        }
-                    }
-                    Divider()
-                    Text("가져올 트랙 · \(selected.count)/\(draft.document.tracks.count)").fontWeight(.semibold)
-                    ForEach(draft.document.tracks) {track in
-                        Toggle(isOn:Binding(get:{selected.contains(track.id)},set:{if $0{selected.insert(track.id)}else{selected.remove(track.id)}})) {
-                            VStack(alignment:.leading,spacing:4) {
-                                HStack {Text(track.name).lineLimit(2).help(track.name);Spacer();Text("\(track.notes.count)개 노트 · 채널 \(track.channel+1)").foregroundStyle(StudioTheme.secondary)}
-                                Text(expressionSummary(track)).foregroundStyle(StudioTheme.secondary).fixedSize(horizontal:false,vertical:true)
-                            }
                         }
                     }
                 }.frame(maxWidth:.infinity,alignment:.leading).padding(.trailing,8)

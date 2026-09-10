@@ -1,5 +1,11 @@
 # 변경 이력
 
+## 검증 완료 — build142 가져오기와 오디오 동선
+
+- 파일·대상을 고정하고 트랙 목록을 앞에 배치했다. 단일 import는 이전 pitch/공유 범위를 이어받지 않고 이번 use의 piano로 연다. 오디오 action row·파형·수치 접근도 개선했다.
+- Release 45.66초·관련 49개 검사·패키지 독립 감사와 native import/취소·다중 트랙·invalid 시작 위치·오디오 split/Undo를 확인했다. state 독립 감사 10개 캡처는 PASS, UI 16쌍은 PASS_WITH_SCOPE_LIMITS이며 r182 재열기도 일치했다.
+- 전체 suite·물리 I/O·긴 파일명·모든 정책/키보드 조합은 미실행이다. [기록](docs/164-import-and-audio-workflow.md).
+
 ## 검증 완료 — build141 편집 포커스 의도
 
 - attach와 mode entry를 공통 요청으로 통합하고 실제 창 활성화 시 기존 요청을 재시도한다. 빠른 전환에서 이전 콜백이 최신 focus를 덮던 경계를 개선했다.
