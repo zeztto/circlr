@@ -1,5 +1,11 @@
 # 변경 이력
 
+## 검증 완료 — 0.20.0 build126 비활성 편곡안 이름 변경
+
+- ⇧⌘N·버튼이 강조한 편곡안을 대상으로 하며 source title/AX를 명시하고 이름 적용 후 강조를 유지한다. 현재 편곡·캔버스는 유지한다.
+- 최종 Release42.19초·native B 대상/빈 이름 거절/마우스/강조 유지/A 작업 복귀·Undo/Redo를 확인했다. 저장/재열기·독립7개 snapshot 감사·production 서명/UUID도 통과했다.
+- 한글 typeText 축소의 원인은 미확정이며 한글 입력 통과로 세지 않는다. 편곡 전환별 이전 위치 복귀는 후속이다. [기록](docs/145-inactive-arrangement-rename.md).
+
 ## 검증 완료 — 0.20.0 build125 공유 오디오·오토메이션 원본 범위
 
 - edit_shared_audio의 pattern/track/clip 주소와 split/duplicate/fade/delete, set_automation의 original 범위를 연결하고 혼합 주소를 거절한다.

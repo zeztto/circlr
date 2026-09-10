@@ -48,7 +48,7 @@ import CirclrCore
             guard !marked else{return nil}
             if naming==nil {
                 if event.keyCode==2 {beginName(duplicate:true,sourceID:active)}
-                else if event.keyCode==45 {beginName(duplicate:false,sourceID:request.currentID)}
+                else if event.keyCode==45 {beginName(duplicate:false,sourceID:active)}
                 else {continueEditing()}
             }
             return nil
@@ -103,7 +103,7 @@ import CirclrCore
     private func syncField() {
         guard let field,field.active,field.requestID==requestID else{return}
         field.modeID=modeID;field.placeholderString=naming == nil ? "편곡안 이름 또는 #번호 검색":"편곡안 이름"
-        field.setAccessibilityLabel(naming.map{$0.duplicate ? "새 편곡안 이름":"현재 편곡안 이름"} ?? "편곡안 검색")
+        field.setAccessibilityLabel(naming.map{$0.duplicate ? "새 편곡안 이름":"이름 변경 대상 · "+$0.sourceTitle} ?? "편곡안 검색")
         if field.stringValue != text {field.stringValue=text}
         if let editor=field.currentEditor() as? NSTextView,editor.string != text {editor.string=text;editor.setSelectedRange(NSRange(location:(text as NSString).length,length:0))}
     }
@@ -111,8 +111,8 @@ import CirclrCore
     func findCurrent(){guard naming==nil,let request else{return};query="";highlighted=request.currentID;syncField();if let field{_ = focus(field)}}
     func move(_ delta:Int){guard naming==nil,!rows.isEmpty else{return};let index=rows.firstIndex{$0.id==active} ?? 0;highlighted=rows[max(0,min(rows.count-1,index+delta))].id}
     func beginName(duplicate:Bool,sourceID:ID?) {
-        guard !marked,naming==nil,current,let request,let sourceID,let choice=request.choices.first(where:{$0.id==sourceID}),duplicate || sourceID==request.currentID else{return}
-        if duplicate{highlighted=sourceID};notice="";draft=duplicate ? "":choice.name
+        guard !marked,naming==nil,current,let request,let sourceID,let choice=request.choices.first(where:{$0.id==sourceID}) else{return}
+        highlighted=sourceID;notice="";draft=duplicate ? "":choice.name
         naming=NameOperation(duplicate:duplicate,sourceID:sourceID,sourceTitle:choice.title);changeMode()
     }
     func cancel(){guard !marked else{return};if naming != nil{naming=nil;draft="";notice="";changeMode()}else{store?.closeArrangementPicker()}}

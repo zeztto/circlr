@@ -45,8 +45,7 @@ extension AppStore {
     func closeArrangementPicker(){arrangementPickerRequest?.input.stop();arrangementPickerRequest=nil;focusCanvas?()}
     func editArrangementName(_ name:String,duplicate:Bool,sourceID source:ID,request:ArrangementPickerRequest)throws {
         guard arrangementPickerCurrent(request),
-              request.choices.contains(where:{$0.id==source}),
-              duplicate || source==request.currentID else{throw CirclrError("대상이나 음악이 바뀌었거나 다른 작업 중입니다. 닫은 뒤 다시 열어주세요.")}
+              request.choices.contains(where:{$0.id==source}) else{throw CirclrError("대상이나 음악이 바뀌었거나 다른 작업 중입니다. 닫은 뒤 다시 열어주세요.")}
         guard try ArrangementSelection.catalog(project,compositionID:request.compositionID).contains(where:{$0.id==source}) else{throw CirclrError("복제·이름 변경할 편곡안을 다시 선택하세요")}
         var candidate=project,created:ID?
         var continuation=duplicate ? nil:request.continuation
@@ -69,7 +68,10 @@ extension AppStore {
         let choices=try ArrangementSelection.catalog(project,compositionID:owner.id)
         arrangementPickerRequest=ArrangementPickerRequest(input:request.input,identity:numberEditIdentity,compositionID:owner.id,destination:owner.kind.label+" · "+owner.name,currentID:owner.selectedArrangementID,choices:choices,routes:arrangementRouteSummaries(choices),
             continuationSource:duplicate ? nil:request.continuationSource,continuation:continuation)
-        if let refreshed=arrangementPickerRequest {refreshed.input.bind(store:self,request:refreshed)}
+        if let refreshed=arrangementPickerRequest {
+            refreshed.input.bind(store:self,request:refreshed)
+            if !duplicate {refreshed.input.highlighted=source}
+        }
     }
     func applyArrangement(_ id:ID,request:ArrangementPickerRequest)throws {
         guard arrangementPickerCurrent(request),request.choices.contains(where:{$0.id==id}) else{throw CirclrError("대상이나 음악이 바뀌었거나 다른 작업 중입니다. 닫은 뒤 다시 열어주세요.")}
@@ -106,7 +108,6 @@ struct ArrangementPickerView:View {
     private var highlighted:ID? {input.highlighted}
     private var notice:String {input.notice}
     private var naming:ArrangementInputCoordinator.NameOperation? {input.naming}
-    private var currentChoice:ArrangementChoice? {request.choices.first{$0.id==request.currentID}}
     private var rows:[ArrangementChoice] {ArrangementSelection.search(request.choices,query:query)}
     private var active:ID? {rows.contains{$0.id==highlighted} ? highlighted:rows.first?.id}
     private var current:Bool {store.arrangementPickerCurrent(request)}
@@ -139,9 +140,9 @@ struct ArrangementPickerView:View {
                 }.padding(.horizontal,18).padding(.bottom,14)
             }else{
                 HStack(spacing:10) {
-                    Button("현재 이름 변경 · ⇧⌘N"){beginName(duplicate:false,sourceID:request.currentID)}
-                        .help("현재 편곡안 이름 변경 · ⇧⌘N")
-                        .disabled(!current || currentChoice==nil)
+                    Button("강조한 이름 변경 · ⇧⌘N"){beginName(duplicate:false,sourceID:active)}
+                        .help("강조한 편곡안 이름 변경 · ⇧⌘N · 현재 재생 편곡과 캔버스는 유지")
+                        .disabled(!current || active==nil)
                     Button("강조한 편곡 복제 · ⇧⌘D"){beginName(duplicate:true,sourceID:active)}
                         .help("강조한 편곡을 이름 정해 복제 · ⇧⌘D · 섹션 원본은 공유 · 이번 사용 편집은 별도")
                         .disabled(!current || active==nil)
@@ -168,7 +169,7 @@ struct ArrangementPickerView:View {
                 }.onChange(of:active){_,id in if let id {proxy.scrollTo(id,anchor:.center)}}
                     .onChange(of:query){_,_ in if let active{proxy.scrollTo(active,anchor:.center)}}
             }
-            Text(naming == nil ? "↑↓ 선택 · Return 편곡 적용 · Esc 취소 · 같은 편곡은 현재 작업과 이력 유지\n⇧⌘N 현재 이름 변경 · ⇧⌘D 강조한 편곡 복제":"Return 이름 적용 · Esc 이름 입력 취소 · 입력 중에는 편곡 전환이 잠깁니다")
+            Text(naming == nil ? "↑↓ 선택 · Return 편곡 적용 · Esc 취소 · 같은 편곡은 현재 작업과 이력 유지\n⇧⌘N 강조한 이름 변경 · ⇧⌘D 강조한 편곡 복제":"Return 이름 적용 · Esc 이름 입력 취소 · 입력 중에는 편곡 전환이 잠깁니다")
                 .font(.system(size:12)).foregroundStyle(StudioTheme.secondary).padding(18)
         }.frame(width:850,height:560).background(StudioTheme.surface,in:RoundedRectangle(cornerRadius:10))
             .overlay(RoundedRectangle(cornerRadius:10).strokeBorder(StudioTheme.line))
