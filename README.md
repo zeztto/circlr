@@ -6,7 +6,9 @@ macOS용 앨범·송폼 궤도 편집기. **앨범 → 곡·악장 → 섹션 �
 
 연결 UI는 [서클 둘레 8방향 IN/OUT과 다중 입출력](docs/22-eight-direction-ports.md)으로 확장 중이다. 포트의 신호 의미와 연결점 배치를 분리한다. 아래 일반 사용법은 배포된 0.19 앱 기준이며 새 포트 기능은 독립 개발 브랜치에서 검증한다.
 
-현재 **`codex/daw-integration`의 0.20.0 build 110**에 녹음 lifecycle과 8방향·다중 bus·그룹 포트를 통합했다. 같은 캔버스의 연결 편집·녹음 상태·스텝·오토메이션이 공존하며, 녹음 시작·정리 중 음악 편집과 Undo의 경쟁을 차단한다. build 23의 실제 편집·바운스·Undo·저장/재열기·닫기 최소화 및 출력별 모션 검증은 [통합 QA](qa/daw-integration-review.md)에 기록했다.
+현재 **`codex/daw-integration`의 0.20.0 build 111**에 녹음 lifecycle과 8방향·다중 bus·그룹 포트를 통합했다. 같은 캔버스의 연결 편집·녹음 상태·스텝·오토메이션이 공존하며, 녹음 시작·정리 중 음악 편집과 Undo의 경쟁을 차단한다. build 23의 실제 편집·바운스·Undo·저장/재열기·닫기 최소화 및 출력별 모션 검증은 [통합 QA](qa/daw-integration-review.md)에 기록했다.
+
+**build111은 MIDI 생성 네 항목을 기존 메뉴에 직접 배치하고 실행 범위·겹침을 안내한다.** 명령 검색도 같은 요청 snapshot을 사용하며 stale 실행을 거절한다. final4 Release42.59초·checker10개 상태·일반56박/공유4박 추가·기존 노트 보존/공유 B/Undo/strict 재열기·시각5장·빠른 ASCII/한국어 paste 검증을 통과했다. final2의 Space 누수·출력 시도1회/시작 전 timeout은 별도 incident로 남겼다. 수정 후 final4는 명시적 QA output-helper deny 환경에서 attempts0·자산2개를 유지했다. 팝업 메뉴는 AX만 확인했고 stale 거절은 source review 범위이며 IME·물리 출력은 미검증이다. QA 앱 종료 후 사용자 PID86114만 유지했다. [계약](docs/127-midi-generation-menu.md).
 
 **build110은 동명 테이크를 `#번호 · 이름`으로 구분한다.** 번호는 필터 전 현재 대상의 eligible 순서이며 영구 ID나 녹음 연번이 아니다. Release38.99초·실제 ⌥⌘T/Down/번호 검색/Return/Undo/검색 reset/Esc/저장 재열기·checker5개 상태/AX4개·시각 검토를 통과했다. 음악r30→31→32와 정확한 적용 대상, 자산2개·output/record0을 확인했고 이전 출력 reader 수정도 포함한다. QA 앱은 종료하고 사용자 PID86114를 유지했다. [계약](docs/126-take-identity.md).
 

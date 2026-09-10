@@ -6,11 +6,16 @@ import CirclrAudio
 
 extension AppStore {
     func generateMIDI(_ pattern:MIDIPattern) {
-        guard var lane=currentLane else{return}
+        guard nameEditing.resolve(),let request=midiGenerationRequest else{return}
+        generateMIDI(pattern,request:request)
+    }
+    func generateMIDI(_ pattern:MIDIPattern,request:MIDIGenerationRequest) {
+        guard !trackBounceRecoveryLocked,midiImportDraft==nil else{status="녹음·가져오기·렌더가 끝난 뒤 MIDI를 추가하세요";return}
+        guard midiGenerationRequest==request,nameEditing.resolve(),midiGenerationRequest==request,
+              var lane=currentLane else{status="편집 대상이나 커서·길이가 바뀌었습니다. MIDI 메뉴를 다시 여세요";return}
         do {
-            let start=max(0,min(editorBeats-0.03125,selectedBeat))
-            var notes=try MIDIGenerator.notes(pattern:pattern,context:currentContext,beats:editorBeats-start)
-            for i in notes.indices {notes[i].beat+=start}
+            var notes=try MIDIGenerator.notes(pattern:pattern,context:request.context,beats:request.duration)
+            for i in notes.indices {notes[i].beat+=request.start}
             lane.notes+=notes;setLane(lane)
         }catch{fail(error)}
     }

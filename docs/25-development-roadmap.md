@@ -1,6 +1,12 @@
 # 써클러 개발 방향과 실행 계획
 
-갱신: 2026-09-10. 계획 시작 기준: 0.11 native 앱, 0.12 음악 에이전트 키트 소스. 기존 출고 표기는 0.19.0이며 실행 중 사용자 앱의 별도 관측 버전은0.14다. 개발 검증 후보는 0.20.0 build 110이다. 목표는 송폼 중심의 전문 음악 제작을 먼저 완성하고, 이를 아티스트의 작품·세계관 관리로 확장하는 것이다.
+갱신: 2026-09-10. 계획 시작 기준: 0.11 native 앱, 0.12 음악 에이전트 키트 소스. 기존 출고 표기는 0.19.0이며 실행 중 사용자 앱의 별도 관측 버전은0.14다. 개발 검증 후보는 0.20.0 build 111이다. 목표는 송폼 중심의 전문 음악 제작을 먼저 완성하고, 이를 아티스트의 작품·세계관 관리로 확장하는 것이다.
+
+## 현재 검증 완료 — build111 MIDI 생성 메뉴·명령 검색 focus
+
+기존 MIDI 메뉴에 네 생성 항목을 직접 배치하고1-based 시작·남은 길이/4분음표·기존 노트 유지/겹침을 안내한다. 명령 검색도 같은 snapshot을 사용하며 stale 실행을 거절한다. final4 Release42.59초·checker10개 snapshot·ordinary56/shared4·기존 보존/공유 B/strict Undo/재열기·rapid ASCII/한국어 paste·시각5장 검증을 통과했다.
+
+final2 focus 전환 Space 누수는 출력 attempt1·didStart=false·outputNodeAcquisition timeout 후 정지·종료한 incident로 보존한다. 수정 후 final4는 명시적 QA output-helper deny로 attempts0·자산2개를 유지했다. 팝업 메뉴는 AX만 검증했고 stale 거절은 source review 범위이며 IME·물리 출력은 미검증이다. QA 앱 종료 후 사용자 PID86114만 유지했다. 이전 후보와 최종 승인 근거를 분리한다. [계약](127-midi-generation-menu.md).
 
 ## 현재 검증 완료 — build110 테이크 번호 표시
 

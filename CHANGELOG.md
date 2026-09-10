@@ -1,5 +1,12 @@
 # 변경 이력
 
+## 검증 완료 — 0.20.0 build111 MIDI 생성 메뉴·명령 검색 focus
+
+- 기존 MIDI 메뉴에 네 패턴 항목을 직접 배치. 1-based 시작·남은 길이(4분음표 기준)와 기존 노트 유지/겹침 안내, 명령 검색의 동일 request/range 및 stale 거절 적용. 추가 패널 없음.
+- final2 빠른 메뉴 종료→명령 검색 입력에서 Space가 재생으로 누수: attempt1·didStart=false·outputNodeAcquisition timeout 후 정지·QA 앱 종료. 초기 final/final2는 승인 제외. 동기 focus·window-local 입력 guard·same-ID buffer 및 NSApp.sendEvent replay로 수정.
+- final4 Release42.59초·UUID `1968E4B0-2662-3544-ACAD-DDABF1EADB95`. checker10개 snapshot·ordinary56/shared4 추가·기존 보존/공유 B/strict Undo/재열기·자산2개·attempts0 통과. rapid ASCII·한국어 paste와 시각5장 통과.
+- final4는 명시적 QA output-helper deny 환경이다. 팝업 메뉴는 AX만 검증했고 메뉴 JPG 없음. stale 거절은 source review 범위이며 IME·실제 출력/readback/hotplug는 미검증이다. final2 incident를 final4 attempts0과 구분하며 QA 앱 종료 후 사용자 PID86114만 관측했다. [계약](docs/127-midi-generation-menu.md).
+
 ## 검증 완료 — 0.20.0 build110 테이크 번호 표시
 
 - 동명 테이크 행을 `#번호 · 이름`으로 표시하고 검색 안내에 번호 추가. 번호는 필터 전 현재 대상 eligible 순서이며 영구 ID·녹음 연번이 아님. 이전 출력 reader 수정 포함.

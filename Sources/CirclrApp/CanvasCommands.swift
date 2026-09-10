@@ -110,7 +110,13 @@ extension AppStore {
             if selectedTrackID != nil {
                 add("bounce","선택 트랙을 오디오로 바운스"){[weak self] in self?.bounceTrack()}
                 add("midi-export","선택 MIDI 파일 저장…"){[weak self] in self?.exportMIDI()}
-                for pattern in MIDIPattern.allCases {add("pattern-\(pattern.rawValue)","MIDI 패턴 생성 · \(pattern.label)"){[weak self] in self?.generateMIDI(pattern)}}
+                if let request=midiGenerationRequest {
+                    for pattern in MIDIPattern.allCases {
+                        commands.append(StudioCommand(id:"pattern-\(pattern.rawValue)",title:"MIDI 패턴 생성 · \(pattern.label)",
+                            detail:request.rangeLabel+" · 기존 노트 유지 · 겹쳐 추가",
+                            run:{[weak self] in self?.generateMIDI(pattern,request:request)}))
+                    }
+                }
             }
         }
         for node in hierarchyScene?.nodes ?? [] {
@@ -266,7 +272,7 @@ struct StudioCommandPalette:View {
         VStack(spacing:0) {
             if !palette.title.isEmpty {Text(palette.title).font(.headline).frame(maxWidth:.infinity,alignment:.leading).padding([.top,.horizontal],17)}
             HStack(spacing:10) {
-                CommandSearchField(text:$query,onMove:{delta in selection=max(0,min(results.count-1,selection+delta))},onSubmit:execute,onCancel:{store.commandPalette=nil;store.focusCanvas?()},placeholder:palette.placeholder)
+                CommandSearchField(text:$query,onMove:{delta in selection=max(0,min(results.count-1,selection+delta))},onSubmit:execute,onCancel:{store.commandPalette=nil;store.focusCanvas?()},placeholder:palette.placeholder,focusOwner:palette.id)
                 Text("Esc").font(.system(size:10,design:.monospaced)).foregroundStyle(StudioTheme.secondary)
             }.padding(17)
             Divider().overlay(StudioTheme.line)
@@ -305,14 +311,26 @@ struct CommandSearchField:NSViewRepresentable {
     let onCancel:()->Void
     var placeholder="명령 또는 서클 이름 검색"
     var onExtend:((Int)->Void)?
+    var focusOwner:UUID?
     func makeCoordinator()->Coordinator {Coordinator(self)}
-    func makeNSView(context:Context)->NSSearchField {
-        let field=NSSearchField();field.placeholderString=placeholder;field.isBordered=false;field.focusRingType = .none
+    func makeNSView(context:Context)->SearchControl {
+        let field=SearchControl();field.focusOwner=focusOwner;field.placeholderString=placeholder;field.isBordered=false;field.focusRingType = .none
         field.font = .systemFont(ofSize:15);field.delegate=context.coordinator
-        DispatchQueue.main.async{field.window?.makeFirstResponder(field)}
         return field
     }
-    func updateNSView(_ field:NSSearchField,context:Context){context.coordinator.parent=self;if field.stringValue != text {field.stringValue=text}}
+    func updateNSView(_ field:SearchControl,context:Context){field.focusOwner=focusOwner;context.coordinator.parent=self;if field.stringValue != text {field.stringValue=text}}
+    static func dismantleNSView(_ field:SearchControl,coordinator:Coordinator){field.active=false;field.delegate=nil}
+    final class SearchControl:NSSearchField {
+        static let attached=Notification.Name("circlr.commandSearchAttached")
+        var focusOwner:UUID?
+        var active=true
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            guard active,let window else{return}
+            window.makeFirstResponder(self)
+            NotificationCenter.default.post(name:Self.attached,object:self)
+        }
+    }
     final class Coordinator:NSObject,NSSearchFieldDelegate {
         var parent:CommandSearchField
         init(_ parent:CommandSearchField){self.parent=parent}

@@ -22,6 +22,9 @@ struct AlbumCanvas: NSViewRepresentable {
     var animation: Timer?
     var animationDestination: HierarchyCamera?
     var scrollMonitor: Any?
+    private var paletteKeyMonitor:Any?
+    private var paletteFocusObserver:NSObjectProtocol?
+    private var pendingPaletteKeys:[(UUID,NSEvent)]=[]
     var editor: NSHostingView<InlineCircleEditor>?
     var editorAddress: CircleAddress?
     var labelPlacements:[CanvasLabelPlacement]=[]
@@ -106,10 +109,54 @@ struct AlbumCanvas: NSViewRepresentable {
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         if let scrollMonitor { NSEvent.removeMonitor(scrollMonitor); self.scrollMonitor = nil }
+        if let paletteKeyMonitor {NSEvent.removeMonitor(paletteKeyMonitor);self.paletteKeyMonitor=nil}
+        if let paletteFocusObserver {NotificationCenter.default.removeObserver(paletteFocusObserver);self.paletteFocusObserver=nil}
+        pendingPaletteKeys=[]
         if let interactionMonitor { NSEvent.removeMonitor(interactionMonitor); self.interactionMonitor = nil }
         playbackNotifications.removeAll()
         if window != nil {
             installPlaybackObservers()
+            paletteKeyMonitor=NSEvent.addLocalMonitorForEvents(matching:.keyDown){[weak self] event in
+                guard let self,event.window===self.window,let owner=self.store.commandPalette?.id else{return event}
+                guard NSApp.isActive,self.window?.isKeyWindow==true else{self.pendingPaletteKeys=[];return nil}
+                if let field=self.paletteSearch(owner) {
+                    guard self.focusPaletteSearch(field) else{
+                        self.pendingPaletteKeys=[];self.store.status="검색 입력을 시작하지 못했습니다. 검색창을 다시 여세요";return nil
+                    }
+                    let queued=self.pendingPaletteKeys.filter{$0.0==owner && ProcessInfo.processInfo.systemUptime-$0.1.timestamp<=2}.map{$0.1};self.pendingPaletteKeys=[]
+                    for pending in queued {
+                        guard self.store.commandPalette?.id==owner,NSApp.isActive,self.window?.isKeyWindow==true else{return nil}
+                        NSApp.sendEvent(pending)
+                    }
+                    return self.store.commandPalette?.id==owner ? event:nil
+                }
+                self.pendingPaletteKeys.removeAll{$0.0 != owner || ProcessInfo.processInfo.systemUptime-$0.1.timestamp>2}
+                guard self.pendingPaletteKeys.count<256 else{
+                    self.pendingPaletteKeys=[];self.store.status="검색 입력 대기가 길어졌습니다. 검색창을 다시 여세요";return nil
+                }
+                self.pendingPaletteKeys.append((owner,event))
+                return nil
+            }
+            paletteFocusObserver=NotificationCenter.default.addObserver(forName:CommandSearchField.SearchControl.attached,object:nil,queue:.main){[weak self] notification in
+                guard let field=notification.object as? CommandSearchField.SearchControl,let owner=field.focusOwner else{return}
+                DispatchQueue.main.async{[weak self,weak field] in
+                    guard let self else{return}
+                    guard let field,field.active,field.window===self.window,self.store.commandPalette?.id==owner,
+                          NSApp.isActive,self.window?.isKeyWindow==true else{
+                        self.pendingPaletteKeys.removeAll{$0.0==owner};return
+                    }
+                    let events=self.pendingPaletteKeys.filter{$0.0==owner && ProcessInfo.processInfo.systemUptime-$0.1.timestamp<=2}.map{$0.1}
+                    self.pendingPaletteKeys=[]
+                    for event in events {
+                        guard self.store.commandPalette?.id==owner,field.active,field.window===self.window,
+                              NSApp.isActive,self.window?.isKeyWindow==true else{break}
+                        guard self.focusPaletteSearch(field) else{
+                            self.store.status="검색 입력을 시작하지 못했습니다. 검색창을 다시 여세요";break
+                        }
+                        NSApp.sendEvent(event)
+                    }
+                }
+            }
             scrollMonitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { [weak self] event in
                 guard let self, event.window === self.window, self.bounds.contains(self.convert(event.locationInWindow, from: nil)) else { return event }
                 if self.store.outputPreferencesOpen{return event}
@@ -565,8 +612,24 @@ struct AlbumCanvas: NSViewRepresentable {
         if let leaf=hit(p),leaf.role == .music,leaf.radius*camera.zoom>=325,store.hierarchySelection != leaf.id {store.selectHierarchy(leaf.id);placeEditor()}
     }
     override func magnify(with event:NSEvent){let p=convert(event.locationInWindow,from:nil);setCamera(camera.zoomed(to:camera.zoom*exp(event.magnification),around:Point(p.x,p.y)))}
+    private func focusPaletteSearch(_ field:CommandSearchField.SearchControl)->Bool {
+        guard let window,field.active,field.window===window,NSApp.isActive,window.isKeyWindow else{return false}
+        if let editor=field.currentEditor(),window.firstResponder===editor{return true}
+        if window.firstResponder===field{return true}
+        guard window.makeFirstResponder(field) else{return false}
+        if let editor=field.currentEditor(),window.firstResponder===editor{return true}
+        return window.firstResponder===field
+    }
+    private func paletteSearch(_ owner:UUID)->CommandSearchField.SearchControl? {
+        func find(_ view:NSView)->CommandSearchField.SearchControl? {
+            if let field=view as? CommandSearchField.SearchControl,field.active,field.focusOwner==owner{return field}
+            for child in view.subviews {if let field=find(child){return field}}
+            return nil
+        }
+        return window?.contentView.flatMap{find($0)}
+    }
     override func keyDown(with event:NSEvent) {
-        if store.outputPreferencesOpen || store.libraryOpen || store.soundPickerRequest != nil || store.arrangementPickerRequest != nil {return}
+        if store.outputPreferencesOpen || store.libraryOpen || store.soundPickerRequest != nil || store.arrangementPickerRequest != nil || store.commandPalette != nil || store.navigationOpen || store.keyboardHelp {return}
         if event.modifierFlags.contains(.command) || event.modifierFlags.contains(.control) {super.keyDown(with:event);return}
         if handleConnectionKey(event) { return }
         if event.modifierFlags.contains([.option,.shift]),[123,124,125,126].contains(event.keyCode),!store.project.usesOrbits {
