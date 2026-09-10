@@ -1,5 +1,10 @@
 # 변경 이력
 
+## 개발 진행 — MIDI pitch bend Core 기초
+
+- raw wheel·RPN range 상태·시간순 이벤트의 검증/직렬화/hold 조회 타입을 추가했다. 경계·순서·저장 테스트 8개와 독립 검토를 통과했다.
+- Project/schema·가져오기·GUI/MCP·DSP 연결은 다음 단계다. 앱 build132와 기존 연주는 유지한다. [계획과 결과](docs/154-midi-pitch-bend-plan.md).
+
 ## 검증 완료 — 0.20.0 build132 MIDI 가져오기 피드백
 
 - 고정 실행 영역에서 입력·선택·tempo 지원 오류를 표시하고 대상 use 별명·편곡·순서를 맞춘다.

@@ -62,7 +62,7 @@ build131은 [MIDI tempo import 계획](151-midi-tempo-import-plan.md)의 기본 
 
 [신스 cutoff automation 계획](148-synth-cutoff-automation-plan.md)은 build129에서 descriptor·voice 보존 DSP·GUI/MCP·schema를 구현하고 기계검증·실제 Hz 편집/오류 거절을 확인했다. GUI/schema 독립 감사와 production 서명/UUID도 통과했으며 바운스·복원·재열기 r79 및 PCM 독립 감사도 통과했다. 최종 종합 UI 데이터 감사도 통과했다. [현재 검증](149-synth-cutoff-automation-validation.md)을 기준으로 판단한다.
 
-**다음 행동:** MIDI pitch bend의 채널·범위·reset·sample timing과 GUI/MCP 편집 계약을 계획한다. build131에서 확인한 가져오기 오류·대상 표시는 build132에서 개선했다. 전체 앱 사용성의 다른 장애는 실제 한 곡 동선에서 계속 확인한다. [MIDI tempo 가져오기](152-midi-tempo-import-validation.md)는 위 범위를 구현·검증했으며 새 모델 도입 단계로 다시 세지 않는다. build129에서 `AutomationParameter`에 synthCutoff를 추가했으며 native 편집·바운스·재열기와 독립 감사를 통과했다. 신스 filter 같은 다음 파라미터는 descriptor·단위·범위·초깃값·시간 의미·DSP 반영을 먼저 정한 뒤 UI에 노출한다. plugin parameter는 실제 descriptor와 state 복원 계약을 갖춘 뒤 추가한다.
+**다음 행동:** [MIDI pitch bend 계획154](154-midi-pitch-bend-plan.md)의 Core 기초 타입·테스트8개를 바탕으로 optional 프로젝트 저장과 compiled source identity/clock packet을 연결한다. parser·DSP·GUI/MCP·native 검증은 아직 남아 있다. build131에서 확인한 가져오기 오류·대상 표시는 build132에서 개선했다. 전체 앱 사용성의 다른 장애는 실제 한 곡 동선에서 계속 확인한다. [MIDI tempo 가져오기](152-midi-tempo-import-validation.md)는 위 범위를 구현·검증했으며 새 모델 도입 단계로 다시 세지 않는다. build129에서 `AutomationParameter`에 synthCutoff를 추가했으며 native 편집·바운스·재열기와 독립 감사를 통과했다. 신스 filter 같은 다음 파라미터는 descriptor·단위·범위·초깃값·시간 의미·DSP 반영을 먼저 정한 뒤 UI에 노출한다. plugin parameter는 실제 descriptor와 state 복원 계약을 갖춘 뒤 추가한다.
 
 MIDI CC/페달/피치 벤드·tempo map은 노트 import와 다른 이벤트·시간 계약이 필요하다. 기존 파일을 여는 것만으로 재해석하지 않으며 가져오기 전 적용 범위를 설명한다. 오디오 crossfade·comping·time warp, 실시간 automation write/touch/latch, punch/loop 녹음은 원본/테이크·공통 clock·취소 수명에 의존하므로 독립 체크박스로 쌓지 않는다. [기본 DAW 계획](31-daw-basics-plan.md)의 남은 조건을 유지한다.
 
