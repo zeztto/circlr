@@ -66,12 +66,21 @@ struct CountControl:View {
     @Binding var value:Int
     let range:ClosedRange<Int>
     var suffix=""
+    var fieldWidth:CGFloat=48
+    var validate:((Int)throws->Void)? = nil
+    private var numberValidation:((Double)throws->Void)? {
+        guard let validate else{return nil}
+        return {value in
+            guard let integer=Int(exactly:value) else{throw CirclrError("정수로 입력하세요")}
+            try validate(integer)
+        }
+    }
     var body:some View {
         HStack(spacing:6) {
             if !title.isEmpty {Text(title).foregroundStyle(StudioTheme.secondary)}
             HStack(spacing:0) {
                 Button {value=max(range.lowerBound,value-1)} label:{Image(systemName:"minus").frame(width:28,height:32)}.disabled(value<=range.lowerBound).accessibilityLabel(title+" 줄이기")
-                CommittedNumberField(title:title,value:Binding(get:{Double(value)},set:{if let next=Int(exactly:$0) {value=next}}),range:Double(range.lowerBound)...Double(range.upperBound),integerOnly:true,width:48,alignment:.center)
+                CommittedNumberField(title:title,value:Binding(get:{Double(value)},set:{if let next=Int(exactly:$0) {value=next}}),range:Double(range.lowerBound)...Double(range.upperBound),integerOnly:true,width:fieldWidth,alignment:.center,validate:numberValidation)
                 Button {value=min(range.upperBound,value+1)} label:{Image(systemName:"plus").frame(width:28,height:32)}.disabled(value>=range.upperBound).accessibilityLabel(title+" 늘리기")
             }.buttonStyle(.plain).background(StudioTheme.raised,in:RoundedRectangle(cornerRadius:5))
             if !suffix.isEmpty {Text(suffix).foregroundStyle(StudioTheme.secondary)}

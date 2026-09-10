@@ -99,6 +99,7 @@ public struct AgentOperation:Codable {
     public var parameter:AutomationParameter?
     public var automationPoints:[AutomationPoint]?
     public init(_ kind:String){self.kind=kind}
+
 }
 
 public enum AgentProjectEditing {
@@ -143,6 +144,14 @@ public enum AgentProjectEditing {
                 }
                 try ArrangementSelection.select(arrangementID,compositionID:compositionID,in:&p)
                 explicitSelection=arrangementID
+            case "set_use_length_override","clear_use_length_override":
+                let encoded=try JSONEncoder().encode(op)
+                let fields=try JSONSerialization.jsonObject(with:encoded) as? [String:Any] ?? [:]
+                let expected:Set<String>=op.kind=="set_use_length_override" ? ["kind","arrangementID","useID","bars"]:["kind","arrangementID","useID"]
+                guard Set(fields.keys)==expected,let arrangementID=op.arrangementID,let useID=op.useID else {
+                    throw CirclrError("섹션 길이 operation에는 arrangementID·useID와 해당 종류의 필드만 지정하세요")
+                }
+                _ = try SectionLengthEditing.set(bars:op.bars,arrangementID:arrangementID,useID:useID,in:&p)
             case "clear_use_tempo_override":
                 guard op.arrangementID != nil,let useID=op.useID else{throw CirclrError("arrangementID·useID가 필요합니다")}
                 try UseTempoOverrideEditing.clear(useID:useID,in:&p)
@@ -205,7 +214,8 @@ public enum AgentProjectEditing {
                 try ProjectEditing.setLane(lane,for:id,original:false,in:&p)
             case "set_section":
                 guard let id=op.useID,let i=p.arrangements[p.activeIndex].uses.firstIndex(where:{$0.id==id}) else {throw CirclrError("useID가 필요합니다")}
-                if let name=op.name{p.arrangements[p.activeIndex].uses[i].name=name};if let bars=op.bars{p.arrangements[p.activeIndex].uses[i].barsOverride=bars}
+                if let name=op.name{p.arrangements[p.activeIndex].uses[i].name=name}
+                if let bars=op.bars {p.arrangements[p.activeIndex].uses[i].barsOverride=bars}
                 if let repeats=op.repeatCount{p.arrangements[p.activeIndex].uses[i].repeatCount=repeats};if let settings=op.settings{p.arrangements[p.activeIndex].uses[i].settings=settings}
             case "set_step":
                 guard let id=op.useID,let use=p.active.uses.first(where:{$0.id==id}),let section=p.sections.first(where:{$0.id==use.sectionID}),

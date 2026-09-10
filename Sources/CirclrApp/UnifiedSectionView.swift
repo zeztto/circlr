@@ -18,7 +18,7 @@ struct UnifiedSectionView:View {
     private var structure:some View {
         VStack(alignment:.leading,spacing:10) {
             HStack(spacing:18) {
-                CountControl(title:"길이",value:Binding(get:{store.selectedUse?.barsOverride ?? store.project.sections.first{$0.id==use.sectionID}?.bars ?? 8},set:{v in store.updateUse("길이"){$0.barsOverride=v}}),range:1...4096,suffix:"마디")
+                SectionLengthControl(store:store)
                 CountControl(title:"재생",value:Binding(get:{store.selectedUse?.repeatCount ?? use.repeatCount},set:{v in store.updateUse("반복"){$0.repeatCount=v}}),range:1...256,suffix:"회")
                     .help("테두리 원 하나가 한 번의 재생입니다")
                 Divider().frame(height:22)

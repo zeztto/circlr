@@ -245,8 +245,8 @@ struct HierarchySettingsEditor: View {
                 }
             }
             if let use=store.selectedUse,store.selectedMusic==nil,store.selectedHierarchyGroup==nil {
-                HStack(spacing:24) {
-                CountControl(title:"마디",value:Binding(get:{store.selectedUse?.barsOverride ?? store.project.sections.first{$0.id==use.sectionID}?.bars ?? 8},set:{v in store.updateUse("섹션 길이"){$0.barsOverride=v}}),range:1...1024)
+                MIDIWorkspaceToolbarLayout(gap:16) {
+                SectionLengthControl(store:store)
                 CountControl(title:"반복",value:Binding(get:{store.selectedUse?.repeatCount ?? use.repeatCount},set:{v in store.updateUse("섹션 반복"){$0.repeatCount=v}}),range:1...256)
                 }
             }

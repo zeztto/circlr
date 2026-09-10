@@ -103,6 +103,14 @@ OPERATION["properties"]["kind"]["enum"].extend(ARRANGEMENT_OPERATIONS + ["select
 OPERATION["description"] = "clear_use_tempo_override requires arrangementID/useID, removes only that use tempo override, and requires midiTempoImport=1. edit_shared_audio requires patternID, trackID, clipID and edit (split/duplicate/fade/delete). patternID is rejected except on edit_shared_audio/edit_pitch_bend; arrangementID/compositionID/nodeID/useID/laneID are rejected on edit_shared_audio. original is rejected on kinds other than set_automation/edit_pitch_bend. It edits the shared rhythm pattern across its uses; split uses sourceOffset seconds, duplicate uses beatOffset, fade uses fadeIn/fadeOut seconds, as in edit_audio. set_automation accepts original: omitted/false edits this use, true edits the shared section source and retains existing use overrides. insert_section requires arrangementID, useID (insert after), name (1–120 trimmed characters), bars (1–4096), and at {x,y}; it atomically inserts a new section into a linear path, preserving editing selection. Branches, loops and non-default transitions fail without changes. duplicate_arrangement and rename_arrangement require explicit compositionID, arrangementID and name (1–120 characters after trimming whitespace). Duplicate shares section sources and assets, preserving every owner's playback choice and the editing canvas. Rename changes only the arrangement name. select_arrangement requires compositionID and arrangementID (no name needed); it deliberately changes the owner's playback choice and visible editing branch."
 
 
+LENGTH_OPERATIONS = ["set_use_length_override", "clear_use_length_override"]
+OPERATION["properties"]["kind"]["enum"].extend(LENGTH_OPERATIONS)
+for kind in LENGTH_OPERATIONS:
+    required = ["kind", "arrangementID", "useID"] + (["bars"] if kind == "set_use_length_override" else [])
+    OPERATION["oneOf"].append(schema({key: ({"enum": [kind]} if key == "kind" else OPERATION["properties"][key]) for key in required}, required))
+OPERATION["description"] += " set_use_length_override requires exactly kind/arrangementID/useID/bars (integer 1–4096); clear_use_length_override requires exactly kind/arrangementID/useID and restores the shared source length. Both require sectionLengthEditing=1. Legacy set_section retains its existing shape and final batch validation. Changes preserve source data and editing selection; unsafe truncation fails atomically."
+
+
 BEND_RANGE = schema({"semitones": {"type": "integer", "minimum": 0, "maximum": 127}, "cents": {"type": "integer", "minimum": 0, "maximum": 127}}, ["semitones", "cents"])
 BEND_CHANGE = schema({"kind": {"type": "string", "enum": ["insert", "update", "remove", "setInitial", "clear"]},
     "beat": {"type": "number", "minimum": 0, "maximum": 131072}, "rawValue": {"type": "integer", "minimum": 0, "maximum": 16383},
@@ -233,6 +241,10 @@ def rpc(path, request):
 def validate_operation_scopes(operations):
     for index, operation in enumerate(operations):
         kind = operation["kind"]
+        if kind in LENGTH_OPERATIONS:
+            expected = {"kind", "arrangementID", "useID"} | ({"bars"} if kind == "set_use_length_override" else set())
+            if set(operation) != expected:
+                raise ValueError("section length operation has missing or inapplicable fields")
         if operation.get("parameter") == "synthCutoff" and kind != "set_automation":
             raise ValueError(f"operations[{index}].parameter: synthCutoff requires set_automation")
         if "original" in operation and kind not in {"set_automation", "edit_pitch_bend"}:
@@ -290,6 +302,8 @@ def call_tool(path, name, arguments, read_only=False):
             required_capabilities.append("midiPitchBendImport")
         if entry["method"] == "apply" and any(op["kind"] == "edit_pitch_bend" for op in arguments["operations"]):
             required_capabilities.append("midiPitchBendEditing")
+        if entry["method"] == "apply" and any(op["kind"] in LENGTH_OPERATIONS for op in arguments["operations"]):
+            required_capabilities.append("sectionLengthEditing")
         if required_capabilities:
             # This read does not weaken the final app-side revision/atomicity guard.
             probe = rpc(path, {"id": str(uuid.uuid4()), "method": "snapshot", "arguments": {}})
