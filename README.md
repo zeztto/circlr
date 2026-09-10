@@ -6,7 +6,9 @@ macOS용 앨범·송폼 궤도 편집기. **앨범 → 곡·악장 → 섹션 �
 
 연결 UI는 [서클 둘레 8방향 IN/OUT과 다중 입출력](docs/22-eight-direction-ports.md)으로 확장 중이다. 포트의 신호 의미와 연결점 배치를 분리한다. 아래 일반 사용법은 배포된 0.19 앱 기준이며 새 포트 기능은 독립 개발 브랜치에서 검증한다.
 
-현재 **`codex/daw-integration`의 0.20.0 build 113**에 녹음 lifecycle과 8방향·다중 bus·그룹 포트를 통합했다. 같은 캔버스의 연결 편집·녹음 상태·스텝·오토메이션이 공존하며, 녹음 시작·정리 중 음악 편집과 Undo의 경쟁을 차단한다. build 23의 실제 편집·바운스·Undo·저장/재열기·닫기 최소화 및 출력별 모션 검증은 [통합 QA](qa/daw-integration-review.md)에 기록했다.
+현재 **`codex/daw-integration`의 0.20.0 build 114**에 녹음 lifecycle과 8방향·다중 bus·그룹 포트를 통합했다. 같은 캔버스의 연결 편집·녹음 상태·스텝·오토메이션이 공존하며, 녹음 시작·정리 중 음악 편집과 Undo의 경쟁을 차단한다. build 23의 실제 편집·바운스·Undo·저장/재열기·닫기 최소화 및 출력별 모션 검증은 [통합 QA](qa/daw-integration-review.md)에 기록했다.
+
+**build114는 짧은 오디오 구간의 파형 손잡이를 개선했다.** 32초 파일의 0.5초 구간에서 라벨이 충돌하고 가까운 x 위치의 trim 판정이 커서 조작을 가로채는 문제를 다룬다. 짧은 구간에만 세로로 나눈 손잡이·공통 geometry·라벨 연결선을 적용해 자동 fit 없이 직접 cursor/trim을 조작한다. final2 Release41.14초·실제 geometry782개 검사·source review를 통과했다. native20개 strict snapshot·5개 gesture·Undo/정확한 저장 재열기와 JPG10장·AX 시각 검토를 통과했다. wide는 F/0 표시만 native 확인했으며 wide hit는 harness, orbital·drag 중 resize는 source 확인 범위다. [계약](docs/130-audio-waveform-handles.md).
 
 **build113은 실제 오디오 클립 구간의 BPM 검사와 빠른 편곡 입력을 개선했다.** 일정 구간의 Core split·legacy/graph render를 허용하고 실제 변화 교차·반복 시작 BPM 불일치는 거절한다. 선택 트랙은 필요한 endpoint만 렌더한다. Release 73.53초·관련 테스트 16개(tempo 13개 포함)·오디오 checker 9개 capture와 실제 28초 stereo 48 kHz WAV를 확인했다. 빠른 편곡 입력 9개 capture와 strict 재열기·disk 대조도 통과했다. JPG 10장·AX 시각 검토는 짧은 파형 라벨 간격과 reset 상세 스크롤의 경미한 개선점을 남겼다. 실제 B 복제 commit·IME는 미검증이며 물리 출력 attempt는 0이다. [계약](docs/129-audio-tempo-regions-and-arrangement-input.md).
 

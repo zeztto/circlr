@@ -109,6 +109,13 @@ struct OrbitAudioEditor:NSViewRepresentable {
         guard source>=value.sourceStart,source<=value.sourceStart+value.duration else{return 1}
         return (value.renderWindow?.envelopes ?? []).reduce(value.explicitEnvelope?.gain(at:source) ?? 1){$0*$1.gain(at:source)}
     }
+    func linearHandles(_ value:AudioClip)->AudioWaveformHandleLayout {
+        let start=value.sourceStart,end=start+value.duration
+        let font:[NSAttributedString.Key:Any]=[.font:NSFont.systemFont(ofSize:10)]
+        return AudioWaveformHandleLayout(bounds:bounds,plot:plot,
+            startX:visible(start) ? handle(start,end:false).x:nil,endX:visible(end) ? handle(end,end:true).x:nil,
+            startLabel:("시작" as NSString).size(withAttributes:font),endLabel:("끝" as NSString).size(withAttributes:font))
+    }
     func drawLinear(_ value:AudioClip) {
         StudioTheme.canvasNS.setFill();bounds.fill()
         let start=value.sourceStart,end=start+value.duration
@@ -129,10 +136,18 @@ struct OrbitAudioEditor:NSViewRepresentable {
                 StudioTheme.accentNS.withAlphaComponent(time>=start && time<=end ? 0.8:0.18).setStroke();path.stroke()
             }
         }
-        for (source,isEnd,label) in [(start,false,"시작"),(end,true,"끝")] where visible(source) {
-            let p=handle(source,end:isEnd),path=NSBezierPath();path.move(to:NSPoint(x:p.x,y:plot.minY));path.line(to:NSPoint(x:p.x,y:plot.maxY))
-            (isEnd ? StudioTheme.textNS:StudioTheme.accentNS).setStroke();path.lineWidth=2;path.stroke();OrbitDrawing.dot(p,radius:5,color:isEnd ? StudioTheme.textNS:StudioTheme.accentNS)
-            OrbitDrawing.text(label,at:NSPoint(x:min(bounds.width-16,max(16,p.x)),y:bounds.maxY-10),size:10)
+        let handles=linearHandles(value)
+        for (geometry,isEnd,label) in [(handles.start,false,"시작"),(handles.end,true,"끝")] {
+            guard let geometry else{continue}
+            let color=isEnd ? StudioTheme.textNS:StudioTheme.accentNS
+            let path=NSBezierPath();path.move(to:NSPoint(x:geometry.timeX,y:plot.minY));path.line(to:NSPoint(x:geometry.timeX,y:plot.maxY))
+            color.setStroke();path.lineWidth=2;path.stroke();OrbitDrawing.dot(geometry.dot,radius:5,color:color)
+            if abs(geometry.label.midX-geometry.timeX)>1 {
+                let leader=NSBezierPath();leader.move(to:NSPoint(x:geometry.timeX,y:plot.maxY))
+                leader.line(to:NSPoint(x:geometry.label.midX,y:geometry.label.minY-1))
+                color.withAlphaComponent(0.65).setStroke();leader.lineWidth=1;leader.stroke()
+            }
+            OrbitDrawing.text(label,at:NSPoint(x:geometry.label.midX,y:geometry.label.minY+5),size:10)
         }
         let cut=clip.sourceStart+store.audioCutOffset
         if visible(cut) {
@@ -142,10 +157,11 @@ struct OrbitAudioEditor:NSViewRepresentable {
     override func mouseDown(with event:NSEvent) {
         guard isCurrent else{return};window?.makeFirstResponder(self);cancelDrag()
         let p=convert(event.locationInWindow,from:nil),a=handle(clip.sourceStart,end:false),b=handle(clip.sourceStart+clip.duration,end:true)
-        if !orbital && !plot.contains(p){return}
-        let da=visible(clip.sourceStart) ? (orbital ? hypot(p.x-a.x,p.y-a.y):abs(p.x-a.x)):Double.infinity
-        let db=visible(clip.sourceStart+clip.duration) ? (orbital ? hypot(p.x-b.x,p.y-b.y):abs(p.x-b.x)):Double.infinity
-        guard min(da,db)<14 else {
+        let linear=linearHandles(clip)
+        if !orbital && !linear.acceptsMouseDown(at:p,bounds:bounds,plot:plot){return}
+        let da=orbital ? (visible(clip.sourceStart) ? hypot(p.x-a.x,p.y-a.y):Double.infinity):linear.distance(to:p,end:false)
+        let db=orbital ? (visible(clip.sourceStart+clip.duration) ? hypot(p.x-b.x,p.y-b.y):Double.infinity):linear.distance(to:p,end:true)
+        guard min(da,db)<(orbital ? 14:linear.hitRadius) else {
             if orbital && abs(hypot(p.x-center.x,p.y-center.y)-waveRadius)>max(16,outer*0.2){return}
             let source=viewport.source(at:phase(p),assetDuration:asset.duration);store.audioSplitOffset=max(0,min(clip.duration,source-clip.sourceStart));needsDisplay=true;return
         }

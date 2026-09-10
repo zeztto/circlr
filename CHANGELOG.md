@@ -1,5 +1,13 @@
 # 변경 이력
 
+## 검증 완료 — 0.20.0 build114 짧은 파형 손잡이
+
+- build113 final split 화면의 32초 파일·0.5초 구간에서 라벨 충돌과 linear x 거리14px 미만 trim 판정이 구간 조작을 가로채는 문제 확인.
+- 짧은 구간에만 y-separated handle·공통 geometry·라벨 leader를 적용. 자동 fit 없이 직접 cursor/trim 조작을 검증했고 orbital은 source 정책 보존 범위다.
+- actual helper geometry harness72개 scenario/737개 검사·source review blocker0 통과. 첫 앱 Release41.59초·exit0은 사전 후보다. standalone harness의 CoreGraphics import 누락은 명시 import로 수정했으며 제품 compile 실패와 구분. drag 중 resize 취소는 source guard 검토만 수행.
+- final2 Release41.14초·UUID `8EBE5ECA-B744-3D51-874C-78794B72374A`, geometry782개·source v3 review blocker0 통과. native20개 JSON의 시작/끝/tiny/middle drag·Undo·restored/reopened32·자산2개/noIO 확보. JPG10장·AX 시각과20개 strict checker·5개 gesture·restored/reopened/disk 동일성 통과. 좌표1px tolerance는 native만 적용하고 geometry782개는 exact 검사. wide native는 F/0만이며 wide hit는 harness, orbital은 source만 검토. QA 종료·사용자 PID86114 유지. 초기 x55 plot 밖 no-op 후보는 보존하되 승인 제외.
+- 별도 후속 오디오 진단은 AuditionTransport의 in-process AU→mixer/start 구간을 bounded trace로 분리할 필요가 있음. timeout이 factory를 중단시키지 못하는 경계이며 이번 UI 수정이나 HAL 해결로 합산하지 않음. [계약](docs/130-audio-waveform-handles.md).
+
 ## 검증 완료 — 0.20.0 build113 오디오 템포 구간·편곡 입력
 
 - 실제 clip span의 일정 BPM을 허용하는 Core 공통 split와 legacy/graph render, 선택 출력의 endpoint 의존성 및 tail/render 공통 plan 적용. 실제 변화 교차·반복 시작 BPM 불일치는 거절.
