@@ -1,5 +1,11 @@
 # 변경 이력
 
+## 검증 완료 — 0.20.0 build112 편곡 복제 후 편집 유지
+
+- 현재 편곡의 정확한 audio 클립·MIDI 서클/노트 대상 continuation·⇧⌘E·workspaceOriginal=false·automation point 복원 구현. rhythm과 다른 candidate는 대상에서 제외. graph=nil·유효하지 않은 색상 주소는 원본에 보존하고 clone에는 복사하지 않음.
+- Release83.26초·UUID `9FEBF1B5-482D-321E-807A-6D0AD5C45744`·Core13개·source review blocker0·시각7장 통과. checker24개 snapshot의 sharedOriginalModeForcedOff·exactCloneMusic·audio/automation 복귀·sourcePreserved·Undo/reopen·noIO 통과. stale는 UI disabled no-op이며 handler 호출 검증은 아님.
+- 빠른 복제 직후 rename/다음 clone 단축키가 검색으로 입력되거나 clipboard timeout이 관측됨. 폼 확인 뒤 성공했으며 기존 picker의 빠른 연속 단축키/focus는 후속 과제. MIDI continuation UI는 native 미검증이며 Core는 주소 mapping 검증이다. nonempty 그룹/색상 native는 미검증. cached viewport 허용은 original-before editor 없음→continued의 같은 asset 구체화에 한정. 물리 출력은 QA stub 차단, QA 종료 후 사용자 PID86114만 유지. [계약](docs/128-arrangement-continuation.md).
+
 ## 검증 완료 — 0.20.0 build111 MIDI 생성 메뉴·명령 검색 focus
 
 - 기존 MIDI 메뉴에 네 패턴 항목을 직접 배치. 1-based 시작·남은 길이(4분음표 기준)와 기존 노트 유지/겹침 안내, 명령 검색의 동일 request/range 및 stale 거절 적용. 추가 패널 없음.

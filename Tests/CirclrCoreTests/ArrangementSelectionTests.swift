@@ -124,7 +124,9 @@ final class ArrangementSelectionTests:XCTestCase {
         let section=CircleAddress.section(arrangementID:source.id,useID:use.id)
         let node=try XCTUnwrap(p.sections.first?.graph?.nodes.first?.id)
         let music=CircleAddress.music(arrangementID:source.id,useID:use.id,nodeID:node)
-        let inner=CircleAddress.group(parent:.group(parent:section,id:"inner"),id:"nested")
+        var innerGroup=CanvasGroup(name:"오디오 묶음",members:[node]);innerGroup.id="inner"
+        p.sections[0].graph?.layout.groups.append(innerGroup)
+        let inner=CircleAddress.group(parent:section,id:"inner")
         let outer=CircleAddress.group(parent:.composition(owner),id:group.id)
         p.circleColors=[section:CircleColor.Preset.amber.color,music:CircleColor.Preset.coral.color,inner:CircleColor.Preset.mint.color,outer:CircleColor.Preset.blue.color,.album:CircleColor.Preset.rose.color]
         let before=try XCTUnwrap(p.circleColors)
@@ -134,9 +136,43 @@ final class ArrangementSelectionTests:XCTestCase {
         var expected=before
         expected[newSection]=before[section]
         expected[.music(arrangementID:id,useID:newUse,nodeID:node)]=before[music]
-        expected[.group(parent:.group(parent:newSection,id:"inner"),id:"nested")]=before[inner]
+        expected[.group(parent:newSection,id:"inner")]=before[inner]
         expected[.group(parent:.composition(owner),id:newGroup)]=before[outer]
         XCTAssertEqual(p.circleColors,expected)
         XCTAssertEqual(p.arrangements.first{$0.id==source.id}?.uses,source.uses)
     }
+    func testDuplicateMappingUsesExactOccurrenceAndRejectsInventedAddresses() throws {
+        var p=try CircleColorTests().fixture()
+        let owner=try XCTUnwrap(p.album?.compositions.first?.id),sourceID=p.activeArrangementID
+        var second=p.active.uses[0];second.id=newID();second.name=p.active.uses[0].name
+        p.arrangements[p.activeIndex].uses.append(second)
+        let uses=p.active.uses, node=try XCTUnwrap(p.sections[0].graph?.nodes.first?.id)
+        let invalid=CircleAddress.music(arrangementID:sourceID,useID:uses[0].id,nodeID:"deleted")
+        p.circleColors=[invalid:CircleColor.Preset.coral.color]
+        let before=p
+        let result=try ArrangementSelection.duplicateWithMapping(sourceID,compositionID:owner,name:"대안",in:&p)
+        XCTAssertEqual(result.arrangementID,p.activeArrangementID)
+        for (old,new) in zip(uses,p.active.uses) {
+            XCTAssertEqual(result.addressMap[.section(arrangementID:sourceID,useID:old.id)],.section(arrangementID:result.arrangementID,useID:new.id))
+            XCTAssertEqual(result.addressMap[.music(arrangementID:sourceID,useID:old.id,nodeID:node)],.music(arrangementID:result.arrangementID,useID:new.id,nodeID:node))
+        }
+        XCTAssertNil(result.addressMap[invalid])
+        XCTAssertNil(result.addressMap[.music(arrangementID:sourceID,useID:"missing",nodeID:node)])
+        XCTAssertNil(result.addressMap[.music(arrangementID:"foreign",useID:uses[0].id,nodeID:node)])
+        XCTAssertNil(result.addressMap[.group(parent:.section(arrangementID:sourceID,useID:uses[0].id),id:"deleted")])
+        XCTAssertEqual(p.circleColors,before.circleColors)
+        XCTAssertEqual(p.arrangements.first{$0.id==sourceID},before.active)
+        XCTAssertEqual(p.sections,before.sections)
+        XCTAssertEqual(p.tracks,before.tracks)
+        XCTAssertEqual(p.assets,before.assets)
+    }
+    func testDuplicateMappingFailureDoesNotPartiallyPublishClone() throws {
+        var p=try CircleColorTests().fixture()
+        let owner=try XCTUnwrap(p.album?.compositions.first?.id),source=p.activeArrangementID
+        p.arrangements[p.activeIndex].uses[0].sectionID="missing"
+        let before=p
+        XCTAssertThrowsError(try ArrangementSelection.duplicateWithMapping(source,compositionID:owner,name:"대안",in:&p))
+        XCTAssertEqual(p,before)
+    }
+
 }

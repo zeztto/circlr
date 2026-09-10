@@ -10,6 +10,8 @@ struct ArrangementPickerRequest:Identifiable {
     let currentID:ID?
     let choices:[ArrangementChoice]
     let routes:[ID:ArrangementRouteSummary]
+    var continuationSource:ArrangementContinuationSource?=nil
+    var continuation:ArrangementContinuation?=nil
 }
 
 extension AppStore {
@@ -22,7 +24,7 @@ extension AppStore {
         do {
             let choices=try ArrangementSelection.catalog(project,compositionID:owner.id)
             soundPickerRequest=nil;libraryOpen=false;navigationOpen=false;commandPalette=nil;keyboardHelp=false
-            arrangementPickerRequest=ArrangementPickerRequest(identity:numberEditIdentity,compositionID:owner.id,destination:owner.kind.label+" · "+owner.name,currentID:owner.selectedArrangementID,choices:choices,routes:arrangementRouteSummaries(choices))
+            arrangementPickerRequest=ArrangementPickerRequest(identity:numberEditIdentity,compositionID:owner.id,destination:owner.kind.label+" · "+owner.name,currentID:owner.selectedArrangementID,choices:choices,routes:arrangementRouteSummaries(choices),continuationSource:captureArrangementContinuation(currentID:owner.selectedArrangementID))
         }catch{fail(error)}
     }
     private func arrangementRouteSummaries(_ choices:[ArrangementChoice])->[ID:ArrangementRouteSummary] {
@@ -44,7 +46,16 @@ extension AppStore {
               duplicate || source==request.currentID else{throw CirclrError("대상이나 음악이 바뀌었거나 다른 작업 중입니다. 닫은 뒤 다시 열어주세요.")}
         guard try ArrangementSelection.catalog(project,compositionID:request.compositionID).contains(where:{$0.id==source}) else{throw CirclrError("복제·이름 변경할 편곡안을 다시 선택하세요")}
         var candidate=project,created:ID?
-        if duplicate {created=try ArrangementSelection.duplicate(source,compositionID:request.compositionID,name:name,in:&candidate)}
+        var continuation=duplicate ? nil:request.continuation
+        if duplicate {
+            let result=try ArrangementSelection.duplicateWithMapping(source,compositionID:request.compositionID,name:name,in:&candidate)
+            created=result.arrangementID
+            if source==request.currentID,let captured=request.continuationSource,
+               case .music(let sourceArrangement,_,_)=captured.address,sourceArrangement==source,
+               let destination=result.addressMap[captured.address] {
+                continuation=ArrangementContinuation(destination:destination,workspace:captured.workspace,kind:captured.kind,name:captured.name)
+            }
+        }
         else {_ = try ArrangementSelection.rename(source,compositionID:request.compositionID,name:name,in:&candidate)}
         mutate(duplicate ? "편곡안 복제":"편곡안 이름 변경",musical:duplicate) {$0=candidate}
         if duplicate {
@@ -53,7 +64,8 @@ extension AppStore {
         }
         guard let owner=project.album?.composition(request.compositionID) else{throw CirclrError("대상 곡을 찾을 수 없습니다")}
         let choices=try ArrangementSelection.catalog(project,compositionID:owner.id)
-        arrangementPickerRequest=ArrangementPickerRequest(identity:numberEditIdentity,compositionID:owner.id,destination:owner.kind.label+" · "+owner.name,currentID:owner.selectedArrangementID,choices:choices,routes:arrangementRouteSummaries(choices))
+        arrangementPickerRequest=ArrangementPickerRequest(identity:numberEditIdentity,compositionID:owner.id,destination:owner.kind.label+" · "+owner.name,currentID:owner.selectedArrangementID,choices:choices,routes:arrangementRouteSummaries(choices),
+            continuationSource:duplicate ? nil:request.continuationSource,continuation:continuation)
     }
     func applyArrangement(_ id:ID,request:ArrangementPickerRequest)throws {
         guard arrangementPickerCurrent(request),request.choices.contains(where:{$0.id==id}) else{throw CirclrError("대상이나 음악이 바뀌었거나 다른 작업 중입니다. 닫은 뒤 다시 열어주세요.")}
@@ -140,6 +152,16 @@ struct ArrangementPickerView:View {
                         .keyboardShortcut("d",modifiers:[.command,.shift])
                         .help("강조한 편곡을 이름 정해 복제 · ⇧⌘D · 섹션 원본은 공유 · 이번 사용 편집은 별도")
                         .disabled(!current || active==nil)
+                }.padding(.horizontal,18).padding(.bottom,14)
+            }
+            if naming == nil,let continuation=request.continuation {
+                HStack(spacing:10) {
+                    Button("복제한 \(continuation.kind) 계속 편집 · ⇧⌘E") {
+                        do {try store.continueArrangementEditing(request)}catch{notice=error.localizedDescription}
+                    }.keyboardShortcut("e",modifiers:[.command,.shift]).disabled(!current)
+                        .help(continuation.name+" · 복제한 이번 사용 편집으로 이어집니다")
+                    Text("복제한 이번 사용 · "+continuation.name).font(.system(size:12)).foregroundStyle(StudioTheme.secondary)
+                        .lineLimit(1).help(continuation.name)
                 }.padding(.horizontal,18).padding(.bottom,14)
             }
             if !current || !notice.isEmpty {

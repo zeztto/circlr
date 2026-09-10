@@ -1,82 +1,101 @@
 # 써클러 개발 방향과 실행 계획
 
-갱신: 2026-09-10. 계획 시작 기준: 0.11 native 앱, 0.12 음악 에이전트 키트 소스. 기존 출고 표기는 0.19.0이며 실행 중 사용자 앱의 별도 관측 버전은0.14다. 개발 검증 후보는 0.20.0 build 111이다. 목표는 송폼 중심의 전문 음악 제작을 먼저 완성하고, 이를 아티스트의 작품·세계관 관리로 확장하는 것이다.
+갱신: 2026-09-10. 계획 시작 기준: 0.11 native 앱, 0.12 음악 에이전트 키트 소스. 기존 출고 표기는 0.19.0이며 실행 중 사용자 앱의 별도 관측 버전은0.14다. 최신 검증 완료는 0.20.0 build112다. 목표는 송폼 중심의 전문 음악 제작을 먼저 완성하고, 이를 아티스트의 작품·세계관 관리로 확장하는 것이다.
 
-## 현재 검증 완료 — build111 MIDI 생성 메뉴·명령 검색 focus
+## 최신 완료 — build112 편곡 복제 후 편집 유지
+
+현재 편곡 복제 후 정확한 클립·오토메이션 대상을 유지하여 계속 편집하는 흐름을 구현했다. Release83.26초·Core13개·source review blocker0·시각7장 검토를 통과했으며 native 주 시나리오와 추가 원본 scope/rename/Undo 후 stale UI disabled를 실행했다. 최종 checker24개 snapshot에서 원본 scope 해제·정확한 clone 음악·audio/automation 복귀·원본 보존·Undo/reopen·noIO를 확인했다. stale는 disabled no-op 검증이며 handler 직접 호출은 미검증이다. 빠른 복제 직후 picker의 연속 단축키/focus와 clipboard timeout은 후속 과제로 유지하고 전체 키보드 동작 완료를 주장하지 않는다. MIDI continuation UI·nonempty 그룹/색상 native는 미검증이고 Core 주소 mapping 검증과 구분하며 물리 출력은 stub 차단했다. [계약](128-arrangement-continuation.md).
+
+## 현행 우선순위
+
+이 절이 현재 우선순위다. 아래 누적 이력의 당시 ‘현재’·‘다음’ 문장과 초기 A–H 계약은 새 작업 지시가 아니다. 선택 복원(build71), 선택 보기(build72), 오디오 배치(build73), 키보드 수치 입력(build74), 도움말 검색(build75)은 완료된 범위다. 모든 서클의 선택 영구 저장은 별도 설계 범위다.
+
+1. **물리 오디오 출고 조건 재점검.** `Sources/CirclrAudio/PlaybackTransport.swift`, `PlaybackOutputConnection.swift`, `AuditionTransport.swift`의 상태와 기존 QA를 대조한다. build32의 HAL IOProc 대기는 확인됐지만 원인은 확정되지 않았다. 먼저 현재 장치/프로세스의 읽기 전용 관측과 기존 stack으로 재현 조건을 정리하고, 독립 진단 프로세스의 시간 제한·취소·정리 경계를 정의한다. 정상 출력 시작/정지/자연 종료, 입력 녹음, 장치 변경, MP4 시계 검증이 없으면 사용자 앱을 교체하지 않는다. 오프라인 렌더 성공은 실제 출력 성공으로 계산하지 않는다.
+2. **한 곡 작업 흐름의 통합 사용성 검증.** 개별 편집기 통과와 별도로 섹션 생성→드럼/신스 스텝→오디오 가져오기→연결/자동화→편곡 대안→바운스/재열기의 실제 동선을 평가한다. 작은 창·긴 이름·키보드에서 숨은 상태와 되돌아가기 비용을 기록하고 재현되는 문제부터 수정한다. 별도 고정 사이드바를 추가하지 않는다.
+3. **음악 품질과 아티스트 세계 확장.** f0r h3r의 단순한 클럽 리듬·악기 편성·음색과 발매 품질은 실제 청감/렌더 평가가 필요하다. 물리 I/O 신뢰성과 제작 흐름이 확보된 뒤 아티스트 프로필 및 텍스트/영상/이미지 자산의 저장·연결 계약을 구현한다. 데모 완성이나 아티스트 관리 완료를 현재 UI QA로 대신 선언하지 않는다.
+
+
+물리 오디오 항목은 사용자 앱 교체를 위한 출고 gate다. 두 번째 우선순위의 build112 편곡 복제 후 편집 유지 slice는 완료했으며 빠른 picker 연속 단축키/focus는 후속 과제로 남긴다. 실제 I/O를 자동으로 재개하는 지시가 아니다. 검증한 개별 기능·오프라인 결과를 전체 DAW·물리 출력 완료로 합산하지 않는다.
+
+## 누적 검증 이력
+
+아래는 각 build에서 확인한 결과와 당시 남긴 제한이다. 최신 작업 범위는 위 두 절에서만 정하며 이전 수치·후속 계획을 현재 후보의 검증으로 바꾸지 않는다.
+
+## 검증 이력 — build111 MIDI 생성 메뉴·명령 검색 focus
 
 기존 MIDI 메뉴에 네 생성 항목을 직접 배치하고1-based 시작·남은 길이/4분음표·기존 노트 유지/겹침을 안내한다. 명령 검색도 같은 snapshot을 사용하며 stale 실행을 거절한다. final4 Release42.59초·checker10개 snapshot·ordinary56/shared4·기존 보존/공유 B/strict Undo/재열기·rapid ASCII/한국어 paste·시각5장 검증을 통과했다.
 
 final2 focus 전환 Space 누수는 출력 attempt1·didStart=false·outputNodeAcquisition timeout 후 정지·종료한 incident로 보존한다. 수정 후 final4는 명시적 QA output-helper deny로 attempts0·자산2개를 유지했다. 팝업 메뉴는 AX만 검증했고 stale 거절은 source review 범위이며 IME·물리 출력은 미검증이다. QA 앱 종료 후 사용자 PID86114만 유지했다. 이전 후보와 최종 승인 근거를 분리한다. [계약](127-midi-generation-menu.md).
 
-## 현재 검증 완료 — build110 테이크 번호 표시
+## 검증 이력 — build110 테이크 번호 표시
 
 동명 테이크를 `#번호 · 이름`으로 구분한다. 필터 전 eligible 순서라 검색 후에도 번호는 유지되지만 영구 ID·녹음 연번은 아니다. Release38.99초·native 키보드 진입/선택/#2 검색/Return/Undo/reset/Esc/저장 재열기·checker5개 상태/AX4개 및 시각4장 검토를 통과했다. 음악r30→31→32의 정확한 적용 대상/gain과 자산2개·output/record0을 확인했다. 이전 출력 reader 수정 포함, QA 앱 종료·사용자 PID86114 유지. [계약](126-take-identity.md).
 
-## 현재 검증 완료 — build109 앱별 출력 장치·공유 리듬 표시
+## 검증 이력 — build109 앱별 출력 장치·공유 리듬 표시
 
 최종 Release40.31초·mock/fixture38개16.992초를 통과했다. UI-only mock 출력9개 상태의 키보드 진입/선택·Tab/Esc·설정 복원·누락 유지·실패 재시도·조회 취소739ms와 공유 리듬6개 상태의 같은 패턴 B 공유 변경/Undo·일반 MIDI 구분·strict 재열기를 확인했다. checker 출력9/리듬6·시각 출력9장/리듬3장·최종 source review도 통과했다. 초기 Esc 및 Picker 갱신 문제는 native controls와 ObservedObject 적용 후 재검증했다.
 
 네 helper 패키징과 명시 선택 noFallback, 선택값/마지막 확인 장치 구분을 구현했다. 5초는 catalog 조회 deadline이며 timeout/취소 후 소유 child를 terminate·reap한다. SIGKILL 이후 waitUntilExit에는 별도 deadline이 없어 총 완료 시간은 플랫폼 종료에 의존한다. 실제 readback·hotplug·물리 재생과 HAL stall 해결은 미검증이다. 사용자 앱 PID86114만 유지하며 QA/helper 잔류 없음. [구현·검증](125-output-device-implementation.md).
 
-## 현재 검증 완료 — build108 테이크 검색
+## 검증 이력 — build108 테이크 검색
 
 StudioPalette와 ⌥⌘T·직접 버튼·전체 명령으로 테이크를 검색한다. 초기 shortcut/split 충돌을 수정하고 final3 목록 높이194를 필터 중 유지했다. Release39.82초·native 선택/검색0/Esc/Undo·⌘T 회귀·명령/query reset·stale 거절과 시각/source 검토를 통과했다. checker9개 상태·검색 AX·테이크5개·자산2개·output0·r30 strict 복원/재열기/disk 대조를 통과했으며 physical I/O0·사용자 앱을 유지했다. [계약](124-take-search.md).
 
 오디오 후속 [앱별 출력 장치 계획](107-app-output-device-plan.md)은 build109에서 구현했으며 실제 장치 검증과 stall 해결은 별도다.
 
-## 현재 검증 완료 — build107 테이크 요약·offline 악기 격리
+## 검증 이력 — build107 테이크 요약·offline 악기 격리
 
 테이크 요약·현재 내용 비교와 offline 악기 worker를 구현했다. 최종 Release40.16초·관련 테스트27개/9.151초·패키지4개 PCM89100 frames/maxError0를 확인했다. UI의 실제 선택/재선택·Undo·strict r22 재열기는 통과했고 checker8개 상태·자산2개·테이크5개·strict r22 재열기도 통과했다. 첫 후보의 후속 선택 no-op 원인은 캐시로 추정할 뿐 확정하지 않는다. 키보드 메뉴 선택·원본 편집/name commit/stale intent/record busy의 native와 물리 출력은 미검증이다. [테이크](122-take-summary.md) · [악기](123-au-instrument-worker.md).
 
-## 현재 검증 완료 — build106 바운스 안내
+## 검증 이력 — build106 바운스 안내
 
 `TrackBounceStatus`에서 경로와 여운을 독립 표시한다. Release38.64초와 실제 두 경고·여운 설정/취소·자동 추정 복귀, QA6개 상태·음악r22/자산2개·strict 재열기·시각 검토를 통과했다. exact dedup은 source review 범위다. 실제 바운스·경로 복구 버튼 실행·물리 I/O는 이번에 검증하지 않았으며 audio attempts0·검증 앱 종료를 확인했다. [계약](121-bounce-notice-visibility.md).
 
-## 현재 검증 완료 — build105 오토메이션 compact 배치
+## 검증 이력 — build105 오토메이션 compact 배치
 
 adaptive 배치·도구 flow·수치 입력 버튼/Tab/reveal로 compact plot을 약50→160px로 넓혔다. Release38.43초와 실제 초안 줌 왕복·위치/gain/pan 입력·invalid·Undo·수치 버튼을 확인했다. QA10개 상태·자산2개·음악 delta/복원·strict r28 재열기와 시각 검토를 통과했다. physical0·사용자 앱 유지. 동시 drag/resize·원본 불가 group·IME·대량 점은 미검증이고 하단 안내는 우측 스크롤 아래에 있다. [계약](120-automation-compact-layout.md).
 
-## 현재 검증 완료 — build104 연결 focus 유지
+## 검증 이력 — build104 연결 focus 유지
 
 폭 전환의 control identity와 target 선택 행 inner/outer reveal을 유지한다. 최종 Release40.00초와 실제 target/search/filter 왕복·caret·목록 이동·키보드 재연결/취소를 확인했다. QA11개 상태·음악r36/자산2개·source hash·strict 재열기/disk와 시각 검토를 통과했다. physical0·사용자 앱 유지. 실제 케이블 적용·그룹 관리·IME 조합·숨은 jump focus 폭 전환은 미검증이며 compact 선택 행 reveal은 상단 port actions와 동시 노출이 아니다. [계약](119-connection-focus-continuity.md).
 
-이전 Automation compact 후보는 build105, 경로 메시지에 가려지는 tail 안내는 build106에서 실제 재현·수정했다. 현재는 build109 출력 장치 선택과 공유 리듬 표시를 검증하며 build96 effect·build107 instrument 격리 완료와 구분한다. 전체 DAW·실시간·물리 출력 완료는 아니다.
+이전 Automation compact 후보는 build105, 경로 메시지에 가려지는 tail 안내는 build106에서 실제 재현·수정했다. 당시에는 build109 출력 장치 선택과 공유 리듬 표시를 검증했으며 build96 effect·build107 instrument 격리 완료와 구분한다. 전체 DAW·실시간·물리 출력 완료는 아니다.
 
-## 현재 검증 완료 — build103 오디오 compact 배치
+## 검증 이력 — build103 오디오 compact 배치
 
 파형과 도구 Scroll을 분리하고4열 label 입력·audio 수치 focus reveal을 적용했다. Release39.90초와 실제 초안/줌·invalid focus·trim/Undo·첫/마지막 입력 접근, 수평 overflow 없음을 확인했다. checker4개 상태·자산2개·physical0·revision38 음악 복원/strict 재열기를 통과했다. 전체8필드 연속 Tab·본문180 미만·녹음 busy는 미검증이며 사용자 앱을 유지했다. [계약](118-audio-compact-layout.md).
 
-## 현재 검증 완료 — build102 연결 목록 접근
+## 검증 이력 — build102 연결 목록 접근
 
 고정 jump bar로 compact 목록/입력을 이동하고 재연결 선택 시 compose/search에 focus한다. 최종 Release38.32초와 실제 keyboard·재연결·대상/octant 보존·취소·wide/compact 왕복을 확인했다. QA14개 상태·focus AX5개·음악36/자산2개·studio SHA와 resized/reopened/disk strict 일치를 통과했다. build102 당시 폭 전환 focus 이탈은 build104에서 개선했다. 실제 케이블 적용·빈 연결·그룹 관리·외부 intent는 native 미검증이며 physical0·사용자 앱을 유지한다. [계약](117-connection-workspace-access.md).
 
-## 현재 검증 완료 — build101 inline header
+## 검증 이력 — build101 inline header
 
 stable3그룹·compact 두 줄과 Orbit 여백으로 header 양끝을 표시한다. 초기69.55초 후보의 잔여 잘림을 수정한 최종 Release37.87초에서 한국어 초안/focus 왕복·Esc·설정/연결·상위 이동을 확인했다. QA7개 상태·초안AX2개·음악r36/자산2개·원본 SHA·strict 재열기 대조를 통과했다. physical0·사용자 앱 유지, 녹음 busy/takes·IME 조합·mode Tab 순서·body 하단 스크롤은 미검증이다. 두 줄 header의 body 감소는 기존 스크롤이 필요하며 build100 결과를 이번 검증에 합산하지 않는다. [계약](116-inline-header-layout.md).
 
 당시 AudioWorkspace compact 후보는 build103, 기존 연결 목록 접근 후보는 build102에서 실제 재현·수정했다. 연결 폭 전환 focus는 위 build104의 별도 진행 범위다.
 
-## 현재 검증 완료 — build100 MIDI compact 배치
+## 검증 이력 — build100 MIDI compact 배치
 
 작은 MIDI 편집기에 compact inspector·adaptive toolbar와 responsive Grid/StepEditor를 적용했다. 중간41.96초 후보에서 발견한 step 잘림을 수정한 최종 Release41.85초로 step4필드·1/16 page·검색/줌·노트 이동/Undo·Orbit 초안과 하단 접근을 확인했다. QA18개 상태·AX5개·UUID와 revision36 saved/reopened/disk strict 일치·open 완료를 확인했다. 신규 Core 동작은 없고 physical0·자산2개를 유지한다. 긴 셋잇단 적용은 미검증, header 일부 잘림은 잔여 범위다. [계약](115-midi-compact-layout.md).
 
-## 현재 검증 완료 — build99 편곡 후보 직접 복제
+## 검증 이력 — build99 편곡 후보 직접 복제
 
 행에서 해당 후보를 직접 복제하고 ⇧⌘D는 강조 candidate를 사용한다. Core11개·source guard review·Release41.58초·strict 서명과 실제 B행/키보드 복제·취소·한 Undo·검색0·현재 이름 변경 취소·stale 거절을 확인했다. revision20/21 저장 재열기는 strict 동일하며 QA14개 상태·AX5개 검사·자산2개·physical0 대조와 PNG7개 직접 검토도 통과했다. output/audition0·자산2개를 보존하고 검증 앱을 종료했다. [계약](114-arrangement-candidate-duplicate.md).
 
-## 현재 검증 — build98 섹션 연결 메뉴
+## 검증 이력 — build98 섹션 연결 메뉴
 
 실제 `AlbumCanvas` 우클릭 메뉴의 체크를 `SectionFlowSelection.isSelected`로 통일하고 isEnd에 ‘끝 해제 후 재생할 연결’을 안내한다. 기존 선택 동작은 유지한다. Core6개 실패0·0.004초·Release39.03초·패키지 strict 서명과 실제 단일 선택 무변경·끝 해제/Undo를 확인했다. 체크 glyph 시각은 미검증으로 AX highlight와 구분하며 판정은 Core/source 근거에 한정한다. output/audition0회다. [계약](113-section-flow-menu.md).
 
 앞서 지목한 `UnifiedSectionView`는 rg 검색에서 생성 참조를 찾지 못했으므로 그 소스 상태를 실제 UI 재현으로 해석하지 않는다. 다른 편곡 candidate 직접 복제는 build98 당시 미구현이었으며 위 build99에서 진행한다.
 
-## 현재 검증 완료 — build97 MIDI 작업 도구
+## 검증 이력 — build97 MIDI 작업 도구
 
 전체 편집 폭 toolbar로 작은 창의 Orbit·step·drum step·piano에서 메뉴·bounce·record를 표시한다. Release38.38초와 native 노트/직접⌘A 편집·Undo·34초 바운스/Undo·revision30 strict 저장 재열기를 확인했다. QA20개 상태·AX 내용6개·원본 자산2개·offline bounce1개·physical0 대조도 통과했다. 메뉴 click 동작은 미확정으로 노출 검사와 구분하고 실제 MIDI 녹음·물리 출력은 실행하지 않았다. [계약](112-midi-workspace-actions.md) · [QA](../qa/workflow-visibility-review.md).
 
 isEnd 메뉴 표시는 위 build98의 실제 AlbumCanvas 경로에서 검증한다. 다른 편곡 candidate를 현재 안으로 적용하지 않고 복제하는 동선은 미구현이며 build97 toolbar 검증에 포함하지 않는다. 사용자 dist 앱을 보존하고 검증 앱을 종료했다.
 
-## 현재 검증 완료 — build96 offline AU effect 격리
+## 검증 이력 — build96 offline AU effect 격리
 
 AU effect instantiate/render의 별도 process와 bounded 요청·결과·cancel/deadline을 구현하고 App 두 outer task의 즉시 STOP 진입 경쟁을 수정했다. 최종 관련46개 실패0·18.491초, Release47.10초·패키지3개 실행 파일 검사를 통과했다. 패키지 Apple AU 두 설정의 각12000-frame PCM은 기준과 정확히 일치했다. [계약](111-au-effect-worker.md) · [QA](../qa/au-effect-worker-review.md).
 
@@ -84,13 +103,13 @@ GUI 즉시 STOP race는 source guard·compile 확인이며 실제 host cancel �
 
 이는 보안 sandbox가 아닌 crash/hang 격리다. 가상악기·plugin UI·실시간·물리 출력과 continuous engine은 별도 조건이며 사용자 dist 앱을 교체하지 않는다.
 
-## 현재 검증 완료 — build95 탐색 밀도
+## 검증 이력 — build95 탐색 밀도
 
 현재 target과 같은 단일 버튼을 생략하고 header 복귀·다중 검색·⌘1/⌘3을 유지했다. parse·Release40.30초와 실제 router/header·audio2/effect2/source3 검색·MIDI 선택/복귀를 확인했다. revision62 음악 불변·saved/reopened 전체 manifest strict 동일이며 QA10개 상태·AX12개·자산2개·physical0 대조도 통과했다. MIDI/effect는 use-only 안내 상태의 탐색 검증에 한정한다. [계약](110-route-density.md) · [QA](../qa/route-density-review.md).
 
 offline AU effect 격리의 현재 범위와 제한은 위 build96에 기록한다.
 
-## 현재 검증 완료 — build94 콘솔 높이
+## 검증 이력 — build94 콘솔 높이
 
 로그 높이를 세션40–180px·기본122px로 조절한다. 초기 입력창 단축키 실패를 수정한 최종 parse·Release40.59초와 실제 ⌃⌘1/2/3·drag clamp·접힘/펼침·편집기 왕복·wheel·state 명령을 확인했다. music revision62·saved/reopened strict manifest와 같은 세션 높이40을 유지했다. QA18개 상태·최종AX10개·자산2개·physical0 대조와 consoleHeightReduction82를 확인했다. [계약](109-console-height.md) · [QA](../qa/console-height-review.md).
 
@@ -98,7 +117,7 @@ Core 변경·신규 unit 테스트는 없다. 실행 중 job 취소 버튼은 �
 
 route bar 중복 버튼 과제의 실제 확인 범위는 위 build95에 기록한다.
 
-## 현재 검증 완료 — build93 음악 그래프 편집 범위
+## 검증 이력 — build93 음악 그래프 편집 범위
 
 scope 전용 snapshot·원본 읽기·대상 guard·use-only 안내와 범위 선택을 구현했다. 관련31개 실패0·최종 Release45.48초와 실제 원본 이름 변경·scope/target 초안 처리·group router 생성·Undo를 확인했다. revision62 saved/reopened manifest는 strict 동일하며 QA18개 상태·AX9개·자산2개·physical0 대조도 통과했다. [계약](108-music-graph-edit-scope.md) · [QA](../qa/music-scope-review.md).
 
@@ -106,7 +125,7 @@ baseline92는 ID collision의 전체 실패·revision54 불변으로 확인한 �
 
 콘솔 로그 높이 과제의 최종 관측은 위 build94에 기록한다. 기존 물리 출력 문제와 별도 범위다.
 
-## 현재 검증 완료 — build92 router 경로 레벨
+## 검증 이력 — build92 router 경로 레벨
 
 네 경로 dB·Tab·slider 입력과 정밀도/순서 보존·명시 대상·원본 분리·expected guard를 구현했다. Core19개·최종 Release41.35초와 실제 입력·preset 충돌 거절·Undo·작은 창/scroll1·저장 재열기를 확인했다. revision54 saved/reopened manifest는 strict 동일하며 QA baseline3개·후보25개·AX12개·자산2개·physical0 대조도 통과했다. 원본 안전성은 이번 route helper 범위이고 물리 출력0회로 사용자 앱을 보존한다. [계약](106-router-route-levels.md) · [QA](../qa/router-level-review.md).
 
@@ -114,19 +133,19 @@ build93의 편집 과제는 일반 `updateMusic`의 effective→original 전파 
 
 후속 I/O는 [앱별 출력 장치 계획](107-app-output-device-plan.md)의 범위와 검증 조건을 확인해 연결한다. 아직 장치 구현·정상 physical 출력 완료로 계산하지 않는다.
 
-## 현재 검증 완료 — build91 출력 dB·router 접근
+## 검증 이력 — build91 출력 dB·router 접근
 
 출력 볼륨을 dB로 통일하고 작은 창의 router 하단 접근·위치 복원을 수정했다. 최종 관련17개 테스트·Release20.04초와 native7개 상태·AX4개에서 mix 왕복·gain/Undo·저장 재열기 뒤 하단 위치1 유지를 확인했다. saved/reopened 전체 manifest는 strict 동일하다. QA 최종 대조와 routerScroll{x:0,y:169} 보존도 통과했다. 앞선38.99초 후보의 광범위 dB 검증·스크롤 누락 발견을 최종 위치 복원 결과와 구분한다. [계약](105-signal-level-decibels.md) · [QA](../qa/signal-level-review.md).
 
 physical 출력0회·사용자 앱 유지로 기존 장치 출력 문제와 구분한다. 새 장치 출력 성공을 확인한 작업이 아니다.
 
-## 현재 검증 완료 — build90 포트별 출력 도달성
+## 검증 이력 — build90 포트별 출력 도달성
 
 공통 Core structural port reachability로 탐색 후보·선택 트랙 추론·바운스 분류를 맞췄다. router 실제 route, mute/gain0의 구조 연결, sidechain-only 제외와 lane 소유 미연결 편집 접근을 구분한다. Swift36개 실패0·Release73.47초와 실제 독립 bus별 effect 분리·MCP focus 뒤 단축키의 트랙 추론·router 교차 변경/Undo를 확인했다. QA10개 상태·AX7개·자산2개·physical0과 저장/재열기 manifest 전체 일치도 확인했다. [계약](104-port-aware-navigation.md) · [QA](../qa/port-navigation-review.md).
 
 별도 읽기 전용 장치·클라이언트 관측을 완료했다. [장치 QA](../qa/output-device-review.md). HAL 지연 원인과 정상 출력은 미해결이며 이 탐색 수정의 완료와 합산하지 않는다.
 
-## 현재 검증 완료 — build89 현재 트랙 단축키·출력 재대조
+## 검증 이력 — build89 현재 트랙 단축키·출력 재대조
 
 ⌘1/⌘2/⌘3의 현재 section/track 범위0/1/multi 선택과 혼합 MIDI/audio typed union을 구현했다. parser·Release42.42초와 실제 미연결 Return·종류 전환·현재 찾기 union 해제를 포함한 탐색을 확인했다. 신규 Swift unit 테스트는 없으며 저장·재열기의 음악/선택/camera 보존과 QA13개 캡처·AX7개 대조를 통과했다. [단축키 QA](../qa/track-shortcut-review.md). [계약](103-track-shortcuts-and-output-recheck.md).
 
@@ -136,35 +155,35 @@ physical 출력0회·사용자 앱 유지로 기존 장치 출력 문제와 구�
 
 별도 live stall probe2회는 mainMixer→AudioDeviceCreateIOProcID→HAL SetPropertyData→mach_msg 대기 stack을 확보했다 (`qa/generated/output-stall-build89/stall-summary.json`). 서명 대조 당시 sample 미확보와 구분하며 서버 원인·장치 identity는 미확정이다.
 
-## 현재 상태 — build88 섹션 삽입 완료·출력 지연 진단
+## 당시 상태 — build88 섹션 삽입 완료·출력 지연 진단
 
 선택 섹션 뒤 연결을 유지하는 원자적 삽입과 출력 준비 trace를 추가했다. Audio26개·Core7개·MCP23개·kit9개·file worker16개·Release52.87초와 실제 MIDI 편집 중 명령 삽입·Undo/Redo를 확인했다. 섹션 QA22개 상태·자산2개 보존 대조도 통과했다. [섹션 QA](../qa/section-insertion-review.md). [계약](102-section-insertion-and-output-preparation.md).
 
 raw Release 무음 helper2회는 started0.533/0.122초·자연 finished·command EOF 후 exit0으로 끝났다. 패키지 worker는 앱 host의 무음 fixture와 독립 CLI 실행 모두 각각 두 번 mixerAcquisition 진입에서 timeout했다. raw Release와 패키지 binary의 UUID·기계코드 섹션은 같고 codesign·.app 위치가 다르지만 원인은 아직 확정되지 않았다. 실제 믹서 준비6초·Space 안내와 세 번째 시작의 즉시 취소·정리를 확인했지만 host 정상 출력은 여전히 실패한다. [관측](../qa/output-preparation-native-review.md). 원본을 보존한 추가 matrix에서 패키지 byte 동일 외부 사본·재서명 raw 외부 사본이 각2회 mixerAcquisition에서 timeout하고 EOF exit0으로 정리됐다. .app 위치만으로는 설명되지 않았다. 당시 없던 동시간 raw control과 서명 보존 대조는 위 build89 결과에서 모두 실패했으므로 서명 원인을 확정하지 않는다. 독립 성공을 host 복구로 일반화하지 않으며 timeout/retry/device 정책·물리 I/O 출고 조건·사용자 앱을 유지한다.
 
-## 현재 검증 완료 — build87 렌더 tail 정책
+## 검증 이력 — build87 렌더 tail 정책
 
 자동 감쇠 추정·직접0–120초·상한/미확정 안내·메모리 사전 거절과 보존 클립 실제 끝을 공통 planner에 연결했다. Audio30개·Core3개·MCP22개·kit9개·Release52.98초를 통과했다. 실제 자동74초/직접34초의 앞34초 PCM, 바운스/export의 재열기 전후 바이트 일치와 설정·사전 거절·STOP 취소를 확인했다. QA checker22개 문서 캡처·RPC 오류/취소 기록 대조도 통과했다. [계약](101-render-tail-policy.md) · [QA](../qa/render-tail-review.md).
 
 UI running 스피너 캡처·상한120초 완료 파일·실제 AU 검증은 남아 있다. AU는 단위 metadata만 확인했다. 실제 출력0회로 사용자 앱을 유지하고 검증 앱을 종료했다. 자동 추정과 오프라인 측정은 무손실·청취·물리 I/O 출고 보장이 아니다.
 
-## 현재 검증 완료 — build86 오디오 범위·바운스 음소거
+## 검증 이력 — build86 오디오 범위·바운스 음소거
 
 공유 원본/이번 사용 표시와 전용 클립 복귀를 기존 줄에 통합하고 파형 높이를 유지했다. 첫 후보의 Return 무응답을 수정한 최종 Release41.19초·Audio21개와 native 범위별 트림/Undo·출력 음소거 바운스·Return 복귀·원본 복원·Undo3·재열기를 확인했다. QA checker28개 상태·자산2개·바운스1개와 WAV PCM/checksum 대조도 통과했다. 실제 출력·audition0회로 사용자 앱과 물리 I/O 출고 조건을 유지한다. [계약](100-audio-scope-and-bounce-mute.md) · [QA](../qa/audio-scope-review.md).
 
 build87의 tail 정책은 아래 build86 재현에서 시작했다. compiled renderer에서1초 body의 끝 직전 pulse에 delay1초·feedback0.8을 적용해 tail2초와5초를 비교했다. 앞3초는 같지만 잘리는3–6초에 peak0.1024(약−19.8dBFS)·RMS0.008464가 남았다. [Python 재현](../qa/probe-bounce-tail.py) · [Swift 재현](../qa/probe-bounce-tail.swift). 이 과거 재현과 build87의 자동/직접 렌더 검증을 구분하며 실제 장치 청취 조건은 유지한다.
 
-## 현재 검증 완료 — build85 바운스 상태·연결 복구
+## 검증 이력 — build85 바운스 상태·연결 복구
 
 build84 실제 앱에서 경로 밖 복제본의 제외 안내 누락과 비활성 버튼의 help에만 있는 원인을 재현했다. build85는 typed assessment와 기존 route bar의 원인·제외 상태·연결 보기, 명령 검색의 정확한 출력 IN 이동을 구현했다. 초기 추가 행의 파형 축소는 최종 한 줄 배치로 복원했다. Core28개·AudioRouterAudio15개·최종 Release40.86초와 native 연결 해제/Undo·오토메이션 경고·오래된 명령 거절·저장 재열기를 확인했고 QA checker native20개·compact12개 상태·자산2개·재열기 manifest·source SHA 대조도 통과했다. [계약](99-bounce-visibility.md) · [QA](../qa/bounce-visibility-review.md).
 
 이번 범위의 바운스 렌더는 미실행이며 실제 출력·audition은0회다. 기존 사용자 앱과 물리 I/O 출고 조건을 유지한다. 다음은 가져오기→편집→오토메이션→바운스 전체 도구 왕복에서 남은 작업을 실제 시나리오로 확인한다. 이번 연결 복구 검증을 전체 제작 흐름 완료로 계산하지 않는다.
 
-## 현재 검증 완료 — build84 편곡 연결 경로 미리보기
+## 검증 이력 — build84 편곡 연결 경로 미리보기
 
 기존 편곡안 행에 연결 순서·반복·경로 제외·오류를 표시하고 `ArrangementCompiler`의 경로 cursor를 공유했다. Swift401개 실패0·Release68.85초와 실제1020×768의 같은 이름 비교·키보드 전환·연결/순서/반복 수정 반영·Undo5·재열기를 확인했다. QA checker native15개 상태·자산2개·source SHA 대조도 통과했다. [QA](../qa/arrangement-route-review.md). 오디오 시작0회로 사용자 앱을 보존하고 검증 앱을 종료했다. 음원 유효성·재생 시간·실제 청취와 출력 출고 조건은 별도 유지한다. [계획과 계약](98-arrangement-route-preview.md).
 
-## 직전 완료 — build83 편곡 대안의 복제·이름 변경
+## 검증 이력 — build83 편곡 대안의 복제·이름 변경
 
 build83에서 편곡안 목록에 이름 변경·명명 복제를 모으고, MIDI·섹션 편집 중에도 현재 편곡 번호·이름을 표시했다. ⇧⌘N/⇧⌘D와 MCP 명시 대상 작업을 지원한다. 복제 시 서클 색상을 유지하고 공유 섹션 원본과 이번 사용 편집의 차이를 알린다.
 
@@ -172,15 +191,15 @@ MCP `duplicate_arrangement`·`rename_arrangement`·`select_arrangement`를 지�
 
 실제 A/B 청취와 출력의 간헐적 첫 연결 실패는 별도 재생 조건으로 유지한다.
 
-## 현재 추가 요청 — 서클 색상
+## 완료 이력 — 서클 색상
 
 build81에서 종류별 색상과 사용자 지정·복원을 구현하고 검증했다. 색상/history 14개 테스트를 통과했다. 실제 메뉴·키보드·저장/재열기·패널 초기화 회귀를 확인했다. 기존 한 곡 제작 동선과 물리 오디오 출고 조건은 계속 유효하다. [색상 계약](96-circle-colors.md).
 
-## 통합 흐름 검증 갱신
+## 당시 통합 흐름 검증
 
 이펙트→오토메이션→바운스 산출물을 해시·PCM으로 재검증하고, build81에서 저장 프로젝트 전체 복원을 확인했다. 궤도 화면에서도 음악 데이터가 유지된다. [통합 근거와 검증 경계](../qa/automation-flow-review.md). 다음은 실제 장치 출력 재점검과 같은 곡의 편곡 대안이다.
 
-## 현행 실행 순서 — build108 기준
+## build75–82 통합 흐름과 당시 후속 계획
 
 build80에서 바운스 대상명과 연결 사전 검사를 통합하고 실제 UI 바운스·복원·MCP 즉시 거절을 확인했다. [QA](../qa/bounce-target-review.md). 이후 같은 곡에서 이펙트와 오토메이션을 적용한 바운스·저장/재열기는 위 통합 흐름 QA에서 확인했다. 개별 기능 검증을 한 곡 제작 완료로 계산하지 않는다.
 
@@ -192,11 +211,6 @@ build79에서 섹션의 오디오 가져오기가 과거 트랙을 재사용하�
 
 build82는 이전 play의 timeout/catch가 교체 세션을 취소하지 않도록 세션 ID 확인과 취소를 같은 lock 안에서 수행한다. 외부 STOP은 유지한다. OutputWorkerProcess/Protocol 관련16개 테스트를 통과했다 (`.build/output-session-tests.log`). build82 release 빌드는 46.09초에 통과했다. 실제 native host 첫 시도는 장치 단계 timeout·didStart=false 후 idle로 복구했고, 다른 세션 재시도는 didStart=true·시계 1.1145625초 진행·STOP 후 idle을 확인했다. 간헐적 최초 시작 실패는 미해결이다. 세 번째 세션은 33.994초 진행 관측 뒤 자연 종료했다. [출력 세션 QA](../qa/output-session-review.md). build76의 timeout 후 정리·재시도·Space 취소는 해당 빌드의 [기존 QA](../qa/output-host-review.md) 범위로 유지한다. 사용자 앱 출고 조건과 입력·audition·장치 변경·영상 시계 검증은 계속 남아 있다.
 
-이 절이 현재 우선순위다. 아래 build별 설명의 당시 ‘다음’ 문장은 개발 이력이며 새 작업 지시가 아니다. 선택 복원(build71), 선택 보기(build72), 오디오 배치(build73), 키보드 수치 입력(build74), 도움말 검색(build75)은 완료된 범위다. 모든 서클의 선택 영구 저장은 별도 설계 범위다.
-
-1. **물리 오디오 출고 조건 재점검.** `Sources/CirclrAudio/PlaybackTransport.swift`, `PlaybackOutputConnection.swift`, `AuditionTransport.swift`의 상태와 기존 QA를 대조한다. build32의 HAL IOProc 대기는 확인됐지만 원인은 확정되지 않았다. 먼저 현재 장치/프로세스의 읽기 전용 관측과 기존 stack으로 재현 조건을 정리하고, 독립 진단 프로세스의 시간 제한·취소·정리 경계를 정의한다. 정상 출력 시작/정지/자연 종료, 입력 녹음, 장치 변경, MP4 시계 검증이 없으면 사용자 앱을 교체하지 않는다. 오프라인 렌더 성공은 실제 출력 성공으로 계산하지 않는다.
-2. **한 곡 작업 흐름의 통합 사용성 검증.** 개별 편집기 통과와 별도로 섹션 생성→드럼/신스 스텝→오디오 가져오기→연결/자동화→편곡 대안→바운스/재열기의 실제 동선을 평가한다. 작은 창·긴 이름·키보드에서 숨은 상태와 되돌아가기 비용을 기록하고 재현되는 문제부터 수정한다. 별도 고정 사이드바를 추가하지 않는다.
-3. **음악 품질과 아티스트 세계 확장.** f0r h3r의 단순한 클럽 리듬·악기 편성·음색과 발매 품질은 실제 청감/렌더 평가가 필요하다. 물리 I/O 신뢰성과 제작 흐름이 확보된 뒤 아티스트 프로필 및 텍스트/영상/이미지 자산의 저장·연결 계약을 구현한다. 데모 완성이나 아티스트 관리 완료를 현재 UI QA로 대신 선언하지 않는다.
 
 build75는 검색 가능한 도움말·작업 필터와 제목 우선 명령 검색을 구현했다. [계약](89-searchable-shortcuts.md) · [검증](../qa/shortcut-search-review.md). 에이전트 재시도는 현재 세션의 thread limit으로 거절됐으므로 독립 검토는 수행되지 않았다.
 
@@ -310,19 +324,19 @@ build68 당시 후속 범위였던 선택 노트·오디오 분할 커서·오�
 
 **build 48에서 오토메이션의 길이 밖 마디 눈금과 점 탐색을 구현했다.** 부분 마디·변박을 유지한 희소 눈금, 이전/다음·Home/End의 범위 확장, 점 번호·마디/박/초와 선택 점 보기를 연결했다. 깨끗한 빌드의 Swift 374개·Python 26개, 두 배치의 실제 편집/Undo·범위·대상 분리·원본 복원은 [계약](62-automation-time-navigation.md) · [QA](../qa/automation-time-navigation-review.md)에 기록했다. 최초 증분 테스트 충돌 뒤 동일 소스의 전체 재빌드는 통과했으며, 후속 offline 검사는 `.build/automation-time-quality` scratch를 사용한다.
 
-다음 UI 우선순위는 **남은 작업 이동 깊이와 입력 검증**이다. 궤도 배치·펼친 그룹에서 이름표/포트 hit를 먼저 확인하고 import→trim/split/fade→오토메이션→bounce 흐름의 남은 단계를 줄인다. 전역 편집↔연결의 복귀 포커스와 legacy/실제 Audio Unit 경로는 별도 대표 검사로 이어간다. 녹음 테이크가 있는 헤더와 실제 Audio Unit 편집기의 설정 전환은 별도 native 검사 대상으로 유지한다. 원본 음악과 입력 정밀도를 보존하며 실제 창에서 데이터·포커스·Undo를 함께 확인한다.
+당시 UI 우선순위는 **남은 작업 이동 깊이와 입력 검증**이었다. 궤도 배치·펼친 그룹에서 이름표/포트 hit를 먼저 확인하고 import→trim/split/fade→오토메이션→bounce 흐름의 남은 단계를 줄인다. 전역 편집↔연결의 복귀 포커스와 legacy/실제 Audio Unit 경로는 별도 대표 검사로 이어간다. 녹음 테이크가 있는 헤더와 실제 Audio Unit 편집기의 설정 전환은 별도 native 검사 대상으로 유지한다. 원본 음악과 입력 정밀도를 보존하며 실제 창에서 데이터·포커스·Undo를 함께 확인한다.
 
 **build 49에서 오디오 파형의 휠 확대와 원본 시간 이동을 구현했다.** −/+·Page Up/Down·Home/End·0/F/C와 숨겨진 분할 커서 찾기를 지원하며, 편집/Undo·배치 전환 중 표시 범위를 유지한다. 작은 창의 파형 높이를 확보하고 숫자 작성 중 휠의 포커스 보호를 확인했다. Swift 377개·Python 26개, 최종 앱의 실제 편집·탐색·대상/원본 전환·음악/배치 복원은 [계약](63-audio-source-navigation.md) · [QA](../qa/audio-source-navigation-review.md)에 기록했다.
 
-현재 전달 조건은 기능별로 구분한다. UI·편집 개선은 build 74 QA 앱에서 직접 검토할 수 있다. 사용 중인 0.19 앱을 교체하려면 우선 같은 Mac에서 출력 연결→실제 재생/정지→재시작과 기존 곡/MP4 회귀를 끝내야 한다. 녹음은 별도 허용이 필요한 실제 입력·취소·테이크 저장 회귀가 남았다. VoiceOver와 밀집 연결 조작은 전역의 모든 조합이라는 무한 조건 대신 MIDI/audio/sidechain/flow, 접힌 그룹, 긴 이름, 작은 창의 대표 경로를 명시한 검사표로 좁혀 수행한다. 과거 QA 수치를 새 빌드의 전체 기능 승인으로 합산하지 않는다.
+당시 전달 조건은 기능별로 구분했다. UI·편집 개선의 build74 QA 앱 검토와 당시 사용 앱 교체 조건을 기록한 문단이다. 사용자 앱을 교체하려면 우선 같은 Mac에서 출력 연결→실제 재생/정지→재시작과 기존 곡/MP4 회귀를 끝내야 한다. 녹음은 별도 허용이 필요한 실제 입력·취소·테이크 저장 회귀가 남았다. VoiceOver와 밀집 연결 조작은 전역의 모든 조합이라는 무한 조건 대신 MIDI/audio/sidechain/flow, 접힌 그룹, 긴 이름, 작은 창의 대표 경로를 명시한 검사표로 좁혀 수행한다. 과거 QA 수치를 새 빌드의 전체 기능 승인으로 합산하지 않는다.
 
-다음 실행 순서는 다음과 같다. (1) 궤도 배치·다수 섹션 전환·펼친 그룹·긴 이름·시간 손잡이·VoiceOver 조합을 점검한다. 이름표/포트 hit와 그려진 위치가 일치하고 키보드로 편집/복귀가 가능해야 한다. (2) file-URL drop의 실제 제스처·orbit 위치·overlay 거절을 먼저 검증하고 file promise와 로컬 라이브러리를 연결해 import→섹션 배치→편집→바운스→저장 복원의 작업 깊이를 줄인다. 원본 참조·중복 자산·Undo 계약을 먼저 정한다. (3) 새 출력 telemetry로 장치별 cold/warm 연결 시간을 수집해 HAL 대기와 engine 시작/정지의 원인을 분리하고, 연속 render graph/PDC 전에 장치 변경·복구 수명을 확정한다. 마이크 입력의 별도 실행 조건과 E 출고 gate는 유지한다.
+당시 기록한 실행 순서는 다음과 같다. (1) 궤도 배치·다수 섹션 전환·펼친 그룹·긴 이름·시간 손잡이·VoiceOver 조합을 점검한다. 이름표/포트 hit와 그려진 위치가 일치하고 키보드로 편집/복귀가 가능해야 한다. (2) file-URL drop의 실제 제스처·orbit 위치·overlay 거절을 먼저 검증하고 file promise와 로컬 라이브러리를 연결해 import→섹션 배치→편집→바운스→저장 복원의 작업 깊이를 줄인다. 원본 참조·중복 자산·Undo 계약을 먼저 정한다. (3) 새 출력 telemetry로 장치별 cold/warm 연결 시간을 수집해 HAL 대기와 engine 시작/정지의 원인을 분리하고, 연속 render graph/PDC 전에 장치 변경·복구 수명을 확정한다. 마이크 입력의 별도 실행 조건과 E 출고 gate는 유지한다.
 
 0.14에서 10음색 engine 3와 15트랙의 f0r h3r v4를 추가했고, 0.15에서 B의 탐색 깊이·라벨 가독성·작은 창 편집을 개선했다. 배포용 v4는 FreePats CC0 bank를 사용한다. 기존 버전·원본 곡은 보존한다. [음질·음악 검증](../qa/0.14-review.md)과 [UI 검증](../qa/0.15-review.md)을 분리한다.
 
-추가된 기본 DAW 요청에 따라 0.16 스텝, 0.17 MIDI 일괄 편집·노트 import와 권한 대기 guard, 0.18 오디오 split/duplicate/fade, 0.19 gain/pan automation을 구현했다. 다음 실행 순서는 장치 lifecycle → E의 endpoint 데이터·표시·hit·Undo/MCP → 공통 drop/로컬 라이브러리 → 실제 MP4 재검증과 F/G/H다. 상세 완료 조건은 [기본 DAW 확장 계획](31-daw-basics-plan.md)을 따른다. Scarlett 출력 연결과 실제 재생 녹화 검증은 남아 있으며, UI 완료가 이를 대신하지 않는다. [Splice 연동 계획](27-splice-licensing-and-integration.md)은 공통 파일 import → 로컬 라이브러리 → companion AU 순서다.
+추가된 기본 DAW 요청에 따라 0.16 스텝, 0.17 MIDI 일괄 편집·노트 import와 권한 대기 guard, 0.18 오디오 split/duplicate/fade, 0.19 gain/pan automation을 구현했다. 당시 정한 실행 순서는 장치 lifecycle → E의 endpoint 데이터·표시·hit·Undo/MCP → 공통 drop/로컬 라이브러리 → 실제 MP4 재검증과 F/G/H다. 상세 완료 조건은 [기본 DAW 확장 계획](31-daw-basics-plan.md)을 따른다. Scarlett 출력 연결과 실제 재생 녹화 검증은 남아 있으며, UI 완료가 이를 대신하지 않는다. [Splice 연동 계획](27-splice-licensing-and-integration.md)은 공통 파일 import → 로컬 라이브러리 → companion AU 순서다.
 
-| 단계 | 현재 상태 | 다음 확인할 결과 |
+| 단계 | 당시 상태 | 당시 남은 확인 결과 |
 |---|---|---|
 | A | private 소스 이력, 로컬 패키징 구현 | CI·서명 배포는 별도 범위 |
 | B | 생성/⌘J/트랙 전환/8방향 연결·follow/라벨·소스별 서클·직접 이펙트·단위/확정 입력·직접 음악 설정·출력 dB/범위·오토메이션/세 MIDI 작업 공간·고정 눈금·오디오 source 범위/dB/ms·배치 전환 편집 유지·전환 시간/단위/포커스·직접 연결 검색/논리 포트 필터·이름 확정·MIDI 전체 음역/드럼 행·오토메이션 시간 탐색·오디오 원본 휠/키보드 탐색 | 전역 왕복/legacy·밀집 조합·VoiceOver |
@@ -342,7 +356,9 @@ build68 당시 후속 범위였던 선택 노트·오디오 분할 커서·오�
 4. 실제 동작과 음악 품질을 검증한 기능만 UI에 표시한다. 미완성 버튼이나 가짜 에이전트 진행을 넣지 않는다.
 5. 제작 중 원본과 수정본을 구분한다. 사용자 곡, 샘플 출처, 편곡 대안과 복구 가능성을 보존한다.
 
-## 현재 문제와 우선순위
+## 초기 계약 — 문제와 우선순위
+
+아래 표와 A–H는 0.11/0.12 시점에서 출발한 초기 계약을 보존한 것이다. ‘원격 이력 없음’·‘좌우 포트에 제한됨’ 등은 현재 결함을 뜻하지 않는다. 완료 근거와 최신 잔여 범위는 위 현행 우선순위 및 누적 검증 이력을 따른다.
 
 | 우선순위 | 문제 | 완료 결과 |
 |---|---|---|
@@ -356,7 +372,7 @@ build68 당시 후속 범위였던 선택 노트·오디오 분할 커서·오�
 | P2 | 앱 내 Codex 계정 대화 미구현 | 공식 App Server 세션·로그인·취소·권한 UI |
 | P3 | 아티스트 자산이 곡 파일로 분산 | 아티스트 프로필, 작품·세계관·통합 미디어 catalog |
 
-## 이번 실행 A — 이력과 릴리스 기반
+## 초기 계약 A — 이력과 릴리스 기반
 
 - 현재 소스·문서·테스트·브랜드 리소스를 먼저 커밋한다. 사용자 승인된 계정의 private 저장소를 생성하고 privacy와 원격 HEAD를 검증한다.
 - licensed 샘플이 들어간 .circlr/WAV, build 앱, 임시 QA 산출물, 계정·로컬 절대 경로 설정을 Git에서 제외한다. 직접 작성한 MIDI와 제작 코드는 보관한다.
@@ -364,7 +380,7 @@ build68 당시 후속 범위였던 선택 노트·오디오 분할 커서·오�
 - macOS CI는 순수 Core/형식 검사를 우선하고 Audio Unit/native GUI 검증을 별도 단계로 명시한다. 서명·notarization 배포는 개발자 계정과 배포 정책을 정한 뒤 구성한다.
 - 완료 기준: private=true, 원격 commit SHA 일치, 비밀정보 패턴 검사, 로컬 기존 앱 보관.
 
-## 이번 실행 B — 캔버스 조작과 키보드
+## 초기 계약 B — 캔버스 조작과 키보드
 
 ### 생성
 
@@ -384,7 +400,7 @@ build68 당시 후속 범위였던 선택 노트·오디오 분할 커서·오�
 
 파일 책임: AppStore/AlbumWorkspace/AlbumCanvas, 새 command UI, CirclrApp 메뉴, Orbit MIDI/Audio editor. Core에는 좌표·선택·편집 의미의 검증 가능한 공통 동작만 둔다.
 
-## 이번 실행 C — 재생 화면 영상 녹화
+## 초기 계약 C — 재생 화면 영상 녹화
 
 - 첫 범위는 써클러 자신의 캔버스와 실제 재생 음악이다. 다른 앱·알림·마이크를 함께 녹화하지 않는다.
 - 녹화 시작 전에 파일 경로를 선택하고 렌더를 준비한다. 화면 크기가 바뀌어도 영상 해상도를 고정하고 비율을 보존한다.
@@ -396,7 +412,7 @@ build68 당시 후속 범위였던 선택 노트·오디오 분할 커서·오�
 
 파일 책임: 독립 recording/export 서비스, AppStore 녹화 상태, AlbumCanvas capture, toolbar/menu. 오디오 엔진과 파일 포맷을 공유하되 녹화 파일 I/O를 실시간 오디오 callback에 넣지 않는다.
 
-## 이번 실행 D — 악기 DSP와 실제 곡 재제작
+## 초기 계약 D — 악기 DSP와 실제 곡 재제작
 
 ### 문제 진단
 
@@ -423,7 +439,7 @@ build68 당시 후속 범위였던 선택 노트·오디오 분할 커서·오�
 
 파일 책임: CirclrRealtime/synth.c, CirclrCore/ProductionModel, CirclrAudio/ProductionInstrument 및 필요한 DSP, 제작 CLI, music/f0r-h3r/v2, 음질/호환성 테스트.
 
-## 다음 개발 E — 8방향 포트와 편집 명령 통합
+## 초기 계약 E — 8방향 포트와 편집 명령 통합
 
 [8방향 계약](22-eight-direction-ports.md)을 구현한다. port ID와 cable endpoint 위치를 분리하고 종류별 입력/출력을 표시한다. Fan-in/out, sidechain, reroute, 다중 케이블 선택을 지원한다. 키보드 연결 선택과 MCP가 동일한 type/cycle 검사를 통과하도록 한다. 기존 그래프 migration·재생 동등성을 우선 검증한다.
 
@@ -434,7 +450,7 @@ build68 당시 후속 범위였던 선택 노트·오디오 분할 커서·오�
 3. recording-lifecycle 0.20 변경을 별도 통합 작업 디렉터리에서 보존·병합하고 전체 저장 호환성·Undo·녹음 수명 주기·기존 곡 렌더 회귀를 확인한다. 마이크 실제 캡처는 기존에 미승인된 범위로 남는다.
 4. 통합 결과에 맞춰 version/README/CHANGELOG/kit·서명·UUID를 갱신하고 검증된 앱을 출고한다. 독립 개발 source push는 출고와 구분한다.
 
-## 다음 개발 F — 연속 실시간 오디오와 녹음
+## 초기 계약 F — 연속 실시간 오디오와 녹음
 
 미리 듣기의 별도 worker·held note 수명은 build 43에서 준비했다. 장치 연결이 정상인 환경에서 sampler/synth/AU의 실제 note-on/off·voice steal·MIDI timestamp를 확인한 뒤 공통 render graph로 통합한다. 현재 backend 분리는 연속 엔진이나 PDC의 완성이 아니다.
 
@@ -443,13 +459,13 @@ build68 당시 후속 범위였던 선택 노트·오디오 분할 커서·오�
 - plug-in latency 신고/측정·PDC, latency 변화, bypass, suspend, sample rate 변경, 외부 장치 hot-plug를 검증한다.
 - crash 격리 및 복구, offline render와 실시간 render 차이를 명시한다. 복잡한 plug-in의 안정성을 소스 검사만으로 선언하지 않는다.
 
-## 다음 개발 G — 앱 내 Codex
+## 초기 계약 G — 앱 내 Codex
 
 [계정 콘솔 계획](20-codex-account-console-plan.md)과 [음악 제작팀](24-music-agent-kit.md)을 연결한다. 공식 App Server를 사용하고 별도 비공식 OAuth나 auth.json 복제를 하지 않는다. 전용 storage/runtime, 모델 목록, 로그인/로그아웃, 대화 복원, 실제 역할 로그를 구현한다.
 
 RunLease는 projectID·revision·turn generation·권한을 묶는다. 사용자의 STOP/프로젝트 전환 뒤 늦은 결과를 적용하지 않는다. 전문 에이전트가 제안한 여러 변경은 single writer가 통합하고 승인 정책은 실제 변경 단위와 연결한다. 사용자 계정/모델/비용 정책을 UI에서 확인 가능하게 한다.
 
-## 이후 H — 아티스트의 창작 세계
+## 초기 계약 H — 아티스트의 창작 세계
 
 [아티스트 세계관 설계](21-artist-universe.md)를 기반으로 프로필·작품·에셋·버전·권리/출처·발매 묶음을 도입한다. 음악 시간 궤도와 텍스트/이미지의 관계 궤도를 혼동하지 않는다. 파일은 stable ID·hash·참조 무결성으로 관리하고 외부 파일 이동/삭제 및 백업·복원 흐름을 검증한다.
 
