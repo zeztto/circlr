@@ -4,7 +4,32 @@ import CirclrCore
 import CirclrAudio
 
 struct AgentMIDIImportResult:Codable {
-    struct Track:Codable {var id:String;var name:String;var channel:Int;var noteCount:Int;var beats:Double}
+    struct PitchBend:Codable {
+        var eventCount:Int
+        var initialValue:Int
+        var initialRange:MIDIPitchBendRange
+        var ranges:[MIDIPitchBendRange]
+        var rangeChangeCount:Int
+        var uniqueRangeCount:Int
+        var hasMoreRanges:Bool
+        init(_ sequence:MIDIPitchBendSequence)throws {
+            struct RangeKey:Hashable {var semitones:Int;var cents:Int}
+            eventCount=sequence.events.count;initialValue=sequence.initialValue;initialRange=sequence.initialRange
+            ranges=[sequence.initialRange];rangeChangeCount=0
+            var seen:Set<RangeKey>=[.init(semitones:initialRange.semitones,cents:initialRange.cents)]
+            for (index,event) in sequence.events.enumerated() {
+                if index%256==0 {try Task.checkCancellation()}
+                if case .range(let range)=event.kind {
+                    rangeChangeCount+=1
+                    if seen.insert(.init(semitones:range.semitones,cents:range.cents)).inserted,ranges.count<16 {ranges.append(range)}
+                }
+            }
+            uniqueRangeCount=seen.count;hasMoreRanges=uniqueRangeCount>ranges.count
+        }
+    }
+
+    struct Issue:Codable {var channel:Int?;var beat:Double?;var code:String;var message:String}
+    struct Track:Codable {var id:String;var name:String;var channel:Int;var noteCount:Int;var beats:Double;var pitchBend:PitchBend?}
     var tracks:[Track]
     var selectedTrackIDs:[String]
     var laneIDs:[ID]
@@ -12,6 +37,8 @@ struct AgentMIDIImportResult:Codable {
     var tempoImportIssue:String?
     var ignoredPerformanceEvents:Int
     var previewOnly:Bool
+    var expressionPolicy:MIDIImportExpressionPolicy
+    var selectedIssues:[Issue]
     var tempoPolicy:MIDIImportTempoPolicy
     var previousSectionSeconds:Double
     var sectionSeconds:Double?
@@ -25,6 +52,7 @@ extension AppStore {
         guard let args=request.arguments,let path=args.path,let arrangementID=args.arrangementID,let useID=args.useID,
               project.arrangements.first(where:{$0.id==arrangementID})?.uses.contains(where:{$0.id==useID}) == true else{throw CirclrError("path·arrangementID·useID를 확인하세요")}
         let url=try agentPath(path),beat=args.atBeat ?? 0,extend=args.extendSection ?? false,preview=args.previewOnly ?? false,policy=args.tempoPolicy ?? .keepCurrent
+        let expressionPolicy=args.expressionPolicy ?? .preserve
         guard beat.isFinite,beat>=0,beat<=131072 else{throw CirclrError("MIDI 시작 박을 확인하세요")}
         if let ids=args.trackIDs {guard !ids.isEmpty,ids.count<=256,Set(ids).count==ids.count else{throw CirclrError("중복 없는 MIDI trackIDs 1–256개를 지정하세요")}}
         productionGeneration+=1;let generation=productionGeneration,jobID=newID()
@@ -35,24 +63,34 @@ extension AppStore {
             let worker=Task.detached(priority:.userInitiated){
                 try Task.checkCancellation()
                 let document=try Self.readAgentMIDI(url)
+                var summaries:[Int:AgentMIDIImportResult.PitchBend]=[:]
+                // The raw parser merges controller state per channel; note tracks
+                // on that channel share it. Summarize each sequence once off-main.
+                for track in document.tracks {
+                    try Task.checkCancellation()
+                    if summaries[track.channel]==nil,let expression=track.pitchBend {
+                        summaries[track.channel]=try AgentMIDIImportResult.PitchBend(expression)
+                    }
+                }
                 try Task.checkCancellation()
-                return document
+                return (document,summaries)
             }
             do {
-                let document=try await withTaskCancellationHandler {try await worker.value} onCancel:{worker.cancel()}
+                let (document,summaries)=try await withTaskCancellationHandler {try await worker.value} onCancel:{worker.cancel()}
                 guard !Task.isCancelled,self.productionGeneration==generation else{return}
                 try AgentProjectEditing.check(request,project:self.project)
                 let currentActive=self.project.activeArrangementID
                 let ids=args.trackIDs ?? document.tracks.map(\.id)
                 guard Set(ids).isSubset(of:Set(document.tracks.map(\.id))) else{throw CirclrError("파일에 없는 MIDI trackID가 있습니다. previewOnly로 다시 확인하세요")}
-                let selected=document.tracks.filter{ids.contains($0.id)}
-                let parts=selected.map{MIDIImportPart(name:$0.name,notes:$0.notes,drums:$0.channel==9)}
+                let selectedIDs=Set(ids)
+                let selectedIssues=document.issues(selectedIDs:selectedIDs).map{AgentMIDIImportResult.Issue(channel:$0.channel,beat:$0.beat,code:$0.code,message:$0.message)}
                 let map=document.tempoChanges.first.map{first in MIDIImportTempoMap(initialBPM:first.bpm,changes:Array(document.tempoChanges.dropFirst()))}
                 var candidate=self.project;candidate.activeArrangementID=arrangementID
                 guard let use=candidate.active.uses.first(where:{$0.id==useID}) else{throw CirclrError("대상 섹션이 변경되었습니다")}
                 let before=try ArrangementCompiler.context(project:candidate,use:use,arrangementID:arrangementID).2.seconds
                 var after:Double?,previewIssue:String?,laneIDs:[ID]=[]
                 do {
+                    let parts=try document.importParts(selectedIDs:selectedIDs,expressionPolicy:expressionPolicy)
                     if policy == .applyFile,let issue=document.tempoImportIssue {throw CirclrError(issue)}
                     if policy == .applyFile,map==nil {throw CirclrError("적용할 MIDI 템포 맵이 없습니다")}
                     if preview {
@@ -65,7 +103,7 @@ extension AppStore {
                 }catch{if preview{previewIssue=error.localizedDescription}else{throw error}}
                 candidate.activeArrangementID=currentActive
                 try Task.checkCancellation()
-                let result=AgentMIDIImportResult(tracks:document.tracks.map{.init(id:$0.id,name:$0.name,channel:$0.channel,noteCount:$0.notes.count,beats:$0.notes.map{$0.beat+$0.length}.max() ?? 0)},selectedTrackIDs:ids,laneIDs:preview ? []:laneIDs,tempoChanges:document.tempoChanges,tempoImportIssue:document.tempoImportIssue,ignoredPerformanceEvents:document.ignoredPerformanceEvents,previewOnly:preview,tempoPolicy:policy,previousSectionSeconds:before,sectionSeconds:after,previewIssue:previewIssue)
+                let result=AgentMIDIImportResult(tracks:document.tracks.map{.init(id:$0.id,name:$0.name,channel:$0.channel,noteCount:$0.notes.count,beats:$0.notes.map{$0.beat+$0.length}.max() ?? 0,pitchBend:$0.pitchBend == nil ? nil:summaries[$0.channel])},selectedTrackIDs:ids,laneIDs:preview ? []:laneIDs,tempoChanges:document.tempoChanges,tempoImportIssue:document.tempoImportIssue,ignoredPerformanceEvents:document.ignoredPerformanceEvents,previewOnly:preview,expressionPolicy:expressionPolicy,selectedIssues:selectedIssues,tempoPolicy:policy,previousSectionSeconds:before,sectionSeconds:after,previewIssue:previewIssue)
                 if !preview {
                     try UseTempoOverrideEditing.validateChanges(from:self.project,to:candidate)
                     let revision=self.project.musicRevision

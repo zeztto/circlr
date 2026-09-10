@@ -1,5 +1,11 @@
 # 변경 이력
 
+## 검증 완료 — 0.20.0 build134 MIDI pitch bend 가져오기
+
+- preserve 기본·명시적 omit과 raw controller/RPN 보존, channel별 미지원 오류, schema5 atomic 적용을 GUI/MCP에 연결했다. CC121 reset과 마지막 bend의 길이 경계를 처리한다.
+- 회귀 793개·내부 skip 2개·실패 0개, 별도 실제 재생 테스트 1개 제외. Python MCP 6/27개와 Release 85.97초·QA 패키지 서명을 통과했다. 실제 적용/Undo·GUI/MCP 동일 결과·저장/재열기와 stress 제한 오류를 확인했다.
+- 최종 독립 감사·QA 종료와 최종 서명 재검사도 통과했다. 곡선 UI·MCP 표현 편집·SMF 내보내기·AU/sampler·실제 청취는 완료하지 않았다. [기록](docs/156-midi-pitch-bend-import.md).
+
 ## 검증 완료 — 0.20.0 build133 내장 신스 pitch bend와 가져오기 취소 복귀
 
 - schema5의 source별 표현을 내장 신스에 연결하고, MIDI 미리보기 취소의 viewport·스텝 cursor·Escape 복귀를 수정했다. 적용 성공 시 새 MIDI 선택은 유지한다.

@@ -54,7 +54,8 @@ public struct MIDIImportPart {
     public var name:String
     public var notes:[Note]
     public var drums:Bool
-    public init(name:String,notes:[Note],drums:Bool=false){self.name=name;self.notes=notes;self.drums=drums}
+    public var pitchBend:MIDIPitchBendSequence?
+    public init(name:String,notes:[Note],drums:Bool=false,pitchBend:MIDIPitchBendSequence?=nil){self.name=name;self.notes=notes;self.drums=drums;self.pitchBend=pitchBend}
 }
 public enum MIDIImportEditing {
     /// Adds independent MIDI circles to one use in a single transaction, preserving all existing lanes.
@@ -62,21 +63,11 @@ public enum MIDIImportEditing {
         guard !parts.isEmpty,parts.count<=256,parts.reduce(0,{$0+$1.notes.count})<=100000 else {throw CirclrError("가져올 트랙과 노트 수를 확인하세요")}
         var p=project;let previousSignalPositions=p.signal.layout.positions
         guard let useIndex=p.active.uses.firstIndex(where:{$0.id==useID}) else {throw CirclrError("대상 섹션을 찾을 수 없습니다")}
-        for part in parts {guard !part.notes.isEmpty,!part.name.isEmpty,part.name.count<=1024 else {throw CirclrError("트랙 이름과 MIDI 노트가 필요합니다")};for note in part.notes {try ArrangementCompiler.validateNote(note)}}
-        let extent=atBeat+(parts.flatMap(\.notes).map{$0.beat+$0.length}.max() ?? 0)
-        guard extent<=131072 else {throw CirclrError("MIDI 길이 한도를 넘습니다")}
-        var use=p.active.uses[useIndex]
-        let (section,_,initial)=try ArrangementCompiler.context(project:p,use:use,arrangementID:p.activeArrangementID)
-        guard atBeat.isFinite,atBeat>=0,atBeat<initial.beats else {throw CirclrError("MIDI 시작 위치는 현재 섹션 안으로 지정하세요")}
+        let extent=try MIDIImportExtent.resolve(parts,useID:useID,extendSection:extendSection,atBeat:atBeat,in:p)
+        let section=extent.section
         if let position {guard position.x.isFinite,position.y.isFinite else {throw CirclrError("MIDI 서클 배치 위치를 확인하세요")}}
         let tempoPreview=tempoPolicy == .applyFile ? try MIDITempoImport.preview(parts,useID:useID,extendSection:extendSection,atBeat:atBeat,tempoMap:tempoMap,in:p):nil
-        if extent>initial.beats+1e-8 {
-            guard extendSection else {throw CirclrError("MIDI가 섹션보다 깁니다. 섹션 길이 늘리기를 선택하세요")}
-            var bars=use.barsOverride ?? section.bars,clock=initial
-            while clock.beats+1e-8<extent,bars<1024 {bars+=1;use.barsOverride=bars;clock=try ArrangementCompiler.context(project:p,use:use,arrangementID:p.activeArrangementID).2}
-            guard clock.beats+1e-8>=extent else {throw CirclrError("MIDI 길이가 최대 1,024마디를 넘습니다")}
-            p.arrangements[p.activeIndex].uses[useIndex].barsOverride=bars
-        }
+        p.arrangements[p.activeIndex].uses[useIndex].barsOverride=extent.barsOverride
         if let tempoPreview {
             p.schemaVersion=max(4,p.schemaVersion)
             p.arrangements[p.activeIndex].uses[useIndex].tempoOverride=tempoPreview.tempoOverride
@@ -85,6 +76,10 @@ public enum MIDIImportEditing {
         for (index,part) in parts.enumerated() {
             let track=p.addTrack(name:part.name,drums:part.drums)
             var lane=Lane(trackID:track);lane.notes=part.notes.map{var n=$0;n.id=newID();n.beat+=atBeat;return n}
+            if var expression=part.pitchBend {
+                for index in expression.events.indices {expression.events[index].beat+=atBeat}
+                try expression.validate();lane.pitchBend=expression
+            }
             try ProjectEditing.setLane(lane,for:useID,original:false,in:&p);ids.append(lane.id)
             if let position,!p.usesOrbits,let definition=p.sections.first(where:{$0.id==section.id}),
                var graph=try SectionGraphEditing.effective(section:definition,use:p.active.uses[useIndex]) {

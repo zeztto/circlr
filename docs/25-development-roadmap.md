@@ -1,5 +1,7 @@
 # 써클러 개발 방향과 실행 계획
 
+build134에서 MIDI pitch bend/RPN 가져오기와 preserve/omit·고정 오류·GUI/MCP 동일 적용을 연결했다. 회귀 793개·내부 skip 2개·실패 0개, Release 85.97초·native 적용/Undo·저장/재열기와 stress 제한 처리를 확인했다. 최종 독립 감사·QA 종료와 최종 서명 재검사도 통과했다. 다음은 곡선 UI·MCP 표현 편집·SMF 내보내기이며 AU/sampler·물리 청취도 남아 있다. [검증 기록](156-midi-pitch-bend-import.md).
+
 build133에서 내장 신스 source별 pitch bend와 MIDI 가져오기 취소 복귀를 연결했다. 수정 후보 Release 44.41초·패키지 서명, 회귀 780개·내부 skip 2개·실패 0개와 별도 바운스 저장/복원 1개를 확인했다. 실제 노트/스텝·Escape·적용/Undo·저장/재열기도 통과했다. 다음은 SMF bend/RPN parser·GUI/MCP 표현 편집·내보내기 왕복이며 AU/sampler와 물리 청취는 남아 있다. [검증 기록](155-pitch-bend-synth-and-import-return.md).
 
 이전 저장·컴파일 단계의 [MIDI pitch bend 계획154](154-midi-pitch-bend-plan.md)에서 source별 표현·반복 release·RPN/raw 보존 계약을 정하고 optional 저장·schema5·source/occurrence packet과 미지원 오디오 렌더·typed MIDI 저장 거절을 연결했다. Core/Audio 회귀 765개·내부 skip 2개·실패 0개와 별도 router guard 9개를 확인했다. 실제 재생 테스트 1개는 제외했다. 앱 build132 이후 개발 기초이며 실제 가져오기·편집·렌더 지원으로 계산하지 않는다.

@@ -21,27 +21,19 @@ public struct MIDITempoImportPreview {
     public let startBeat:Double,endBeat:Double,minimumBPM:Double,maximumBPM:Double
     public let previousRegionSeconds:Double,regionSeconds:Double,previousSectionSeconds:Double,sectionSeconds:Double
     public let bars:Int
+    public let noteEndBeat:Double,lastExpressionBeat:Double?
     public let tempoOverride:UseTempoOverride?
 }
 public enum MIDITempoImport {
     public static func preview(_ parts:[MIDIImportPart],useID:ID,extendSection:Bool,atBeat:Double=0,tempoPolicy:MIDIImportTempoPolicy = .applyFile,tempoMap:MIDIImportTempoMap?=nil,in project:Project)throws->MIDITempoImportPreview {
-        guard !parts.isEmpty,parts.count<=256,parts.reduce(0,{$0+$1.notes.count})<=100000,
-              let use=project.active.uses.first(where:{$0.id==useID}) else{throw CirclrError("가져올 MIDI와 대상 섹션을 확인하세요")}
-        for part in parts {guard !part.notes.isEmpty else{throw CirclrError("가져올 MIDI 노트가 없습니다")};for note in part.notes {try ArrangementCompiler.validateNote(note)}}
-        let end=atBeat+(parts.flatMap(\.notes).map{$0.beat+$0.length}.max() ?? 0)
-        let (section,_,initial)=try ArrangementCompiler.context(project:project,use:use,arrangementID:project.activeArrangementID)
-        guard atBeat.isFinite,atBeat>=0,atBeat<initial.beats,end.isFinite,end>atBeat,end<=131072 else{throw CirclrError("MIDI 템포 적용 구간을 확인하세요")}
-        var extended=use,bars=use.barsOverride ?? section.bars,clock=initial
-        if end>initial.beats+1e-8 {
-            guard extendSection else{throw CirclrError("MIDI가 섹션보다 깁니다. 섹션 길이 늘리기를 선택하세요")}
-            while clock.beats+1e-8<end,bars<1024 {bars+=1;extended.barsOverride=bars;clock=try ArrangementCompiler.context(project:project,use:extended,arrangementID:project.activeArrangementID).2}
-            guard clock.beats+1e-8>=end else{throw CirclrError("MIDI 길이가 최대 1,024마디를 넘습니다")}
-        }
+        let extent=try MIDIImportExtent.resolve(parts,useID:useID,extendSection:extendSection,atBeat:atBeat,in:project)
+        let end=extent.endBeat,initial=extent.initialClock,clock=extent.clock,bars=extent.bars
+        let use=project.active.uses.first{$0.id==useID}!
         if tempoPolicy == .keepCurrent {
             let values=[clock.bpm(at:atBeat)]+clock.tempos.filter{$0.beat>atBeat && $0.beat<end}.map(\.bpm)
             let duration=clock.seconds(at:end)-clock.seconds(at:atBeat)
             return MIDITempoImportPreview(startBeat:atBeat,endBeat:end,minimumBPM:values.min()!,maximumBPM:values.max()!,previousRegionSeconds:duration,regionSeconds:duration,
-                previousSectionSeconds:initial.seconds,sectionSeconds:clock.seconds,bars:bars,tempoOverride:use.tempoOverride)
+                previousSectionSeconds:initial.seconds,sectionSeconds:clock.seconds,bars:bars,noteEndBeat:extent.noteEndBeat,lastExpressionBeat:extent.lastExpressionBeat,tempoOverride:use.tempoOverride)
         }
         guard let tempoMap else{throw CirclrError("파일 템포 맵이 필요합니다")}
         try tempoMap.validate()
@@ -59,14 +51,14 @@ public enum MIDITempoImport {
         try mapOverride.validate(beats:clock.beats)
         var candidate=project;candidate.schemaVersion=max(4,candidate.schemaVersion)
         let index=candidate.active.uses.firstIndex{$0.id==useID}!
-        candidate.arrangements[candidate.activeIndex].uses[index].barsOverride=extended.barsOverride
+        candidate.arrangements[candidate.activeIndex].uses[index].barsOverride=extent.barsOverride
         candidate.arrangements[candidate.activeIndex].uses[index].tempoOverride=mapOverride
         let updated=try ArrangementCompiler.context(project:candidate,use:candidate.active.uses[index],arrangementID:candidate.activeArrangementID).2
         try UseTempoOverrideEditing.validateAudio(in:candidate,useID:useID)
         let values=[tempoMap.initialBPM]+tempoMap.changes.filter{$0.beat<end-atBeat}.map(\.bpm)
         return MIDITempoImportPreview(startBeat:atBeat,endBeat:end,minimumBPM:values.min()!,maximumBPM:values.max()!,
             previousRegionSeconds:clock.seconds(at:end)-clock.seconds(at:atBeat),regionSeconds:updated.seconds(at:end)-updated.seconds(at:atBeat),
-            previousSectionSeconds:initial.seconds,sectionSeconds:updated.seconds,bars:bars,tempoOverride:mapOverride)
+            previousSectionSeconds:initial.seconds,sectionSeconds:updated.seconds,bars:bars,noteEndBeat:extent.noteEndBeat,lastExpressionBeat:extent.lastExpressionBeat,tempoOverride:mapOverride)
     }
 }
 public enum UseTempoOverrideEditing {

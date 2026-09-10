@@ -10,16 +10,16 @@ class MIDIImportMCPTests(unittest.TestCase):
     def args(self,**extra):
         return dict(projectID='p',expectedRevision=3,path='/tmp/score.mid',arrangementID='a',useID='u',**extra)
     def probe(self,**extra):
-        return dict(ok=True,result=dict(projectID='p',revision=3,runtime=dict(capabilities=dict(midiTempoImport=1)),**extra))
+        return dict(ok=True,result=dict(projectID='p',revision=3,runtime=dict(capabilities=dict(midiTempoImport=1,midiPitchBendImport=1)),**extra))
     def test_default_and_preview_arguments_are_not_injected(self):
-        for extra in ({},{'previewOnly':True},{'trackIDs':['0:0'],'atBeat':2,'extendSection':True,'tempoPolicy':'applyFile'}):
+        for extra in ({},{'previewOnly':True},{'expressionPolicy':'preserve'},{'expressionPolicy':'omit','previewOnly':True},{'expressionPolicy':'omit'},{'trackIDs':['0:0'],'atBeat':2,'extendSection':True,'tempoPolicy':'applyFile'}):
             args=self.args(**extra)
             with patch.object(s,'rpc',side_effect=[self.probe(),dict(ok=True,result=dict(jobID='job',state='running'))]) as rpc:
                 self.assertFalse(s.call_tool('/unused','circlr_import_midi',args)['isError'])
                 self.assertEqual([c.args[1]['method'] for c in rpc.call_args_list],['snapshot','import_midi'])
                 self.assertEqual(rpc.call_args.args[1]['arguments'],{k:v for k,v in args.items() if k not in s.REVISION})
     def test_invalid_input_does_not_read_socket(self):
-        invalid=[dict(self.args(),**{key:value}) for key,value in [('path','relative.mid'),('path','/tmp/a\0.mid'),('atBeat',True),('atBeat',-1),('atBeat',float('nan')),('extendSection',None),('previewOnly','true'),('tempoPolicy','current'),('tempoPolicy',None),('trackIDs',[]),('trackIDs',['0:0','0:0']),('trackIDs',None)]]
+        invalid=[dict(self.args(),**{key:value}) for key,value in [('path','relative.mid'),('path','/tmp/a\0.mid'),('atBeat',True),('atBeat',-1),('atBeat',float('nan')),('extendSection',None),('previewOnly','true'),('tempoPolicy','current'),('tempoPolicy',None),('expressionPolicy','ignore'),('expressionPolicy',None),('expressionPolicy',True),('trackIDs',[]),('trackIDs',['0:0','0:0']),('trackIDs',None)]]
         invalid += [{k:v for k,v in self.args().items() if k!=key} for key in ['projectID','expectedRevision','path','arrangementID','useID']]
         for args in invalid:
             with self.subTest(args=args),patch.object(s,'rpc') as rpc:
@@ -29,6 +29,8 @@ class MIDIImportMCPTests(unittest.TestCase):
         probes=[dict(ok=True,result={}),dict(ok=False)]
         for cap in [None,False,0,2,'1']:
             p=self.probe();p['result']['runtime']['capabilities']['midiTempoImport']=cap;probes.append(p)
+        for cap in [None,False,0,2,'1']:
+            p=self.probe();p['result']['runtime']['capabilities']['midiPitchBendImport']=cap;probes.append(p)
         for key,value in [('projectID','other'),('revision',4)]:
             p=self.probe();p['result'][key]=value;probes.append(p)
         for p in probes:

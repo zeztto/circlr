@@ -39,6 +39,7 @@ public struct AgentArguments:Codable {
     public var atBeat:Double?
     public var extendSection:Bool?
     public var tempoPolicy:MIDIImportTempoPolicy?
+    public var expressionPolicy:MIDIImportExpressionPolicy?
     public var previewOnly:Bool?
     public var afterSequence:Int?
     public var detail:Bool?

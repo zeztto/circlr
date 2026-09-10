@@ -7,6 +7,10 @@ public struct ImportedMIDITrack:Identifiable {
     public var name:String
     public var channel:Int
     public var notes:[Note]
+    public var pitchBend:MIDIPitchBendSequence? = nil
+    public init(id:String,name:String,channel:Int,notes:[Note],pitchBend:MIDIPitchBendSequence?=nil) {
+        self.id=id;self.name=name;self.channel=channel;self.notes=notes;self.pitchBend=pitchBend
+    }
 }
 public struct ImportedMIDI {
     public var tracks:[ImportedMIDITrack]
@@ -14,17 +18,19 @@ public struct ImportedMIDI {
     public var ignoredPerformanceEvents:Int
     public var tempoChanges:[TempoChange]=[]
     public var tempoImportIssue:String?=nil
+    public var expressionIssues:[MIDIImportExpressionIssue]=[]
     public init(tracks:[ImportedMIDITrack],tempo:Double?,ignoredPerformanceEvents:Int,
-                tempoChanges:[TempoChange]=[],tempoImportIssue:String?=nil) {
+                tempoChanges:[TempoChange]=[],tempoImportIssue:String?=nil,expressionIssues:[MIDIImportExpressionIssue]=[]) {
         self.tracks=tracks;self.tempo=tempo;self.ignoredPerformanceEvents=ignoredPerformanceEvents
-        self.tempoChanges=tempoChanges;self.tempoImportIssue=tempoImportIssue
+        self.tempoChanges=tempoChanges;self.tempoImportIssue=tempoImportIssue;self.expressionIssues=expressionIssues
     }
     public var beats:Double {tracks.flatMap(\.notes).map{$0.beat+$0.length}.max() ?? 0}
 }
 
 public enum MIDIImport {
     /// AudioToolbox pairs SMF note-on/off events without opening an audio device.
-    /// Only note performances are imported; controller/program/SysEx data is counted for the UI.
+    /// Pitch bend/RPN state is scanned independently and attached by MIDI channel.
+    /// Unsupported expressions require an explicit omit policy when creating parts.
     public static func read(_ data:Data)throws->ImportedMIDI {
         try Task.checkCancellation()
         guard (14...16_777_216).contains(data.count),data.prefix(4)==Data("MThd".utf8) else {throw CirclrError("16 MiB 이하의 표준 MIDI 파일을 선택하세요")}
@@ -87,6 +93,13 @@ public enum MIDIImport {
         do {result.tempoChanges=try readTempoChanges(data)}
         catch is CancellationError {throw CancellationError()}
         catch {result.tempoImportIssue=error.localizedDescription}
+        do {
+            let expression=try MIDIExpressionScan.read(data)
+            result.expressionIssues=expression.issues
+            result.ignoredPerformanceEvents=expression.ignoredEvents
+            for i in result.tracks.indices {result.tracks[i].pitchBend=expression.sequences[result.tracks[i].channel]}
+        } catch is CancellationError {throw CancellationError()}
+        catch {result.expressionIssues=[.init(code:"expression_parse_failed",message:error.localizedDescription)]}
         return result
     }
     /// Stable order is track-chunk order, then event order; the last event at a beat wins.
