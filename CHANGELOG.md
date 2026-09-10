@@ -1,9 +1,11 @@
 # 변경 이력
 
-## 개발 진행 — MIDI pitch bend Core 기초
+## 개발 진행 — MIDI pitch bend 저장·컴파일 계약
 
 - raw wheel·RPN range 상태·시간순 이벤트의 검증/직렬화/hold 조회 타입을 추가했다. 경계·순서·저장 테스트 8개와 독립 검토를 통과했다.
-- Project/schema·가져오기·GUI/MCP·DSP 연결은 다음 단계다. 앱 build132와 기존 연주는 유지한다. [계획과 결과](docs/154-midi-pitch-bend-plan.md).
+- optional Lane/RhythmPattern·schema5 저장과 source/occurrence packet을 연결했다. 미지원 오디오 렌더와 typed MIDI 저장은 표현을 버리는 대신 오류로 거절한다. 실제 SMF parser·GUI/MCP·DSP 지원은 다음 단계이며 패키지 앱은 build132를 유지한다. [계획과 결과](docs/154-midi-pitch-bend-plan.md).
+
+- Core/Audio 회귀 765개·내부 skip 2개·실패 0개, 73.023초. 실제 재생 포함 테스트 1개는 AU helper 미준비 실패 후 제외했다. 추가 router guard 9개도 0.517초에 통과했다. 새 native GUI·패키지·물리 오디오 검증은 수행하지 않았다.
 
 ## 검증 완료 — 0.20.0 build132 MIDI 가져오기 피드백
 

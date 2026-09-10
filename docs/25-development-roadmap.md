@@ -1,6 +1,6 @@
 # 써클러 개발 방향과 실행 계획
 
-[MIDI pitch bend 계획154](154-midi-pitch-bend-plan.md)에서 source별 표현·반복 release·RPN/raw 보존 계약을 정하고 독립 Core 타입/테스트8개를 추가했다. 앱 build132 이후 개발 기초이며 실제 가져오기·편집·렌더 지원으로 계산하지 않는다.
+[MIDI pitch bend 계획154](154-midi-pitch-bend-plan.md)에서 source별 표현·반복 release·RPN/raw 보존 계약을 정하고 optional 저장·schema5·source/occurrence packet과 미지원 오디오 렌더·typed MIDI 저장 거절을 연결했다. Core/Audio 회귀 765개·내부 skip 2개·실패 0개와 별도 router guard 9개를 확인했다. 실제 재생 테스트 1개는 제외했다. 앱 build132 이후 개발 기초이며 실제 가져오기·편집·렌더 지원으로 계산하지 않는다.
 
 build132에서 가져오기 오류의 고정 표시와 대상 use 별명·편곡·순서를 개선했다. 최종 Release 47.20초·native 오류/회복·취소/재열기·production 서명과 첫 6개 화면 감사를 통과했다. 추가 unsupported 화면의 오류 고정·keepCurrent 회복과 음악 보존도 독립 감사 PASS로 확인했다. [검증 기록](153-midi-import-feedback.md). 다음 음악 표현은 MIDI pitch bend 계약 계획이며 전체 사용성·DAW 목표는 남아 있다.
 

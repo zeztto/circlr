@@ -23,7 +23,7 @@ extension AppStore {
         guard let lane=currentLane else{return}
         let panel=NSSavePanel();panel.title="MIDI 저장";panel.nameFieldStringValue=(selectedCircle?.title ?? "연주")+".mid";panel.allowedContentTypes=[UTType(filenameExtension:"mid")!]
         guard panel.runModal() == .OK,let url=panel.url else{return}
-        do {try MIDIFile.encode(lanes:[(selectedCircle?.title ?? "연주",lane.notes)],tempo:currentContext.tempo,meter:currentContext.meter).write(to:url,options:.atomic);status="MIDI 저장 완료"}catch{fail(error)}
+        do {try MIDIFile.encode(sources:[(selectedCircle?.title ?? "연주",lane)],tempo:currentContext.tempo,meter:currentContext.meter).write(to:url,options:.atomic);status="MIDI 저장 완료"}catch{fail(error)}
     }
     func chooseSampleInstrument() {
         guard let trackID=selectedTrackID else{return}

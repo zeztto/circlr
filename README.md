@@ -8,7 +8,7 @@ macOS용 앨범·송폼 궤도 편집기. **앨범 → 곡·악장 → 섹션 �
 
 현재 **`codex/daw-integration`의 0.20.0 build 132**에 녹음 lifecycle과 8방향·다중 bus·그룹 포트를 통합했다. 같은 캔버스의 연결 편집·녹음 상태·스텝·오토메이션이 공존하며, 녹음 시작·정리 중 음악 편집과 Undo의 경쟁을 차단한다. build 23의 실제 편집·바운스·Undo·저장/재열기·닫기 최소화 및 출력별 모션 검증은 [통합 QA](qa/daw-integration-review.md)에 기록했다.
 
-MIDI pitch bend는 [전체 연결 계획과 Core 기초](docs/154-midi-pitch-bend-plan.md)를 진행 중이다. raw/range 상태 타입·검증 테스트 8개를 추가했으며, 아직 가져오기·편집·소리에는 연결하지 않았다. 현재 앱 버전은 그대로다.
+MIDI pitch bend는 [전체 연결 계획과 Core 기초](docs/154-midi-pitch-bend-plan.md)를 진행 중이다. raw/range 상태 타입에 이어 optional Lane/RhythmPattern 저장·schema5와 source/occurrence packet을 연결하고, 미지원 오디오 렌더·typed MIDI 저장을 명시적으로 거절하도록 했다. 실제 SMF parser·DSP·GUI/MCP 표현 기능은 아직 미지원이며 패키지 앱은 build132를 유지한다. 관련 Core/Audio 회귀는 765개 중 내부 skip 2개·실패 0개이며, 실제 재생 포함 테스트 1개는 명시적으로 제외했다.
 
 **build132는 MIDI 가져오기의 오류와 정확한 대상 이름을 바로 보여준다.** 고정 실행 영역의 입력/트랙/tempo 오류와 수정 후 회복, use 별명 일치·취소/재열기 음악 보존을 확인했다. 최종 Release 47.20초·production 서명을 통과했으며 추가 unsupported 화면의 오류 고정·keepCurrent 회복과 음악 보존도 독립 감사 PASS로 확인했다. [검증 기록](docs/153-midi-import-feedback.md).
 

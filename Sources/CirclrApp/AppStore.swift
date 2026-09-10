@@ -233,7 +233,11 @@ import CirclrAudio
     }
     var currentLane: Lane? {selectedTrackID.flatMap{lane(for:$0)}}
     func lane(for trackID:ID)->Lane? {
-        if let id = editPatternID, let pattern = project.patterns.first(where:{$0.id == id}) { var lane = Lane(trackID:pattern.trackID); lane.id = pattern.id; lane.notes = pattern.notes; lane.audio = pattern.audio; return lane }
+        if let id = editPatternID, let pattern = project.patterns.first(where:{$0.id == id}) {
+            var lane = Lane(trackID:pattern.trackID)
+            lane.id = pattern.id; lane.notes = pattern.notes; lane.audio = pattern.audio; lane.pitchBend = pattern.pitchBend
+            return lane
+        }
         guard let use = selectedUse,let section = project.sections.first(where:{$0.id == use.sectionID}) else { return nil }
         let lanes = editOriginal ? section.lanes : ((try? ArrangementCompiler.effectiveLanes(section:section,use:use)) ?? [])
         return selectedLaneID.flatMap { id in lanes.first { $0.id == id } } ?? lanes.first { $0.trackID == trackID }
@@ -419,7 +423,14 @@ import CirclrAudio
     func addBus(at point:Point? = nil) { let name = "Bus \(project.signal.nodes.filter{$0.kind == .bus}.count+1)"; let node = SignalNode(kind:.bus,name:name); mutate("Bus 추가") { p in p.signal.nodes.append(node); p.signal.layout.positions[node.id] = point ?? Point(350,450+Double(p.signal.nodes.filter{$0.kind == .bus}.count-1)*220); if let master = p.signal.nodes.first(where:{$0.kind == .master}) { p.signal.edges.append(SignalEdge(from:node.id,to:master.id)) } }; soundView = true; select(node.id) }
     static func effectName(_ kind:EffectKind) -> String { switch kind { case .gain:return "Gain"; case .lowpass:return "Low-pass"; case .delay:return "Delay"; case .reverb:return "Reverb"; case .drive:return "Drive"; case .pan:return "Pan"; case .compressor:return "Compressor"; case .audioUnit:return "Audio Unit" } }
     func setLane(_ lane:Lane) {
-        if let id = editPatternID { mutate("리듬 패턴 편집") { p in if let i = p.patterns.firstIndex(where:{$0.id == id}) { p.patterns[i].notes = lane.notes; p.patterns[i].audio = lane.audio } }; return }
+        if let id = editPatternID {
+            mutate("리듬 패턴 편집") { p in
+                guard let i=p.patterns.firstIndex(where:{$0.id == id}) else{return}
+                p.patterns[i].notes = lane.notes; p.patterns[i].audio = lane.audio; p.patterns[i].pitchBend = lane.pitchBend
+                try MIDIPitchBendStorage.promote(in:&p)
+            }
+            return
+        }
         guard let id = selectedUse?.id else { return }; let original = editOriginal
         mutate(original ? "원본 연주 편집" : "이번 사용 연주 편집") { try ProjectEditing.setLane(lane,for:id,original:original,in:&$0) }
     }

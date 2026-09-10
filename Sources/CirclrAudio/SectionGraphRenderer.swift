@@ -2,10 +2,19 @@ import Foundation
 import CirclrCore
 
 public enum SectionGraphRenderer {
-    public static func render(_ plan: SectionSignalPlan, project: Project, root: URL?,
+    public static func render(_ plan:SectionSignalPlan,project:Project,root:URL?,clock:MusicClock,tail:Double,
+                              applyOutputGain:Bool=true,observe:((ID,PCM)->Void)?=nil,
+                              observeOutput:((MusicBusEndpoint,PCM)->Void)?=nil) async throws->[ID:PCM] {
+        try await render(plan,project:project,root:root,clock:clock,tail:tail,applyOutputGain:applyOutputGain,
+                         audibleTrackIDs:nil,observe:observe,observeOutput:observeOutput)
+    }
+    /// The arrangement owner limits validation to outputs actually included in its mix/stems.
+    static func render(_ plan: SectionSignalPlan, project: Project, root: URL?,
                               clock: MusicClock, tail: Double, applyOutputGain: Bool = true,
+                              audibleTrackIDs:Set<ID>?,
                               observe: ((ID, PCM) -> Void)? = nil,
                               observeOutput: ((MusicBusEndpoint, PCM) -> Void)? = nil) async throws -> [ID: PCM] {
+        try validatePitchBendSupport(plan,project:project,applyOutputGain:applyOutputGain,outputTracks:audibleTrackIDs)
         let frames = try RenderTailPlanner.frameCount(bodySeconds: clock.seconds, tailSeconds: tail)
         guard Double(frames) * 8 * Double(workingBufferCount(plan)) < 1_073_741_824 else {
             throw CirclrError("섹션 내부 오디오가 준비 가능한 메모리 범위를 넘습니다")
@@ -100,6 +109,33 @@ public enum SectionGraphRenderer {
             consumers[edge.from, default: 0] -= 1
             if consumers[edge.from] == 0 { buffers[edge.from] = nil }
         }
+    }
+
+    /// Storage/compilation currently retain expression; rendering must not silently drop it.
+    /// Walk actual ports so muted, disconnected and unused router branches remain usable archives.
+    static func validatePitchBendSupport(_ plan:SectionSignalPlan,project:Project,applyOutputGain:Bool=true,
+                                         outputTracks:Set<ID>?=nil)throws {
+        var audiblePlan=plan,tracks=project.tracks
+        // This renderer returns pre-track PCM. Track mute/gain belong to its arrangement caller.
+        for i in tracks.indices {tracks[i].muted=false;tracks[i].gain=1}
+        if !applyOutputGain {
+            for i in audiblePlan.orderedNodes.indices {
+                if case .output=audiblePlan.orderedNodes[i].content {
+                    audiblePlan.orderedNodes[i].muted=false;audiblePlan.orderedNodes[i].gain=1
+                }
+            }
+        }
+        if let outputTracks {tracks=tracks.filter{outputTracks.contains($0.id)}}
+        let paths=PlaybackAnalysis.audiblePaths(audiblePlan,tracks:tracks)
+        let instruments=Set(plan.orderedNodes.compactMap{node -> ID? in
+            if case .instrument=node.content {return node.id};return nil
+        })
+        for edge in paths.connections.values where edge.signal == .midi && instruments.contains(edge.to.nodeID) {
+            if !(plan.midiPerformances[edge.from.nodeID] ?? []).isEmpty {throw unsupportedPitchBend()}
+        }
+    }
+    static func unsupportedPitchBend()->CirclrError {
+        CirclrError("피치 벤드가 포함된 MIDI의 오디오 렌더는 아직 지원하지 않습니다.")
     }
 
     static func audibleAncestors(_ plan:SectionSignalPlan)->Set<ID> {

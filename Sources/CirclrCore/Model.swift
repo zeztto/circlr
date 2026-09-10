@@ -89,6 +89,7 @@ public struct Lane: Codable, Equatable, Identifiable {
     public var trackID: ID
     public var notes: [Note] = []
     public var audio: [AudioClip] = []
+    public var pitchBend:MIDIPitchBendSequence?
     public init(trackID: ID) { self.trackID = trackID }
 }
 public struct PluginDescriptor: Codable, Equatable, Identifiable, Sendable {
@@ -166,6 +167,7 @@ public struct RhythmPattern: Codable, Equatable, Identifiable {
     public var trackID: ID
     public var notes: [Note] = []
     public var audio: [AudioClip] = []
+    public var pitchBend:MIDIPitchBendSequence?
     public init(name: String, trackID: ID) { self.name = name; self.trackID = trackID }
 }
 public enum TransitionMode: String, Codable, CaseIterable { case within, insert, overlap }

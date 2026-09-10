@@ -3,7 +3,7 @@ import Foundation
 public enum SectionGraphMigration {
     /// Explicit, transactional migration; the caller controls when to save the resulting document.
     public static func migrate(_ input: Project) throws -> Project {
-        guard (1...4).contains(input.schemaVersion) else { throw CirclrError("지원하지 않는 음악 문서 형식입니다") }
+        guard (1...5).contains(input.schemaVersion) else { throw CirclrError("지원하지 않는 음악 문서 형식입니다") }
         var result = input
         let migrating = Set(input.sections.filter { $0.graph == nil }.map(\.id))
         for i in result.sections.indices where migrating.contains(result.sections[i].id) {

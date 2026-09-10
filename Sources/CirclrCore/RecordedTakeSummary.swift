@@ -21,7 +21,7 @@ public struct RecordedTakeSummary: Equatable {
         let hasContent = !take.lane.notes.isEmpty || !take.lane.audio.isEmpty
         return Self(noteCount:take.lane.notes.count,clipCount:take.lane.audio.count,
                     matchesCurrentContent:hasContent
-                    && (take.lane.notes.isEmpty || target.notes==take.lane.notes)
+                    && (take.lane.notes.isEmpty || (target.notes==take.lane.notes && target.pitchBend==take.lane.pitchBend))
                     && (take.lane.audio.isEmpty || target.audio==take.lane.audio))
     }
 }

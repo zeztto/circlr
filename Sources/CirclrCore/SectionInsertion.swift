@@ -27,7 +27,7 @@ public enum SectionInsertion {
         guard arrangement.uses.filter({$0.id==afterUseID}).count==1,
               let source=arrangement.uses.first(where:{$0.id==afterUseID}),
               project.sections.filter({$0.id==source.sectionID}).count==1 else{return fail(.missingSection)}
-        guard (1...4).contains(project.schemaVersion) else{return fail(.invalidStructure)}
+        guard (1...5).contains(project.schemaVersion) else{return fail(.invalidStructure)}
         let ids=Set(arrangement.uses.map(\.id))
         guard ids.count==arrangement.uses.count,let start=arrangement.startID,ids.contains(start),
               Set(arrangement.edges.map(\.id)).count==arrangement.edges.count,

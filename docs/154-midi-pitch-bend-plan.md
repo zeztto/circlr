@@ -4,7 +4,7 @@
 
 ## 실제 손실 지점과 방향
 
-`MIDIImport.swift`는 track/channel별 Note를 만들지만 channel message는 제외한다. `MIDIImportPart`는 channel을 drums 여부로만 사용한다. `Note`에는 채널이 없고 `Lane`/`RhythmPattern`에는 bend가 없다. `SectionGraphRenderer.swift`는 여러 source의 notes를 합치며 `ProductionInstrument.swift`, C Voice/Event, AU worker는 그 출처를 받지 않는다. 악기 전역에 bend 배열만 추가하면 독립 MIDI 서클의 음정이 같이 바뀐다.
+`MIDIImport.swift`는 track/channel별 Note를 만들지만 channel message는 제외한다. `MIDIImportPart`는 channel을 drums 여부로만 사용한다. `Note`에는 채널이 없다. 조사 당시 없던 `Lane`/`RhythmPattern`의 bend 저장은 아래 Core 연결 단계에서 추가했다. `SectionGraphRenderer.swift`는 여러 source의 notes를 합치며 `ProductionInstrument.swift`, C Voice/Event, AU worker는 그 출처를 받지 않는다. 악기 전역에 bend 배열만 추가하면 독립 MIDI 서클의 음정이 같이 바뀐다.
 
 저장값은 14-bit raw 값과 RPN range 상태를 유지하고, DSP에는 해석된 반음과 안정적인 source identity를 전달한다. 반음 곡선만 저장하여 원래 wheel 값과 범위를 잃는 방식은 사용하지 않는다. 같은 MIDI source의 함께 울리는 노트에는 bend가 함께 적용된다. 다른 source는 같은 파일 채널 번호라도 별도 연주 영역이며 graph edge 순서로 서로의 controller를 덮어쓰지 않는다.
 
@@ -47,4 +47,18 @@ Core에서 중심·양끝·range 변경·같은 beat 순서·직렬화·불변 �
 
 `swift test --scratch-path .build/integration-default --filter MIDIPitchBendTests`가 8개 테스트·실패0으로 통과했다(0.020초, `.build/pitch-bend-foundation-tests.log`). raw 양끝과 중심·range-only 변경·같은 beat 순서·JSON 보존·값/시간/개수 경계·이후 invalid 이벤트를 확인했다. 별도 읽기 전용 설계/소스 검토도 PASS했다. 이 검증은 source fan-in/반복 release/실제 MIDI RPN parser/PCM을 아직 증명하지 않는다.
 
-현재 제품은 build132 그대로다. Project/Lane/RhythmPattern/schema, UI/MCP/renderer에는 이 타입을 아직 연결하지 않았다. 다음 실행은 optional 저장 연결과 compiled source identity/clock packet을 함께 정의·검증하고, parser·DSP·UI를 그 계약으로 구현하는 것이다. 기존 notes-only 가져오기 문구나 runtime capability를 바꾸지 않았다.
+## 프로젝트 저장·컴파일 연결 상태
+
+`Lane`과 `RhythmPattern`에 optional `pitchBend`를 연결하고 `MIDIPitchBendStorage.swift`에서 schema5 저장·검증 경계를 다룬다. `MIDIPerformance.swift`와 `SectionGraphCompiler.swift`는 source와 반복 occurrence를 구분하는 performance packet 및 부모 clock으로 변환한 상태를 준비한다. 이는 controller를 소리로 재생하는 DSP 구현과 별개다.
+
+`SectionGraphRenderer.swift`는 실제 출력으로 연결된 MIDI 연주의 미지원 pitch bend를 오류로 거절한다. 음소거·연결되지 않은 보관 서클까지 일괄 차단하는 계약은 아니다. `ProductionModel.swift`의 typed MIDI 저장 경로도 선택된 연주에 pitch bend가 있으면 파일을 만들지 않고 명시적으로 거절한다. 표현을 조용히 버린 notes-only 결과를 성공으로 반환하지 않기 위한 경계다.
+
+현재 패키지 앱은 build132다. 실제 SMF pitch bend/RPN parser, per-stream DSP, GUI 곡선 편집과 MCP 표현 명령은 아직 지원하지 않는다. 다음 실행은 packet을 소비하는 parser·DSP 계약과 nil/center 기존 PCM 보존을 구현하고, 그 결과를 GUI/MCP와 import/export 왕복에 연결하는 것이다. 이 저장·거절 경계를 전체 연주 기능 완료로 계산하지 않는다.
+
+## 저장·컴파일 회귀 검증
+
+`swift test --scratch-path .build/integration-default --filter 'CirclrCoreTests|CirclrAudioTests' --skip 'AudioTests.testArrangementRenderExportAndPlayback'`는 765개 테스트, 내부 skip 2개, 실패 0개로 73.023초에 종료했다 (`.build/pitch-bend-regression-final.log`). 기초 상태 검사와 Storage 8개·Performance 6개·Export 3개·Audio guard 8개를 포함한다. Core take 경로의 P2 지적은 수정 후 재검토에서 해결됐으며 Audio 검토도 PASS했다.
+
+명시적으로 제외한 기존 `testArrangementRenderExportAndPlayback`은 실제 재생을 포함하며, 첫 실행에서는 AU helper를 사용할 수 없어 재생 전에 실패했다. 내부 skip 2개는 `AUEffectWorkerIntegrationTests`의 실제 worker 경로와 `AUInstrumentWorkerIntegrationTests`의 bounded runner/helper 경로가 없는 데 따른다. 따라서 이 회귀 결과를 실제 AU worker·재생·물리 오디오 성공으로 해석하지 않는다. 이번 단계에서 새 native GUI나 패키지 앱 검증은 수행하지 않았다.
+
+추가 router 검증은 `swift test --scratch-path .build/integration-default --filter MIDIPitchBendGuardTests`로 9개·실패 0개, 0.517초에 통과했다 (`.build/pitch-bend-router-final.log`). 사용하지 않는 포트와 route gain 0에서는 PCM 0을 확인했고 활성 route에서는 미지원 표현을 명시적으로 거절했다. 위 765개 회귀와 별도 실행이며 실제 장치 출력 검사가 아니다.

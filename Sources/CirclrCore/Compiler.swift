@@ -195,7 +195,7 @@ public enum ArrangementCompiler {
         return (section,c,clock)
     }
     public static func compile(_ project: Project, arrangementID: ID? = nil, onlyUseID: ID? = nil) throws -> ExecutionPlan {
-        guard (1...4).contains(project.schemaVersion) else { throw CirclrError("이 프로젝트의 형식 버전을 지원하지 않습니다") }
+        guard (1...5).contains(project.schemaVersion) else { throw CirclrError("이 프로젝트의 형식 버전을 지원하지 않습니다") }
         guard let a = project.arrangements.first(where: { $0.id == (arrangementID ?? project.activeArrangementID) }) else { throw CirclrError("편곡안을 찾을 수 없습니다") }
         if a.uses.isEmpty { return ExecutionPlan(revision: project.musicRevision, arrangementID: a.id, occurrences: [], transitions: [], duration: 0, warnings: []) }
         var flow = try ArrangementFlowCursor(a, onlyUseID: onlyUseID)
@@ -208,6 +208,7 @@ public enum ArrangementCompiler {
             let lanes = try effectiveLanes(section: section, use: use)
             try validateLanes(lanes, project: project)
             let signalPlan = try SectionGraphCompiler.compile(project: project, section: section, use: use, context: context, clock: clock)
+            if signalPlan == nil && lanes.contains(where: { $0.pitchBend != nil }) { throw CirclrError("피치 벤드 연주는 섹션 음악 그래프가 필요합니다") }
             for lane in lanes {
                 if lane.notes.contains(where: { $0.beat + $0.length > clock.beats + 0.000001 }) { warnings.append("\(use.name): 섹션 끝에서 MIDI note를 종료합니다") }
             }
@@ -216,6 +217,7 @@ public enum ArrangementCompiler {
                 guard let pattern = project.patterns.first(where: { $0.id == patternID }) else { throw CirclrError("\(use.name): 리듬 패턴을 찾을 수 없습니다") }
                 try validatePattern(pattern, project: project)
                 if pattern.meter != context.meter { warnings.append("\(use.name): 패턴 \(pattern.meter.label) / 서클 \(context.meter.label)") }
+                if signalPlan == nil && pattern.pitchBend != nil { throw CirclrError("피치 벤드 패턴은 섹션 음악 그래프가 필요합니다") }
                 if signalPlan == nil { eventCount += Int(ceil(clock.beats / pattern.length)) * (pattern.notes.count + pattern.audio.count) * use.repeatCount }
             }
             eventCount += (signalPlan?.eventCount ?? lanes.reduce(0) { $0 + $1.notes.count + $1.audio.count }) * use.repeatCount
@@ -231,6 +233,7 @@ public enum ArrangementCompiler {
                     if let p = t.patternID {
                         guard let pattern = project.patterns.first(where: { $0.id == p }) else { throw CirclrError("전환 패턴을 찾을 수 없습니다") }
                         try validatePattern(pattern, project: project)
+                        guard pattern.pitchBend == nil else { throw CirclrError("전환 패턴의 피치 벤드 연주는 아직 지원하지 않습니다") }
                     }
                     if duration > 0 { transitions.append(ScheduledTransition(edgeID: edge.id, transition: t, start: start, duration: duration, sourceOccurrenceID: source.id, targetOccurrenceID: occurrence.id, context: source.context)) }
                     pending = nil
@@ -251,6 +254,8 @@ public enum ArrangementCompiler {
     public static func validateLanes(_ lanes: [Lane], project: Project) throws {
         for lane in lanes {
             guard project.tracks.contains(where: { $0.id == lane.trackID }) else { throw CirclrError("연주 트랙을 찾을 수 없습니다") }
+            try lane.pitchBend?.validate()
+            if lane.pitchBend != nil && project.schemaVersion < 5 { throw CirclrError("피치 벤드에는 version 5 프로젝트가 필요합니다") }
             for note in lane.notes { try validateNote(note) }
             for clip in lane.audio {
                 guard project.assets.contains(where: { $0.id == clip.assetID }), clip.beat.isFinite, clip.beat >= 0, clip.duration.isFinite, clip.duration > 0, clip.sourceStart.isFinite, clip.sourceStart >= 0, clip.gain.isFinite, (0...4).contains(clip.gain), clip.sourceBPM.isFinite, clip.sourceBPM > 0 else { throw CirclrError("오디오 clip의 파일·위치·길이를 확인하세요") }
@@ -260,7 +265,7 @@ public enum ArrangementCompiler {
     }
     public static func validatePattern(_ pattern: RhythmPattern, project: Project) throws {
         guard pattern.length.isFinite, (1.0/1024...1_048_576).contains(pattern.length) else { throw CirclrError("패턴 길이를 확인하세요") }
-        var lane = Lane(trackID: pattern.trackID); lane.notes = pattern.notes; lane.audio = pattern.audio
+        var lane = Lane(trackID: pattern.trackID); lane.notes = pattern.notes; lane.audio = pattern.audio; lane.pitchBend = pattern.pitchBend
         try validateLanes([lane], project: project)
         guard pattern.notes.allSatisfy({ $0.beat < pattern.length }) else { throw CirclrError("패턴 밖의 note 위치를 확인하세요") }
     }

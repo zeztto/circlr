@@ -95,6 +95,7 @@ public enum ProjectEditing {
         let previousClips = Set(previousLane?.audio.map(\.id) ?? [])
         var candidate = project
         try setLaneData(lane, for: useID, original: original, in: &candidate)
+        try MIDIPitchBendStorage.promote(in:&candidate)
         guard let use = candidate.active.uses.first(where: { $0.id == useID }),
               let section = candidate.sections.first(where: { $0.id == use.sectionID }) else { throw CirclrError("섹션이 없습니다") }
         if var graph = original ? section.graph : try SectionGraphEditing.effective(section: section, use: use) {
@@ -160,7 +161,7 @@ public extension ProjectEditing {
         let target=take.targetLaneID.flatMap{id in lanes.first{$0.id==id}} ?? (take.targetLaneID == nil ? lanes.first{$0.trackID==take.lane.trackID}:nil)
         if take.targetLaneID != nil,target == nil { throw CirclrError("녹음 대상 서클이 삭제되었습니다") }
         var lane=target ?? take.lane
-        if !take.lane.notes.isEmpty { lane.notes=take.lane.notes }
+        if !take.lane.notes.isEmpty { lane.notes=take.lane.notes;lane.pitchBend=take.lane.pitchBend }
         if !take.lane.audio.isEmpty { lane.audio=take.lane.audio }
         var candidate=project;let active=candidate.activeArrangementID;candidate.activeArrangementID=candidate.arrangements[ai].id
         try setLane(lane,for:take.useID,original:false,in:&candidate)

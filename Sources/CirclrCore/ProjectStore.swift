@@ -24,9 +24,9 @@ public enum ProjectStore {
         let data = try Data(contentsOf: manifest)
         struct Header:Decodable {let schemaVersion:Int}
         let header=try JSONDecoder().decode(Header.self,from:data)
-        guard (1...4).contains(header.schemaVersion) else {throw CirclrError("더 새로운 프로젝트 형식입니다. 원본을 덮어쓰지 마세요")}
+        guard (1...5).contains(header.schemaVersion) else {throw CirclrError("더 새로운 프로젝트 형식입니다. 원본을 덮어쓰지 마세요")}
         let project = try JSONDecoder().decode(Project.self, from: data)
-        guard (1...4).contains(project.schemaVersion) else { throw CirclrError("더 새로운 프로젝트 형식입니다. 원본을 덮어쓰지 마세요") }
+        guard (1...5).contains(project.schemaVersion) else { throw CirclrError("더 새로운 프로젝트 형식입니다. 원본을 덮어쓰지 마세요") }
         guard !project.arrangements.isEmpty, project.arrangements.contains(where: { $0.id == project.activeArrangementID }) else { throw CirclrError("유효한 편곡안이 없습니다") }
         try validateStructure(project)
         for asset in project.assets {
@@ -36,8 +36,9 @@ public enum ProjectStore {
         return LoadedProject(project: project, root: url)
     }
     public static func validateStructure(_ p:Project) throws {
-        guard (1...4).contains(p.schemaVersion) else {throw CirclrError("지원하지 않는 프로젝트 형식입니다")}
+        guard (1...5).contains(p.schemaVersion) else {throw CirclrError("지원하지 않는 프로젝트 형식입니다")}
         try AutomationCompiler.validateTargets(in:p)
+        try MIDIPitchBendStorage.validate(in:p)
         try p.portLayout?.validate()
         func unique(_ ids:[ID]) throws { guard ids.allSatisfy({!$0.isEmpty}),Set(ids).count==ids.count else { throw CirclrError("프로젝트에 비어 있거나 중복된 ID가 있습니다") } }
         func layout(_ l:Layout) throws { guard l.zoom.isFinite,(0.25...2.5).contains(l.zoom),l.spacing.isFinite,(12...256).contains(l.spacing),l.pan.x.isFinite,l.pan.y.isFinite,l.positions.values.allSatisfy({$0.x.isFinite && $0.y.isFinite && abs($0.x)<1e7 && abs($0.y)<1e7}) else { throw CirclrError("Canvas 좌표를 확인하세요") };try unique(l.groups.map(\.id)) }

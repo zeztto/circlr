@@ -7,9 +7,11 @@ public struct SectionSignalPlan {
     /// Event positions are expressed on the parent section's clock after local timing is resolved.
     public var midi: [ID: [Note]]
     public var audio: [ID: [AudioClip]]
+    public var midiPerformances: [ID: [MIDIPerformanceStream]] = [:]
     public var connections: [MusicBusConnection] = []
     public var automation:[ID:[AutomationPlan]] = [:]
     public var eventCount: Int {
+        midiPerformances.values.reduce(0) { $0 + $1.reduce(0) { $0 + 1 + $1.pitchBendStates.count } } +
         automation.values.reduce(0){$0+$1.reduce(0){$0+$1.spans.count}} + midi.values.reduce(0) { $0 + $1.count } +
         orderedNodes.reduce(0) { $0 + (audio[$1.id]?.count ?? 0) * $1.repeatCount }
     }
@@ -44,6 +46,9 @@ public enum SectionGraphCompiler {
             case .midi(let laneID):
                 guard let lane = lanes.first(where: { $0.id == laneID }) else { throw CirclrError("\(node.name)의 MIDI 연주 원본을 찾을 수 없습니다") }
                 plan.midi[node.id] = try scheduledNotes(lane.notes, node: node, context: resolved, parentClock: clock)
+                if let bend = lane.pitchBend {
+                    plan.midiPerformances[node.id] = try performanceStreams(notes: lane.notes, sequence: bend, grid: resolved.beatGrid, node: node, context: resolved, parentClock: clock)
+                }
             case .audio(let laneID, let clipID):
                 guard let clip = lanes.first(where: { $0.id == laneID })?.audio.first(where: { $0.id == clipID }) else { throw CirclrError("\(node.name)의 오디오 clip을 찾을 수 없습니다") }
                 plan.audio[node.id] = [clip]
@@ -59,9 +64,12 @@ public enum SectionGraphCompiler {
                 guard let pattern = project.patterns.first(where: { $0.id == patternID }) else { throw CirclrError("리듬 패턴을 찾을 수 없습니다") }
                 try ArrangementCompiler.validatePattern(pattern, project: project)
                 guard pattern.trackID == trackID else { continue }
-                let expanded = try expandedPattern(pattern, length: clock.beats, grid: resolved.beatGrid)
+                let expanded = try expandedPatternNotesOnly(pattern, length: clock.beats, grid: resolved.beatGrid)
                 if case .rhythmMIDI = node.content {
                     plan.midi[node.id] = try scheduledNotes(expanded.notes, node: node, context: resolved, parentClock: clock)
+                    if let bend = pattern.pitchBend {
+                        plan.midiPerformances[node.id] = try performanceStreams(notes: pattern.notes, sequence: bend, patternLength: pattern.length, grid: resolved.beatGrid, node: node, context: resolved, parentClock: clock)
+                    }
                 } else { plan.audio[node.id] = expanded.audio }
             }
             guard plan.eventCount <= 1_000_000 else { throw CirclrError("섹션 내부의 재생 event가 너무 많습니다") }
@@ -97,6 +105,11 @@ public enum SectionGraphCompiler {
     }
 
     public static func expandedPattern(_ pattern: RhythmPattern, length: Double, grid: BeatGrid) throws -> Lane {
+        guard pattern.pitchBend == nil else { throw CirclrError("피치 벤드 패턴은 독립 MIDI 연주 stream으로 준비해야 합니다") }
+        return try expandedPatternNotesOnly(pattern, length: length, grid: grid)
+    }
+
+    private static func expandedPatternNotesOnly(_ pattern: RhythmPattern, length: Double, grid: BeatGrid) throws -> Lane {
         guard pattern.length.isFinite, pattern.length > 0, length.isFinite, length > 0 else { throw CirclrError("리듬 패턴의 길이를 확인하세요") }
         let repeats = ceil(length / pattern.length)
         guard repeats * Double(pattern.notes.count + pattern.audio.count) <= 1_000_000 else { throw CirclrError("리듬 패턴의 event가 너무 많습니다") }

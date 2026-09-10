@@ -17,12 +17,18 @@ public enum ArrangementRenderer {
     static var preparationByteLimit:Double {min(2_147_483_648,Double(ProcessInfo.processInfo.physicalMemory)/4)}
     public static func render(project: Project, root: URL?, plan: ExecutionPlan, tailSeconds: Double? = nil, includeStems: Bool = true, includeVisualization: Bool = false, progress: @escaping (String, Double) -> Void = { _,_ in }) async throws -> PreparedAudio {
         guard plan.duration > 0 else { throw CirclrError("먼저 섹션을 만들고 시작 서클을 지정하세요") }
+        try validatePitchBendSupport(project:project,plan:plan)
         let tailPlan = try RenderTailPlanner.arrangement(project:project,plan:plan,requestedSeconds:tailSeconds,
                                                         includeStems:includeStems,includeVisualization:includeVisualization)
         let tailSeconds = tailPlan.effectiveSeconds
         let frames = try RenderTailPlanner.frameCount(bodySeconds:plan.duration,tailSeconds:tailSeconds)
         var tracks = Dictionary(uniqueKeysWithValues: project.tracks.map { ($0.id,PCM(frames: frames)) })
         var visualization = PlaybackAnalysis()
+        let connected=PlaybackAnalysis.connectedSignals(project.signal)
+        let connectedTracks=Set(project.signal.nodes.compactMap{node -> ID? in
+            node.kind == .source && connected.contains(node.id) ? node.trackID:nil
+        })
+        let masterTracks=Set(project.tracks.filter{!$0.muted && $0.gain>0 && connectedTracks.contains($0.id)}.map(\.id))
         for (index, occurrence) in plan.occurrences.enumerated() {
             try Task.checkCancellation()
             progress("\(occurrence.use.name) · \(occurrence.iteration+1)/\(occurrence.use.repeatCount)회 준비",0.78*Double(index)/Double(max(1,plan.occurrences.count)))
@@ -43,6 +49,7 @@ public enum ArrangementRenderer {
                 }
                 let outputNodes = Set(signal.orderedNodes.filter { if case .output = $0.content { return true }; return false }.map(\.id))
                 graphAudio = try await SectionGraphRenderer.render(signal, project: project, root: root, clock: occurrence.clock, tail: tailSeconds,
+                    audibleTrackIDs:occurrence.use.gain>0 ? masterTracks:[],
                     observe: includeVisualization ? { id, pcm in
                         if outputNodes.contains(id), audible.nodes.contains(id) { visual.nodes[id] = PlaybackEnvelope(pcm) }
                     } : nil,
@@ -127,6 +134,37 @@ public enum ArrangementRenderer {
         progress("재생 준비 완료",1)
         return PreparedAudio(plan:plan,mix:mix,stems:stems,tailSeconds:tailSeconds,tailPlan:tailPlan,visualization:includeVisualization ? visualization : nil)
     }
+    /// Check the entire requested arrangement before any instrument/effect helper can run.
+    /// Unused storage, muted tracks and disconnected master paths are not render failures.
+    static func validatePitchBendSupport(project:Project,plan:ExecutionPlan)throws {
+        let connected=PlaybackAnalysis.connectedSignals(project.signal)
+        let connectedTracks=Set(project.signal.nodes.compactMap{node -> ID? in
+            node.kind == .source && connected.contains(node.id) ? node.trackID:nil
+        })
+        let audibleTracks=Set(project.tracks.filter{!$0.muted && $0.gain>0 && connectedTracks.contains($0.id)}.map(\.id))
+        for occurrence in plan.occurrences where occurrence.use.gain>0 {
+            if let graph=occurrence.signalPlan {
+                try SectionGraphRenderer.validatePitchBendSupport(graph,project:project,outputTracks:audibleTracks)
+            } else {
+                for lane in occurrence.lanes where audibleTracks.contains(lane.trackID) && lane.pitchBend != nil {
+                    if lane.notes.contains(where:{$0.beat<occurrence.clock.beats}) {throw SectionGraphRenderer.unsupportedPitchBend()}
+                }
+                if let id=occurrence.context.rhythm.patternID,let pattern=project.patterns.first(where:{$0.id==id}),
+                   audibleTracks.contains(pattern.trackID),pattern.pitchBend != nil,
+                   pattern.notes.contains(where:{$0.beat<min(pattern.length,occurrence.clock.beats)}) {
+                    throw SectionGraphRenderer.unsupportedPitchBend()
+                }
+            }
+        }
+        for transition in plan.transitions where transition.duration>0 {
+            if let id=transition.transition.patternID,let pattern=project.patterns.first(where:{$0.id==id}),
+               audibleTracks.contains(pattern.trackID),pattern.pitchBend != nil,
+               pattern.notes.contains(where:{$0.beat<min(pattern.length,transition.duration*transition.context.tempo/60)}) {
+                throw SectionGraphRenderer.unsupportedPitchBend()
+            }
+        }
+    }
+
     /// Shared by render and preflight, before jobs or PCM allocations begin.
     static func preparationFrames(project: Project, plan: ExecutionPlan, tailSeconds: Double,
                                   includeStems: Bool, includeVisualization: Bool) throws -> Int {
