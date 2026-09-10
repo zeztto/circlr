@@ -2,6 +2,30 @@ import XCTest
 @testable import CirclrAudio
 
 final class OutputWorkerProtocolTests: XCTestCase {
+    func testSelectionWireBoundsAndLegacyDecoding() throws {
+        let id = UUID()
+        for uid in ["", "   ", "bad\nuid", String(repeating: "x", count: 1025), "bad\0uid"] {
+            XCTAssertThrowsError(try OutputWorkerWire.encode(.init(session: id, sequence: 1,
+                payload: .prepareOutput(frames: 100, selection: .deviceUID(uid)))))
+        }
+        for selection in [OutputDeviceSelection.systemDefault, .deviceUID("valid")] {
+            let packet = OutputWorkerPacket(session: id, sequence: 1, payload: .prepareOutput(frames: 100, selection: selection))
+            var commands = OutputWorkerWire(session: id, receiving: .commands)
+            XCTAssertEqual(try commands.receive(OutputWorkerWire.encode(packet)), [packet])
+        }
+        var legacy = OutputWorkerWire(session: id)
+        let hello = OutputWorkerPacket(session: id, sequence: 1, payload: .hello)
+        XCTAssertEqual(try legacy.receive(OutputWorkerWire.encode(hello)), [hello])
+        var sequence: UInt64 = 2
+        for stage in OutputWorkerWire.legacyTraceStages {
+            for phase in [PlaybackOutputTraceEvent.Phase.entered, .completed] {
+                _ = try legacy.receive(OutputWorkerWire.encode(.init(session: id, sequence: sequence,
+                    payload: .trace(stage: stage, phase: phase, elapsedSeconds: Double(sequence)))))
+                sequence += 1
+            }
+        }
+        XCTAssertEqual(PlaybackOutputTrace.maximumEvents, OutputWorkerWire.traceStages.count * 2 + 4)
+    }
     func testFragmentedAndCoalescedPackets() throws {
         let session = UUID(), run = UUID()
         let packets = [OutputWorkerPacket(session: session, sequence: 1, payload: .started(run: run)),
@@ -97,7 +121,7 @@ final class OutputWorkerProtocolTests: XCTestCase {
             XCTAssertTrue(try wire.receive(bytes.prefix(7)).isEmpty)
             XCTAssertEqual(try wire.receive(bytes.dropFirst(7)).count, 2)
         }
-        XCTAssertThrowsError(try wire.receive(packet(15, .playerPlay, .completed, 8)))
+        XCTAssertThrowsError(try wire.receive(packet(OutputWorkerWire.traceStages.count * 2 + 1, .playerPlay, .completed, 10)))
         for (stage, phase, time) in [(PlaybackOutputTraceEvent.Stage.fileValidation, PlaybackOutputTraceEvent.Phase.entered, 1.0), (.fileValidation, .completed, 0.5), (.engineCreation, .entered, 2)] {
             var invalid = OutputWorkerWire(session: id)
             _ = try invalid.receive(packet(1, .fileValidation, .entered, 1))

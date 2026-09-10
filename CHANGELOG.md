@@ -1,10 +1,17 @@
 # 변경 이력
 
+## 검증 완료 — 0.20.0 build109 앱별 출력 장치·공유 리듬 표시
+
+- catalog helper·요청별 선택·capability·실제 장치 guard·장치 변경 감시 구현. 명시 장치는 자동 대체하지 않고 시스템 기본 출력 setter를 호출하지 않음. 네 helper 필수 패키징.
+- 초기 Esc 실패를 native controls로, Picker 선택 후 상태 갱신 누락을 ObservedObject로 수정. 최종 Release40.31초·UUID `3FED7CA1-03C1-3701-9E28-4BF59247A1CA`·mock/fixture38개16.992초 통과.
+- UI-only mock 출력9개 상태에서 ⌘,·초기 focus·Space/↑↓/Return A→B·Tab·Esc·명령 진입·설정 복원·누락 유지·실패 재시도·취소739ms 확인. 음악r14 유지. 공유 리듬6개 상태의 r16→17→18·동일 패턴 B 공유·Undo·일반 MIDI 배너 없음·strict 재열기 확인.
+- checker 출력9/리듬6·시각 출력9장/리듬3장·최종 source review·각 QA packager strict 서명 검증 통과. 조회5초는 deadline이며 reap 총 시간은 플랫폼 종료에 의존. 실제 장치 readback/hotplug/물리 재생은 미검증, HAL stall 해결 아님. 사용자 앱 PID86114 유지·QA/helper 잔류 없음. [구현·검증](docs/125-output-device-implementation.md).
+
 ## 검증 완료 — 0.20.0 build108 테이크 검색
 
 - StudioPalette·직접 버튼/⌥⌘T/전체 명령·키보드 검색 적용. 초기 shortcut이 split에 잡히던 문제를 정확한 modifier guard로 수정.
 - final2 키보드 성공 뒤 final3 목록 높이를 초기3개 기준194로 줄이고 필터 중 유지. 최종 Release39.82초·실제 선택/검색0/취소/Undo·⌘T split 회귀·명령/query reset·stale 거절·시각/source 검토 통과.
-- checker9개 상태·검색 AX·테이크5개·자산2개·output0·r30 strict 복원/재열기/disk 대조 통과. physical I/O0·사용자 앱 유지. 앱별 출력 장치 계획은 미구현. [계약](docs/124-take-search.md).
+- checker9개 상태·검색 AX·테이크5개·자산2개·output0·r30 strict 복원/재열기/disk 대조 통과. physical I/O0·사용자 앱 유지. 당시 앱별 출력 장치 계획은 미구현. [계약](docs/124-take-search.md).
 
 ## 개발 중 — 0.20.0 build107 테이크 요약·AU instrument worker
 

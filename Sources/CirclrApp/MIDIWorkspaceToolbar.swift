@@ -6,6 +6,7 @@ struct MIDIWorkspaceToolbar<Trailing:View>:View {
     @ObservedObject var store:AppStore
     let focusTarget:MIDIEditorFocus
     @ViewBuilder let trailing:()->Trailing
+    private var sharedPattern:RhythmPattern? {store.editPatternID.flatMap{id in store.project.patterns.first{$0.id==id}}}
     var body:some View {
         MIDIWorkspaceToolbarLayout {
             HStack(spacing:10) {
@@ -13,13 +14,14 @@ struct MIDIWorkspaceToolbar<Trailing:View>:View {
                 Text(store.project.usesOrbits ? "궤도":"피아노 롤").tag(false)
                 Text("스텝").tag(true)
             }.pickerStyle(.segmented).labelsHidden().frame(width:110)
-            Menu("MIDI") {
+            Menu(sharedPattern == nil ? "MIDI":"공유 리듬 MIDI") {
                 Button("MIDI 파일 가져오기"){store.chooseMIDIImport()}
                 Button("MIDI 저장"){store.exportMIDI()}
                 Menu("패턴 추가"){ForEach(MIDIPattern.allCases,id:\.self){pattern in Button(pattern.label){store.generateMIDI(pattern)}}}
                 Button("전체 선택 · ⌘A"){store.chooseMIDINotes(.all);focusTarget.focus()}
                 Button("선택 해제 · ⇧⌘A"){store.chooseMIDINotes(.clear);focusTarget.focus()}
             }.fixedSize()
+                .help(sharedPattern.map{"공유 리듬 · \($0.name) · 노트·클립 변경은 같은 패턴을 사용하는 모든 곳에 반영됩니다"} ?? "MIDI 가져오기·저장·노트 선택")
             TrackBounceButton(store:store)
             Button{store.startMIDIRecording()}label:{Image(systemName:store.midiRecording ? "stop.circle":"record.circle")}
                 .accessibilityLabel(store.midiRecording ? "MIDI 녹음 정지":"MIDI 녹음")

@@ -14,10 +14,11 @@ import OSLog
                 .onOpenURL{store.open($0)}
         }.defaultSize(width:1440,height:900).windowStyle(.titleBar)
         .commands {
-            CommandGroup(replacing:.newItem){Button("새 앨범"){store.newProject()}.keyboardShortcut("n");Button("열기…"){store.open()}.keyboardShortcut("o");Divider();Button("창 닫기"){NSApplication.shared.keyWindow?.performClose(nil)}.keyboardShortcut("w")}
-            CommandGroup(replacing:.saveItem){Button("저장"){store.save()}.keyboardShortcut("s");Button("다른 이름으로 저장…"){store.save(as:true)}.keyboardShortcut("s",modifiers:[.command,.shift]);Divider();Button("WAV 내보내기…"){store.export()}.keyboardShortcut("e")}
-            CommandGroup(replacing:.undoRedo){Button("실행 취소"){store.undo()}.keyboardShortcut("z").disabled(store.undoCount==0);Button("다시 실행"){store.redo()}.keyboardShortcut("z",modifiers:[.command,.shift]).disabled(store.redoCount==0)}
-            CommandMenu("보기") {
+            CommandGroup(replacing:.appSettings){Button("출력 설정…"){store.showOutputPreferences()}.keyboardShortcut(",")}
+            CommandGroup(replacing:.newItem){Group {Button("새 앨범"){store.newProject()}.keyboardShortcut("n");Button("열기…"){store.open()}.keyboardShortcut("o");Divider();Button("창 닫기"){NSApplication.shared.keyWindow?.performClose(nil)}.keyboardShortcut("w")}.disabled(store.outputPreferencesOpen)}
+            CommandGroup(replacing:.saveItem){Group {Button("저장"){store.save()}.keyboardShortcut("s");Button("다른 이름으로 저장…"){store.save(as:true)}.keyboardShortcut("s",modifiers:[.command,.shift]);Divider();Button("WAV 내보내기…"){store.export()}.keyboardShortcut("e")}.disabled(store.outputPreferencesOpen)}
+            CommandGroup(replacing:.undoRedo){Group {Button("실행 취소"){store.undo()}.keyboardShortcut("z").disabled(store.undoCount==0);Button("다시 실행"){store.redo()}.keyboardShortcut("z",modifiers:[.command,.shift]).disabled(store.redoCount==0)}.disabled(store.outputPreferencesOpen)}
+            CommandMenu("보기") {Group {
                 Button("영상 녹화 시작 / 마치기…"){store.toggleMovieRecording()}.keyboardShortcut("r",modifiers:[.command,.shift])
                 Button("샘플 라이브러리…"){store.showMediaLibrary()}.keyboardShortcut("l",modifiers:[.command,.option])
                 Button("녹음 테이크 찾기…"){store.showRecordedTakes()}.keyboardShortcut("t",modifiers:[.command,.option]).disabled(store.recordedTakeChoices.isEmpty || store.trackBounceRecoveryLocked || store.midiImportDraft != nil)
@@ -39,8 +40,8 @@ import OSLog
                 Button("명령 검색…"){store.showCommands()}.keyboardShortcut("p",modifiers:[.command,.shift])
                 Button("키보드 사용법"){store.arrangementPickerRequest=nil;store.libraryOpen=false;store.commandPalette=nil;store.navigationOpen=false;store.keyboardHelp.toggle()}.keyboardShortcut("/")
                 Button("캔버스로 포커스 이동"){store.arrangementPickerRequest=nil;store.libraryOpen=false;store.commandPalette=nil;store.navigationOpen=false;store.focusCanvas?()}.keyboardShortcut("0",modifiers:[.command,.option])
-            }
-            CommandMenu("곡 구성"){Button("섹션 추가"){store.addSection()}.keyboardShortcut("k");Button("선택 항목 복제"){store.duplicateFocusedContent()}.keyboardShortcut("d");Button("그룹 만들기"){store.makeHierarchyGroup()}.keyboardShortcut("g");Button("삭제"){store.removeHierarchy()};Divider();Button("재생 / 정지"){store.play()};Button("오디오 가져오기…"){store.importAudio()}.keyboardShortcut("i")}
+            }.disabled(store.outputPreferencesOpen)}
+            CommandMenu("곡 구성"){Group {Button("섹션 추가"){store.addSection()}.keyboardShortcut("k");Button("선택 항목 복제"){store.duplicateFocusedContent()}.keyboardShortcut("d");Button("그룹 만들기"){store.makeHierarchyGroup()}.keyboardShortcut("g");Button("삭제"){store.removeHierarchy()};Divider();Button("재생 / 정지"){store.play()};Button("오디오 가져오기…"){store.importAudio()}.keyboardShortcut("i")}.disabled(store.outputPreferencesOpen)}
         }
     }
 }

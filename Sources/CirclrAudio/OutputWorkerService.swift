@@ -1,5 +1,6 @@
 import Foundation
 import AVFAudio
+import CoreAudio
 import Darwin
 
 /// Entrypoint for the bundled, single-session output child. Never call inside the app.
@@ -32,6 +33,12 @@ private final class Worker: @unchecked Sendable {
     private var timer: Timer?
     private var lastSeconds = 0.0
     private let traceOrigin = ProcessInfo.processInfo.systemUptime
+    private var outputSelection: OutputDeviceSelection = .systemDefault
+    private var deviceBinding: OutputDeviceBinding?
+    private var observationID: UUID?
+    private var configurationObserver: NSObjectProtocol?
+    private var deviceListeners: [(AudioObjectID, AudioObjectPropertyAddress, AudioObjectPropertyListenerBlock)] = []
+    private var didStart = false
 
     init(session: UUID, directory: URL) throws {
         self.session = session
@@ -48,7 +55,7 @@ private final class Worker: @unchecked Sendable {
     }
 
     func start() {
-        emit(.hello)
+        emit(.helloCapabilities(outputDeviceSelection: true))
         let slots = DispatchSemaphore(value: 8)
         DispatchQueue(label: "circlr.output-worker-input").async {
             var wire = OutputWorkerWire(session: self.session, receiving: .commands)
@@ -94,29 +101,9 @@ private final class Worker: @unchecked Sendable {
         do {
             switch payload {
             case .prepare(let frames):
-                guard file == nil, !used else { throw WorkerError.invalidState }
-                trace(.fileValidation, .entered)
-                let url = directory.appendingPathComponent("audio.caf")
-                try Self.validateOwned(url, directory: false)
-                let input = try AVAudioFile(forReading: url, commonFormat: .pcmFormatFloat32, interleaved: false)
-                guard input.length == frames, input.processingFormat.sampleRate == 48_000,
-                      input.processingFormat.channelCount == 2,
-                      input.fileFormat.streamDescription.pointee.mFormatID == kAudioFormatLinearPCM,
-                      let scratch = AVAudioPCMBuffer(pcmFormat: input.processingFormat, frameCapacity: 4096) else { throw WorkerError.invalidFile }
-                // Validate with bounded memory; playback streams the already-open file.
-                while input.framePosition < input.length {
-                    try input.read(into: scratch, frameCount: AVAudioFrameCount(min(4096, input.length - input.framePosition)))
-                    guard scratch.frameLength > 0, let channels = scratch.floatChannelData else { throw WorkerError.invalidFile }
-                    for channel in 0..<2 {
-                        for frame in 0..<Int(scratch.frameLength) {
-                            guard channels[channel][frame].isFinite else { throw WorkerError.invalidFile }
-                        }
-                    }
-                }
-                input.framePosition = 0
-                file = input
-                trace(.fileValidation, .completed)
-                emit(.prepared)
+                try prepare(frames: frames, selection: .systemDefault)
+            case .prepareOutput(let frames, let selection):
+                try prepare(frames: frames, selection: selection)
             case .play(let run):
                 guard let file, active == nil, !used else { throw WorkerError.invalidState }
                 used = true
@@ -127,6 +114,17 @@ private final class Worker: @unchecked Sendable {
                 self.engine = engine; self.player = player
                 engine.attach(player)
                 trace(.engineCreation, .completed)
+                trace(.outputNodeAcquisition, .entered)
+                guard let outputUnit = engine.outputNode.audioUnit else { throw WorkerError.missingOutputUnit }
+                trace(.outputNodeAcquisition, .completed)
+                try checkCancellation()
+                trace(.deviceSelection, .entered)
+                let binding = try OutputDeviceBinding(selection: outputSelection, audioUnit: outputUnit)
+                self.deviceBinding = binding
+                _ = try binding.bind()
+                try installDeviceObservers(engine: engine, binding: binding, run: run)
+                _ = try binding.revalidate()
+                trace(.deviceSelection, .completed)
                 trace(.mixerAcquisition, .entered)
                 let mixer = engine.mainMixerNode
                 trace(.mixerAcquisition, .completed)
@@ -152,9 +150,12 @@ private final class Worker: @unchecked Sendable {
                 trace(.playerPlay, .entered)
                 player.play()
                 try checkCancellation()
+                let actualDevice = try binding.revalidate()
                 player.volume = 1
                 try checkCancellation()
                 trace(.playerPlay, .completed)
+                emit(.outputDevice(descriptor: actualDevice))
+                didStart = true
                 emit(.started(run: run))
                 timer = Timer.scheduledTimer(withTimeInterval: 0.02, repeats: true) { [weak self] _ in self?.tick(run) }
             case .stop(let run):
@@ -169,10 +170,97 @@ private final class Worker: @unchecked Sendable {
         } catch {
             let run = active
             // Report before device cleanup, which itself may block.
-            emit(.failure(run: run, message: "출력 준비 또는 재생에 실패했습니다"))
+            emit(.failure(run: run, message: failureMessage(error)))
             clear()
             exit(70)
         }
+    }
+
+    private func prepare(frames: Int, selection: OutputDeviceSelection) throws {
+        guard file == nil, !used else { throw WorkerError.invalidState }
+        trace(.fileValidation, .entered)
+        let url = directory.appendingPathComponent("audio.caf")
+        try Self.validateOwned(url, directory: false)
+        let input = try AVAudioFile(forReading: url, commonFormat: .pcmFormatFloat32, interleaved: false)
+        guard input.length == frames, input.processingFormat.sampleRate == 48_000,
+              input.processingFormat.channelCount == 2,
+              input.fileFormat.streamDescription.pointee.mFormatID == kAudioFormatLinearPCM,
+              let scratch = AVAudioPCMBuffer(pcmFormat: input.processingFormat, frameCapacity: 4096) else { throw WorkerError.invalidFile }
+        // Validate with bounded memory; playback streams the already-open file.
+        while input.framePosition < input.length {
+            try checkCancellation()
+            try input.read(into: scratch, frameCount: AVAudioFrameCount(min(4096, input.length - input.framePosition)))
+            guard scratch.frameLength > 0, let channels = scratch.floatChannelData else { throw WorkerError.invalidFile }
+            for channel in 0..<2 {
+                for frame in 0..<Int(scratch.frameLength) {
+                    guard channels[channel][frame].isFinite else { throw WorkerError.invalidFile }
+                }
+            }
+        }
+        input.framePosition = 0
+        file = input
+        outputSelection = selection
+        trace(.fileValidation, .completed)
+        emit(.prepared)
+    }
+
+    // All observation state and device revalidation belong to the worker's main queue.
+    // Never query HAL from a CoreAudio notification thread or reuse a previous run's callback.
+    private func installDeviceObservers(engine: AVAudioEngine, binding: OutputDeviceBinding, run: UUID) throws {
+        guard let deviceID = binding.deviceID else { throw WorkerError.invalidState }
+        let token = UUID()
+        observationID = token
+        configurationObserver = NotificationCenter.default.addObserver(forName: .AVAudioEngineConfigurationChange, object: engine, queue: nil) { [weak self] _ in
+            DispatchQueue.main.async { [weak self] in self?.deviceChanged(run: run, observation: token) }
+        }
+        let system = AudioObjectID(kAudioObjectSystemObject)
+        let properties: [(AudioObjectID, AudioObjectPropertySelector, AudioObjectPropertyScope)] = [
+            (system, kAudioHardwarePropertyDefaultOutputDevice, kAudioObjectPropertyScopeGlobal),
+            (system, kAudioHardwarePropertyDevices, kAudioObjectPropertyScopeGlobal),
+            (deviceID, kAudioDevicePropertyDeviceIsAlive, kAudioObjectPropertyScopeGlobal),
+            (deviceID, kAudioDevicePropertyStreams, kAudioDevicePropertyScopeOutput)
+        ]
+        for (object, selector, scope) in properties {
+            var property = AudioObjectPropertyAddress(mSelector: selector, mScope: scope, mElement: kAudioObjectPropertyElementMain)
+            let listener: AudioObjectPropertyListenerBlock = { [weak self] _, _ in
+                self?.deviceChanged(run: run, observation: token)
+            }
+            let status = AudioObjectAddPropertyListenerBlock(object, &property, DispatchQueue.main, listener)
+            guard status == noErr else { throw WorkerError.monitorFailed(status) }
+            deviceListeners.append((object, property, listener))
+        }
+    }
+
+    private func deviceChanged(run: UUID, observation: UUID) {
+        guard active == run, observationID == observation, let binding = deviceBinding else { return }
+        do {
+            try checkCancellation()
+            _ = try binding.revalidate()
+            if didStart, engine?.isRunning != true { throw WorkerError.configurationChanged }
+        } catch is CancellationError {
+            clear()
+        } catch {
+            // Publish failure before HAL cleanup, which may block; never retry on a default device.
+            emit(.failure(run: run, message: failureMessage(error)))
+            clear()
+            exit(70)
+        }
+    }
+
+    private func removeDeviceObservers() {
+        observationID = nil
+        if let configurationObserver { NotificationCenter.default.removeObserver(configurationObserver) }
+        configurationObserver = nil
+        for (object, address, listener) in deviceListeners {
+            var property = address
+            _ = AudioObjectRemovePropertyListenerBlock(object, &property, DispatchQueue.main, listener)
+        }
+        deviceListeners.removeAll()
+        deviceBinding = nil
+    }
+
+    private func failureMessage(_ error: Error) -> String {
+        (error as? LocalizedError)?.errorDescription ?? "출력 준비 또는 재생에 실패했습니다"
     }
 
     private func checkCancellation() throws {
@@ -194,11 +282,23 @@ private final class Worker: @unchecked Sendable {
 
     private func clear() {
         active = nil
+        didStart = false
         timer?.invalidate(); timer = nil
+        removeDeviceObservers()
         player?.stop(); engine?.stop()
         player = nil; engine = nil
         file = nil
     }
 }
 
-private enum WorkerError: Error { case invalidFile, invalidState, backpressure }
+private enum WorkerError: LocalizedError {
+    case invalidFile, invalidState, backpressure, missingOutputUnit, configurationChanged, monitorFailed(OSStatus)
+    var errorDescription: String? {
+        switch self {
+        case .missingOutputUnit: return "출력 장치의 오디오 연결을 만들 수 없습니다"
+        case .configurationChanged: return "출력 장치 구성이 바뀌어 재생이 중단되었습니다. 다시 재생하세요."
+        case .monitorFailed(let status): return "출력 장치 변경 감시를 시작하지 못했습니다 (OSStatus \(status))"
+        default: return "출력 준비 또는 재생에 실패했습니다"
+        }
+    }
+}

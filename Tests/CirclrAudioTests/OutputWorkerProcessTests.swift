@@ -25,14 +25,14 @@ if mode=='exit':sys.exit(1)
 origin=time.monotonic()
 def trace(stage,phase):
  emit({'trace':dict(stage=stage,phase=phase,elapsedSeconds=time.monotonic()-origin)})
-emit({'hello':{}})
+emit({'helloCapabilities':{'outputDeviceSelection':True}} if mode.startswith('device-') else {'hello':{}})
 for line in sys.stdin:
  packet=json.loads(line);p=packet['payload']
- if 'prepare' in p:
+ if 'prepare' in p or 'prepareOutput' in p:
   assert open(os.path.join(directory,'audio.caf'),'rb').read(4)==b'caff'
   if mode=='malformed':
    print('{bad',flush=True);continue
-  if mode.startswith('trace'):
+  if mode.startswith('trace') or mode=='device-trace':
    trace('fileValidation','entered');trace('fileValidation','completed')
   emit({'prepared':{}})
  elif 'play' in p:
@@ -42,13 +42,16 @@ for line in sys.stdin:
    while True:time.sleep(1)
   if mode=='late':time.sleep(.3)
   if mode=='disconnect':sys.exit(2)
-  if mode.startswith('trace'):
-   for stage in ['engineCreation','mixerAcquisition','routing','scheduling','engineStart','playerPlay']:
+  if mode.startswith('trace') or mode=='device-trace':
+   stages=['engineCreation']+(['outputNodeAcquisition','deviceSelection'] if mode=='device-trace' else [])+['mixerAcquisition','routing','scheduling','engineStart','playerPlay']
+   for stage in stages:
     trace(stage,'entered')
     if stage=='mixerAcquisition' and mode in ['trace-delay','trace-eof']:
      if mode=='trace-eof':sys.exit(2)
      time.sleep(2)
     trace(stage,'completed')
+  if mode.startswith('device-') and mode != 'device-missing':
+   emit({'outputDevice':{'descriptor':{'uid':'other' if mode=='device-mismatch' else 'selected','name':'Fixture output'}}})
   emit({'started':{'run':run}})
   emit({'clock':{'run':run,'seconds':0.125}})
   if mode=='finished':emit({'finished':{'run':run}})
@@ -70,14 +73,39 @@ for line in sys.stdin:
     private func temporary(_ id: UUID) -> URL {
         FileManager.default.temporaryDirectory.appendingPathComponent("circlr-output-" + id.uuidString)
     }
+    func testExplicitSelectionRequiresCapabilityAndMatchingActualDevice() async throws {
+        for mode in ["ready", "device-missing", "device-mismatch", "device-ready"] {
+            let host = OutputWorkerProcess(executable: try fixture(mode))
+            do {
+                try await host.play(PCM(frames: 48000), from: 0, timeout: 2, selection: .deviceUID("selected"))
+                XCTAssertEqual(mode, "device-ready")
+            } catch { XCTAssertNotEqual(mode, "device-ready") }
+            XCTAssertEqual(host.status.transport.didStart, mode == "device-ready")
+            XCTAssertEqual(host.status.outputSelectionKind, "deviceUID")
+            if mode == "device-ready" {
+                XCTAssertEqual(host.status.actualOutputDeviceName, "Fixture output")
+                let status = try JSONEncoder().encode(host.status)
+                XCTAssertFalse(String(decoding: status, as: UTF8.self).contains("selected"))
+            }
+            host.cancel()
+            try await wait { [.idle, .failed].contains(host.status.transport.phase) }
+        }
+    }
+    func testCapableDefaultRequiresActualDevice() async throws {
+        let host = OutputWorkerProcess(executable: try fixture("device-missing"))
+        do { try await host.play(PCM(frames: 48000), from: 0, timeout: 2); XCTFail("missing actual device accepted") }
+        catch {}
+        XCTAssertFalse(host.status.transport.didStart)
+        try await wait { [.idle, .failed].contains(host.status.transport.phase) }
+    }
     func testCompleteTraceAndLegacyCompatibility() async throws {
-        for mode in ["trace-ready", "ready"] {
+        for mode in ["trace-ready", "ready", "device-trace"] {
             let host = OutputWorkerProcess(executable: try fixture(mode))
             try await host.play(PCM(frames: 48000), from: 0, timeout: 2)
             let trace = try XCTUnwrap(host.status.trace)
             XCTAssertEqual(trace.sessionID, host.status.attemptID)
-            XCTAssertEqual(trace.helperReportsStages, mode == "trace-ready")
-            XCTAssertEqual(trace.events.count, mode == "trace-ready" ? 18 : 4)
+            XCTAssertEqual(trace.helperReportsStages, mode != "ready")
+            XCTAssertEqual(trace.events.count, mode == "device-trace" ? 22 : (mode == "trace-ready" ? 18 : 4))
             XCTAssertEqual(trace.events.first?.stage, .cafWrite)
             XCTAssertEqual(trace.events.last?.phase, .completed)
             XCTAssertTrue(zip(trace.events, trace.events.dropFirst()).allSatisfy { $0.elapsedSeconds <= $1.elapsedSeconds })

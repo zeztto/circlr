@@ -112,6 +112,7 @@ struct AlbumCanvas: NSViewRepresentable {
             installPlaybackObservers()
             scrollMonitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { [weak self] event in
                 guard let self, event.window === self.window, self.bounds.contains(self.convert(event.locationInWindow, from: nil)) else { return event }
+                if self.store.outputPreferencesOpen{return event}
                 if self.store.consoleBounds.contains(self.convert(event.locationInWindow,from:nil)){return event}
                 if let content=self.window?.contentView,let hit=content.hitTest(content.convert(event.locationInWindow,from:nil)) {
                     if hit !== self,!hit.isDescendant(of:self){return event}
@@ -565,7 +566,7 @@ struct AlbumCanvas: NSViewRepresentable {
     }
     override func magnify(with event:NSEvent){let p=convert(event.locationInWindow,from:nil);setCamera(camera.zoomed(to:camera.zoom*exp(event.magnification),around:Point(p.x,p.y)))}
     override func keyDown(with event:NSEvent) {
-        if store.libraryOpen || store.soundPickerRequest != nil || store.arrangementPickerRequest != nil {return}
+        if store.outputPreferencesOpen || store.libraryOpen || store.soundPickerRequest != nil || store.arrangementPickerRequest != nil {return}
         if event.modifierFlags.contains(.command) || event.modifierFlags.contains(.control) {super.keyDown(with:event);return}
         if handleConnectionKey(event) { return }
         if event.modifierFlags.contains([.option,.shift]),[123,124,125,126].contains(event.keyCode),!store.project.usesOrbits {

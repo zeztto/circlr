@@ -1,12 +1,18 @@
 # 써클러 개발 방향과 실행 계획
 
-갱신: 2026-09-10. 계획 시작 기준: 0.11 native 앱, 0.12 음악 에이전트 키트 소스. 기존 출고 표기는 0.19.0이며 실행 중 사용자 앱의 별도 관측 버전은0.14다. 개발 검증 후보는 0.20.0 build 108이다. 목표는 송폼 중심의 전문 음악 제작을 먼저 완성하고, 이를 아티스트의 작품·세계관 관리로 확장하는 것이다.
+갱신: 2026-09-10. 계획 시작 기준: 0.11 native 앱, 0.12 음악 에이전트 키트 소스. 기존 출고 표기는 0.19.0이며 실행 중 사용자 앱의 별도 관측 버전은0.14다. 개발 검증 후보는 0.20.0 build 109이다. 목표는 송폼 중심의 전문 음악 제작을 먼저 완성하고, 이를 아티스트의 작품·세계관 관리로 확장하는 것이다.
+
+## 현재 검증 완료 — build109 앱별 출력 장치·공유 리듬 표시
+
+최종 Release40.31초·mock/fixture38개16.992초를 통과했다. UI-only mock 출력9개 상태의 키보드 진입/선택·Tab/Esc·설정 복원·누락 유지·실패 재시도·조회 취소739ms와 공유 리듬6개 상태의 같은 패턴 B 공유 변경/Undo·일반 MIDI 구분·strict 재열기를 확인했다. checker 출력9/리듬6·시각 출력9장/리듬3장·최종 source review도 통과했다. 초기 Esc 및 Picker 갱신 문제는 native controls와 ObservedObject 적용 후 재검증했다.
+
+네 helper 패키징과 명시 선택 noFallback, 선택값/마지막 확인 장치 구분을 구현했다. 5초는 catalog 조회 deadline이며 timeout/취소 후 소유 child를 terminate·reap한다. SIGKILL 이후 waitUntilExit에는 별도 deadline이 없어 총 완료 시간은 플랫폼 종료에 의존한다. 실제 readback·hotplug·물리 재생과 HAL stall 해결은 미검증이다. 사용자 앱 PID86114만 유지하며 QA/helper 잔류 없음. [구현·검증](125-output-device-implementation.md).
 
 ## 현재 검증 완료 — build108 테이크 검색
 
-StudioPalette와 ⌥⌘T·직접 버튼·전체 명령으로 테이크를 검색한다. 초기 shortcut/split 충돌을 수정하고 final3 목록 높이194를 필터 중 유지했다. Release39.82초·native 선택/검색0/Esc/Undo·⌘T 회귀·명령/query reset·stale 거절과 시각/source 검토를 통과했다. checker 최종 대조는 진행 중이며 physical I/O0·사용자 앱을 유지했다. [계약](124-take-search.md).
+StudioPalette와 ⌥⌘T·직접 버튼·전체 명령으로 테이크를 검색한다. 초기 shortcut/split 충돌을 수정하고 final3 목록 높이194를 필터 중 유지했다. Release39.82초·native 선택/검색0/Esc/Undo·⌘T 회귀·명령/query reset·stale 거절과 시각/source 검토를 통과했다. checker9개 상태·검색 AX·테이크5개·자산2개·output0·r30 strict 복원/재열기/disk 대조를 통과했으며 physical I/O0·사용자 앱을 유지했다. [계약](124-take-search.md).
 
-오디오 후속 [앱별 출력 장치 계획](107-app-output-device-plan.md)은 아직 미구현이며 stall 해결로 표현하지 않는다.
+오디오 후속 [앱별 출력 장치 계획](107-app-output-device-plan.md)은 build109에서 구현했으며 실제 장치 검증과 stall 해결은 별도다.
 
 ## 현재 검증 완료 — build107 테이크 요약·offline 악기 격리
 
@@ -24,7 +30,7 @@ adaptive 배치·도구 flow·수치 입력 버튼/Tab/reveal로 compact plot을
 
 폭 전환의 control identity와 target 선택 행 inner/outer reveal을 유지한다. 최종 Release40.00초와 실제 target/search/filter 왕복·caret·목록 이동·키보드 재연결/취소를 확인했다. QA11개 상태·음악r36/자산2개·source hash·strict 재열기/disk와 시각 검토를 통과했다. physical0·사용자 앱 유지. 실제 케이블 적용·그룹 관리·IME 조합·숨은 jump focus 폭 전환은 미검증이며 compact 선택 행 reveal은 상단 port actions와 동시 노출이 아니다. [계약](119-connection-focus-continuity.md).
 
-이전 Automation compact 후보는 build105, 경로 메시지에 가려지는 tail 안내는 build106에서 실제 재현·수정했다. 현재는 위 build107의 테이크 요약과 offline AU instrument 격리를 진행하며 build96 effect 격리 완료와 구분한다. 전체 DAW·실시간·물리 출력 완료는 아니다.
+이전 Automation compact 후보는 build105, 경로 메시지에 가려지는 tail 안내는 build106에서 실제 재현·수정했다. 현재는 build109 출력 장치 선택과 공유 리듬 표시를 검증하며 build96 effect·build107 instrument 격리 완료와 구분한다. 전체 DAW·실시간·물리 출력 완료는 아니다.
 
 ## 현재 검증 완료 — build103 오디오 compact 배치
 

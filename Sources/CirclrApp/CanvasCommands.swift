@@ -27,6 +27,7 @@ extension AppStore {
         hierarchyTransitionID=nil;focusHierarchy(address,detail:true);hierarchySettingsOpen=true
     }
     func showCommands() {
+        if outputPreferencesOpen {closeOutputPreferences()}
         arrangementPickerRequest=nil
         soundPickerRequest=nil
         libraryOpen=false
@@ -35,6 +36,7 @@ extension AppStore {
         func add(_ id:String,_ title:String,_ shortcut:String="",_ run:@escaping()->Void) {
             commands.append(StudioCommand(id:id,title:title,shortcut:shortcut,run:run))
         }
+        add("output-settings","곡 재생 출력 설정","⌘,"){[weak self] in self?.showOutputPreferences()}
         add("new","새 앨범","⌘N"){[weak self] in self?.newProject()}
         add("open","프로젝트 열기…","⌘O"){[weak self] in self?.open()}
         add("save","프로젝트 저장","⌘S"){[weak self] in self?.save()}

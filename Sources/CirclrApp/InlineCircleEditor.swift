@@ -11,6 +11,7 @@ struct InlineCircleEditor: View {
     @State private var viewGeneration:Int?
     @State private var nameFocused=false
     @StateObject private var connectionKeyboard=PortKeyboardFocus()
+    private var sharedPattern:RhythmPattern? {store.editPatternID.flatMap{id in store.project.patterns.first{$0.id==id}}}
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             InlineEditorHeader(store:store,nameFocus:$nameFocused,connectionKeyboard:connectionKeyboard)
@@ -27,10 +28,17 @@ struct InlineCircleEditor: View {
                     Picker("서클 편집 범위",selection:Binding(get:{store.editOriginal},set:{_ = store.setMusicEditScope(original:$0,identity:identity)})) {
                         Text("서클 · 이번 사용").tag(false);Text("서클 · 공유 원본").tag(true)
                     }.labelsHidden().controlSize(.mini).frame(width:130)
-                        .help("서클 이름·속성의 편집 범위 · 공유 원본 변경은 같은 원본의 다른 사용에도 반영됩니다. 트랙 음색·레벨은 이 선택과 관계없이 트랙 전체에 적용됩니다.")
+                        .help("서클 이름·속성의 편집 범위 · 공유 원본 변경은 같은 원본의 다른 사용에도 반영됩니다. 트랙 음색·레벨은 이 선택과 관계없이 트랙 전체에 적용됩니다. 리듬 패턴의 노트·클립은 이 선택과 관계없이 같은 패턴의 모든 사용에 적용됩니다.")
                         .disabled(store.preparing || store.midiRecording || store.audioRecordingBusy || store.audioRecordPending || store.midiImportDraft != nil)
                 }
-                Text(store.currentAudioClip != nil && !store.automationVisible && !store.hierarchySettingsOpen && !store.connectionsOpen && store.midiImportDraft==nil ? "파형 위 휠로 확대·축소 · ⇧ 휠로 원본 시간 이동":"휠로 확대·축소 · ⇧ 휠로 편집 영역 이동"); Spacer(); Text("⌘S 저장") }
+                if let pattern=sharedPattern {
+                    Text("패턴: \(pattern.name)").lineLimit(1).truncationMode(.middle)
+                        .help("공유 리듬 패턴: \(pattern.name)")
+                    Text("노트·클립은 모든 사용에 반영").fixedSize()
+                        .help("노트·클립 편집은 같은 리듬 패턴을 사용하는 모든 곳에 반영됩니다. 서클 편집 범위 선택과 별개입니다.")
+                } else {
+                Text(store.currentAudioClip != nil && !store.automationVisible && !store.hierarchySettingsOpen && !store.connectionsOpen && store.midiImportDraft==nil ? "파형 위 휠로 확대·축소 · ⇧ 휠로 원본 시간 이동":"휠로 확대·축소 · ⇧ 휠로 편집 영역 이동")
+                }; Spacer(); Text("⌘S 저장") }
                 .font(.system(size: 11)).foregroundStyle(StudioTheme.secondary)
         }
         .frame(maxWidth:.infinity,maxHeight:.infinity,alignment:.topLeading)

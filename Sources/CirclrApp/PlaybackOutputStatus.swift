@@ -2,6 +2,10 @@ import Foundation
 import CirclrAudio
 
 extension AppStore {
+    var outputDeviceConfirmation:String {
+        if let name=outputStatus.actualOutputDeviceName {return "마지막 재생 확인 장치: "+name}
+        return "실제 출력 장치: 아직 확인되지 않음"
+    }
     func refreshOutputStatus() {
         var next=playback.outputStatus
         // The canvas clock already updates meters; do not invalidate this status row per frame.
@@ -23,6 +27,8 @@ extension AppStore {
         case .helperHello:return "출력 연결"
         case .fileValidation:return "파일 확인"
         case .engineCreation:return "장치 준비"
+        case .outputNodeAcquisition:return "출력 노드 준비"
+        case .deviceSelection:return "출력 장치 확인"
         case .mixerAcquisition:return "믹서 준비"
         case .routing:return "경로 연결"
         case .scheduling:return "재생 배치"
@@ -37,6 +43,7 @@ extension AppStore {
     }
     var outputLabel:String? {
         switch outputStatus.transport.phase {
+        case .playing: return outputStatus.actualOutputDeviceName.map{"출력 · "+$0} ?? "재생 중"
         case .starting:return "\(outputPreparationStage ?? "재생 준비") \(outputStatus.elapsedSeconds)초"
         case .stopping:return "출력 정리 중"
         case .failed:return "출력 시작 실패"
@@ -49,6 +56,7 @@ extension AppStore {
     }
     var outputDetail:String {
         switch outputStatus.transport.phase {
+        case .playing:return outputDeviceConfirmation
         case .starting:return "\(outputPreparationStage ?? "재생 준비") 중 · \(outputStatus.elapsedSeconds)초. Space로 취소할 수 있습니다."
         case .stopping:return (outputStatus.request == .timedOut ? "재생 준비 제한 시간을 초과했습니다. ":"")+"재생 요청은 멈췄으며 출력을 정리하고 있습니다. 편집은 계속할 수 있습니다. 정리가 끝나면 다시 재생하세요."+outputLastStageDetail
         case .failed:return (outputStatus.transport.message ?? "출력을 시작할 수 없습니다. 다시 재생하세요.")+outputLastStageDetail

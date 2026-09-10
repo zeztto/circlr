@@ -33,15 +33,16 @@ import CirclrCore
         guard state.id==activeID,state.phase == .playing else{return 0}
         return min(prepared?.mix.duration ?? .greatestFiniteMagnitude,offset+state.seconds)
     }
-    public func play(_ audio:PreparedAudio,from:Double=0)async throws {
-        try await start(audio,from:from,timeout:10)
+    public func play(_ audio:PreparedAudio,from:Double=0,selection:OutputDeviceSelection = .systemDefault)async throws {
+        try await start(audio,from:from,timeout:10,selection:selection)
     }
-    func start(_ audio:PreparedAudio,from:Double=0,timeout:Double)async throws {
+    func start(_ audio:PreparedAudio,from:Double=0,timeout:Double,selection:OutputDeviceSelection = .systemDefault)async throws {
         guard from.isFinite,from>=0,timeout.isFinite,timeout>0 else{throw PlaybackTransportError.invalidPosition}
         try Task.checkCancellation()
         stop();prepared=audio;offset=min(audio.mix.duration,from)
         guard Int((offset*PCM.rate).rounded())<audio.mix.count else{return}
-        if let outputWorker {try await outputWorker.play(audio.mix,from:offset,timeout:timeout);return}
+        if let outputWorker {try await outputWorker.play(audio.mix,from:offset,timeout:timeout,selection:selection);return}
+        guard selection == .systemDefault else{throw CirclrError("이 출력 경로는 장치 지정을 지원하지 않습니다") }
         generation+=1;let ticket=generation
         try await outputConnection.waitUntilReady(timeout:timeout)
         try Task.checkCancellation()

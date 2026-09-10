@@ -6,7 +6,9 @@ macOS용 앨범·송폼 궤도 편집기. **앨범 → 곡·악장 → 섹션 �
 
 연결 UI는 [서클 둘레 8방향 IN/OUT과 다중 입출력](docs/22-eight-direction-ports.md)으로 확장 중이다. 포트의 신호 의미와 연결점 배치를 분리한다. 아래 일반 사용법은 배포된 0.19 앱 기준이며 새 포트 기능은 독립 개발 브랜치에서 검증한다.
 
-현재 **`codex/daw-integration`의 0.20.0 build 108**에 녹음 lifecycle과 8방향·다중 bus·그룹 포트를 통합했다. 같은 캔버스의 연결 편집·녹음 상태·스텝·오토메이션이 공존하며, 녹음 시작·정리 중 음악 편집과 Undo의 경쟁을 차단한다. build 23의 실제 편집·바운스·Undo·저장/재열기·닫기 최소화 및 출력별 모션 검증은 [통합 QA](qa/daw-integration-review.md)에 기록했다.
+현재 **`codex/daw-integration`의 0.20.0 build 109**에 녹음 lifecycle과 8방향·다중 bus·그룹 포트를 통합했다. 같은 캔버스의 연결 편집·녹음 상태·스텝·오토메이션이 공존하며, 녹음 시작·정리 중 음악 편집과 Undo의 경쟁을 차단한다. build 23의 실제 편집·바운스·Undo·저장/재열기·닫기 최소화 및 출력별 모션 검증은 [통합 QA](qa/daw-integration-review.md)에 기록했다.
+
+**build109는 앱별 출력 선택과 공유 리듬 표시를 추가했다.** 최종 Release40.31초·mock/fixture38개16.992초·UI-only mock 출력9개/리듬6개 상태 checker와 시각/source 검토를 통과했다. 출력 설정의 키보드 선택·Esc·누락 유지·실패 재시도·조회 취소, 공유 패턴 변경/Undo·strict 재열기를 확인했다. 네 helper를 필수 패키징하며 명시 장치를 자동 대체하지 않고 마지막 확인 장치를 별도로 표시한다. 조회5초는 deadline이며 종료 회수는 플랫폼 동작에 의존한다. 실제 readback/hotplug/물리 재생과 HAL stall 해결은 미검증이며 사용자 앱 PID86114를 보존했다. [구현·검증](docs/125-output-device-implementation.md).
 
 **build108은 테이크를 canvas 검색과 키보드로 선택한다.** 최종 Release39.82초와 실제 ⌥⌘T·Down/Return·검색0·Esc·Undo·명령 진입·stale 거절을 확인했다. 검색 중 목록 높이는 유지되며 시각/source 검토를 통과했다. checker9개 상태·검색 AX·테이크5개·자산2개·output0·r30 strict 복원/재열기/disk 대조도 통과했다. 물리 I/O 없이 사용자 앱을 보존했다. [계약](docs/124-take-search.md).
 

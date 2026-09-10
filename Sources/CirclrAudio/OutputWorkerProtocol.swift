@@ -10,6 +10,9 @@ struct OutputWorkerPacket: Codable, Equatable {
 
     enum Payload: Codable, Equatable {
         case hello
+        case helloCapabilities(outputDeviceSelection: Bool)
+        case prepareOutput(frames: Int, selection: OutputDeviceSelection)
+        case outputDevice(descriptor: OutputDeviceDescriptor)
         case prepare(frames: Int)
         case prepared
         case play(run: UUID)
@@ -32,6 +35,12 @@ struct OutputWorkerPacket: Codable, Equatable {
     func validate() throws {
         guard version == Self.version, sequence > 0 else { throw OutputWorkerWireError.invalidPacket }
         switch payload {
+        case .prepareOutput(let frames, let selection):
+            try Self.validateSelection(selection)
+            guard frames > 0, frames <= OutputWorkerWire.maximumFrames else { throw OutputWorkerWireError.invalidPacket }
+        case .outputDevice(let descriptor):
+            try Self.validateSelection(.deviceUID(descriptor.uid))
+            guard !descriptor.name.isEmpty, descriptor.name.utf8.count <= 1024, !descriptor.name.contains("\0") else { throw OutputWorkerWireError.invalidPacket }
         case .prepare(let frames):
             guard frames > 0, frames <= OutputWorkerWire.maximumFrames else { throw OutputWorkerWireError.invalidPacket }
         case .clock(_, let seconds):
@@ -44,6 +53,10 @@ struct OutputWorkerPacket: Codable, Equatable {
                   elapsed <= Double(OutputWorkerWire.maximumFrames) / 48_000 else { throw OutputWorkerWireError.invalidPacket }
         default: break
         }
+    }
+    static func validateSelection(_ selection: OutputDeviceSelection) throws {
+        do { try selection.validate() }
+        catch { throw OutputWorkerWireError.invalidPacket }
     }
 }
 
@@ -58,7 +71,8 @@ struct OutputWorkerWire {
     static let maximumChunkBytes = 64 * 1024
     static let maximumFrameBytes = 16 * 1024
     static let maximumFrames = 48_000 * 60 * 60 * 4
-    static let traceStages: [PlaybackOutputTraceEvent.Stage] = [.fileValidation, .engineCreation, .mixerAcquisition, .routing, .scheduling, .engineStart, .playerPlay]
+    static let legacyTraceStages: [PlaybackOutputTraceEvent.Stage] = [.fileValidation, .engineCreation, .mixerAcquisition, .routing, .scheduling, .engineStart, .playerPlay]
+    static let traceStages: [PlaybackOutputTraceEvent.Stage] = [.fileValidation, .engineCreation, .outputNodeAcquisition, .deviceSelection, .mixerAcquisition, .routing, .scheduling, .engineStart, .playerPlay]
     private let session: UUID
     private let direction: Direction
     private var lastSequence: UInt64 = 0
@@ -66,6 +80,7 @@ struct OutputWorkerWire {
     private var closed = false
     private var traceIndex = 0
     private var traceElapsed = 0.0
+    private var selectedTraceStages = Self.traceStages
 
     init(session: UUID, receiving direction: Direction = .events) {
         self.session = session
@@ -108,12 +123,14 @@ struct OutputWorkerWire {
                 guard packet.session == session, lastSequence < UInt64.max, packet.sequence == lastSequence + 1 else { throw OutputWorkerWireError.stalePacket }
                 let command: Bool
                 switch packet.payload {
-                case .prepare, .play, .stop: command = true
+                case .prepare, .prepareOutput, .play, .stop: command = true
                 default: command = false
                 }
                 guard command == (direction == .commands) else { throw OutputWorkerWireError.wrongDirection }
+                if case .hello = packet.payload { selectedTraceStages = Self.legacyTraceStages }
+                if case .helloCapabilities(let supported) = packet.payload { selectedTraceStages = supported ? Self.traceStages : Self.legacyTraceStages }
                 if case .trace(let stage, let phase, let elapsed) = packet.payload {
-                    guard traceIndex < Self.traceStages.count * 2, stage == Self.traceStages[traceIndex / 2],
+                    guard traceIndex < selectedTraceStages.count * 2, stage == selectedTraceStages[traceIndex / 2],
                           phase == (traceIndex % 2 == 0 ? .entered : .completed), elapsed >= traceElapsed else {
                         throw OutputWorkerWireError.invalidPacket
                     }

@@ -21,6 +21,9 @@ final class OutputWorkerProcess: @unchecked Sendable {
     private var stage = Stage.boot
     private var frames = 0
     private var helperTraceEvents = 0
+    private var outputSelection: OutputDeviceSelection = .systemDefault
+    private var deviceSelectionSupported = false
+    private var actualDevice: OutputDeviceDescriptor?
     private var terminationObserved = false
     private var eventsDrained = false
     // Internal scheduling hooks allow deterministic pipe/termination race tests.
@@ -54,15 +57,16 @@ final class OutputWorkerProcess: @unchecked Sendable {
         if workerElapsed != nil { value.trace?.helperReportsStages = true }
     }
 
-    func play(_ pcm: PCM, from: Double, timeout: Double) async throws {
+    func play(_ pcm: PCM, from: Double, timeout: Double, selection: OutputDeviceSelection = .systemDefault) async throws {
         guard from.isFinite, from >= 0, timeout.isFinite, timeout > 0,
               pcm.left.count == pcm.right.count, pcm.count <= OutputWorkerWire.maximumFrames else { throw PlaybackTransportError.invalidPosition }
+        try OutputWorkerPacket.validateSelection(selection)
         let first = Int(min(Double(pcm.count), (from * PCM.rate).rounded()))
         guard first < pcm.count else { return }
         try Task.checkCancellation()
         let id = UUID(), control = MediaPreviewCancellation()
-        try begin(id, control: control)
-        queue.async { self.launch(id, control: control, pcm: pcm, first: first) }
+        try begin(id, control: control, selection: selection)
+        queue.async { self.launch(id, control: control, pcm: pcm, first: first, selection: selection) }
         let deadline = ProcessInfo.processInfo.systemUptime + timeout
         do {
             while true {
@@ -83,7 +87,7 @@ final class OutputWorkerProcess: @unchecked Sendable {
             throw error
         }
     }
-    private func begin(_ id: UUID, control: MediaPreviewCancellation) throws {
+    private func begin(_ id: UUID, control: MediaPreviewCancellation, selection: OutputDeviceSelection) throws {
         lock.lock(); defer { lock.unlock() }
         guard token == nil else { throw PlaybackTransportError.busy }
         token = control
@@ -92,6 +96,8 @@ final class OutputWorkerProcess: @unchecked Sendable {
         value.attemptID = id; value.phase = .connecting; value.step = .player; value.request = .waiting
         value.transport.id = id; value.transport.phase = .starting
         value.trace = PlaybackOutputTrace(sessionID: id)
+        if case .systemDefault = selection { value.outputSelectionKind = "systemDefault" }
+        else { value.outputSelectionKind = "deviceUID" }
         startedAt = ProcessInfo.processInfo.systemUptime
     }
     func cancel(expectedID: UUID? = nil, timedOut: Bool = false) {
@@ -107,9 +113,10 @@ final class OutputWorkerProcess: @unchecked Sendable {
         queue.async { self.close(id, graceful: true) }
     }
 
-    private func launch(_ id: UUID, control: MediaPreviewCancellation, pcm: PCM, first: Int) {
+    private func launch(_ id: UUID, control: MediaPreviewCancellation, pcm: PCM, first: Int, selection: OutputDeviceSelection) {
         session = id; sequence = 0; stage = .boot; frames = pcm.count - first; helperTraceEvents = 0
         terminationObserved = false; eventsDrained = false
+        outputSelection = selection; deviceSelectionSupported = false; actualDevice = nil
         do {
             guard !control.isCancelled else { throw CancellationError() }
             guard let executable, FileManager.default.isExecutableFile(atPath: executable.path) else {
@@ -221,15 +228,21 @@ final class OutputWorkerProcess: @unchecked Sendable {
         do {
             switch payload {
             case .hello where stage == .boot:
-                trace(id, .helperHello, .completed)
-                stage = .preparing; update { $0.step = .routing }
-                try send(.prepare(frames: frames))
+                try prepare(id, supportsSelection: false)
+            case .helloCapabilities(let supported) where stage == .boot:
+                try prepare(id, supportsSelection: supported)
+            case .outputDevice(let descriptor) where stage == .starting && deviceSelectionSupported && actualDevice == nil:
+                if case .deviceUID(let uid) = outputSelection, descriptor.uid != uid { throw OutputWorkerWireError.invalidPacket }
+                actualDevice = descriptor
+                update { $0.actualOutputDeviceName = descriptor.name }
             case .prepared where stage == .preparing:
                 guard helperTraceEvents == 0 || helperTraceEvents == 2 else { throw OutputWorkerWireError.invalidPacket }
                 stage = .starting; update { $0.step = .device }
                 try send(.play(run: id))
             case .started(let run) where run == id && stage == .starting:
-                guard helperTraceEvents == 0 || helperTraceEvents == OutputWorkerWire.traceStages.count * 2 else { throw OutputWorkerWireError.invalidPacket }
+                guard !deviceSelectionSupported || actualDevice != nil else { throw OutputWorkerWireError.invalidPacket }
+                let traceCount = deviceSelectionSupported ? OutputWorkerWire.traceStages.count : OutputWorkerWire.legacyTraceStages.count
+                guard helperTraceEvents == 0 || helperTraceEvents == traceCount * 2 else { throw OutputWorkerWireError.invalidPacket }
                 stage = .playing
                 update {
                     guard $0.transport.phase == .starting else { return }
@@ -251,6 +264,17 @@ final class OutputWorkerProcess: @unchecked Sendable {
             default: throw OutputWorkerWireError.invalidPacket
             }
         } catch { fail(id, message: "출력 응답 처리에 실패했습니다. 다시 재생하세요.") }
+    }
+    private func prepare(_ id: UUID, supportsSelection: Bool) throws {
+        trace(id, .helperHello, .completed)
+        deviceSelectionSupported = supportsSelection
+        if !supportsSelection, case .deviceUID = outputSelection {
+            fail(id, message: "출력 helper가 장치 선택을 지원하지 않습니다. 앱 설치를 확인하세요.")
+            return
+        }
+        stage = .preparing; update { $0.step = .routing }
+        if supportsSelection { try send(.prepareOutput(frames: frames, selection: outputSelection)) }
+        else { try send(.prepare(frames: frames)) }
     }
     private func fail(_ id: UUID, message: String) {
         guard session == id, stage != .closing else { return }
