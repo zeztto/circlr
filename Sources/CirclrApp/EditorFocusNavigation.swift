@@ -11,12 +11,14 @@ import CirclrCore
     weak var responder:NSResponder?
     weak var fieldEditorOwner:AnyObject?
     let usedFieldEditor:Bool
+    let responderText:String?
     init(store:AppStore) {
         identity=store.numberEditIdentity;page=store.capturedStudioWorkspace.page
         steps=store.midiStepMode;orbits=store.project.usesOrbits
         let currentResponder=NSApp.keyWindow?.firstResponder
         responder=currentResponder
         let fieldEditor=currentResponder as? NSTextView
+        responderText=fieldEditor?.string
         let isFieldEditor=fieldEditor?.isFieldEditor == true
         usedFieldEditor=isFieldEditor
         fieldEditorOwner=isFieldEditor ? fieldEditor?.delegate:nil
@@ -24,6 +26,20 @@ import CirclrCore
 }
 
 extension AppStore {
+    /// An attached native view may satisfy an explicit request, never invent one.
+    func fulfillEditorFocusWhenMounted(_ view:NSView) {
+        guard let id=editorFocusRequest?.id else{return}
+        DispatchQueue.main.async { [weak self,weak view] in
+            guard let self,let view,view.window != nil,self.editorFocusRequest?.id==id else{return}
+            var parent:NSView?=view
+            while let current=parent {
+                if let host=current as? NSHostingView<InlineCircleEditor> {
+                    self.consumeEditorNavigationFocus(in:host);return
+                }
+                parent=current.superview
+            }
+        }
+    }
     func requestEditorNavigationFocus() {
         guard selectedMusic != nil,!hierarchySettingsOpen,!connectionsOpen,hierarchyTransitionID==nil,
               midiImportDraft==nil,embeddedPlugin==nil else{editorFocusRequest=nil;return}
@@ -34,10 +50,14 @@ extension AppStore {
         guard request.identity==numberEditIdentity,request.page==capturedStudioWorkspace.page,
               request.steps==midiStepMode,request.orbits==project.usesOrbits else{editorFocusRequest=nil;return}
         guard !navigationOpen,commandPalette==nil,!keyboardHelp,!libraryOpen,!outputPreferencesOpen,
-              soundPickerRequest==nil,arrangementPickerRequest==nil,
-              let window=editor.window,window===NSApp.keyWindow,NSApp.modalWindow==nil else {
+              soundPickerRequest==nil,arrangementPickerRequest==nil,NSApp.modalWindow==nil else {
             editorFocusRequest=nil;return
         }
+        // Initial saved-workspace restoration can precede the host's window mount.
+        // Attachment will retry the same request; no other window receives focus.
+        guard let window=editor.window else{return}
+        guard let keyWindow=NSApp.keyWindow else{return}
+        guard window===keyWindow else{editorFocusRequest=nil;return}
         func matches(_ view:NSView)->Bool {
             guard !view.isHiddenOrHasHiddenAncestor,view.window===window else{return false}
             switch request.page {
@@ -62,6 +82,12 @@ extension AppStore {
             return nil
         }
         let responder=window.firstResponder
+        if responder===request.responder,let text=responder as? NSTextView {
+            // A user can resume typing into the same owner while the camera opens.
+            // Inspect only; a delayed focus request must never commit fresh input.
+            guard !text.hasMarkedText(),text.string==request.responderText else{editorFocusRequest=nil;return}
+            if hasUnresolvedNumericDraft(in:text) {editorFocusRequest=nil;return}
+        }
         // AppKit reuses one field editor for search and numeric controls.
         // Pointer equality alone must not authorize stealing a new owner's input.
         if responder===request.responder,request.usedFieldEditor {
@@ -89,9 +115,20 @@ struct EditorFocusNavigationAttachment:NSViewRepresentable {
     final class Attachment:NSView {
         weak var store:AppStore?
         var scheduled:UUID?
-        override func viewDidMoveToWindow(){super.viewDidMoveToWindow();schedule()}
-        func schedule() {
-            guard let id=store?.editorFocusRequest?.id,scheduled != id else{return}
+        var keyWindowObserver:NSObjectProtocol?
+        deinit {if let keyWindowObserver {NotificationCenter.default.removeObserver(keyWindowObserver)}}
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            if let keyWindowObserver {NotificationCenter.default.removeObserver(keyWindowObserver);self.keyWindowObserver=nil}
+            if let window {
+                keyWindowObserver=NotificationCenter.default.addObserver(forName:NSWindow.didBecomeKeyNotification,object:window,queue:.main) { [weak self] _ in
+                    MainActor.assumeIsolated {self?.schedule(retryExisting:true)}
+                }
+            }
+            schedule(retryExisting:window != nil)
+        }
+        func schedule(retryExisting:Bool=false) {
+            guard let id=store?.editorFocusRequest?.id,retryExisting || scheduled != id else{return}
             scheduled=id
             DispatchQueue.main.async { [weak self] in
                 guard let self,let store=self.store,store.editorFocusRequest?.id==id,let window=self.window else{return}

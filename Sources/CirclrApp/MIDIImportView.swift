@@ -88,6 +88,7 @@ extension AppStore {
             focusHierarchy(saved.address,detail:detail)
             midiStepMode=saved.midiStepMode
             restoreStudioWorkspace(saved.workspace)
+            requestEditorNavigationFocus()
         }
     }
 
@@ -105,6 +106,7 @@ extension AppStore {
             if ids.count==1,let lane=ids.first {focusHierarchy(.music(arrangementID:draft.arrangementID,useID:draft.useID,nodeID:"midi:\(lane)"),detail:true)}
             else {focusHierarchy(.section(arrangementID:draft.arrangementID,useID:draft.useID),detail:false)}
             selectedBeat=beat
+            if ids.count==1 {requestEditorNavigationFocus()}
             return nil
         }catch{return error.localizedDescription}
     }

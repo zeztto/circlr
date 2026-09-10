@@ -49,7 +49,7 @@ struct AgentConsole:View {
                             .accessibilityLabel(String(format:"완료 · 여운 %.1f초 · ",tail.effectiveSeconds)+job.message)
                     }
                     if let id=job.nodeID,let node=store.hierarchyScene?.nodes.first(where:{$0.music?.id==id}) {
-                        Button("바운스 서클 보기"){store.focusHierarchy(node.id,detail:true)}
+                        Button("바운스 서클 보기"){_=store.focusUserWorkspace(node.id,detail:true,explicitIntent:.content)}
                     }
                 }
                 Text("r\(store.project.musicRevision)").font(.system(size:10,design:.monospaced)).foregroundStyle(StudioTheme.secondary).padding(.trailing,12)

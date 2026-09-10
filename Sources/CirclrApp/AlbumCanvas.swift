@@ -236,7 +236,7 @@ struct AlbumCanvas: NSViewRepresentable {
                     let selection=StudioWorkspace.restoredSelection(saved.selection,in:store.project)
                     store.selectHierarchy(selection);scene=store.hierarchyScene;store.midiStepMode=saved.midiStepMode ?? false
                     if selection==saved.selection {
-                        store.restoreStudioWorkspace(saved.workspace ?? .init(page:saved.settingsOpen ? .settings:.content));setCamera(restored)
+                        store.restoreStudioWorkspace(saved.workspace ?? .init(page:saved.settingsOpen ? .settings:.content));store.requestEditorNavigationFocus();setCamera(restored)
                     } else {
                         store.restoreStudioWorkspace(.init());focus(selection)
                     }

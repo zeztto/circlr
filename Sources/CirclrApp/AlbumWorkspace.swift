@@ -200,7 +200,7 @@ extension AppStore {
             try ProjectEditing.setLane(lane, for: use.id, original: original, in: &p)
             if let point { try HierarchyEditing.move(.music(arrangementID:p.activeArrangementID,useID:use.id,nodeID:"midi:\(lane.id)"),to:point,in:&p) }
         }
-        if let laneID { focusHierarchy(.music(arrangementID: project.activeArrangementID, useID: use.id, nodeID: "midi:\(laneID)"), detail: true) }
+        if let laneID { _=focusUserWorkspace(.music(arrangementID: project.activeArrangementID, useID: use.id, nodeID: "midi:\(laneID)"), detail: true,explicitIntent:.content) }
     }
     var canInsertMusicEffect:Bool {
         guard let music=selectedMusic else{return false}
@@ -309,7 +309,7 @@ extension AppStore {
         }
         guard project.patterns.contains(where:{$0.id==pattern.id}) else{return}
         hierarchySettingsOpen=false
-        focusHierarchy(.music(arrangementID:project.activeArrangementID,useID:use.id,nodeID:"rhythm-midi:\(track.id)"),detail:true)
+        _=focusUserWorkspace(.music(arrangementID:project.activeArrangementID,useID:use.id,nodeID:"rhythm-midi:\(track.id)"),detail:true,explicitIntent:.content)
     }
 }
 

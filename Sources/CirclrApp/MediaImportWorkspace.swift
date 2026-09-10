@@ -62,6 +62,7 @@ extension AppStore {
                         // previous source was being edited in automation mode.
                         self.automationOpen=false
                         self.focusHierarchy(clips.count==1 ? .music(arrangementID:a,useID:u,nodeID:"audio:\(clip)"):.section(arrangementID:a,useID:u),detail:clips.count==1)
+                        if clips.count==1,!(NSApp.keyWindow?.firstResponder is NSTextView) {self.requestEditorNavigationFocus()}
                     }
                 }
             } catch {

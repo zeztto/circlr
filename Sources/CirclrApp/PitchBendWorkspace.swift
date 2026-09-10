@@ -112,7 +112,7 @@ struct PitchBendPlot:NSViewRepresentable {
     required init?(coder:NSCoder){fatalError()}
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
-        DispatchQueue.main.async{[weak self] in guard let self,let window=self.window,!(window.firstResponder is NSTextView) else{return};window.makeFirstResponder(self)}
+        store.fulfillEditorFocusWhenMounted(self)
     }
     func refresh() {
         let identity=store.numberEditIdentity,index=store.pitchBendState.selectedIndex,beats=store.pitchBendDisplayBeats

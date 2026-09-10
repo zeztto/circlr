@@ -116,8 +116,11 @@ struct MIDIEditorModeControls:View {
     }
     private func mode(_ title:String,selected:Bool,action:@escaping()->Void)->some View {
         StudioModeButton(title:title,label:"MIDI 편집 방식 · "+title,selected:selected,help:title+" 편집") {
-            guard store.nameEditing.resolve() else{return}
-            action()
+            var identity=store.numberEditIdentity
+            guard store.resolveActiveNumericDraft(),store.nameEditing.resolve() else{return}
+            identity.revision=store.project.musicRevision
+            guard identity==store.numberEditIdentity else{return}
+            action();store.requestEditorNavigationFocus()
         }.frame(width:CGFloat(title.count)*12+18,height:28)
     }
 }

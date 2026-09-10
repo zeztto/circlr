@@ -139,14 +139,12 @@ struct PianoRoll:NSViewRepresentable {
     init(store:AppStore){self.store=store;super.init(frame:.zero);setAccessibilityElement(true);setAccessibilityRole(.group);setAccessibilityLabel("피아노 롤 · Tab 노트 선택 · 방향키 편집")}
     required init?(coder:NSCoder){fatalError()}
     override func viewDidMoveToWindow(){super.viewDidMoveToWindow();DispatchQueue.main.async{[weak self] in
-        guard let self,let window=self.window else{return}
+        guard let self,self.window != nil else{return}
         if self.scrollObserver==nil,let clip=self.enclosingScrollView?.contentView {
             clip.postsBoundsChangedNotifications=true
             self.scrollObserver=NotificationCenter.default.addObserver(forName:NSView.boundsDidChangeNotification,object:clip,queue:.main){[weak self] _ in MainActor.assumeIsolated{self?.needsDisplay=true}}
         }
-        guard self.allowsEditing,!(window.firstResponder is NSTextView) else{return}
-        window.makeFirstResponder(self)
-    }}
+    };store.fulfillEditorFocusWhenMounted(self)}
     override func viewWillMove(toWindow newWindow:NSWindow?){if newWindow==nil{releaseHeldNote();cancelDrag();if let scrollObserver{NotificationCenter.default.removeObserver(scrollObserver);self.scrollObserver=nil}};super.viewWillMove(toWindow:newWindow)}
     deinit{if let scrollObserver{NotificationCenter.default.removeObserver(scrollObserver)}}
     var dragIsCurrent:Bool {allowsEditing && window != nil && dragIdentity==store.numberEditIdentity && dragFrame==convert(bounds,to:nil) && dragOrbital==store.project.usesOrbits && dragTopPitch==topPitch && dragGrid==store.currentContext.beatGrid.subdivisions}

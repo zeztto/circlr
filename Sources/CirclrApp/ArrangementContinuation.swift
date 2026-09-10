@@ -39,6 +39,6 @@ extension AppStore {
         arrangementPickerRequest=nil
         focusHierarchy(continuation.destination,detail:true)
         restoreStudioWorkspace(continuation.workspace)
-        focusCanvas?()
+        requestEditorNavigationFocus()
     }
 }

@@ -30,10 +30,13 @@ extension AppStore {
     var automationEditorHasFocus:Bool {NSApp.keyWindow?.firstResponder is AutomationPlotView}
     var automationVisible:Bool {automationOpen && selectedMusic?.supportsAutomation==true && !hierarchySettingsOpen && embeddedPlugin==nil}
     func showAutomation() {
-        guard nameEditing.resolve() else{return}
+        var identity=numberEditIdentity
+        guard resolveActiveNumericDraft(),nameEditing.resolve() else{return}
+        identity.revision=project.musicRevision
+        guard identity==numberEditIdentity else{return}
         if selectedMusic?.supportsAutomation==false {openTrackComponent(1)}
         guard selectedMusic?.supportsAutomation==true,let address=hierarchySelection else{return}
-        connectionsOpen=false;hierarchySettingsOpen=false;embeddedPlugin=nil;automationOpen=true;focusHierarchy(address,detail:true)
+        connectionsOpen=false;hierarchySettingsOpen=false;embeddedPlugin=nil;automationOpen=true;focusHierarchy(address,detail:true);requestEditorNavigationFocus()
     }
     func setAutomation(_ points:[AutomationPoint]?=nil,enabled:Bool?=nil) {
         guard let node=selectedMusic,let use=selectedUse else{return}
@@ -101,8 +104,8 @@ struct AutomationEditor:View {
                 // An instrument can change kind without changing its circle address.
                 if !parameters.contains(store.automationParameter) {store.automationParameter = .gain}
             }
-            .onChange(of:store.automationParameter){_,_ in focusTarget.focus()}
-            .onChange(of:store.editOriginal){_,_ in focusTarget.focus()}
+            .onChange(of:store.automationParameter){_,_ in if let view=focusTarget.view {store.fulfillEditorFocusWhenMounted(view)}}
+            .onChange(of:store.editOriginal){_,_ in if let view=focusTarget.view {store.fulfillEditorFocusWhenMounted(view)}}
             .environment(\.numberEditing,NumberEditingContext(snapshot:store.numberEditIdentity,current:{store.numberEditIdentity},focusCanvas:{focusTarget.focus()},fieldFocus:fieldFocus))
     }
     var plot:some View {AutomationPlot(store:store,displayBeats:store.automationDisplayedBeats,focusTarget:focusTarget,fieldFocus:fieldFocus).disabled(!available)}
@@ -153,18 +156,25 @@ struct AutomationEditor:View {
         }
         }
     }
+    private func selectParameter(_ parameter:AutomationParameter) {
+        var identity=store.numberEditIdentity
+        guard store.resolveActiveNumericDraft(),store.nameEditing.resolve() else{return}
+        identity.revision=store.project.musicRevision
+        guard identity==store.numberEditIdentity,store.availableAutomationParameters.contains(parameter) else{return}
+        store.automationParameter=parameter;store.requestEditorNavigationFocus()
+    }
     var parameterControls:some View {
         MIDIWorkspaceToolbarLayout {
             if store.availableAutomationParameters.contains(.synthCutoff) {
                 ForEach(store.availableAutomationParameters,id:\.self) { parameter in
                     StudioModeButton(title:parameter.label,label:"오토메이션 대상 · "+parameter.label,
                         selected:store.automationParameter==parameter,help:parameter.label+" 오토메이션 편집") {
-                        store.automationParameter=parameter
+                        selectParameter(parameter)
                     }
                     .frame(width:max(48,(parameter.label as NSString).size(withAttributes:[.font:NSFont.systemFont(ofSize:12,weight:.semibold)]).width+24),height:28)
                 }
             } else {
-                Picker("오토메이션 대상",selection:$store.automationParameter){ForEach(store.availableAutomationParameters,id:\.self){Text($0.label).tag($0)}}
+                Picker("오토메이션 대상",selection:Binding(get:{store.automationParameter},set:{selectParameter($0)})){ForEach(store.availableAutomationParameters,id:\.self){Text($0.label).tag($0)}}
                     .pickerStyle(.segmented).labelsHidden().frame(width:112)
             }
             HStack(spacing:10) {
@@ -298,7 +308,7 @@ struct AutomationPlot:NSViewRepresentable {
     override var acceptsFirstResponder:Bool {true}
     init(store:AppStore){self.store=store;super.init(frame:.zero);setAccessibilityElement(true);setAccessibilityRole(.group);setAccessibilityLabel("오토메이션 곡선 · Tab 첫 수치 · Shift Tab 마지막 수치 · Return 점 추가 · 대괄호 점 선택 · Home·End 첫·끝 점 · 방향키 시간과 값 · Delete 삭제 · 겹친 점 Option 클릭")}
     required init?(coder:NSCoder){fatalError()}
-    override func viewDidMoveToWindow(){super.viewDidMoveToWindow();DispatchQueue.main.async{[weak self] in guard let self,let window=self.window,!(window.firstResponder is NSTextView) else{return};window.makeFirstResponder(self)}}
+    override func viewDidMoveToWindow(){super.viewDidMoveToWindow();store.fulfillEditorFocusWhenMounted(self)}
     override func layout() {
         super.layout()
         if let dragFrame,dragFrame != convert(bounds,to:nil) {

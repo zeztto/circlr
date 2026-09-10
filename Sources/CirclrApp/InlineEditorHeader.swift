@@ -71,7 +71,10 @@ struct InlineEditorHeader:View {
         switch target {case .content:return -30;case .connections:return -20;case .transition:return -10;case .automation:return -9;case .settings:return -8}
     }
     func select(_ target:Page) {
-        guard store.midiImportDraft==nil,store.nameEditing.resolve() else{return}
+        var identity=store.numberEditIdentity
+        guard store.midiImportDraft==nil,store.resolveActiveNumericDraft(),store.nameEditing.resolve() else{return}
+        identity.revision=store.project.musicRevision
+        guard identity==store.numberEditIdentity else{return}
         switch target {
         case .content:
             store.connectionsOpen=false;store.hierarchySettingsOpen=store.selectedMusic==nil;store.automationOpen=false;store.embeddedPlugin=nil
@@ -82,6 +85,7 @@ struct InlineEditorHeader:View {
         case .automation:store.connectionsOpen=false;store.hierarchySettingsOpen=false;store.showAutomation()
         case .settings:store.connectionsOpen=false;store.automationOpen=false;store.embeddedPlugin=nil;store.hierarchySettingsOpen=true
         }
+        store.requestEditorNavigationFocus()
     }
 }
 

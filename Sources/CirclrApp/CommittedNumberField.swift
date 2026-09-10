@@ -77,6 +77,18 @@ extension EnvironmentValues {
     }
 }
 extension AppStore {
+    /// Read-only focus guard; never invokes commit or a detached coordinator.
+    func hasUnresolvedNumericDraft(in editor:NSTextView)->Bool {
+        guard let window=editor.window,window===NSApp.keyWindow,let content=window.contentView else{return false}
+        func find(_ view:NSView)->NativeNumberField.Control? {
+            guard !view.isHiddenOrHasHiddenAncestor else{return nil}
+            if let field=view as? NativeNumberField.Control,field.window===window,field.isEnabled,
+               field.currentEditor()===editor {return field}
+            for child in view.subviews {if let field=find(child){return field}}
+            return nil
+        }
+        return find(content)?.hasUnresolvedDraft?()==true
+    }
     /// Resolve live mounted fields, including invalid drafts AppKit already blurred.
     /// Detached coordinators and controls in other windows are never invoked.
     func resolveActiveNumericDraft()->Bool {

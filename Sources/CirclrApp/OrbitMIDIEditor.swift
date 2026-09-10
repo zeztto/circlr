@@ -54,7 +54,7 @@ struct OrbitMIDIEditor:NSViewRepresentable {
     var grid:Double {Double(max(1,store.currentContext.beatGrid.subdivisions))}
     init(store:AppStore) {self.store=store;super.init(frame:.zero);setAccessibilityElement(true);setAccessibilityRole(.group);setAccessibilityLabel("MIDI 궤도 편집기 · Tab 노트 선택 · 방향키 이동 · Shift 좌우 길이 · Option 상하 세기")}
     required init?(coder:NSCoder){fatalError()}
-    override func viewDidMoveToWindow(){super.viewDidMoveToWindow();if window==nil{cancelDrag()};DispatchQueue.main.async{[weak self] in guard let self,self.allowsEditing,let window=self.window,!(window.firstResponder is NSTextView) else{return};window.makeFirstResponder(self)}}
+    override func viewDidMoveToWindow(){super.viewDidMoveToWindow();if window==nil{cancelDrag()};store.fulfillEditorFocusWhenMounted(self)}
     var dragIsCurrent:Bool {allowsEditing && window != nil && dragIdentity==store.numberEditIdentity && dragViewport==viewport && dragFrame==convert(bounds,to:nil) && dragOrbital==store.project.usesOrbits && dragGrid==store.currentContext.beatGrid.subdivisions}
     func cancelDrag(){original=nil;gesture=nil;previewLane=nil;dragIdentity=nil;dragViewport=nil;dragFrame=nil;dragOrbital=nil;dragGrid=nil}
     func radius(_ pitch:Int)->Double {outer-(Double(viewport.highest-pitch)+0.5)*row}

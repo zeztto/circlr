@@ -1,5 +1,11 @@
 # 변경 이력
 
+## 검증 완료 — build141 편집 포커스 의도
+
+- attach와 mode entry를 공통 요청으로 통합하고 실제 창 활성화 시 기존 요청을 재시도한다. 빠른 전환에서 이전 콜백이 최신 focus를 덮던 경계를 개선했다.
+- Release 48.10초·warning 0개·관련 39개 검사, 두 출발 상태의 rapid r170/0점 보존·키보드·입력 오류·저장 view 재시작을 확인했다. native 31쌍·data 7개 캡처·package 최종 독립 감사도 PASS했다.
+- 모든 timing 조합·create/import 경로·물리 I/O를 새로 검증한 결과는 아니다. [기록](docs/163-editor-focus-intent.md).
+
 ## 부분 개선 검증 — build140 편집 진입 포커스
 
 - 현재 mode/content type에 맞는 요청 기반 focus로 MIDI·오디오 진입과 키보드 조작을 개선했다. invalid 입력과 console 편집을 보호한다.

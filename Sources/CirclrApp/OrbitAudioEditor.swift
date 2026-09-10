@@ -60,7 +60,7 @@ struct OrbitAudioEditor:NSViewRepresentable {
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         if window==nil{cancelDrag();return}
-        DispatchQueue.main.async{[weak self] in guard let self,self.isCurrent,let window=self.window,!(window.firstResponder is NSTextView) else{return};window.makeFirstResponder(self)}
+        store.fulfillEditorFocusWhenMounted(self)
     }
     func cancelDrag(){original=nil;preview=nil;dragIdentity=nil;dragViewport=nil;dragOrbital=nil;dragBounds=nil}
     func phase(_ point:NSPoint)->Double {orbital ? OrbitTimeline.phase(Point(point.x-center.x,point.y-center.y)):max(0,min(1,(point.x-plot.minX)/max(1,plot.width)))}

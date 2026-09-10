@@ -56,6 +56,7 @@ extension AppStore {
             focusHierarchy(memory.address,detail:detail)
             midiStepMode=memory.midiStepMode
             restoreStudioWorkspace(memory.workspace)
+            requestEditorNavigationFocus()
         }else{
             focusHierarchy(.composition(compositionID))
             restoreStudioWorkspace(.init())

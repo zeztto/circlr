@@ -107,7 +107,7 @@ extension AppStore {
             if let sourceCursor,let clip=currentAudioClip {audioSplitOffset=min(clip.duration,max(0,sourceCursor-clip.sourceStart))}
         default:audioSplitOffset=nil
         }
-        if let result,result != node.id {focusHierarchy(.music(arrangementID:project.activeArrangementID,useID:use.id,nodeID:result),detail:true)}
+        if let result,result != node.id {focusHierarchy(.music(arrangementID:project.activeArrangementID,useID:use.id,nodeID:result),detail:true);requestEditorNavigationFocus()}
         else if result==nil {focusHierarchy(.section(arrangementID:project.activeArrangementID,useID:use.id),detail:false)}
     }
     func editAudioClip(_ clip:AudioClip,_ edit:(inout AudioClip)->Void) {

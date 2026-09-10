@@ -99,7 +99,7 @@ struct StepEditor<Inspector:View>:View {
                     if state.drumMode {
                         Text("\(pitches.count)/\(store.stepRows(extra:state.extraPitches).count)행").fixedSize().monospacedDigit().foregroundStyle(StudioTheme.secondary).font(.system(size:11))
                         CommittedNumberField(title:"드럼 행 MIDI 음높이",value:Binding(get:{Double(state.newPitch)},set:{state.newPitch=Int($0)}),range:0...127,integerOnly:true,width:48)
-                        Button{state.rowQuery="";state.extraPitches.insert(state.newPitch);rowRequest=StepRowRequest(pitch:state.newPitch)}label:{Image(systemName:"plus")}.accessibilityLabel("드럼 행 추가")
+                        Button{state.rowQuery="";state.extraPitches.insert(state.newPitch);rowRequest=StepRowRequest(pitch:state.newPitch);focusTarget.focus()}label:{Image(systemName:"plus")}.accessibilityLabel("드럼 행 추가")
                     }
                     }
                     HStack(spacing:6) {
@@ -222,11 +222,11 @@ struct StepGridCanvas:NSViewRepresentable {
             if let rowRequest {
                 let identity=store.numberEditIdentity
                 DispatchQueue.main.async{[weak view] in
-                    guard let view,let window=view.window,view.allowsEditing,
+                    guard let view,view.window != nil,view.allowsEditing,
                           view.lastRowRequestID==rowRequest.id,view.store.numberEditIdentity==identity,
                           view.page==page,view.grid==grid,view.pitches==pitches,
                           let row=view.pitches.firstIndex(of:rowRequest.pitch) else{return}
-                    view.choose(row:row,column:view.column);window.makeFirstResponder(view)
+                    view.choose(row:row,column:view.column)
                 }
             }
         }
@@ -268,10 +268,7 @@ struct StepGridCanvas:NSViewRepresentable {
     required init?(coder:NSCoder){fatalError()}
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
-        DispatchQueue.main.async{[weak self] in
-            guard let self,self.allowsEditing,let window=self.window,!(window.firstResponder is NSTextView) else{return}
-            window.makeFirstResponder(self)
-        }
+        store.fulfillEditorFocusWhenMounted(self)
     }
     func rect(row:Int,column:Int)->CGRect {CGRect(x:112+Double(column)*cellWidth+2,y:Double(row)*28+2,width:max(1,cellWidth-4),height:24)}
     func label(_ pitch:Int)->String {store.stepRowLabel(pitch)}

@@ -98,6 +98,6 @@ extension AppStore {
             let previous=updatingHierarchyViewport
             updatingHierarchyViewport=true;project.hierarchyView=viewport;updatingHierarchyViewport=previous
             hierarchyCommand=HierarchyCommand(action:.restore)
-        }
+        } else {requestEditorNavigationFocus()}
     }
 }
