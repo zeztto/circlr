@@ -130,12 +130,21 @@ extension AppStore {
             guard audioRecordingAvailable,!audioRecordingBusy,!preparing else{throw CirclrError("녹음할 서클·트랙과 장치 정리 상태를 확인하세요")}
             startAudioRecording();return agentState()
         case "apply":
+            let explicitArrangement=args.operations?.last(where:{$0.kind=="select_arrangement"})
+            if explicitArrangement != nil {
+                guard nameEditing.resolve() else{throw CirclrError("이름 편집을 적용한 뒤 편곡안을 선택하세요")}
+                try AgentProjectEditing.check(request,project:project)
+            }
+            let leaving=explicitArrangement == nil ? nil:capturedArrangementWorkspace()
+            let previousChoice=explicitArrangement.flatMap{$0.compositionID}.flatMap{project.album?.composition($0)?.selectedArrangementID}
+            let previousActive=project.activeArrangementID
             let candidate=try AgentProjectEditing.apply(request,to:project)
             mutate("에이전트 편집 · \(args.operations?.count ?? 0)개"){$0=candidate}
             cancelAudition()
-            if let compositionID=args.operations?.last(where:{$0.kind=="select_arrangement"})?.compositionID {
-                // Explicit selection navigates to its owner; background copies and names keep the editor scope.
-                hierarchySettingsOpen=false;focusHierarchy(.composition(compositionID))
+            if let compositionID=explicitArrangement?.compositionID,let arrangementID=explicitArrangement?.arrangementID {
+                if previousChoice != arrangementID || previousActive != arrangementID {
+                    restoreArrangementWorkspace(arrangementID,compositionID:compositionID,leaving:leaving)
+                }else{normalizeHierarchySelection()}
             }else{normalizeHierarchySelection()}
             return agentState()
         case "undo":

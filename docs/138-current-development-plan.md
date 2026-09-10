@@ -36,7 +36,9 @@
 
 ### 2. 한 곡을 끊김 없이 만드는 단일 캔버스
 
-build126은 적용 A를 유지한 강조 B 이름 변경·강조 유지·Undo/Redo를 검증했다. 최종 Release는 통과했고 저장/재열기·독립7개 snapshot 감사·production 서명/UUID도 통과했다. 다음은 한글 입력 축소의 도구/앱 경계 분리 진단과 편곡 전환별 이전 위치 복귀다. [이름 변경 검증](145-inactive-arrangement-rename.md).
+build127에서 세션 내 편곡별 오디오·automation·스텝 작업 복귀와 문서 reset·삭제 대상 fallback을 확인했다. 소스 검토·Release·최종 15개 capture 감사·r62 재열기/disk 일치·production 서명/UUID를 통과했다. 도구 한글 입력은 TextEdit와 써클러에서 동일하게 축소됐으며 실제 IME는 미검증이다. [복귀/입력 진단](146-input-delivery-and-arrangement-return.md).
+
+build126은 적용 A를 유지한 강조 B 이름 변경·강조 유지·Undo/Redo를 검증했다. 최종 Release는 통과했고 저장/재열기·독립7개 snapshot 감사·production 서명/UUID도 통과했다. 당시 후속으로 정한 도구/앱 입력 비교와 편곡별 복귀는 위 build127에서 진행했다. 실제 한국어 IME 검증은 남아 있다. [이름 변경 검증](145-inactive-arrangement-rename.md).
 
 build122 진행: 새 앨범에서 첫 섹션 생성 동선을 확인했고, 공유 MIDI→스텝 전환의 잘못된 대상 이동과 탐색 누락을 수정했다. 키보드·마우스 복귀와 이름 오류/저장 복원을 검증했다. [기록](140-step-target-navigation.md). 후속으로 공유 노트 입력·음색·reverb·바운스·원본 복원·Undo/재열기를 실제 수행했다. [연속 제작 검증](141-production-flow-validation.md). build123에서 원본 복원 후 저장된 출력으로 복귀하도록 개선했고 정상 복귀·오류 거절·Undo·재열기 및 독립8개 상태 감사를 통과했다. [복귀 검증](142-bounce-restore-navigation.md). build124에서 연결→오토메이션과 import→새 파형을 개선했고 실제 전환·Undo·이름 오류를 확인했다. 저장/재열기도 확인했으며 production 서명·UUID와 독립 데이터 감사도 통과했다. [오디오 전환 검증](143-audio-automation-flow.md). 다음은 오토메이션 편집·편곡 대안의 연속 흐름이다. 탐색 성공을 곡 제작 완료로 세지 않는다.
 

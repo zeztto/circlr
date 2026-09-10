@@ -1,5 +1,11 @@
 # 변경 이력
 
+## 검증 완료 — 0.20.0 build127 편곡별 작업 복귀
+
+- GUI/MCP 편곡 선택에서 임시 마지막 주소·workspace로 복귀한다. 문서 reset은 기억을 지우고 무효 대상은 composition으로 돌아간다.
+- Release44.90초·오디오/automation/스텝 왕복·현재 재선택·stale 거절·문서 reset·삭제 fallback과 최종 15개 capture 감사·r62 재열기/disk 일치·production 서명/UUID를 통과했다.
+- 한글 도구 입력은 TextEdit와 써클러에서 동일하게 축소됐다. 실제 IME·물리 오디오·새 PCM 검사는 미수행이다. [기록](docs/146-input-delivery-and-arrangement-return.md).
+
 ## 검증 완료 — 0.20.0 build126 비활성 편곡안 이름 변경
 
 - ⇧⌘N·버튼이 강조한 편곡안을 대상으로 하며 source title/AX를 명시하고 이름 적용 후 강조를 유지한다. 현재 편곡·캔버스는 유지한다.

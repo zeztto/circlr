@@ -76,9 +76,11 @@ extension AppStore {
     func applyArrangement(_ id:ID,request:ArrangementPickerRequest)throws {
         guard arrangementPickerCurrent(request),request.choices.contains(where:{$0.id==id}) else{throw CirclrError("대상이나 음악이 바뀌었거나 다른 작업 중입니다. 닫은 뒤 다시 열어주세요.")}
         if request.currentID==id {closeArrangementPicker();return}
+        guard nameEditing.resolve(),arrangementPickerCurrent(request) else{throw CirclrError("편집 대상이 바뀌었거나 이름을 적용하지 못했습니다. 편곡안을 다시 여세요.")}
+        let leaving=capturedArrangementWorkspace()
         mutate("편곡안 선택") {try ArrangementSelection.select(id,compositionID:request.compositionID,in:&$0)}
         guard project.album?.composition(request.compositionID)?.selectedArrangementID==id else{throw CirclrError("편곡안을 적용하지 못했습니다")}
-        closeArrangementPicker();hierarchySettingsOpen=false;focusHierarchy(.composition(request.compositionID))
+        closeArrangementPicker();restoreArrangementWorkspace(id,compositionID:request.compositionID,leaving:leaving)
     }
 }
 

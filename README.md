@@ -6,7 +6,9 @@ macOS용 앨범·송폼 궤도 편집기. **앨범 → 곡·악장 → 섹션 �
 
 연결 UI는 [서클 둘레 8방향 IN/OUT과 다중 입출력](docs/22-eight-direction-ports.md)으로 확장 중이다. 포트의 신호 의미와 연결점 배치를 분리한다. 아래 일반 사용법은 배포된 0.19 앱 기준이며 새 포트 기능은 독립 개발 브랜치에서 검증한다.
 
-현재 **`codex/daw-integration`의 0.20.0 build 126**에 녹음 lifecycle과 8방향·다중 bus·그룹 포트를 통합했다. 같은 캔버스의 연결 편집·녹음 상태·스텝·오토메이션이 공존하며, 녹음 시작·정리 중 음악 편집과 Undo의 경쟁을 차단한다. build 23의 실제 편집·바운스·Undo·저장/재열기·닫기 최소화 및 출력별 모션 검증은 [통합 QA](qa/daw-integration-review.md)에 기록했다.
+현재 **`codex/daw-integration`의 0.20.0 build 127**에 녹음 lifecycle과 8방향·다중 bus·그룹 포트를 통합했다. 같은 캔버스의 연결 편집·녹음 상태·스텝·오토메이션이 공존하며, 녹음 시작·정리 중 음악 편집과 Undo의 경쟁을 차단한다. build 23의 실제 편집·바운스·Undo·저장/재열기·닫기 최소화 및 출력별 모션 검증은 [통합 QA](qa/daw-integration-review.md)에 기록했다.
+
+**build127은 편곡을 왕복하면 세션 안의 마지막 편집 위치로 돌아간다.** GUI/MCP의 오디오·오토메이션·스텝 복귀와 문서 reset·삭제 대상 fallback을 확인했다. Release44.90초·최종 15개 capture 감사·r62 재열기/disk 일치·production 서명/UUID를 통과했다. [검증 기록](docs/146-input-delivery-and-arrangement-return.md).
 
 **build126은 현재 편곡을 적용한 채 다른 편곡안 이름을 바꾼다.** 강조한 B의 단축키·마우스 이름 변경, A 작업 화면 보존과 Undo/Redo를 확인했다. Release42.19초를 통과했으며 저장/재열기·독립7개 snapshot 감사·production 서명/UUID도 통과했다. 한글 입력 성공은 미확인이다. [검증 기록](docs/145-inactive-arrangement-rename.md).
 

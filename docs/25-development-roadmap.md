@@ -1,6 +1,8 @@
 # 써클러 개발 방향과 실행 계획
 
-build126에서 현재 A를 유지한 채 강조 B의 이름을 바꾸고 목록 강조를 유지하도록 개선했다. 최종 Release42.19초·native 이름 편집/거절/Undo/Redo를 확인했으며 저장/재열기·독립7개 snapshot 감사·production 서명/UUID도 통과했다. [검증 기록](145-inactive-arrangement-rename.md). 다음은 한글 입력 축소의 도구/앱 경계 분리 진단과 편곡 전환별 이전 작업 위치 복귀이며 전체 제작 목표는 남아 있다.
+build127에서 GUI/MCP 편곡별 작업 복귀·문서 reset·무효 주소 fallback을 구현했다. Release44.90초와 실제 왕복·최종 15개 capture 감사·r62 재열기/disk 일치·production 서명/UUID를 통과했다. 한글 도구 입력은 TextEdit에서도 동일하게 축소되어 앱 고유 원인으로 단정하지 않는다. [검증 기록](146-input-delivery-and-arrangement-return.md). 실제 IME·물리 오디오·전체 제작 목표는 남아 있다.
+
+build126에서 현재 A를 유지한 채 강조 B의 이름을 바꾸고 목록 강조를 유지하도록 개선했다. 최종 Release42.19초·native 이름 편집/거절/Undo/Redo를 확인했으며 저장/재열기·독립7개 snapshot 감사·production 서명/UUID도 통과했다. [검증 기록](145-inactive-arrangement-rename.md). 당시 후속이던 도구/앱 입력 비교와 편곡별 복귀는 위 build127에서 진행했다. 실제 한국어 IME·전체 제작 목표는 남아 있다.
 
 build125에서 MCP 공유 오디오4종 편집과 automation 원본/변형 범위를 연결했다. Core30개·MCP27개·Release73.17초와 native 명령/UI를 확인했으며 저장/재열기·production 서명/UUID·독립14개 snapshot 감사도 통과했다. [검증 기록](144-agent-shared-audio-scope.md). 이후 편곡 대안의 연속 작업과 남은 실제 오디오 검증을 이어간다.
 
