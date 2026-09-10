@@ -20,6 +20,7 @@ struct NumberEditIdentity: Equatable {
     let steps: Bool
     let connections: Bool
     let automation: Bool
+    var sustain:Bool=false
     let focus: CanvasFocus?
     let activation: UUID
     let automationPoint: ID?
@@ -122,7 +123,7 @@ extension AppStore {
             arrangementID:project.activeArrangementID,circle:hierarchySelection,trackID:selectedTrackID,
             laneID:selectedLaneID,patternID:editPatternID,notes:selectedMIDIIDs,clipID:selectedClipID,
             edgeID:edgeSelection,transitionID:hierarchyTransitionID,original:editOriginal,
-            settings:hierarchySettingsOpen,steps:midiStepMode,connections:connectionsOpen,automation:automationOpen,
+            settings:hierarchySettingsOpen,steps:midiStepMode,connections:connectionsOpen,automation:automationOpen,sustain:sustainOpen,
             focus:focus,activation:editorActivation,automationPoint:selectedAutomationPointID,automationParameter:automationParameter)
     }
 }

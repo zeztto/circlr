@@ -1,6 +1,6 @@
 # 현행 개발 계획
 
-기준: 2026-09-11, integration-worktree의 build120 소스(`b06c4a9`)에서 시작해 build127의 소스·검증 기록을 기준으로 build150 검증 결과까지 반영했다. 이 문서는 다음 실행과 완료 판단을 위한 계획이며 [누적 로드맵](25-development-roadmap.md)의 과거 검증 결과를 새로 수행한 검사로 바꾸지 않는다. 전체 DAW·음악 품질·접근성은 아직 완료되지 않았다.
+기준: 2026-09-11, integration-worktree의 build120 소스(`b06c4a9`)에서 시작해 build127의 소스·검증 기록을 기준으로 build151 검증 결과까지 반영했다. 이 문서는 다음 실행과 완료 판단을 위한 계획이며 [누적 로드맵](25-development-roadmap.md)의 과거 검증 결과를 새로 수행한 검사로 바꾸지 않는다. 전체 DAW·음악 품질·접근성은 아직 완료되지 않았다.
 
 ## 제품의 완료 방향
 
@@ -66,7 +66,7 @@ build131은 [MIDI tempo import 계획](151-midi-tempo-import-plan.md)의 기본 
 
 MIDI CC/페달/피치 벤드·tempo map은 노트 import와 다른 이벤트·시간 계약이 필요하다. 기존 파일을 여는 것만으로 재해석하지 않으며 가져오기 전 적용 범위를 설명한다. 오디오 crossfade·comping·time warp, 실시간 automation write/touch/latch, punch/loop 녹음은 원본/테이크·공통 clock·취소 수명에 의존하므로 독립 체크박스로 쌓지 않는다. [기본 DAW 계획](31-daw-basics-plan.md)의 남은 조건을 유지한다.
 
-build149 이후 [서스테인 계약173](173-midi-sustain-plan.md)의 optional 저장/schema7·공유 복사·단일 source/occurrence stream에 이어 내장 신스의 key-off 보류·해제 DSP를 연결했다. [렌더 검증175](175-midi-sustain-render.md)에서 전체 Core+선별 Audio635개·실패0개, 바운스/복원·반복 격리와 Release를 확인했다. SMF CC64/CC121 parser·명시적 export 종료·GUI/MCP import는 [build150](176-midi-sustain-file-workflow.md)에서 연결해 파일 실행 검증을 완료했고 최종 재열기 독립 비교도 PASS했다. 다음은 같은 캔버스의 페달 직접 편집이며 실제 장치 연주·GUI/MCP 이벤트 편집은 아직 지원하지 않는다.
+build149 이후 [서스테인 계약173](173-midi-sustain-plan.md)의 optional 저장/schema7·공유 복사·단일 source/occurrence stream에 이어 내장 신스의 key-off 보류·해제 DSP를 연결했다. [렌더 검증175](175-midi-sustain-render.md)에서 전체 Core+선별 Audio635개·실패0개, 바운스/복원·반복 격리와 Release를 확인했다. SMF CC64/CC121 parser·명시적 export 종료·GUI/MCP import는 [build150](176-midi-sustain-file-workflow.md)에서 연결해 파일 실행 검증을 완료했고 최종 재열기 독립 비교도 PASS했다. 같은 캔버스의 페달 직접 편집·MCP 이벤트 편집은 [build151](177-midi-sustain-editing.md)에서 연결하고 native 동선을 검증했다. 최종 재열기 data/UI 감사도 명시된 범위에서 통과했으며 실제 장치 연주·모든 scope native 편집은 별도 범위다.
 
 **완료 증거:** GUI/MCP 동등 편집·atomic stale 거절·Undo/저장 호환, 변박·반복·공유 원본의 시간 검증, 렌더된 PCM에서 의도한 파라미터 변화, native 편집 동선과 경계 오류 안내. 실시간 기능은 1번의 clock·실제 소리 검증까지 통과해야 완료다.
 

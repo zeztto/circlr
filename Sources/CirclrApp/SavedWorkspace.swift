@@ -7,11 +7,15 @@ extension AppStore {
         else if hierarchyTransitionID != nil && hierarchyTransitionID==recentTransitionID {saved.page = .transition}
         else if hierarchySettingsOpen {saved.page = .settings}
         else if automationVisible {saved.page = .automation}
+        else if sustainOpen {
+            switch selectedMusic?.content {case .midi,.rhythmMIDI:saved.page = .sustain;default:break}
+        }
         else if pitchBendOpen {
             switch selectedMusic?.content {case .midi,.rhythmMIDI:saved.page = .pitchBend;default:break}
         }
         switch selectedMusic?.content {
         case .midi,.rhythmMIDI:
+            if sustainOpen || sustainState != .init() {saved.sustain=sustainState.validated(count:currentLane?.sustain?.events.count ?? 0)}
             if pitchBendOpen || pitchBendState != .init() {saved.pitchBend=pitchBendState.validated(count:currentLane?.pitchBend?.events.count ?? 0)}
         default:break
         }
@@ -30,6 +34,9 @@ extension AppStore {
         guard let address=hierarchySelection else{return}
         let view=saved.restored(at:address,in:project)
         editOriginal=view.original;automationParameter=view.automationParameter
+        sustainOpen=view.page == .sustain
+        sustainState=(view.sustain ?? .init()).validated(count:currentLane?.sustain?.events.count ?? 0)
+        if let key=editorWorkspaceKey {sustainViewStates[key]=sustainState}
         pitchBendOpen=view.page == .pitchBend
         pitchBendState=(view.pitchBend ?? .init()).validated(count:currentLane?.pitchBend?.events.count ?? 0)
         if let key=editorWorkspaceKey {pitchBendViewStates[key]=pitchBendState}

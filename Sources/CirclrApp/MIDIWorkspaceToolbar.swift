@@ -109,9 +109,10 @@ struct MIDIEditorModeControls:View {
     @ObservedObject var store:AppStore
     var body:some View {
         HStack(spacing:4) {
-            mode(store.project.usesOrbits ? "궤도":"피아노 롤",selected:!store.pitchBendOpen && !store.midiStepMode){store.pitchBendOpen=false;store.midiStepMode=false}
-            mode("스텝",selected:!store.pitchBendOpen && store.midiStepMode){store.pitchBendOpen=false;store.midiStepMode=true}
-            mode("피치 벤드",selected:store.pitchBendOpen){store.pitchBendOpen=true;store.automationOpen=false}
+            mode(store.project.usesOrbits ? "궤도":"피아노 롤",selected:!store.sustainOpen && !store.pitchBendOpen && !store.midiStepMode){store.sustainOpen=false;store.pitchBendOpen=false;store.midiStepMode=false}
+            mode("스텝",selected:!store.sustainOpen && !store.pitchBendOpen && store.midiStepMode){store.sustainOpen=false;store.pitchBendOpen=false;store.midiStepMode=true}
+            mode("피치 벤드",selected:store.pitchBendOpen && !store.sustainOpen){store.sustainOpen=false;store.pitchBendOpen=true;store.automationOpen=false}
+            mode("페달",selected:store.sustainOpen){store.sustainOpen=true;store.pitchBendOpen=false;store.automationOpen=false}
         }.fixedSize()
     }
     private func mode(_ title:String,selected:Bool,action:@escaping()->Void)->some View {

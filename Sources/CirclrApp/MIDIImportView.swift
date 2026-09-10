@@ -104,7 +104,7 @@ extension AppStore {
             guard project==candidate else{return "가져오기를 적용하지 못했습니다. 현재 작업 상태를 확인하세요"}
             midiImportDraft=nil
             // Imported lanes belong to this use, irrespective of the previous editor's scope.
-            editOriginal=false;midiStepMode=false;pitchBendOpen=false
+            editOriginal=false;midiStepMode=false;pitchBendOpen=false;sustainOpen=false
             if ids.count==1,let lane=ids.first {focusHierarchy(.music(arrangementID:draft.arrangementID,useID:draft.useID,nodeID:"midi:\(lane)"),detail:true)}
             else {focusHierarchy(.section(arrangementID:draft.arrangementID,useID:draft.useID),detail:false)}
             restoreStudioWorkspace(.init(page:.content))

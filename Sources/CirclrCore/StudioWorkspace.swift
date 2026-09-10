@@ -2,7 +2,7 @@ import Foundation
 
 /// Saved view state; restoring it never edits or starts the music graph.
 public struct StudioWorkspace:Codable,Equatable {
-    public enum Page:String,Codable {case content,connections,transition,automation,settings,pitchBend}
+    public enum Page:String,Codable {case content,connections,transition,automation,settings,pitchBend,sustain}
     public var page:Page
     public var original=false
     public var transitionID:ID?
@@ -12,11 +12,13 @@ public struct StudioWorkspace:Codable,Equatable {
     public var editor:EditorViewportState?
     public var automationViewport:AutomationViewport?
     public var pitchBend:PitchBendWorkspaceState?
+    public var sustain:SustainWorkspaceState?
     public init(page:Page = .content){self.page=page}
-    enum CodingKeys:String,CodingKey {case page,original,transitionID,connection,automationParameter,editor,automationViewport,selection,pitchBend}
+    enum CodingKeys:String,CodingKey {case page,original,transitionID,connection,automationParameter,editor,automationViewport,selection,pitchBend,sustain}
     public init(from decoder:Decoder)throws {
         let c=try decoder.container(keyedBy:CodingKeys.self)
         page=(try? c.decode(Page.self,forKey:.page)) ?? .content
+        sustain=(try? c.decode(SustainWorkspaceState.self,forKey:.sustain))?.validated()
         pitchBend=(try? c.decode(PitchBendWorkspaceState.self,forKey:.pitchBend))?.validated()
         original=(try? c.decode(Bool.self,forKey:.original)) ?? false
         transitionID=try? c.decode(ID.self,forKey:.transitionID)
@@ -29,6 +31,9 @@ public struct StudioWorkspace:Codable,Equatable {
     public func restored(at address:CircleAddress,in project:Project)->Self {
         guard let scene=try? StudioNavigation.scene(revealing:address,in:project),let node=scene.node(address) else{return .init()}
         var next=self
+        if page == .sustain {
+            switch node.music?.content {case .midi,.rhythmMIDI:break;default:next.page = .content;next.sustain=nil}
+        }
         if page == .pitchBend {
             switch node.music?.content {case .midi,.rhythmMIDI:break;default:next.page = .content;next.pitchBend=nil}
         }

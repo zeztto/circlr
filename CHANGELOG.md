@@ -1,5 +1,11 @@
 # 변경 이력
 
+## 검증 완료 — build151 서스테인 직접 편집
+
+- 같은 캔버스 페달 mode·초기값/이벤트 편집·명시적 MCP sustainChange와 입력/선택 보호를 연결했다. native 편집·오류·Undo/Redo·scope 복귀와 Release 89.22초를 확인했다.
+- Swift 초기 686개 중 685개 통과·fixture 누락 1개 실패 후 관련 저장 복원 3개 재검사 PASS, Python MCP 29개 PASS다. 최종 data 감사는 PASS_DATA_ONLY, UI 16쌍은 PASS_WITH_SCOPE_LIMITS다.
+- 실제 오디오·모든 scope native 편집·자동 focus 완료는 아니다. [기록](docs/177-midi-sustain-editing.md).
+
 ## 검증 완료 — build150 MIDI 서스테인 파일 연결
 
 - CC64 raw·CC121·preserve/omit와 GUI/MCP 가져오기 preview를 연결했다. midiSustainImport: 1과 명시적 export 끝·합성 pedal-up을 사용한다.

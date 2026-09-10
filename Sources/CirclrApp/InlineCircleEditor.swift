@@ -137,7 +137,8 @@ struct InlineCircleEditor: View {
         }.frame(maxWidth:.infinity,maxHeight:.infinity,alignment:.topLeading)
     }
     @ViewBuilder private var midi:some View {
-        if store.pitchBendOpen {PitchBendWorkspace(store:store)}
+        if store.sustainOpen {SustainWorkspace(store:store)}
+        else if store.pitchBendOpen {PitchBendWorkspace(store:store)}
         else if store.project.usesOrbits && !store.midiStepMode {MIDIOrbitWorkspace(store:store,viewport:$viewState.orbit,scroll:scroll("orbitControls"))}else{MIDIGridWorkspace(store:store,topPitch:$viewState.topPitch,steps:$viewState.steps,pianoScroll:scroll("piano"),stepScroll:scroll("steps"))}
     }
     @ViewBuilder private var audio: some View {

@@ -62,6 +62,7 @@ extension AppStore {
             guard !view.isHiddenOrHasHiddenAncestor,view.window===window else{return false}
             switch request.page {
             case .pitchBend:return view is PitchBendPlotView
+            case .sustain:return view is SustainPlotView
             case .automation:return view is AutomationPlotView
             case .content:
                 switch selectedMusic?.content {

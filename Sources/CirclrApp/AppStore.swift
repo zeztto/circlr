@@ -14,6 +14,7 @@ import CirclrAudio
         if !updatingHierarchyViewport {
             hierarchyRevision += 1
             reconcilePitchBendSelections(from:oldValue)
+            reconcileSustainSelections(from:oldValue)
         }
     } }
     var updatingHierarchyViewport = false
@@ -52,6 +53,12 @@ import CirclrAudio
     @Published var libraryOpen=false {didSet{if !libraryOpen{library.suspend()}}}
     @Published var libraryDestination:MediaImportRequest?
     @Published var midiStepMode=false
+    @Published var sustainOpen=false
+    @Published var sustainState=SustainWorkspaceState()
+    var sustainViewStates:[EditorWorkspaceKey:SustainWorkspaceState]=[:]
+    var sustainWorkspaceKey:EditorWorkspaceKey?
+    var sustainWorkspaceProjectID:ID?
+    var sustainWorkspaceGeneration:Int?
     @Published var pitchBendOpen=false
     @Published var pitchBendState=PitchBendWorkspaceState()
     var pitchBendReadoutIdentity:NumberEditIdentity?
@@ -580,7 +587,7 @@ import CirclrAudio
         do { let loaded = try ProjectStore.load(target); stop(); var migrated = loaded.project; migrated.enableAlbum(); migrated = try SectionGraphMigration.migrate(migrated); project = migrated; projectURL = migrated == loaded.project ? target : nil; mediaRoot = target; selectedTrackID = project.tracks.first?.id; resetSession(); dirty = migrated != loaded.project; status = dirty ? "앨범으로 확장했습니다 · 새 위치에 저장하세요" : "\(project.name) 열기 완료" }
         catch { fail(error) }
     }
-    func resetSession() { editorFocusRequest=nil; circleEditorWorkspaces=[:]; sectionSettingsReturn=nil; pitchBendOpen=false;pitchBendState = .init();pitchBendViewStates=[:];pitchBendWorkspaceKey=nil;pitchBendWorkspaceProjectID=nil;pitchBendWorkspaceGeneration=nil; captureStepCursor=nil;pendingMIDIImportStepCursor=nil;arrangementWorkspaces=[:];outputPreferences.cancel();outputPreferencesOpen=false; bounceTailSeconds=nil;bounceTailEditing=false;bounceTailCache=nil;resettingEditorSelection=true;defer{editorSelectionStates=[:];resettingEditorSelection=false};editorViewStates=[:];automationViewStates=[:];automationWorkspaceKey=nil;automationWorkspaceProjectID=nil;automationWorkspaceGeneration=nil;editOriginal=false;automationParameter = .gain;connectionWorkspaceStates=[:];recentTransitions=[:];arrangementPickerRequest=nil;soundPickerRequest=nil;libraryOpen=false;libraryDestination=nil;cancelMediaImport(); if !recorder.busy && audioRecoveryURL==nil {audioCaptureMessage="";audioInputSeconds=0;audioInputFormat=nil}; connectionEditorIntent=nil;connectionsOpen=false;automationOpen=false;automationViewport.reset();selectedAutomationPointID=nil;cancelRecordingRequest(); audioSplitOffset=nil;midiImportDraft=nil;selectedNoteID=nil; navigationOpen=false; commandPalette=nil; soundView=false; hierarchyTransitionID=nil; hierarchySelection = .album; hierarchySelections = [.album]; hierarchySettingsOpen = false; hierarchyCommand = HierarchyCommand(action: .restore); waveformGeneration += 1; waveforms = [:]; waveformLoading = []; focus = nil; embeddedPlugin = nil; recoveryTask?.cancel(); recoveryTask = nil; try? FileManager.default.removeItem(at:recoveryURL); selection = []; edgeSelection = nil; editPatternID = nil; prepared = nil; preparedKey = ""; dirty = false; undoStack = []; redoStack = []; undoCount = 0; redoCount = 0 }
+    func resetSession() { editorFocusRequest=nil; circleEditorWorkspaces=[:]; sectionSettingsReturn=nil; sustainOpen=false;sustainState = .init();sustainViewStates=[:];sustainWorkspaceKey=nil;sustainWorkspaceProjectID=nil;sustainWorkspaceGeneration=nil; pitchBendOpen=false;pitchBendState = .init();pitchBendViewStates=[:];pitchBendWorkspaceKey=nil;pitchBendWorkspaceProjectID=nil;pitchBendWorkspaceGeneration=nil; captureStepCursor=nil;pendingMIDIImportStepCursor=nil;arrangementWorkspaces=[:];outputPreferences.cancel();outputPreferencesOpen=false; bounceTailSeconds=nil;bounceTailEditing=false;bounceTailCache=nil;resettingEditorSelection=true;defer{editorSelectionStates=[:];resettingEditorSelection=false};editorViewStates=[:];automationViewStates=[:];automationWorkspaceKey=nil;automationWorkspaceProjectID=nil;automationWorkspaceGeneration=nil;editOriginal=false;automationParameter = .gain;connectionWorkspaceStates=[:];recentTransitions=[:];arrangementPickerRequest=nil;soundPickerRequest=nil;libraryOpen=false;libraryDestination=nil;cancelMediaImport(); if !recorder.busy && audioRecoveryURL==nil {audioCaptureMessage="";audioInputSeconds=0;audioInputFormat=nil}; connectionEditorIntent=nil;connectionsOpen=false;automationOpen=false;automationViewport.reset();selectedAutomationPointID=nil;cancelRecordingRequest(); audioSplitOffset=nil;midiImportDraft=nil;selectedNoteID=nil; navigationOpen=false; commandPalette=nil; soundView=false; hierarchyTransitionID=nil; hierarchySelection = .album; hierarchySelections = [.album]; hierarchySettingsOpen = false; hierarchyCommand = HierarchyCommand(action: .restore); waveformGeneration += 1; waveforms = [:]; waveformLoading = []; focus = nil; embeddedPlugin = nil; recoveryTask?.cancel(); recoveryTask = nil; try? FileManager.default.removeItem(at:recoveryURL); selection = []; edgeSelection = nil; editPatternID = nil; prepared = nil; preparedKey = ""; dirty = false; undoStack = []; redoStack = []; undoCount = 0; redoCount = 0 }
     func scheduleViewportRecovery() { captureViewport(); scheduleRecovery() }
     private func scheduleRecovery() {
         recoveryTask?.cancel(); let snapshot = project,root = mediaRoot,url = recoveryURL

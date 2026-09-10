@@ -11,6 +11,7 @@ struct CircleEditorWorkspaceMemory {
     let cursor:MIDIImportStepCursor?
     let trackID:ID?
     let pitchBend:MIDIPitchBendSequence?
+    let sustain:MIDISustainSequence?
     let capturedAt:TimeInterval
 }
 
@@ -24,7 +25,7 @@ extension AppStore {
         }
         circleEditorWorkspaces[key]=CircleEditorWorkspaceMemory(projectID:project.id,generation:mediaImportGeneration,
             key:key,workspace:workspace,steps:midiStepMode,cursor:captureStepCursor?(),trackID:selectedTrackID,
-            pitchBend:pitchBendSource(at:key,in:project),capturedAt:ProcessInfo.processInfo.systemUptime)
+            pitchBend:pitchBendSource(at:key,in:project),sustain:sustainSource(at:key,in:project),capturedAt:ProcessInfo.processInfo.systemUptime)
         while circleEditorWorkspaces.count>128 {
             guard let oldest=circleEditorWorkspaces.min(by:{$0.value.capturedAt<$1.value.capturedAt})?.key else{break}
             circleEditorWorkspaces.removeValue(forKey:oldest)
@@ -44,6 +45,9 @@ extension AppStore {
         selectHierarchy(address)
         var workspace=memory?.workspace ?? StudioWorkspace()
         if explicitIntent != nil {workspace.page = .content}
+        if let state=workspace.sustain,let memory {
+            workspace.sustain=state.reconciled(from:memory.sustain,to:sustainSource(at:memory.key,in:project))
+        }
         if let state=workspace.pitchBend,let memory {
             workspace.pitchBend=state.reconciled(from:memory.pitchBend,to:pitchBendSource(at:memory.key,in:project))
         }

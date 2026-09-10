@@ -50,7 +50,7 @@ extension AppStore {
         guard expected==numberEditIdentity,canOpenSynthAutomation(parameter,trackID:trackID),
               let address=hierarchySelection else{return}
         focusHierarchy(address,detail:true)
-        connectionsOpen=false;hierarchySettingsOpen=false;embeddedPlugin=nil;pitchBendOpen=false
+        connectionsOpen=false;hierarchySettingsOpen=false;embeddedPlugin=nil;pitchBendOpen=false;sustainOpen=false
         automationParameter=parameter;automationOpen=true
         requestEditorNavigationFocus()
     }

@@ -29,6 +29,7 @@ extension AppStore {
     }
     func switchAutomationViewport() {
         switchPitchBendWorkspace()
+        switchSustainWorkspace()
         // Changing targets cannot carry an instrument-only parameter into another kind of circle.
         // The parameter observer re-enters once with gain and saves the outgoing viewport normally.
         if automationParameter != .gain,

@@ -6,9 +6,11 @@ macOS용 앨범·송폼 궤도 편집기. **앨범 → 곡·악장 → 섹션 �
 
 연결 UI는 [서클 둘레 8방향 IN/OUT과 다중 입출력](docs/22-eight-direction-ports.md)으로 확장 중이다. 포트의 신호 의미와 연결점 배치를 분리한다. 아래 일반 사용법은 배포된 0.19 앱 기준이며 새 포트 기능은 독립 개발 브랜치에서 검증한다.
 
-현재 **`codex/daw-integration`의 0.20.0 build 150**에 녹음 lifecycle과 8방향·다중 bus·그룹 포트를 통합했다. 같은 캔버스의 연결 편집·녹음 상태·스텝·오토메이션이 공존하며, 녹음 시작·정리 중 음악 편집과 Undo의 경쟁을 차단한다. build 23의 실제 편집·바운스·Undo·저장/재열기·닫기 최소화 및 출력별 모션 검증은 [통합 QA](qa/daw-integration-review.md)에 기록했다.
+현재 **`codex/daw-integration`의 0.20.0 build 151**에 녹음 lifecycle과 8방향·다중 bus·그룹 포트를 통합했다. 같은 캔버스의 연결 편집·녹음 상태·스텝·오토메이션이 공존하며, 녹음 시작·정리 중 음악 편집과 Undo의 경쟁을 차단한다. build 23의 실제 편집·바운스·Undo·저장/재열기·닫기 최소화 및 출력별 모션 검증은 [통합 QA](qa/daw-integration-review.md)에 기록했다.
 
-**build150은 MIDI 파일의 서스테인 페달을 보존해 가져오고 저장한다.** CC64 raw·CC121·preserve/omit와 명시적 종료 pedal-up을 연결했다. Swift 666개·MCP 24개, 실제 가져오기/내보내기·Undo/Redo와 Release를 확인했다. 페달 직접 편집과 파일 접근 대기의 안내는 후속 범위다. [검증 기록](docs/176-midi-sustain-file-workflow.md).
+**build151은 같은 MIDI 캔버스에서 서스테인 페달을 직접 편집한다.** raw·위치·같은 beat 선택과 MCP 추가/해제, 오류 보호·Undo/Redo·설정/가져오기 취소 복귀를 확인했다. Release 89.22초와 독립 리뷰를 통과했으며 실제 오디오·모든 scope의 native 편집은 별도 검증이다. [검증 기록](docs/177-midi-sustain-editing.md).
+
+**build150은 MIDI 파일의 서스테인 페달을 보존해 가져오고 저장한다.** CC64 raw·CC121·preserve/omit와 명시적 종료 pedal-up을 연결했다. Swift 666개·MCP 24개, 실제 가져오기/내보내기·Undo/Redo와 Release를 확인했다. 당시 후속이던 페달 직접 편집은 위 build151에서 연결했고 파일 접근 대기의 안내는 남아 있다. [검증 기록](docs/176-midi-sustain-file-workflow.md).
 
 **build149는 낮은 오토메이션 화면에서 곡선을 보며 수치와 안내를 스크롤한다.** controls wheel과 canvas zoom을 구분하고, 서클 확대·축소 중 수치 초안 보존·오류 복구·범위 맞춤을 확인했다. 최종 Release 48.72초와 data·패키지 검증을 통과했다. [검증 범위](docs/172-automation-guidance.md).
 

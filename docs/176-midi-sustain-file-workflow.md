@@ -1,6 +1,6 @@
 # MIDI 서스테인 파일 가져오기·내보내기
 
-상태: build150 SMF 연결의 회귀·Release·아래 native 파일 검증을 완료했다. 최종 import/export 독립 감사도 PASS했다. [DSP 검증175](175-midi-sustain-render.md)의 내장 신스 지원과 이번 파일·preview·내보내기를 구분한다. GUI/MCP의 페달 이벤트 직접 편집과 실제 장치 연주는 아직 별도 후속 범위다.
+상태: build150 SMF 연결의 회귀·Release·아래 native 파일 검증을 완료했다. 최종 import/export 독립 감사도 PASS했다. [DSP 검증175](175-midi-sustain-render.md)의 내장 신스 지원과 이번 파일·preview·내보내기를 구분한다. 당시 후속인 GUI/MCP 페달 이벤트 직접 편집은 [build151](177-midi-sustain-editing.md)에서 연결했다. 실제 장치 연주는 별도 범위다.
 
 ## 파일과 적용 계약
 

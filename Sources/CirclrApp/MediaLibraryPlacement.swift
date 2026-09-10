@@ -38,7 +38,7 @@ extension AppStore {
         return NumberEditIdentity(projectID:base.projectID,revision:base.revision,generation:base.generation,
             arrangementID:arrangement,circle:circle,trackID:track,laneID:base.laneID,patternID:pattern,
             notes:base.notes,clipID:base.clipID,edgeID:base.edgeID,transitionID:base.transitionID,original:original,
-            settings:base.settings,steps:base.steps,connections:base.connections,automation:base.automation,
+            settings:base.settings,steps:base.steps,connections:base.connections,automation:base.automation,sustain:base.sustain,
             focus:base.focus,activation:base.activation,automationPoint:base.automationPoint,automationParameter:base.automationParameter)
     }
 }

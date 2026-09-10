@@ -14,6 +14,7 @@ struct SectionSettingsReturnState {
     let stepCursor:MIDIImportStepCursor?
     let trackID:ID?
     let pitchBend:MIDIPitchBendSequence?
+    let sustain:MIDISustainSequence?
 }
 
 extension AppStore {
@@ -51,8 +52,8 @@ extension AppStore {
         let saved=SectionSettingsReturnState(projectID:project.id,generation:mediaImportGeneration,
             sectionAddress:section,sourceAddress:address,title:selectedCircle?.title ?? "이전 편집",
             workspace:workspace,midiStepMode:midiStepMode,viewport:viewport,stepCursor:captureStepCursor?(),
-            trackID:selectedTrackID,pitchBend:pitchBendSource(at:.init(node:address,original:workspace.original),in:project))
-        navigationOpen=false;connectionsOpen=false;automationOpen=false;pitchBendOpen=false;hierarchyTransitionID=nil
+            trackID:selectedTrackID,pitchBend:pitchBendSource(at:.init(node:address,original:workspace.original),in:project),sustain:sustainSource(at:.init(node:address,original:workspace.original),in:project))
+        navigationOpen=false;connectionsOpen=false;automationOpen=false;pitchBendOpen=false;sustainOpen=false;hierarchyTransitionID=nil
         focusHierarchy(section,detail:true)
         hierarchySettingsOpen=true
         sectionSettingsReturn=saved
@@ -65,6 +66,9 @@ extension AppStore {
         guard identity==numberEditIdentity,canReturnFromSectionSettings else{return}
         var workspace=saved.workspace.restored(at:saved.sourceAddress,in:project)
         let key=EditorWorkspaceKey(node:saved.sourceAddress,original:workspace.original)
+        if let state=workspace.sustain {
+            workspace.sustain=state.reconciled(from:saved.sustain,to:sustainSource(at:key,in:project))
+        }
         if let state=workspace.pitchBend {
             workspace.pitchBend=state.reconciled(from:saved.pitchBend,to:pitchBendSource(at:key,in:project))
         }

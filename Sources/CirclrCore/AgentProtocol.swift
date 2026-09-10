@@ -63,6 +63,7 @@ public struct AgentOperation:Codable {
     public var patternID:ID?
     public var original:Bool?
     public var change:AgentPitchBendChange?
+    public var sustainChange:AgentSustainChange?
     public var append:Bool?
     public var instrument:Instrument?
     public var synthVoice:SynthVoice?
@@ -100,6 +101,68 @@ public struct AgentOperation:Codable {
     public var automationPoints:[AutomationPoint]?
     public init(_ kind:String){self.kind=kind}
 
+    private enum CodingKeys:String,CodingKey {case kind,at,compositionID,arrangementID,useID,laneID,nodeID,trackID,name,notes,pattern,patternID,original,change,sustainChange,append,instrument,synthVoice,effect,context,settings,gain,muted,startBeat,lengthBeats,repeatCount,from,to,sidechain,bars,stepIndex,subdivisions,pitch,velocity,gate,enabled,noteIDs,edit,velocityOffset,semitones,beatOffset,strength,clipID,sourceStart,duration,sourceOffset,fadeIn,fadeOut,parameter,automationPoints}
+    private struct RawKey:CodingKey {var stringValue:String;var intValue:Int?{nil};init?(stringValue:String){self.stringValue=stringValue};init?(intValue:Int){return nil}}
+    public init(from decoder:Decoder)throws {
+        let c=try decoder.container(keyedBy:CodingKeys.self)
+        kind=try c.decode(String.self,forKey:.kind)
+        if kind=="edit_sustain" {
+            let raw=try decoder.container(keyedBy:RawKey.self)
+            let allowed:Set<String>=["kind","arrangementID","useID","laneID","original","patternID","trackID","sustainChange"]
+            guard try raw.allKeys.allSatisfy({key in guard allowed.contains(key.stringValue) else{return false};return try !raw.decodeNil(forKey:key)}) else {throw CirclrError("edit_sustain 필드와 null 여부를 확인하세요")}
+        }
+        at=try c.decodeIfPresent(Point.self,forKey:.at)
+        compositionID=try c.decodeIfPresent(ID.self,forKey:.compositionID)
+        arrangementID=try c.decodeIfPresent(ID.self,forKey:.arrangementID)
+        useID=try c.decodeIfPresent(ID.self,forKey:.useID)
+        laneID=try c.decodeIfPresent(ID.self,forKey:.laneID)
+        nodeID=try c.decodeIfPresent(ID.self,forKey:.nodeID)
+        trackID=try c.decodeIfPresent(ID.self,forKey:.trackID)
+        name=try c.decodeIfPresent(String.self,forKey:.name)
+        notes=try c.decodeIfPresent([Note].self,forKey:.notes)
+        pattern=try c.decodeIfPresent(MIDIPattern.self,forKey:.pattern)
+        patternID=try c.decodeIfPresent(ID.self,forKey:.patternID)
+        original=try c.decodeIfPresent(Bool.self,forKey:.original)
+        change=try c.decodeIfPresent(AgentPitchBendChange.self,forKey:.change)
+        sustainChange=try c.decodeIfPresent(AgentSustainChange.self,forKey:.sustainChange)
+        append=try c.decodeIfPresent(Bool.self,forKey:.append)
+        instrument=try c.decodeIfPresent(Instrument.self,forKey:.instrument)
+        synthVoice=try c.decodeIfPresent(SynthVoice.self,forKey:.synthVoice)
+        effect=try c.decodeIfPresent(Effect.self,forKey:.effect)
+        context=try c.decodeIfPresent(MusicContext.self,forKey:.context)
+        settings=try c.decodeIfPresent(ContextSettings.self,forKey:.settings)
+        gain=try c.decodeIfPresent(Double.self,forKey:.gain)
+        muted=try c.decodeIfPresent(Bool.self,forKey:.muted)
+        startBeat=try c.decodeIfPresent(Double.self,forKey:.startBeat)
+        lengthBeats=try c.decodeIfPresent(Double.self,forKey:.lengthBeats)
+        repeatCount=try c.decodeIfPresent(Int.self,forKey:.repeatCount)
+        from=try c.decodeIfPresent(ID.self,forKey:.from)
+        to=try c.decodeIfPresent(ID.self,forKey:.to)
+        sidechain=try c.decodeIfPresent(Bool.self,forKey:.sidechain)
+        bars=try c.decodeIfPresent(Int.self,forKey:.bars)
+        stepIndex=try c.decodeIfPresent(Int.self,forKey:.stepIndex)
+        subdivisions=try c.decodeIfPresent(Int.self,forKey:.subdivisions)
+        pitch=try c.decodeIfPresent(Int.self,forKey:.pitch)
+        velocity=try c.decodeIfPresent(Int.self,forKey:.velocity)
+        gate=try c.decodeIfPresent(Double.self,forKey:.gate)
+        enabled=try c.decodeIfPresent(Bool.self,forKey:.enabled)
+        noteIDs=try c.decodeIfPresent([ID].self,forKey:.noteIDs)
+        edit=try c.decodeIfPresent(String.self,forKey:.edit)
+        velocityOffset=try c.decodeIfPresent(Int.self,forKey:.velocityOffset)
+        semitones=try c.decodeIfPresent(Int.self,forKey:.semitones)
+        beatOffset=try c.decodeIfPresent(Double.self,forKey:.beatOffset)
+        strength=try c.decodeIfPresent(Double.self,forKey:.strength)
+        clipID=try c.decodeIfPresent(ID.self,forKey:.clipID)
+        sourceStart=try c.decodeIfPresent(Double.self,forKey:.sourceStart)
+        duration=try c.decodeIfPresent(Double.self,forKey:.duration)
+        sourceOffset=try c.decodeIfPresent(Double.self,forKey:.sourceOffset)
+        fadeIn=try c.decodeIfPresent(Double.self,forKey:.fadeIn)
+        fadeOut=try c.decodeIfPresent(Double.self,forKey:.fadeOut)
+        parameter=try c.decodeIfPresent(AutomationParameter.self,forKey:.parameter)
+        automationPoints=try c.decodeIfPresent([AutomationPoint].self,forKey:.automationPoints)
+    }
+
+
 }
 
 public enum AgentProjectEditing {
@@ -113,15 +176,17 @@ public enum AgentProjectEditing {
         var p=input
         var explicitSelection:ID?
         for op in operations {
-            guard op.original==nil || ["set_automation","edit_pitch_bend"].contains(op.kind) else{throw CirclrError("original은 set_automation·edit_pitch_bend에만 지정할 수 있습니다")}
-            guard op.patternID==nil || ["edit_shared_audio","edit_pitch_bend"].contains(op.kind) else{throw CirclrError("patternID는 edit_shared_audio·edit_pitch_bend에만 지정할 수 있습니다")}
+            guard op.original==nil || ["set_automation","edit_pitch_bend","edit_sustain"].contains(op.kind) else{throw CirclrError("original은 set_automation·edit_pitch_bend에만 지정할 수 있습니다")}
+            guard op.patternID==nil || ["edit_shared_audio","edit_pitch_bend","edit_sustain"].contains(op.kind) else{throw CirclrError("patternID는 edit_shared_audio·edit_pitch_bend에만 지정할 수 있습니다")}
             guard op.change==nil || op.kind=="edit_pitch_bend" else{throw CirclrError("change는 edit_pitch_bend에만 지정하세요")}
+            guard op.sustainChange==nil || op.kind=="edit_sustain" else{throw CirclrError("sustainChange는 edit_sustain에만 지정하세요")}
             if op.kind=="edit_shared_audio" {
                 guard op.arrangementID==nil,op.useID==nil,op.nodeID==nil,op.laneID==nil,op.compositionID==nil else{throw CirclrError("공유 오디오에는 patternID·trackID·clipID만 대상으로 지정하세요")}
             }
             p.activeArrangementID=input.activeArrangementID
             if let ai=op.arrangementID {guard p.arrangements.contains(where:{$0.id==ai}) else {throw CirclrError("편곡 ID를 찾을 수 없습니다")};p.activeArrangementID=ai}
             switch op.kind {
+            case "edit_sustain":try AgentSustainEditing.apply(op,in:&p)
             case "edit_pitch_bend":try AgentPitchBendEditing.apply(op,in:&p)
             case "duplicate_arrangement", "rename_arrangement":
                 guard let compositionID=op.compositionID,let arrangementID=op.arrangementID,let name=op.name else {
