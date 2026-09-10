@@ -1,5 +1,11 @@
 # 변경 이력
 
+## 검증 완료 — 0.20.0 build130 오토메이션 편집 공간
+
+- 가로 파라미터 선택과 자동 줄바꿈으로 같은 창의 곡선 눈금 영역을 약60→90px로 확대했다.
+- 빈 곡선 Tab/Shift-Tab의 상위 캔버스 전파를 차단하고 신스 필터 도움말을 보완했다.
+- 최종 Release47.75초·native 수치/Undo·재열기·패키지와 독립 7개 capture·6개 JPEG/AX 감사를 통과했다. [검증](docs/150-automation-editing-space.md).
+
 ## 검증 완료 — 0.20.0 build129 신스 cutoff 오토메이션
 
 - 내장 신스 instrument의 절대 Hz 곡선을 voice 상태를 보존한 sample별 DSP에 전달한다. Hz 선형/log 표시·schema3·지원 타깃·GUI/MCP 범위를 연결했다.

@@ -94,7 +94,7 @@ extension AppStore {
             }
         }
         if selectedUse != nil {
-            if selectedMusic != nil {add("automation","볼륨·팬 오토메이션","⌘5"){[weak self] in self?.showAutomation()}}
+            if selectedMusic != nil {add("automation","볼륨·팬·신스 필터 오토메이션","⌘5"){[weak self] in self?.showAutomation()}}
             if currentAudioClip != nil {
                 add("audio-split","커서에서 오디오 분할","⌘T"){[weak self] in self?.splitAudio()}
                 add("audio-duplicate","오디오 구간 뒤에 복제","⌘D"){[weak self] in self?.duplicateAudio()}
@@ -381,7 +381,7 @@ struct KeyboardHelpView:View {
         ("수치 · Return / Esc","값 적용 / 취소 후 편집기로 복귀"),
         ("피아노 롤 · F","선택 노트 보기 · 넓은 선택은 기준 노트"),
         ("MIDI · 선택 노트 드래그","선택 전체 이동 · 끝 손잡이로 공통 길이 조절"),
-        ("⌥⌘R","오디오 녹음 / 정지 · 연결 중 시작 취소"),("⌘5 / 오토메이션 · Return","볼륨·팬 곡선 열기 / 점 추가"),("오토메이션 · [ ] / 방향키","이전·다음 점 / 시간·값 이동"),
+        ("⌥⌘R","오디오 녹음 / 정지 · 연결 중 시작 취소"),("⌘5 / 오토메이션 · Return","볼륨·팬·신스 필터 곡선 열기 / 점 추가"),("오토메이션 · [ ] / 방향키","이전·다음 점 / 시간·값 이동"),
         ("⌘W / ⌘Q","최소화 / 앱 종료")
     ]
     private func group(_ row:(String,String))->String {

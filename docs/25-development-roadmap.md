@@ -1,5 +1,7 @@
 # 써클러 개발 방향과 실행 계획
 
+build130은 오토메이션 가시성과 빈 곡선 키보드 이동을 개선했다. [검증150](150-automation-editing-space.md). 다음 엔진 범위는 [MIDI tempo 가져오기](151-midi-tempo-import-plan.md)이며 계획을 구현 증거로 계산하지 않는다.
+
 build129에서 내장 신스 cutoff의 Core/DSP·GUI/MCP·schema를 연결하고 기계검증·Release 77.59초·실제 Hz 편집/오류 거절을 확인했다. GUI/schema의 독립 감사·production 서명/UUID도 통과했으며 native 바운스·원본 복원·재열기 r79도 확인했다. PCM 최대 1LSB·원본 복원 byte-exact를 독립 감사했으며 최종 종합 UI 데이터 감사도 통과했다. [구현 검증](149-synth-cutoff-automation-validation.md). 실제 청취·물리 오디오·전체 제작 목표는 남아 있다.
 
 build128 compact 후보에서 작은 편집 공간의 오디오 수치4개·완전한 스텝6행과 입력/Undo를 확인했다. 최종 Release 44.07초이며 재열기·production 서명/UUID·독립 13개 compact capture 감사도 통과했다. [화면 검증](147-editor-space.md). 당시 다음 범위로 정한 [내장 신스 cutoff automation](148-synth-cutoff-automation-plan.md)은 위 build129에서 구현·검증했다. 최종 native 결과는 구현 검증 문서를 따른다.

@@ -6,7 +6,9 @@ macOS용 앨범·송폼 궤도 편집기. **앨범 → 곡·악장 → 섹션 �
 
 연결 UI는 [서클 둘레 8방향 IN/OUT과 다중 입출력](docs/22-eight-direction-ports.md)으로 확장 중이다. 포트의 신호 의미와 연결점 배치를 분리한다. 아래 일반 사용법은 배포된 0.19 앱 기준이며 새 포트 기능은 독립 개발 브랜치에서 검증한다.
 
-현재 **`codex/daw-integration`의 0.20.0 build 129**에 녹음 lifecycle과 8방향·다중 bus·그룹 포트를 통합했다. 같은 캔버스의 연결 편집·녹음 상태·스텝·오토메이션이 공존하며, 녹음 시작·정리 중 음악 편집과 Undo의 경쟁을 차단한다. build 23의 실제 편집·바운스·Undo·저장/재열기·닫기 최소화 및 출력별 모션 검증은 [통합 QA](qa/daw-integration-review.md)에 기록했다.
+현재 **`codex/daw-integration`의 0.20.0 build 130**에 녹음 lifecycle과 8방향·다중 bus·그룹 포트를 통합했다. 같은 캔버스의 연결 편집·녹음 상태·스텝·오토메이션이 공존하며, 녹음 시작·정리 중 음악 편집과 Undo의 경쟁을 차단한다. build 23의 실제 편집·바운스·Undo·저장/재열기·닫기 최소화 및 출력별 모션 검증은 [통합 QA](qa/daw-integration-review.md)에 기록했다.
+
+**build130은 오토메이션 곡선 공간과 키보드 이동을 개선했다.** 파라미터를 가로로 배치해 같은 창의 눈금 영역을 약60→90px로 늘리고, 빈 곡선의 Tab이 다른 서클을 선택하던 문제를 수정했다. 최종 Release47.75초·궤도/선형 입력·Undo·재열기를 확인했다. [검증 기록](docs/150-automation-editing-space.md).
 
 **build129는 내장 신스의 필터 cutoff 오토메이션을 연결한다.** Hz 편집·값 오류 거절을 실제 GUI에서 확인했고 Core/Audio·MCP·C DSP 비교 및 Release 77.59초를 통과했다. GUI/schema의 독립 감사·production 서명/UUID도 통과했으며 native 바운스·원본 복원·재열기 r79도 확인했다. PCM 최대 1LSB·원본 복원 byte-exact를 독립 감사했으며 최종 종합 UI 데이터 감사도 통과했다. [구현과 검증](docs/149-synth-cutoff-automation-validation.md).
 

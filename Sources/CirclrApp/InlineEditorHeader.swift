@@ -36,7 +36,7 @@ struct InlineEditorHeader:View {
                 if store.canEditCirclePorts {mode("연결",page:.connections,help:"IN/OUT·대상·8방향 위치 편집 · L")}
                 if store.recentTransitionID != nil {mode("전환",page:.transition,help:"최근 편집한 섹션 전환으로 돌아가기")}
                 if store.selectedMusic != nil {
-                    mode("오토메이션",page:.automation,help:"볼륨·팬 곡선 · ⌘5")
+                    mode("오토메이션",page:.automation,help:"볼륨·팬·신스 필터 곡선 · ⌘5")
                     mode("설정",page:.settings,help:"템포·박자·스케일·반복 설정")
                 }
             }.disabled(store.midiImportDraft != nil)

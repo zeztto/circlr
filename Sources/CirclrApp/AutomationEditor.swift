@@ -108,7 +108,11 @@ struct AutomationEditor:View {
     var plot:some View {AutomationPlot(store:store,displayBeats:store.automationDisplayedBeats,focusTarget:focusTarget,fieldFocus:fieldFocus).disabled(!available)}
     var linear:some View {
         VStack(alignment:.leading,spacing:8) {
-            HStack(spacing:12){parameterControls;Spacer(minLength:8);originalToggle;pointActions}
+            MIDIWorkspaceToolbarLayout(gap:12) {
+                parameterControls.fixedSize(horizontal:true,vertical:false)
+                originalToggle
+                pointActions.fixedSize(horizontal:true,vertical:false)
+            }
             plot.frame(minHeight:80,maxHeight:.infinity)
             HStack(spacing:12) {
                 navigation
@@ -152,8 +156,13 @@ struct AutomationEditor:View {
     var parameterControls:some View {
         MIDIWorkspaceToolbarLayout {
             if store.availableAutomationParameters.contains(.synthCutoff) {
-                Picker("오토메이션 대상",selection:$store.automationParameter){ForEach(store.availableAutomationParameters,id:\.self){Text($0.label).tag($0)}}
-                    .pickerStyle(.radioGroup).labelsHidden().fixedSize()
+                ForEach(store.availableAutomationParameters,id:\.self) { parameter in
+                    StudioModeButton(title:parameter.label,label:"오토메이션 대상 · "+parameter.label,
+                        selected:store.automationParameter==parameter,help:parameter.label+" 오토메이션 편집") {
+                        store.automationParameter=parameter
+                    }
+                    .frame(width:max(48,(parameter.label as NSString).size(withAttributes:[.font:NSFont.systemFont(ofSize:12,weight:.semibold)]).width+24),height:28)
+                }
             } else {
                 Picker("오토메이션 대상",selection:$store.automationParameter){ForEach(store.availableAutomationParameters,id:\.self){Text($0.label).tag($0)}}
                     .pickerStyle(.segmented).labelsHidden().frame(width:112)
@@ -449,8 +458,14 @@ struct AutomationPlot:NSViewRepresentable {
         case 115:store.chooseAutomationBoundary(last:false)
         case 119:store.chooseAutomationBoundary(last:true)
         case 48:
-            if store.selectedAutomationPoint != nil,!event.modifierFlags.contains(.option),
-               fieldFocus?.enter(last:event.modifierFlags.contains(.shift),in:window)==true {return}
+            if !event.modifierFlags.contains(.option) {
+                if store.selectedAutomationPoint != nil,
+                   fieldFocus?.enter(last:event.modifierFlags.contains(.shift),in:window)==true {return}
+                // An empty lane has no numeric fields. Traverse controls explicitly instead
+                // of bubbling Tab to the parent canvas, where it selects another circle.
+                if event.modifierFlags.contains(.shift) {window?.selectPreviousKeyView(self)} else {window?.selectNextKeyView(self)}
+                return
+            }
             super.keyDown(with:event)
         case 36,76:store.addAutomationPoint()
         case 51,117:store.removeAutomationPoint()

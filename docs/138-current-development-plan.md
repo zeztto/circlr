@@ -1,6 +1,6 @@
 # 현행 개발 계획
 
-기준: 2026-09-10, integration-worktree의 build120 소스(`b06c4a9`)에서 시작해 build127의 소스·검증 기록을 기준으로 build129 진행 결과까지 반영했다. 이 문서는 다음 실행과 완료 판단을 위한 계획이며 [누적 로드맵](25-development-roadmap.md)의 과거 검증 결과를 새로 수행한 검사로 바꾸지 않는다. 전체 DAW·음악 품질·접근성은 아직 완료되지 않았다.
+기준: 2026-09-10, integration-worktree의 build120 소스(`b06c4a9`)에서 시작해 build127의 소스·검증 기록을 기준으로 build130 진행 결과까지 반영했다. 이 문서는 다음 실행과 완료 판단을 위한 계획이며 [누적 로드맵](25-development-roadmap.md)의 과거 검증 결과를 새로 수행한 검사로 바꾸지 않는다. 전체 DAW·음악 품질·접근성은 아직 완료되지 않았다.
 
 ## 제품의 완료 방향
 
@@ -36,6 +36,8 @@
 
 ### 2. 한 곡을 끊김 없이 만드는 단일 캔버스
 
+build130은 가로 파라미터 선택으로 곡선 공간을 확보하고 빈 곡선 Tab의 다른 서클 이동을 수정했다. [검증150](150-automation-editing-space.md).
+
 build128 compact의 동일 창에서 오디오 핵심 수치 4개·완전한 스텝6행과 실제 입력/Undo를 확인했다. 최종 재열기·production 서명/UUID·독립 13개 compact capture 감사도 통과했다. [가시성 검증](147-editor-space.md).
 
 build127에서 세션 내 편곡별 오디오·automation·스텝 작업 복귀와 문서 reset·삭제 대상 fallback을 확인했다. 소스 검토·Release·최종 15개 capture 감사·r62 재열기/disk 일치·production 서명/UUID를 통과했다. 도구 한글 입력은 TextEdit와 써클러에서 동일하게 축소됐으며 실제 IME는 미검증이다. [복귀/입력 진단](146-input-delivery-and-arrangement-return.md).
@@ -56,7 +58,7 @@ build122 진행: 새 앨범에서 첫 섹션 생성 동선을 확인했고, 공�
 
 [신스 cutoff automation 계획](148-synth-cutoff-automation-plan.md)은 build129에서 descriptor·voice 보존 DSP·GUI/MCP·schema를 구현하고 기계검증·실제 Hz 편집/오류 거절을 확인했다. GUI/schema 독립 감사와 production 서명/UUID도 통과했으며 바운스·복원·재열기 r79 및 PCM 독립 감사도 통과했다. 최종 종합 UI 데이터 감사도 통과했다. [현재 검증](149-synth-cutoff-automation-validation.md)을 기준으로 판단한다.
 
-**다음 행동:** 2번의 제작 흐름에서 필요한 표현을 확인하고, 첫 대상 하나의 저장→편집→MCP→renderer 경로를 끝까지 연결한다. build129에서 `AutomationParameter`에 synthCutoff를 추가했으며 native 편집·바운스·재열기와 독립 감사를 통과했다. 신스 filter 같은 다음 파라미터는 descriptor·단위·범위·초깃값·시간 의미·DSP 반영을 먼저 정한 뒤 UI에 노출한다. plugin parameter는 실제 descriptor와 state 복원 계약을 갖춘 뒤 추가한다.
+**다음 행동:** [MIDI tempo 가져오기 계획](151-midi-tempo-import-plan.md)의 전체 이벤트 읽기·이번 use의 구간별 tempo 적용·GUI/MCP·오프라인 렌더를 연결한다. 현재는 계획이며 모델/schema 도입 선택부터 검증한다. build129에서 `AutomationParameter`에 synthCutoff를 추가했으며 native 편집·바운스·재열기와 독립 감사를 통과했다. 신스 filter 같은 다음 파라미터는 descriptor·단위·범위·초깃값·시간 의미·DSP 반영을 먼저 정한 뒤 UI에 노출한다. plugin parameter는 실제 descriptor와 state 복원 계약을 갖춘 뒤 추가한다.
 
 MIDI CC/페달/피치 벤드·tempo map은 노트 import와 다른 이벤트·시간 계약이 필요하다. 기존 파일을 여는 것만으로 재해석하지 않으며 가져오기 전 적용 범위를 설명한다. 오디오 crossfade·comping·time warp, 실시간 automation write/touch/latch, punch/loop 녹음은 원본/테이크·공통 clock·취소 수명에 의존하므로 독립 체크박스로 쌓지 않는다. [기본 DAW 계획](31-daw-basics-plan.md)의 남은 조건을 유지한다.
 
