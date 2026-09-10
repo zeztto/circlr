@@ -95,7 +95,7 @@ struct AlbumCanvas: NSViewRepresentable {
             return bitmap.cgImage
         }
         store.canvasCommands = { [weak self] in self?.availableCommands() ?? [] }
-        store.focusCanvas = { [weak self] in guard let self else{return};self.window?.makeFirstResponder(self) }
+        store.focusCanvas = { [weak self] in guard let self else{return};self.store.editorFocusRequest=nil;self.window?.makeFirstResponder(self) }
         installCircleColorObserver()
         registerForDraggedTypes([.fileURL])
         wantsLayer = true; clipsToBounds = true; layer?.masksToBounds = true; layer?.backgroundColor = StudioTheme.canvasNS.cgColor
@@ -307,6 +307,7 @@ struct AlbumCanvas: NSViewRepresentable {
             addSubview(host); editor = host; editorAddress = address
         }
         editor?.frame = frame
+        if let editor {store.consumeEditorNavigationFocus(in:editor)}
     }
     func removePrecisionEditor() {
         guard let current=editor else {editorAddress=nil;return}
@@ -536,6 +537,7 @@ struct AlbumCanvas: NSViewRepresentable {
         guard store.resolveActiveNumericDraft(),store.nameEditing.resolve() else{return}
         identity.revision=store.project.musicRevision
         guard identity==store.numberEditIdentity else{return}
+        store.editorFocusRequest=nil
         interruptPlaybackFollow()
         window?.makeFirstResponder(self); animation?.invalidate(); animation=nil
         down=convert(event.locationInWindow,from:nil);panOrigin=camera.pan;dragNode=nil;dragPreview=nil

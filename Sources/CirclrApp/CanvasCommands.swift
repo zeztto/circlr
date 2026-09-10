@@ -246,15 +246,8 @@ extension AlbumCanvasView {
         if let child=scene?.nodes.first(where:{$0.parent==address}),store.selectedMusic==nil,!store.hierarchySettingsOpen {
             guard store.selectUserWorkspace(child.id) else{return};focus(child.id,detail:child.role == .music)
         }else {guard store.selectUserWorkspace(address) else{return};focus(address,detail:true)}
-        DispatchQueue.main.asyncAfter(deadline:.now()+0.32){[weak self] in
-            guard let self,let editor=self.editor else{return}
-            func target(_ view:NSView)->NSView? {
-                if view is StepGridView || view is OrbitMIDIView || view is OrbitAudioView || view is PianoRollView || view is AudioLaneView {return view}
-                for child in view.subviews {if let result=target(child){return result}}
-                return nil
-            }
-            if let view=target(editor){self.window?.makeFirstResponder(view)}
-        }
+        store.requestEditorNavigationFocus()
+        placeEditor()
     }
 }
 

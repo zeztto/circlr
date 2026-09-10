@@ -45,6 +45,7 @@ struct InlineCircleEditor: View {
         .padding(14).background(store.project.usesOrbits && !store.hierarchySettingsOpen && store.midiImportDraft==nil ? Color.clear:StudioTheme.surface).foregroundStyle(StudioTheme.text)
         .font(.system(size: 13)).buttonStyle(CanvasButtonStyle()).controlSize(.regular)
         .tint(StudioTheme.accent).preferredColorScheme(.dark)
+        .background(EditorFocusNavigationAttachment(store:store).allowsHitTesting(false))
         .numberEditing(in:store)
         .onExitCommand {
             if let draft=store.midiImportDraft {store.cancelMIDIImport(draft.id)}

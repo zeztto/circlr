@@ -47,7 +47,7 @@ extension AppStore {
             default:break
             }
         }
-        focusCanvas?();return true
+        return true
     }
     func openTrackComponent(_ index:Int) {
         guard (0...2).contains(index),let track=currentStudioTrack else{status="작업할 섹션과 트랙을 선택하세요";return}

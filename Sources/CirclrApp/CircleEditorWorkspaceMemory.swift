@@ -66,6 +66,7 @@ extension AppStore {
     }
     @discardableResult func focusUserWorkspace(_ address:CircleAddress,detail:Bool=false,explicitIntent:CircleWorkspaceIntent?=nil)->Bool {
         guard selectUserWorkspace(address,explicitIntent:explicitIntent) else{return false}
+        requestEditorNavigationFocus()
         hierarchyCommand=HierarchyCommand(action:.focus(address,detail));return true
     }
 }

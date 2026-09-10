@@ -1,5 +1,10 @@
 # 변경 이력
 
+## 부분 개선 검증 — build140 편집 진입 포커스
+
+- 현재 mode/content type에 맞는 요청 기반 focus로 MIDI·오디오 진입과 키보드 조작을 개선했다. invalid 입력과 console 편집을 보호한다.
+- 최종 Release 46.68초·기반 39개 검사·native 방향키/Tab/Enter와 Undo를 확인했다. 빠른 모드 전환의 기존 async attach focus 경쟁은 미해결이며 다음 우선 수정이다. 최종 state·재시작 감사는 PASS, UI 감사는 `PASS_WITH_KNOWN_RACE`다. 전체 포커스 완료로 선언하지 않는다. [기록](docs/162-editor-navigation-focus.md).
+
 ## 검증 완료 — build139 서클별 편집 화면 기억
 
 - 첫 방문 기본 화면·재방문 scope별 기억·명시적 스텝 요청 우선을 연결했다. invalid canvas 이동 재현을 수정해 잘못된 수치·이름을 보존하고 이동을 차단한다.
