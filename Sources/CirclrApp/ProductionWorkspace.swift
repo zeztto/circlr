@@ -43,8 +43,33 @@ extension AppStore {
         var args=AgentArguments();args.arrangementID=project.activeArrangementID;args.useID=use.id;args.trackID=track.id;args.tailSeconds=bounceTailSeconds;request.arguments=args
         do {_ = try executeAgent(request,source:"사용자")}catch{fail(error)}
     }
-    func restoreBounce() {
-        guard let node=selectedMusic,let use=selectedUse else{return}
-        mutate("바운스 원본 복원"){try BounceEditing.restore(nodeID:node.id,useID:use.id,in:&$0)}
+    func restoreBounce(identity expected:NumberEditIdentity) {
+        guard expected==numberEditIdentity,!trackBounceRecoveryLocked,let node=selectedMusic,let source=node.bounce,
+              case .music(let arrangementID,let useID,let nodeID)=hierarchySelection,
+              nodeID==node.id,arrangementID==project.activeArrangementID,selectedUse?.id==useID else{return}
+        var identity=expected
+        guard nameEditing.resolve() else{return}
+        identity.revision=project.musicRevision
+        guard identity==numberEditIdentity,!trackBounceRecoveryLocked,selectedMusic?.bounce==source else{return}
+        do {
+            let baseline=project
+            var candidate=baseline
+            try BounceEditing.restore(nodeID:nodeID,useID:useID,in:&candidate)
+            let destination=CircleAddress.music(arrangementID:arrangementID,useID:useID,nodeID:source.outputNodeID)
+            let scene=try StudioNavigation.scene(revealing:destination,in:candidate)
+            guard let output=scene.node(destination)?.music,case .output(let trackID)=output.content else {
+                throw CirclrError("바운스 원본의 출력 서클을 찾을 수 없습니다")
+            }
+            guard candidate != baseline,identity==numberEditIdentity,!trackBounceRecoveryLocked else{return}
+            mutate("바운스 원본 복원") {project in
+                guard project==baseline else{return}
+                project=candidate
+            }
+            // mutate can decline an edit; only the exact committed candidate permits navigation.
+            candidate.musicRevision=baseline.musicRevision+1
+            identity.revision=candidate.musicRevision
+            guard project==candidate,numberEditIdentity==identity else{return}
+            navigateStudio(destination,track:trackID)
+        }catch{fail(error)}
     }
 }

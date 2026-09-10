@@ -196,7 +196,7 @@ struct AudioWorkspaceView:View {
                     }.fixedSize(horizontal:true,vertical:false)
                     HStack(spacing:10) {
                 TrackBounceButton(store:store)
-                if store.selectedMusic?.bounce != nil {Button("원본 복원"){act{store.restoreBounce()}}}
+                if store.selectedMusic?.bounce != nil {Button("원본 복원"){store.restoreBounce(identity:scopeIdentity)}}
                     }.fixedSize(horizontal:true,vertical:false)
                     HStack(spacing:10) {
                 Toggle("템포 추종",isOn:Binding(get:{liveClip.followsTempo},set:{value in store.editAudioClip(liveClip){$0.followsTempo=value}}))

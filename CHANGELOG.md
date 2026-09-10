@@ -1,5 +1,11 @@
 # 변경 이력
 
+## 검증 완료 — 0.20.0 build123 원본 복원 후 출력 복귀
+
+- 원본 복원 성공 후 같은 arrangement/use에 저장된 outputNodeID로 이동한다. 렌더 당시 identity를 전달하고 정확한 candidate 적용 뒤에만 탐색하여 보관 오디오에 남던 문제를 개선했다.
+- 이름 오류·출력 연결 충돌의 거절, 정상 복귀·Undo·저장/재열기를 native로 확인했다. Release44.82초·QA/production 서명·독립8개 상태 감사와 자산3개 SHA 보존을 통과했다.
+- stale 요청 직접 주입·실제 녹음 잠금은 native 미검증이며 새 PCM 검사·물리 입출력을 실행하지 않았다. 전체 제작 흐름은 계속 진행한다. [검증 기록](docs/142-bounce-restore-navigation.md).
+
 ## 추가 검증 — 기존 build122의 연속 제작 흐름
 
 - 공유 스텝·신스 cutoff·reverb·GUI 바운스·원본 복원·Undo·재열기를 실제 앱에서 검증했다. 새 앱 코드나 Release 빌드는 없다.
