@@ -1,12 +1,12 @@
 # 써클러 개발 방향과 실행 계획
 
-갱신: 2026-09-10. 계획 시작 기준: 0.11 native 앱, 0.12 음악 에이전트 키트 소스. 기존 출고 표기는 0.19.0이며 실행 중 사용자 앱의 별도 관측 버전은0.14다. build115는 mocked lifecycle·presentation·offscreen widget·Release 범위의 제한된 검증을 완료했고 build116의 아래 mixed-candidate 검증도 완료했다. 목표는 송폼 중심의 전문 음악 제작을 먼저 완성하고, 이를 아티스트의 작품·세계관 관리로 확장하는 것이다.
+갱신: 2026-09-10. **현재 실행 순서·의존성·완료 증거는 [현행 개발 계획](138-current-development-plan.md)을 기준으로 한다.** build120까지의 소스와 검증 기록을 대조했으며, 이 문서의 버전별 항목과 초기 A–H 계약은 당시 결과·제한을 보존하는 이력이다. 목표는 송폼 중심의 전문 음악 제작을 먼저 완성하고, 이를 아티스트의 작품·세계관 관리로 확장하는 것이다. 소스 후보의 검증과 실행 중 사용자 앱 출고는 구분한다.
 
 ## 검증 완료 — build120 콘솔 작업 영역 유지
 
 재실행 때 콘솔을 매번 다시 키우거나 접던 불편을 앱별 높이/열림 상태 저장으로 개선했다. 실제180pt/접힘 및40pt/열림의 재실행·프로젝트 열기 후 유지, 음악·사용자 설정 분리를 확인했다. 기존 메뉴와 핫키를 그대로 쓴다. [검증 기록](137-console-preferences.md).
 
-다음 효과 폼 검토에서 `EffectControls`의 focus registry가 자동 스크롤을 켜지 않는 점을 확인했다. 다만 최대2개 파라미터여서 native에서 가려지는 조건은 아직 재현하지 않았다. 짧은 본문에서 compressor 임계값→압축비 이동을 먼저 확인하고, 실제 불편이 확인되면 개선한다. 효과 폼의 상위 NumberEditingContext 보존도 함께 검토한다. 제품 전체의 접근성 완료로 간주하지 않는다.
+build121 후속 검증에서 baseline120의 compressor 임계값·압축비는 모두 보였으나, 다음 Tab으로 출력 볼륨0.00에 이동하면 화면 밖에서 선택되는 문제를 실제 재현했다. 공통 `NativeNumberField`의 focus reveal을 수정했고 Release44.03초 빌드는 성공했다. 최종 native 효과·신스 왕복과 값 적용/Undo·저장/재열기 및 독립 증거 감사를 통과했다. [build121 기록](139-numeric-focus-visibility.md) 참조. 이후에는 [한 곡 통합 작업 흐름](138-current-development-plan.md)의 연속 동선을 검증한다. 제품 전체의 접근성 완료로 간주하지 않는다.
 
 ## 검증 완료 — build119 신스 수치 접근
 
@@ -24,7 +24,7 @@
 
 현행 우선순위의 한 곡 작업 흐름을 따라 공유 리듬 `.rhythmAudio`의 AudioLane 표시를 같은 캔버스의 파형·수치 편집으로 연결한다. 클립 선택·공유 범위 안내·trim/fades/volume/beat/tempo·split/duplicate/delete를 구현했다. Core는 pattern.audio만 원자적으로 변경하고 ordinary graph를 보존하며 stale identity·Undo/재열기·noIO를 검증했다. 실제 baseline115 r14·PNG/AX와 Core7개(offline PCM1개 포함)·0.390초를 확인했다. graph/legacy expanded cycle offset을 검사했으나 legacy 전체 PCM은 미검증이다. 최대2개 keyed cache를 적용했고 final2 Release44.04초·regression32개·native17개 상태를 확인했으나 clip 초안 잔류·저장 선택/viewport 복원을 수정했다. frozen final3 Release42.71초·source v6 review와 보완5개 native 상태를 확인했고 final2 17개와 final3 5개를 구분한 checker·exact Undo/reopen/disk·signed main SHA/UUID·final3 PNG4장 검토를 통과했다. draft-switched 수치는 AX only이며 compact·물리 I/O·legacy 전체 PCM은 미검증이다. QA 종료 후 사용자 PID86114를 유지했다. [계약](132-shared-rhythm-audio-workspace.md).
 
-별도 audition worker 격리 설계는 물리 오디오 출고 gate의 후속 계획이며 이번 편집 UI의 완료에 합산하지 않는다. worker 계획이 작성돼도 격리 구현·실제 HAL 성공을 의미하지 않는다. [격리 계획](133-audition-worker-plan.md).
+build116 당시 별도 audition worker 격리는 후속 설계 단계였으며 이 편집 UI의 완료에 합산하지 않았다. 이후 build118에서 프로세스 격리·mock lifecycle·패키징을 구현·검증했다. 실제 HAL 성공은 여전히 별도 완료 조건이다. [격리 계획](133-audition-worker-plan.md) · [build118 검증](135-audition-worker-isolation.md).
 
 ## 제한된 검증 완료 — build115 미리 듣기 단계 진단
 
@@ -34,7 +34,7 @@ optional session trace64개·첫 interruption 보존·stale guard와 실제 준�
 
 32초 파일의0.5초 구간에서 라벨 충돌과 linear trim hit가 cursor 조작을 가로채는 문제를 개선했다. 짧은 구간의 세로 분리 손잡이·공통 geometry·라벨 연결선으로 직접 cursor/trim을 지원하며 자동 fit과 orbital 변경은 추가하지 않는다. final2 Release41.14초·geometry782개 검사·source v3 review blocker0을 통과했다. native20개 JSON·자산2개/noIO·restored/reopened32를 확보했고 JPG10장·AX 시각과20개 strict checker·5개 gesture·음악/자산 보존·restored/reopened/disk 동일성도 통과했다. wide native는 F/0 표시, wide hit는 harness, orbital은 source 검토에 한정한다. drag 중 resize 취소는 source guard 검토 범위다. [계약](130-audio-waveform-handles.md).
 
-build114 당시 오디오 후속 감사는 `AuditionTransport`의 in-process AU 생성부터 mixer/start까지 단계가 구분되지 않고 timeout이 factory를 중단하지 못하는 경계를 확인했다. 단계 구분은 build115의 bounded trace로 구현했다. 실행 중 factory 중단과 실제 HAL 해결은 여전히 후속 과제다.
+build114 당시 오디오 후속 감사는 `AuditionTransport`의 in-process AU 생성부터 mixer/start까지 단계가 구분되지 않고 timeout이 factory를 중단하지 못하는 경계를 확인했다. 단계 구분은 build115의 bounded trace로 구현했다. factory 중단은 당시 후속 과제였으며 build118에서 기본 경로를 별도 프로세스로 격리했다. 실제 HAL 해결·가청 결과는 그 mock 검증과 구분하여 남겨 둔다.
 
 ## 최신 완료 — build113 오디오 템포 구간·편곡 입력
 
@@ -46,7 +46,7 @@ build114 당시 오디오 후속 감사는 `AuditionTransport`의 in-process AU 
 
 ## 현행 우선순위
 
-이 절이 현재 우선순위다. 아래 누적 이력의 당시 ‘현재’·‘다음’ 문장과 초기 A–H 계약은 새 작업 지시가 아니다. 선택 복원(build71), 선택 보기(build72), 오디오 배치(build73), 키보드 수치 입력(build74), 도움말 검색(build75)은 완료된 범위다. 모든 서클의 선택 영구 저장은 별도 설계 범위다.
+아래 세 축을 [현행 개발 계획](138-current-development-plan.md)의 여섯 작업 흐름으로 구체화했다. 실행 순서와 완료 판단은 연결 문서를 따른다. 아래 누적 이력의 당시 ‘현재’·‘다음’ 문장과 초기 A–H 계약은 새 작업 지시가 아니다. 선택 복원(build71), 선택 보기(build72), 오디오 배치(build73), 키보드 수치 입력(build74), 도움말 검색(build75)은 완료된 범위다. 모든 서클의 선택 영구 저장은 별도 설계 범위다.
 
 1. **물리 오디오 출고 조건 재점검.** `Sources/CirclrAudio/PlaybackTransport.swift`, `PlaybackOutputConnection.swift`, `AuditionTransport.swift`의 상태와 기존 QA를 대조한다. build32의 HAL IOProc 대기는 확인됐지만 원인은 확정되지 않았다. 먼저 현재 장치/프로세스의 읽기 전용 관측과 기존 stack으로 재현 조건을 정리하고, 독립 진단 프로세스의 시간 제한·취소·정리 경계를 정의한다. 정상 출력 시작/정지/자연 종료, 입력 녹음, 장치 변경, MP4 시계 검증이 없으면 사용자 앱을 교체하지 않는다. 오프라인 렌더 성공은 실제 출력 성공으로 계산하지 않는다.
 2. **한 곡 작업 흐름의 통합 사용성 검증.** 개별 편집기 통과와 별도로 섹션 생성→드럼/신스 스텝→오디오 가져오기→연결/자동화→편곡 대안→바운스/재열기의 실제 동선을 평가한다. 작은 창·긴 이름·키보드에서 숨은 상태와 되돌아가기 비용을 기록하고 재현되는 문제부터 수정한다. 별도 고정 사이드바를 추가하지 않는다.
@@ -57,7 +57,7 @@ build114 당시 오디오 후속 감사는 `AuditionTransport`의 in-process AU 
 
 ## 누적 검증 이력
 
-아래는 각 build에서 확인한 결과와 당시 남긴 제한이다. 최신 작업 범위는 위 두 절에서만 정하며 이전 수치·후속 계획을 현재 후보의 검증으로 바꾸지 않는다.
+아래는 각 build에서 확인한 결과와 당시 남긴 제한이다. 최신 작업 범위는 [현행 개발 계획](138-current-development-plan.md)에서 정하며 이전 수치·후속 계획을 현재 후보의 검증으로 바꾸지 않는다.
 
 ## 검증 이력 — build111 MIDI 생성 메뉴·명령 검색 focus
 

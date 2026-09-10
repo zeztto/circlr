@@ -1,5 +1,11 @@
 # 변경 이력
 
+## 검증 완료 — 0.20.0 build121 수치 포커스 가시성
+
+- 공통 native 수치 필드의 focus 성공 시 자동 스크롤. Effect context 전체를 보존하며 focus registry만 교체한다.
+- Release44.03초·source review·실제 효과 Tab/Shift+Tab·볼륨 변경/Undo·초안 취소·신스11필드 왕복·저장/재열기를 확인했다.
+- UI-only QA와 production 패키지를 분리했다. 물리 오디오·전체 제작 흐름은 미검증이다. [검증](docs/139-numeric-focus-visibility.md), [개발 계획](docs/138-current-development-plan.md).
+
 ## 검증 완료 — 0.20.0 build120 콘솔 작업 영역 유지
 
 - 앱별 UserDefaults에 콘솔 열림/로그높이 저장·복원. 기본true/122pt,40…180pt 범위와 잘못된 저장 타입/비유한값 보호. 음악·프로젝트·Undo 경로와 분리했다.

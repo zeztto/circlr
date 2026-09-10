@@ -212,7 +212,12 @@ private struct NativeNumberField: NSViewRepresentable {
         var began:(()->Void)?
         override func becomeFirstResponder() -> Bool {
             let result=super.becomeFirstResponder()
-            if result {began?()};return result
+            if result {
+                began?()
+                // Native Tab order also reaches fields without an explicit focus registry.
+                if enclosingScrollView != nil {scrollToVisible(bounds.insetBy(dx:0,dy:-22))}
+            }
+            return result
         }
     }
 }

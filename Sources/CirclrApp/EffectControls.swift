@@ -35,6 +35,11 @@ private struct EffectParameterFields:View {
     let apply:(Effect,Effect)->Bool
     @Environment(\.numberEditing) private var context
     @State private var fieldFocus:NumberFieldFocus
+    private var editingContext:NumberEditingContext {
+        var result=context
+        result.fieldFocus=fieldFocus
+        return result
+    }
     init(effect:Binding<Effect>,apply:@escaping(Effect,Effect)->Bool) {
         _effect=effect;self.apply=apply
         _fieldFocus=State(initialValue:NumberFieldFocus(EffectParameter.all(for:effect.wrappedValue.kind).map{$0.fieldTitle(in:effect.wrappedValue)}))
@@ -59,7 +64,7 @@ private struct EffectParameterFields:View {
                     if !parameter.displayHint(in:effect).isEmpty {Text(parameter.displayHint(in:effect)).font(.system(size:12)).foregroundStyle(StudioTheme.secondary)}
                 }
             }
-        }.environment(\.numberEditing,NumberEditingContext(snapshot:context.snapshot,current:context.current,focusCanvas:context.focusCanvas,fieldFocus:fieldFocus))
+        }.environment(\.numberEditing,editingContext)
     }
 }
 
