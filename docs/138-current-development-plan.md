@@ -1,6 +1,6 @@
 # 현행 개발 계획
 
-기준: 2026-09-10, integration-worktree의 build120 소스(`b06c4a9`)에서 시작해 build127의 소스·검증 기록을 기준으로 build146 검증 결과까지 반영했다. 이 문서는 다음 실행과 완료 판단을 위한 계획이며 [누적 로드맵](25-development-roadmap.md)의 과거 검증 결과를 새로 수행한 검사로 바꾸지 않는다. 전체 DAW·음악 품질·접근성은 아직 완료되지 않았다.
+기준: 2026-09-10, integration-worktree의 build120 소스(`b06c4a9`)에서 시작해 build127의 소스·검증 기록을 기준으로 build147 검증 결과까지 반영했다. 이 문서는 다음 실행과 완료 판단을 위한 계획이며 [누적 로드맵](25-development-roadmap.md)의 과거 검증 결과를 새로 수행한 검사로 바꾸지 않는다. 전체 DAW·음악 품질·접근성은 아직 완료되지 않았다.
 
 ## 제품의 완료 방향
 
@@ -104,4 +104,4 @@ build125에서 GUI/MCP 범위 차이 중 공유 오디오4종 편집과 automati
 
 다음 UI 후보는 multi142의 긴 캔버스 이름 잘림과 StudioRouteBar 폭 부족 처리다. 긴 이름은 전체 title+subtitle tooltip·AX가 이미 있으므로 선택이 필수라고 단정하지 않고 실제 native tooltip 표시부터 확인한다. 후자는 읽기 전용 소스 검토 후보이며 native 재현 전에는 확정 결함으로 세지 않는다.
 
-다음 오프라인 음악 표현 후보는 [내장 신스 resonance 오토메이션 계획](169-synth-resonance-plan.md)이다. v2/v3 지원·normalized/% 단위·schema6·cutoff 동시 DSP와 검증 계약을 정리했으며 아직 미구현이다.
+현재 오프라인 음악 표현 작업은 [내장 신스 resonance 오토메이션 계획](169-synth-resonance-plan.md)의 build147 구현이다. v2/v3 지원·normalized/% 단위·schema6·cutoff 동시 DSP와 검증 계약을 정리했으며 Swift 568개·MCP 22개·Release와 native 편집/바운스/재시작을 확인했으며 data 독립 감사는 PASS_DATA_ONLY이며 UI 감사는 PASS_WITH_EXPLICIT_LIMITS이며 DSP 읽기 전용 검토도 PASS했다([기록](170-synth-resonance-automation.md)).

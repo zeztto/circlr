@@ -83,17 +83,18 @@ struct AutomationEditor:View {
     @State private var gainFields=NumberFieldFocus(["오토메이션 위치 박","오토메이션 볼륨 dB"],revealOnFocus:true)
     @State private var panFields=NumberFieldFocus(["오토메이션 위치 박","오토메이션 팬 %"],revealOnFocus:true)
     @State private var cutoffFields=NumberFieldFocus(["오토메이션 위치 박","오토메이션 필터 cutoff Hz"],revealOnFocus:true)
+    @State private var resonanceFields=NumberFieldFocus(["오토메이션 위치 박","오토메이션 필터 공명 %"],revealOnFocus:true)
     private var fieldFocus:NumberFieldFocus {
-        switch store.automationParameter {case .gain:return gainFields;case .pan:return panFields;case .synthCutoff:return cutoffFields}
+        switch store.automationParameter {case .gain:return gainFields;case .pan:return panFields;case .synthCutoff:return cutoffFields;case .synthResonance:return resonanceFields}
     }
     private var valueTitle:String {
-        switch store.automationParameter {case .gain:return "오토메이션 볼륨 dB";case .pan:return "오토메이션 팬 %";case .synthCutoff:return "오토메이션 필터 cutoff Hz"}
+        switch store.automationParameter {case .gain:return "오토메이션 볼륨 dB";case .pan:return "오토메이션 팬 %";case .synthCutoff:return "오토메이션 필터 cutoff Hz";case .synthResonance:return "오토메이션 필터 공명 %"}
     }
     private var valuePresentation:NumberEditPresentation {
-        switch store.automationParameter {case .gain:return .gainDecibels;case .pan:return .panPercent;case .synthCutoff:return .number}
+        switch store.automationParameter {case .gain:return .gainDecibels;case .pan:return .panPercent;case .synthCutoff:return .number;case .synthResonance:return .resonancePercent}
     }
     private var valueUnit:String {
-        switch store.automationParameter {case .gain:return "dB";case .pan:return "%";case .synthCutoff:return "Hz"}
+        switch store.automationParameter {case .gain:return "dB";case .pan:return "%";case .synthCutoff:return "Hz";case .synthResonance:return "%"}
     }
     var lane:AutomationLane? {store.currentAutomation}
     var hidden:Int {lane?.points.filter{$0.beat>store.automationDisplayedBeats}.count ?? 0}
@@ -112,7 +113,7 @@ struct AutomationEditor:View {
     var linear:some View {
         VStack(alignment:.leading,spacing:8) {
             MIDIWorkspaceToolbarLayout(gap:12) {
-                parameterControls.fixedSize(horizontal:true,vertical:false)
+                parameterItems
                 originalToggle
                 pointActions.fixedSize(horizontal:true,vertical:false)
             }
@@ -164,7 +165,10 @@ struct AutomationEditor:View {
         store.automationParameter=parameter;store.requestEditorNavigationFocus()
     }
     var parameterControls:some View {
-        MIDIWorkspaceToolbarLayout {
+        MIDIWorkspaceToolbarLayout {parameterItems}
+    }
+    @ViewBuilder var parameterItems:some View {
+        Group {
             if store.availableAutomationParameters.contains(.synthCutoff) {
                 ForEach(store.availableAutomationParameters,id:\.self) { parameter in
                     StudioModeButton(title:parameter.label,label:"오토메이션 대상 · "+parameter.label,
@@ -238,7 +242,7 @@ struct AutomationEditor:View {
                 guard store.numberEditIdentity==identity,var current=store.selectedAutomationPoint,current.id==point.id else{return}
                 current.shape=v;store.editAutomationPoint(current)
             })){Text("선형").tag(AutomationShape.linear);Text("유지").tag(AutomationShape.hold)}.pickerStyle(.segmented).labelsHidden().frame(width:112)
-                .help("선형은 저장된 배율·팬·Hz 값을 연결합니다. cutoff의 표시 축만 로그이며 보간은 Hz 선형입니다. 유지는 다음 점까지 값을 유지합니다.")
+                .help("선형은 저장된 배율·팬·Hz·공명 값을 연결합니다. cutoff의 표시 축만 로그이며 보간은 Hz 선형입니다. 유지는 다음 점까지 값을 유지합니다.")
         }
     }
     var emptyHint:some View {Text(available ? "빈 곳 클릭 또는 점 추가 · Return":"이번 사용에 추가된 서클입니다. 공유 원본 편집을 끄고 조절하세요.").foregroundStyle(StudioTheme.secondary)}
@@ -246,6 +250,7 @@ struct AutomationEditor:View {
         switch store.automationParameter {
         case .gain:return Text("0 dB 원래 레벨 · −∞ 무음")
         case .pan:return Text("−100 왼쪽 · 0 중앙 · +100 오른쪽")
+        case .synthResonance:return Text("0–90% · 선형 눈금과 보간\n곡선이 없거나 꺼지면 신스 설정값 사용 · ↑↓ 1% · ⌥ 0.1% · ⇧ 10%")
         case .synthCutoff:return Text("40–20,000 Hz · 로그 눈금 · Hz 선형 보간\n곡선이 없거나 꺼지면 신스 설정값 사용 · ↑↓ 100 Hz · ⌥ 1 Hz · ⇧ 1,000 Hz")
         }
     }
@@ -345,7 +350,7 @@ struct AutomationPlot:NSViewRepresentable {
         let parameter=store.automationParameter,points=points,lane=AutomationLane(parameter:parameter,points:points)
         var occupied:[NSRect]=[]
         let levels:[Double]
-        switch parameter {case .gain:levels=[0,1,4];case .pan:levels=[-1,0,1];case .synthCutoff:levels=[40,400,4000,20000]}
+        switch parameter {case .gain:levels=[0,1,4];case .pan:levels=[-1,0,1];case .synthCutoff:levels=[40,400,4000,20000];case .synthResonance:levels=[0,0.3,0.6,0.9]}
         for (index,v) in levels.enumerated() {
             let n=normalized(v),path=NSBezierPath()
             if orbital {path.append(OrbitDrawing.arc(center,radius:radius*(0.3+0.7*n),from:0,to:1))}
@@ -355,9 +360,10 @@ struct AutomationPlot:NSViewRepresentable {
             switch parameter {
             case .gain:label=GainScale.text(v)
             case .pan:label=v<0 ? "L":v>0 ? "R":"C"
+            case .synthResonance:label=String(format:"%.0f%%",v*100)
             case .synthCutoff:label=v>=1000 ? String(format:"%.0fk",v/1000):String(format:"%.0f",v)
             }
-            let text=label+(orbital && parameter == .gain ? " dB":parameter == .synthCutoff ? " Hz":""),at=orbital ? NSPoint(x:48,y:rect.minY+Double(index)*20):NSPoint(x:parameter == .synthCutoff ? 23:18,y:rect.maxY-n*rect.height)
+            let text=label+(orbital && parameter == .gain ? " dB":parameter == .synthCutoff ? " Hz":""),at=orbital ? NSPoint(x:48,y:rect.minY+Double(index)*20):NSPoint(x:parameter == .synthCutoff || parameter == .synthResonance ? 23:18,y:rect.maxY-n*rect.height)
             occupied.append(labelRect(text,at:at,size:11))
             OrbitDrawing.text(text,at:at,size:11,color:StudioTheme.secondaryNS)
         }

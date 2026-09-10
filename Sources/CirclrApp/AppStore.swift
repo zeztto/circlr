@@ -299,8 +299,9 @@ import CirclrAudio
             var candidate = project; try action(&candidate)
             if candidate == project { return }
             try UseTempoOverrideEditing.validateChanges(from:project,to:candidate)
-            // Instrument replacement must not strand automation on an unsupported target.
-            if candidate.tracks.map({ $0.instrument.kind }) != project.tracks.map({ $0.instrument.kind }) {
+            // Instrument kind or engine changes must not strand automation on an unsupported target.
+            if candidate.tracks.map({ $0.instrument.kind }) != project.tracks.map({ $0.instrument.kind }) ||
+                candidate.tracks.map({ $0.instrument.synth?.engineVersion }) != project.tracks.map({ $0.instrument.synth?.engineVersion }) {
                 try ProjectStore.validateStructure(candidate)
             }
             undoStack.append(.init(id:audioHistoryID ?? UUID(),name:name,project:project,layoutOnly:portLayoutOnly,colorsOnly:circleColorsOnly,audio:nil)); if undoStack.count > 80 { undoStack.removeFirst() }; redoStack = []

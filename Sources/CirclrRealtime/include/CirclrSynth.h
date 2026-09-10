@@ -26,3 +26,8 @@ void circlr_synth_render_cutoff(CirclrSynth *synth, float *left, float *right, c
 int circlr_synth_owned_note_on(CirclrSynth *synth, uint64_t streamID, uint64_t voiceID, int pitch, int velocity, double semitones);
 int circlr_synth_owned_note_off(CirclrSynth *synth, uint64_t streamID, uint64_t voiceID);
 int circlr_synth_owned_pitch_bend(CirclrSynth *synth, uint64_t streamID, double semitones);
+
+// Render-consumer only. Both buffers are optional, one value per sample.
+// Resonance is finite 0...0.9; invalid samples fall back to the patch value.
+// Engine v2/v3 apply resonance while preserving voice/filter/controller state.
+void circlr_synth_render_filter(CirclrSynth *synth, float *left, float *right, const double *cutoffHz, const double *resonance, uint32_t frames);

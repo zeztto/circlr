@@ -110,7 +110,7 @@ final class SynthCutoffAutomationTests:XCTestCase {
             XCTAssertEqual(try ProjectStore.load(root).project.schemaVersion,p.schemaVersion)
             XCTAssertEqual(try Data(contentsOf:manifest),bytes)
         }
-        let future=Data(#"{"schemaVersion":6,"parameter":"unknownFuture"}"#.utf8);try future.write(to:manifest)
+        let future=Data(#"{"schemaVersion":7,"parameter":"unknownFuture"}"#.utf8);try future.write(to:manifest)
         XCTAssertThrowsError(try ProjectStore.load(root)){error in XCTAssertTrue(error.localizedDescription.contains("더 새로운 프로젝트"))}
         XCTAssertEqual(try Data(contentsOf:manifest),future)
     }

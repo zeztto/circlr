@@ -30,6 +30,7 @@ enum MIDIPitchBendRenderer {
         guard (1...65536).contains(blockSize),notes.count<=500000,performances.count<=1_000_000 else {
             throw CirclrError("신스 연주 event 수·렌더 block 크기를 확인하세요")
         }
+        guard patch.engineVersion>=2 || !automation.contains(where:{$0.parameter == .synthResonance}) else {throw CirclrError("Resonance 오토메이션은 내장 신스 engine 2·3에서만 지원합니다")}
         let frames=try ProductionInstrument.frameCount(clock:clock,tail:tail)
         var budget=notes.count*2, available:[NoteKey:Int]=[:]
         for note in notes {
@@ -108,8 +109,9 @@ enum MIDIPitchBendRenderer {
             return $0.order<$1.order
         }
         let engine=try SynthEngine(patch)
-        var result=PCM(frames:frames),cutoff=try SynthCutoffCursor(automation)
+        var result=PCM(frames:frames),cutoff=try SynthCutoffCursor(automation),resonance=try SynthResonanceCursor(automation)
         var cutoffSamples=[Double](repeating:patch.cutoff,count:blockSize)
+        var resonanceSamples=[Double](repeating:patch.resonance,count:blockSize)
         var currentBend=[Double](repeating:0,count:performances.count+2),cursor=0,index=0
         while cursor<frames {
             try Task.checkCancellation()
@@ -127,13 +129,16 @@ enum MIDIPitchBendRenderer {
             }
             let next=index<events.count ? events[index].frame:frames
             let count=min(blockSize,frames-cursor,max(1,next-cursor))
-            if cutoff.active {
-                for i in 0..<count {cutoffSamples[i]=cutoff.value(at:Double(cursor+i)/PCM.rate)}
-                cutoffSamples.withUnsafeBufferPointer { values in
-                    result.left.withUnsafeMutableBufferPointer { l in result.right.withUnsafeMutableBufferPointer { r in
-                        engine.render(left:l.baseAddress!+cursor,right:r.baseAddress!+cursor,cutoffHz:values.baseAddress!,frames:UInt32(count))
-                    } }
+            if cutoff.active || resonance.active {
+                for i in 0..<count {
+                    if cutoff.active {cutoffSamples[i]=cutoff.value(at:Double(cursor+i)/PCM.rate)}
+                    if resonance.active {resonanceSamples[i]=resonance.value(at:Double(cursor+i)/PCM.rate)}
                 }
+                cutoffSamples.withUnsafeBufferPointer { values in resonanceSamples.withUnsafeBufferPointer { resonances in
+                    result.left.withUnsafeMutableBufferPointer { l in result.right.withUnsafeMutableBufferPointer { r in
+                        engine.render(left:l.baseAddress!+cursor,right:r.baseAddress!+cursor,cutoffHz:cutoff.active ? values.baseAddress:nil,resonance:resonance.active ? resonances.baseAddress:nil,frames:UInt32(count))
+                    } }
+                } }
             } else {
                 result.left.withUnsafeMutableBufferPointer { l in result.right.withUnsafeMutableBufferPointer { r in
                     engine.render(left:l.baseAddress!+cursor,right:r.baseAddress!+cursor,frames:UInt32(count))

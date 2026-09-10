@@ -53,7 +53,7 @@ OPERATION = schema({
     "enabled": {"type": "boolean", "description": "Enable a step or bypass/read an existing automation curve, according to kind."},
     "noteIDs": {"type": "array", "items": STRING, "minItems": 1, "maxItems": 100000},
     "edit": {"type": "string", "enum": ["transpose", "move", "duplicate", "quantize", "velocity", "length_delta", "velocity_delta", "delete", "split", "fade"]},
-    "parameter": {"type": "string", "enum": ["gain", "pan", "synthCutoff"], "description": "gain 0–4, pan -1–1, synthCutoff 40–20000 Hz. Cutoff requires a built-in synth instrument node and runtime.capabilities.synthCutoffAutomation=1."},
+    "parameter": {"type": "string", "enum": ["gain", "pan", "synthCutoff", "synthResonance"], "description": "gain 0–4, pan -1–1, synthCutoff 40–20000 Hz. Cutoff requires a built-in synth instrument node and runtime.capabilities.synthCutoffAutomation=1. synthResonance stores 0–0.9 (display 0–90%), requires synth engine 2/3 and runtime.capabilities.synthResonanceAutomation=1."},
     "automationPoints": {"type": "array", "items": AUTOMATION_POINT, "maxItems": 4096, "description": "Replace this node parameter curve. Empty clears it. Omitted with enabled changes only bypass."},
     "sourceOffset": {"type": "number", "exclusiveMinimum": 0, "description": "Split offset in source seconds from the selected clip start."},
     "fadeIn": {"type": "number", "minimum": 0}, "fadeOut": {"type": "number", "minimum": 0},
@@ -84,7 +84,7 @@ OPERATION["oneOf"] = [
      "required": ["compositionID", "arrangementID"]},
 ]
 # Encode parameter ranges in the advertised schema as well as IPC validation.
-AUTOMATION_RANGES = {"gain": (0, 4), "pan": (-1, 1), "synthCutoff": (40, 20000)}
+AUTOMATION_RANGES = {"gain": (0, 4), "pan": (-1, 1), "synthCutoff": (40, 20000), "synthResonance": (0, 0.9)}
 for parameter, (minimum, maximum) in AUTOMATION_RANGES.items():
     point = {**AUTOMATION_POINT, "properties": {**AUTOMATION_POINT["properties"],
              "value": {"type": "number", "minimum": minimum, "maximum": maximum}}}
@@ -150,7 +150,7 @@ TOOLS = [
     tool("reconnect_ports", "reconnect_ports", "Replace one existing cable using its complete logical connectionID and two explicit endpoints. Preserves edge ID and gain; rejects cross-graph moves, cycles and duplicates atomically. Composition sequence cables cannot be reconnected.", {**PORT_PAIR, "connectionID": CONNECTION_ID}, (*PORT_PAIR, "connectionID"), True),
     tool("disconnect_ports", "disconnect_ports", "Disconnect the exact logical cable. One Undo; other section uses stay unchanged. Composition sequence cables cannot be disconnected.", {**LAYOUT_REVISION, "connectionID": CONNECTION_ID}, ("expectedLayoutRevision", "connectionID"), True),
     tool("move_ports", "move_ports", "Atomically place 1–128 distinct existing cables in eight directions. One layout Undo; changes layoutRevision only, preserving music and audio. Unchanged placements are a no-op.", {**LAYOUT_REVISION, "moves": {"type": "array", "items": PLACED_CONNECTION, "minItems": 1, "maxItems": 128}}, ("expectedLayoutRevision", "moves"), True),
-    tool("apply", "apply", "Atomically apply 1–128 edits as one Undo action. set_automation uses gain 0–4, pan -1–1, or synthCutoff 40–20000 Hz on built-in synth instrument nodes only. Cutoff batches require a fresh matching snapshot with runtime.capabilities.synthCutoffAutomation=1; unsupported apps receive no mutation. Final target and revision validation remain app-side. edit_shared_audio requires patternID, trackID, clipID and edit (split/duplicate/fade/delete), affecting all uses of the shared rhythm pattern; offsets and fades match edit_audio. set_automation original defaults to false (this use); true edits shared section source while retaining use overrides. set_notes/generate_midi replace notes unless append=true. duplicate_arrangement/rename_arrangement require explicit compositionID, arrangementID and a name of 1–120 characters after trimming; duplicate shares section sources/assets while preserving playback choices and the editing canvas. select_arrangement requires compositionID and arrangementID and deliberately changes playback choice and the visible editing branch. Stable IDs are required; stale revisions fail without changes.", {"operations": {"type": "array", "items": OPERATION, "minItems": 1, "maxItems": 128}}, ("operations",), True),
+    tool("apply", "apply", "Atomically apply 1–128 edits as one Undo action. set_automation uses gain 0–4, pan -1–1, or synthCutoff 40–20000 Hz on built-in synth instrument nodes only. Cutoff batches require a fresh matching snapshot with runtime.capabilities.synthCutoffAutomation=1; unsupported apps receive no mutation. synthResonance uses 0–0.9 normalized values (display 0–90%) on built-in synth engine 2/3 instrument nodes only, and requires synthResonanceAutomation=1 from the same fresh snapshot, including clear and bypass edits. Final target and revision validation remain app-side. edit_shared_audio requires patternID, trackID, clipID and edit (split/duplicate/fade/delete), affecting all uses of the shared rhythm pattern; offsets and fades match edit_audio. set_automation original defaults to false (this use); true edits shared section source while retaining use overrides. set_notes/generate_midi replace notes unless append=true. duplicate_arrangement/rename_arrangement require explicit compositionID, arrangementID and a name of 1–120 characters after trimming; duplicate shares section sources/assets while preserving playback choices and the editing canvas. select_arrangement requires compositionID and arrangementID and deliberately changes playback choice and the visible editing branch. Stable IDs are required; stale revisions fail without changes.", {"operations": {"type": "array", "items": OPERATION, "minItems": 1, "maxItems": 128}}, ("operations",), True),
     tool("import_midi", "import_midi", "Read a local regular SMF format 0/1 file (maximum 16 MiB) in a background job. Requires midiTempoImport=1 and midiPitchBendImport=1 capabilities and matching project/revision. previewOnly=true returns track IDs, per-track pitchBend eventCount, initialValue/initialRange, rangeChangeCount (all range events), uniqueRangeCount (including initial range), first-seen ranges (at most 16) and hasMoreRanges, selectedIssues, actual expressionPolicy, tempo metadata and optional previewIssue without changing the document. expressionPolicy defaults to preserve: supported MIDI pitch bend/RPN sensitivity is retained; selected unsupported expression fails apply. Only explicit omit imports notes without expression; issues remain visible. Pitch bend audio rendering supports built-in synths; drums and other unsupported instrument backends reject expression rather than drop it. Omitted trackIDs imports all note tracks; explicit IDs are index:channel from preview. keepCurrent (default) retains current tempo; applyFile applies the file tempo to this use only and fails on tempoImportIssue. atBeat defaults to 0, extendSection defaults to false. One Undo; preserves editing selection. Read job until terminal. No playback/audition is started.", {
         **SCOPE, "path": STRING,
         "trackIDs": {"type": "array", "items": {"type": "string", "minLength": 1, "maxLength": 32}, "minItems": 1, "maxItems": 256},
@@ -245,8 +245,8 @@ def validate_operation_scopes(operations):
             expected = {"kind", "arrangementID", "useID"} | ({"bars"} if kind == "set_use_length_override" else set())
             if set(operation) != expected:
                 raise ValueError("section length operation has missing or inapplicable fields")
-        if operation.get("parameter") == "synthCutoff" and kind != "set_automation":
-            raise ValueError(f"operations[{index}].parameter: synthCutoff requires set_automation")
+        if operation.get("parameter") in {"synthCutoff", "synthResonance"} and kind != "set_automation":
+            raise ValueError(f"operations[{index}].parameter: synth automation requires set_automation")
         if "original" in operation and kind not in {"set_automation", "edit_pitch_bend"}:
             raise ValueError(f"operations[{index}].original: supported only by set_automation")
         if "patternID" in operation and kind not in {"edit_shared_audio", "edit_pitch_bend"}:
@@ -296,6 +296,8 @@ def call_tool(path, name, arguments, read_only=False):
         required_capabilities = []
         if entry["method"] == "apply" and any(op.get("parameter") == "synthCutoff" for op in arguments["operations"]):
             required_capabilities.append("synthCutoffAutomation")
+        if entry["method"] == "apply" and any(op.get("parameter") == "synthResonance" for op in arguments["operations"]):
+            required_capabilities.append("synthResonanceAutomation")
         if entry["method"] == "import_midi" or (entry["method"] == "apply" and any(op["kind"] == "clear_use_tempo_override" for op in arguments["operations"])):
             required_capabilities.append("midiTempoImport")
         if entry["method"] == "import_midi":

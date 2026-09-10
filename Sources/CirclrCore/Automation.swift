@@ -1,20 +1,22 @@
 import Foundation
 
-public enum AutomationParameter:String,Codable,CaseIterable {case gain,pan,synthCutoff
-    public var neutral:Double {switch self {case .gain:return 1;case .pan:return 0;case .synthCutoff:return SynthPatch().cutoff}}
-    public var range:ClosedRange<Double> {switch self {case .gain:return 0...4;case .pan:return -1...1;case .synthCutoff:return 40...20000}}
-    public var label:String {switch self {case .gain:return "볼륨";case .pan:return "팬";case .synthCutoff:return "필터 cutoff"}}
-    public var unit:String {switch self {case .gain:return "dB";case .pan:return "%";case .synthCutoff:return "Hz"}}
+public enum AutomationParameter:String,Codable,CaseIterable {case gain,pan,synthCutoff,synthResonance
+    public var neutral:Double {switch self {case .gain:return 1;case .pan:return 0;case .synthCutoff:return SynthPatch().cutoff;case .synthResonance:return SynthPatch().resonance}}
+    public var range:ClosedRange<Double> {switch self {case .gain:return 0...4;case .pan:return -1...1;case .synthCutoff:return 40...20000;case .synthResonance:return 0...0.9}}
+    public var label:String {switch self {case .gain:return "볼륨";case .pan:return "팬";case .synthCutoff:return "필터 cutoff";case .synthResonance:return "공명"}}
+    public var unit:String {switch self {case .gain:return "dB";case .pan:return "%";case .synthCutoff:return "Hz";case .synthResonance:return "%"}}
     public func supports(node:MusicCircle,in project:Project)->Bool {
         guard node.supportsAutomation else{return false}
-        guard self == .synthCutoff else{return true}
+        guard self == .synthCutoff || self == .synthResonance else{return true}
         guard case .instrument(let trackID)=node.content else{return false}
-        return project.tracks.first{$0.id==trackID}?.instrument.kind == .synthesizer
+        guard let instrument=project.tracks.first(where:{$0.id==trackID})?.instrument,instrument.kind == .synthesizer else{return false}
+        return self != .synthResonance || (2...3).contains((instrument.synth ?? SynthPatch()).engineVersion)
     }
     public func fallback(node:MusicCircle,in project:Project)->Double {
-        guard self == .synthCutoff,case .instrument(let trackID)=node.content,
+        guard self == .synthCutoff || self == .synthResonance,case .instrument(let trackID)=node.content,
               let instrument=project.tracks.first(where:{$0.id==trackID})?.instrument,instrument.kind == .synthesizer else{return neutral}
-        return (instrument.synth ?? SynthPatch()).cutoff
+        let patch=instrument.synth ?? SynthPatch()
+        return self == .synthResonance ? patch.resonance:patch.cutoff
     }
 }
 public enum AutomationShape:String,Codable,CaseIterable {case linear,hold}
@@ -77,7 +79,7 @@ public enum AutomationCompiler {
         guard node.startBeat.isFinite,node.startBeat>=0,node.lengthBeats.map({$0.isFinite && $0>0 && $0<=1_048_576}) ?? true,
               (1...256).contains(node.repeatCount),lanes.isEmpty || node.supportsAutomation,lanes.count<=AutomationParameter.allCases.count,Set(lanes.map(\.parameter)).count==lanes.count else {throw CirclrError("오토메이션의 서클 시간과 오디오 신호의 볼륨·팬 대상을 확인하세요")}
         for lane in lanes {
-            if lane.parameter == .synthCutoff {guard case .instrument=node.content else{throw CirclrError("필터 cutoff는 내장 신스 악기 서클에서만 지원합니다")}}
+            if lane.parameter == .synthCutoff || lane.parameter == .synthResonance {guard case .instrument=node.content else{throw CirclrError("필터 오토메이션은 내장 신스 악기 서클에서만 지원합니다")}}
             guard !lane.points.isEmpty,lane.points.count<=4096,Set(lane.points.map(\.id)).count==lane.points.count,
                   lane.points.allSatisfy({!$0.id.isEmpty && $0.id.count<=128 && $0.beat.isFinite && (0...1_048_576).contains($0.beat) && $0.value.isFinite && lane.parameter.range.contains($0.value)}),
                   zip(lane.points,lane.points.dropFirst()).allSatisfy({$0.beat<$1.beat}),
@@ -90,16 +92,17 @@ public enum AutomationCompiler {
     }
     private static func validateTarget(_ node:MusicCircle,project:Project)throws {
         for lane in node.automation ?? [] {
-            guard lane.parameter.supports(node:node,in:project) else{throw CirclrError("이 악기는 필터 cutoff 오토메이션을 지원하지 않습니다. 곡선을 먼저 제거하세요")}
+            guard lane.parameter.supports(node:node,in:project) else{throw CirclrError("이 악기는 해당 필터 오토메이션을 지원하지 않습니다. 곡선을 먼저 제거하세요")}
+            if lane.parameter == .synthResonance,project.schemaVersion<6 {throw CirclrError("공명 오토메이션에는 version 6 프로젝트가 필요합니다")}
             if lane.parameter == .synthCutoff,project.schemaVersion<3 {throw CirclrError("필터 cutoff 오토메이션에는 version 3 프로젝트가 필요합니다")}
         }
     }
     /// Includes unused originals and every inactive override, without compiling audio.
     public static func validateTargets(in project:Project)throws {
-        for section in project.sections {for node in section.graph?.nodes ?? [] {try validateTarget(node,project:project)}}
+        for section in project.sections {for node in section.graph?.nodes ?? [] {try validate(node,project:project)}}
         for arrangement in project.arrangements {for use in arrangement.uses {
-            for node in use.graphEdits?.nodeOverrides.values.map({$0}) ?? [] {try validateTarget(node,project:project)}
-            for node in use.graphEdits?.addedNodes ?? [] {try validateTarget(node,project:project)}
+            for node in use.graphEdits?.nodeOverrides.values.map({$0}) ?? [] {try validate(node,project:project)}
+            for node in use.graphEdits?.addedNodes ?? [] {try validate(node,project:project)}
         }}
     }
     /// Piecewise seconds include tempo boundaries so linear interpolation remains linear in beats.
@@ -156,6 +159,7 @@ public enum AutomationEditing {
         graph.nodes[i].automation=value
         var candidate=project
         if graph.nodes[i].automation?.contains(where:{$0.parameter == .synthCutoff})==true {candidate.schemaVersion=max(3,candidate.schemaVersion)}
+        if graph.nodes[i].automation?.contains(where:{$0.parameter == .synthResonance})==true {candidate.schemaVersion=max(6,candidate.schemaVersion)}
         try AutomationCompiler.validate(graph.nodes[i],project:candidate)
         try SectionGraphEditing.set(graph,useID:useID,original:original,in:&candidate)
         project=candidate

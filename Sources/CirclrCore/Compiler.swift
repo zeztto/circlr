@@ -195,7 +195,7 @@ public enum ArrangementCompiler {
         return (section,c,clock)
     }
     public static func compile(_ project: Project, arrangementID: ID? = nil, onlyUseID: ID? = nil) throws -> ExecutionPlan {
-        guard (1...5).contains(project.schemaVersion) else { throw CirclrError("이 프로젝트의 형식 버전을 지원하지 않습니다") }
+        guard (1...6).contains(project.schemaVersion) else { throw CirclrError("이 프로젝트의 형식 버전을 지원하지 않습니다") }
         guard let a = project.arrangements.first(where: { $0.id == (arrangementID ?? project.activeArrangementID) }) else { throw CirclrError("편곡안을 찾을 수 없습니다") }
         if a.uses.isEmpty { return ExecutionPlan(revision: project.musicRevision, arrangementID: a.id, occurrences: [], transitions: [], duration: 0, warnings: []) }
         var flow = try ArrangementFlowCursor(a, onlyUseID: onlyUseID)

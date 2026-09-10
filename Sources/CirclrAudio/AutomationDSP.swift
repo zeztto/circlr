@@ -4,7 +4,7 @@ import Foundation
 enum AutomationDSP {
     static func apply(_ plans:[AutomationPlan],to pcm:inout PCM)throws {
         for plan in plans {
-            guard plan.parameter != .synthCutoff,!plan.spans.isEmpty else{continue}
+            guard plan.parameter != .synthCutoff,plan.parameter != .synthResonance,!plan.spans.isEmpty else{continue}
             var cursor=0
             for frame in pcm.left.indices {
                 if frame%8192==0 {try Task.checkCancellation()}
@@ -12,7 +12,7 @@ enum AutomationDSP {
                 while cursor+1<plan.spans.count && seconds>=plan.spans[cursor].end {cursor+=1}
                 let value=plan.spans[cursor].value(at:seconds)
                 switch plan.parameter {
-                case .synthCutoff:break // Applied inside the instrument, never as a PCM effect.
+                case .synthCutoff,.synthResonance:break // Applied inside the instrument, never as a PCM effect.
                 case .gain:pcm.left[frame]*=Float(value);pcm.right[frame]*=Float(value)
                 case .pan:pcm.left[frame]*=Float(sqrt(max(0,1-value)));pcm.right[frame]*=Float(sqrt(max(0,1+value)))
                 }
@@ -33,6 +33,27 @@ struct SynthCutoffCursor {
         guard spans.allSatisfy({$0.start.isFinite && $0.end.isFinite && $0.start>=0 && $0.end>$0.start && $0.from.isFinite && $0.to.isFinite && (40...20000).contains($0.from) && (40...20000).contains($0.to)}),
               zip(spans,spans.dropFirst()).allSatisfy({$0.end==$1.start}) else {
             throw CirclrError("신스 필터 오토메이션의 시간과 Hz 범위를 확인하세요")
+        }
+    }
+    mutating func value(at seconds:Double)->Double {
+        precondition(active)
+        while index+1<spans.count && seconds>=spans[index].end {index+=1}
+        return spans[index].value(at:seconds)
+    }
+}
+
+/// Resonance uses the same hold/linear span clock as cutoff, including tails.
+struct SynthResonanceCursor {
+    private let spans:[AutomationSpan]
+    private var index=0
+    var active:Bool {!spans.isEmpty}
+    init(_ plans:[AutomationPlan])throws {
+        let selected=plans.filter{$0.parameter == .synthResonance}
+        guard selected.count<=1 else{throw CirclrError("신스 resonance 오토메이션은 하나만 사용할 수 있습니다")}
+        spans=selected.first?.spans ?? []
+        guard spans.allSatisfy({$0.start.isFinite && $0.end.isFinite && $0.start>=0 && $0.end>$0.start && $0.from.isFinite && $0.to.isFinite && (0...0.9).contains($0.from) && (0...0.9).contains($0.to)}),
+              zip(spans,spans.dropFirst()).allSatisfy({$0.end==$1.start}) else {
+            throw CirclrError("신스 resonance 오토메이션의 시간과 0–0.9 범위를 확인하세요")
         }
     }
     mutating func value(at seconds:Double)->Double {

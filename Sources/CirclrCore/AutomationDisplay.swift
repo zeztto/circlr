@@ -20,6 +20,7 @@ public enum AutomationDisplay {
     public static func value(_ value:Double,parameter:AutomationParameter)->String {
         if parameter == .gain{return GainScale.text(value)+" dB"}
         if parameter == .synthCutoff{return String(format:"%.2f Hz",locale:Locale(identifier:"en_US_POSIX"),value)}
+        if parameter == .synthResonance{return String(format:"%.2f%%",locale:Locale(identifier:"en_US_POSIX"),value*100)}
         if value==0{return "중앙"}
         return (value<0 ? "L ":"R ")+String(format:"%.2f%%",locale:Locale(identifier:"en_US_POSIX"),abs(value)*100)
     }
@@ -29,6 +30,10 @@ public enum AutomationDisplay {
         if parameter == .synthCutoff {
             let step=fine ? 1.0:coarse ? 1000.0:100.0
             return max(40,min(20000,value+sign*step))
+        }
+        if parameter == .synthResonance {
+            let step=fine ? 0.001:coarse ? 0.1:0.01
+            return max(0,min(0.9,value+sign*step))
         }
         if parameter == .gain {
             let step=fine ? 0.1:coarse ? 3.0:0.5

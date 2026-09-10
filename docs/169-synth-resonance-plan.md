@@ -1,6 +1,6 @@
 # 내장 신스 resonance 오토메이션 계획
 
-상태: 다음 기능의 계약 계획이며 미구현이다. cutoff와 resonance를 함께 움직이는 필터 sweep의 음악적 표현을 목표로 한다. 새 oscillator·MIDI CC·plugin host 확장은 범위 밖이다.
+상태: build147 구현의 계약 계획이다. 실제 구현·검증 상태는 [검증 기록](170-synth-resonance-automation.md)에서 구분한다. cutoff와 resonance를 함께 움직이는 필터 sweep의 음악적 표현을 목표로 한다. 새 oscillator·MIDI CC·plugin host 확장은 범위 밖이다.
 
 ## 파라미터와 지원 범위
 
@@ -8,7 +8,7 @@
 
 `synth.c`의 engine v2/v3 SVF는 `k = 2 - 1.6 * resonance`로 값을 사용한다. engine1에는 해당 처리가 없으므로 `.instrument`이며 kind가 synthesizer이고 effective engineVersion이 2 또는 3인 경우만 지원한다. legacy engine1을 자동 승격하거나 sampler/AU에 같은 파라미터를 있다고 가정하지 않는다.
 
-기존 hold/linear/smooth 보간·clock·공유 원본/이번 use·반복·release tail의 마지막 값 유지 의미를 따른다. cutoff와 resonance를 함께 sample 단위로 적용하되 voice·phase·filter state·source별 pitch bend를 유지한다. 블록마다 악기를 다시 생성하지 않는다.
+기존 hold/linear 보간·clock·공유 원본/이번 use·반복·release tail의 마지막 값 유지 의미를 따른다. cutoff와 resonance를 함께 sample 단위로 적용하되 voice·phase·filter state·source별 pitch bend를 유지한다. 블록마다 악기를 다시 생성하지 않는다.
 
 ## 구현 경계와 소스 지도
 
@@ -27,13 +27,13 @@
 4. GUI/MCP의 동일 값·단위·atomic 실패·stale/capability 거절을 확인한다. 작은 캔버스의 파라미터·곡선·수치 가시성을 native로 검증한다.
 5. 한 곡의 filter sweep 편집→오프라인 출력→바운스·원본 복원→저장/재열기로 의도한 변화와 음악·자산 보존을 대조한다. 실제 청취·물리 I/O는 별도 증거다.
 
-이 문서는 소스 기반 후속 계획이다. 테스트 수치나 구현 완료를 미리 기록하지 않으며 build146 배치 변경의 성공 범위에 포함하지 않는다.
+이 문서는 구현 전 정한 계약을 보존한다. build147의 실제 구현·검증 근거는 [결과 기록](170-synth-resonance-automation.md)에 있으며 build146 배치 변경의 성공 범위와 구분한다.
 
 ## 저장·atomic 보강
 
 ProjectStore·Compiler·AlbumModel·migration의 최대 schema guard를 검색해 함께 갱신한다. 파일을 열기만 해서는 승격하지 않으며 clear 뒤 자동 downgrade하지 않는다. 구앱은 새 enum을 안전하게 거절해야 하지만 이미 배포된 구앱의 친절한 버전 오류 문구까지 보장할 수는 없다.
 
-원본 graph·use override·비활성 variant·bounce snapshot까지 공통 supports 판정을 사용하고 disabled lane도 미지원 곡선 저장을 허용하지 않는다. `AppStore.mutate`는 kind 변경뿐 아니라 같은 synthesizer kind의 engine3→1 변경도 검증해야 한다. AgentProjectEditing의 최종 구조 검증과 GUI가 같은 atomic 결정을 내리며 실패 시 project·schema·revision·Undo는 그대로여야 한다.
+원본 graph·use override·비활성 variant·바운스 뒤 보존된 원본 노드까지 공통 supports 판정을 사용하고 disabled lane도 미지원 곡선 저장을 허용하지 않는다. `AppStore.mutate`는 kind 변경뿐 아니라 같은 synthesizer kind의 engine3→1 변경도 검증해야 한다. AgentProjectEditing의 최종 구조 검증과 GUI가 같은 atomic 결정을 내리며 실패 시 project·schema·revision·Undo는 그대로여야 한다.
 
 예정 검사는 Core/Audio 각각의 `SynthResonanceAutomationTests.swift`와 `Tests/test_mcp_resonance.py`로 분리한다. 기존 cutoff·MIDI tempo·pitch bend·SynthCore 회귀를 선별한다. Audio는 nil/disabled/constant와 cutoff-only legacy PCM 보존, finite 응답·spectrum 변화·block 31/64/257 일치, tempo/반복/pitch bend 동시 적용과 tail·bounce 복원을 검사한다. Core는 비활성/bounce target·engine 변경·schema6·Undo까지, MCP는 capability·stale·범위·target·실패 batch 불변을 검사한다.
 

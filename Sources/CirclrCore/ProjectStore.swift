@@ -24,9 +24,9 @@ public enum ProjectStore {
         let data = try Data(contentsOf: manifest)
         struct Header:Decodable {let schemaVersion:Int}
         let header=try JSONDecoder().decode(Header.self,from:data)
-        guard (1...5).contains(header.schemaVersion) else {throw CirclrError("더 새로운 프로젝트 형식입니다. 원본을 덮어쓰지 마세요")}
+        guard (1...6).contains(header.schemaVersion) else {throw CirclrError("더 새로운 프로젝트 형식입니다. 원본을 덮어쓰지 마세요")}
         let project = try JSONDecoder().decode(Project.self, from: data)
-        guard (1...5).contains(project.schemaVersion) else { throw CirclrError("더 새로운 프로젝트 형식입니다. 원본을 덮어쓰지 마세요") }
+        guard (1...6).contains(project.schemaVersion) else { throw CirclrError("더 새로운 프로젝트 형식입니다. 원본을 덮어쓰지 마세요") }
         guard !project.arrangements.isEmpty, project.arrangements.contains(where: { $0.id == project.activeArrangementID }) else { throw CirclrError("유효한 편곡안이 없습니다") }
         try validateStructure(project)
         for asset in project.assets {
@@ -36,7 +36,7 @@ public enum ProjectStore {
         return LoadedProject(project: project, root: url)
     }
     public static func validateStructure(_ p:Project) throws {
-        guard (1...5).contains(p.schemaVersion) else {throw CirclrError("지원하지 않는 프로젝트 형식입니다")}
+        guard (1...6).contains(p.schemaVersion) else {throw CirclrError("지원하지 않는 프로젝트 형식입니다")}
         try AutomationCompiler.validateTargets(in:p)
         try MIDIPitchBendStorage.validate(in:p)
         try p.portLayout?.validate()

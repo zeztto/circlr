@@ -18,8 +18,8 @@ CirclrSynth *circlr_synth_create_v2(int style,double cutoff,double attack,double
     if(s){s->version=2;s->resonance=resonance;s->width=width;s->filterEnvelope=filterEnvelope;}
     return s;
 }
-static void render_v2(CirclrSynth *s,float *left,float *right,uint32_t frames,const double *cutoffHz);
-static void render_v3(CirclrSynth *s,float *left,float *right,uint32_t frames,const double *cutoffHz);
+static void render_v2(CirclrSynth *s,float *left,float *right,uint32_t frames,const double *cutoffHz,const double *resonance);
+static void render_v3(CirclrSynth *s,float *left,float *right,uint32_t frames,const double *cutoffHz,const double *resonance);
 CirclrSynth *circlr_synth_create_v3(int style,double cutoff,double attack,double decay,double sustain,double release,double detune,double resonance,double width,double filterEnvelope,double character,double motion) {
     CirclrSynth *s=circlr_synth_create_v2(style,cutoff,attack,decay,sustain,release,detune,resonance,width,filterEnvelope);
     if(s){s->version=3;s->character=character;s->motion=motion;}
@@ -91,10 +91,17 @@ static double base_cutoff(const CirclrSynth *s,const double *values,uint32_t ind
     if(!values)return s->cutoff;
     double hz=values[index];return isfinite(hz) && hz>=40 && hz<=20000 ? hz:s->cutoff;
 }
+static double base_resonance(const CirclrSynth *s,const double *values,uint32_t index) {
+    if(!values)return s->resonance;
+    double value=values[index];return isfinite(value) && value>=0 && value<=0.9 ? value:s->resonance;
+}
 void circlr_synth_render(CirclrSynth *s,float *left,float *right,uint32_t frames) {
     circlr_synth_render_cutoff(s,left,right,NULL,frames);
 }
 void circlr_synth_render_cutoff(CirclrSynth *s,float *left,float *right,const double *cutoffHz,uint32_t frames) {
+    circlr_synth_render_filter(s,left,right,cutoffHz,NULL,frames);
+}
+void circlr_synth_render_filter(CirclrSynth *s,float *left,float *right,const double *cutoffHz,const double *resonance,uint32_t frames) {
     if(!s)return;
     unsigned r=atomic_load_explicit(&s->read,memory_order_relaxed),w=atomic_load_explicit(&s->write,memory_order_acquire);
     if(atomic_exchange(&s->overflow,0)){
@@ -110,8 +117,8 @@ void circlr_synth_render_cutoff(CirclrSynth *s,float *left,float *right,const do
         }else{for(int i=0;i<VOICES;i++){Voice *v=&s->voices[i];if(v->active && v->pitch==e.pitch && !v->released){v->released=1;v->releaseLevel=v->level;break;}}}
     }
     atomic_store_explicit(&s->read,r,memory_order_release);
-    if(s->version==3){render_v3(s,left,right,frames,cutoffHz);return;}
-    if(s->version==2){render_v2(s,left,right,frames,cutoffHz);return;}
+    if(s->version==3){render_v3(s,left,right,frames,cutoffHz,resonance);return;}
+    if(s->version==2){render_v2(s,left,right,frames,cutoffHz,resonance);return;}
     const double dt=1.0/48000;
     for(int vi=0;vi<VOICES;vi++){Voice *v=&s->voices[vi];if(!v->active)continue;
         int count=s->style==3?7:(s->style==2?1:3);double increments[7];
@@ -144,7 +151,7 @@ static double lowpass_v2(double input,double g,double k,double *s1,double *s2) {
     double a=1/(1+g*(g+k)),v1=a*(*s1+g*(input-*s2)),v2=*s2+g*v1;
     *s1=2*v1-*s1;*s2=2*v2-*s2;return v2;
 }
-static void render_v2(CirclrSynth *s,float *left,float *right,uint32_t frames,const double *cutoffHz) {
+static void render_v2(CirclrSynth *s,float *left,float *right,uint32_t frames,const double *cutoffHz,const double *resonance) {
     const double dt=1.0/48000;
     // Carry the stolen voice's last sample down over ~4 ms instead of a hard reset.
     for(uint32_t i=0;i<frames;i++){left[i]+=(float)s->stealL;right[i]+=(float)s->stealR;s->stealL*=0.97;s->stealR*=0.97;}
@@ -183,7 +190,7 @@ static void render_v2(CirclrSynth *s,float *left,float *right,uint32_t frames,co
             double tracking=pow(v->frequency/261.625565,.28);
             double sweep=s->filterEnvelope*exp(-v->age*4/fmax(.03,s->decay));
             double cutoff=fmin(18000,fmax(40,base_cutoff(s,cutoffHz,i)*tracking*(.65+.35*v->velocity)*pow(2,sweep)));
-            double g=tan(TAU*.5*cutoff/48000),k=2-1.6*s->resonance;
+            double g=tan(TAU*.5*cutoff/48000),k=2-1.6*base_resonance(s,resonance,i);
             double gain=env*pow(v->velocity,1.35)*.32;
             v->lastL=lowpass_v2(l/count,g,k,&v->l1,&v->l2)*gain;
             v->lastR=lowpass_v2(r/count,g,k,&v->r1,&v->r2)*gain;
@@ -203,7 +210,7 @@ static float chorus_tap(const float *line,unsigned write,double delay) {
     unsigned index=(unsigned)position;double fraction=position-index;
     return (float)(line[index]*(1-fraction)+line[(index+1)&2047]*fraction);
 }
-static void render_v3(CirclrSynth *s,float *left,float *right,uint32_t frames,const double *cutoffHz) {
+static void render_v3(CirclrSynth *s,float *left,float *right,uint32_t frames,const double *cutoffHz,const double *resonance) {
     const double dt=1.0/48000;
     // Fixed stack scratch and preallocated delay lines: no allocation/lock in callback.
     for(uint32_t offset=0;offset<frames;offset+=256){
@@ -278,7 +285,7 @@ static void render_v3(CirclrSynth *s,float *left,float *right,uint32_t frames,co
                 if(style==8)sweep+=1.1*env; // brass opens with its attack, not before it
                 double motionOctaves=(style==0 || style==9)?s->motion*.22*movement:0;
                 double cutoff=fmin(18000,fmax(40,base_cutoff(s,cutoffHz,offset+i)*tracking*(.55+.45*v->velocity)*pow(2,sweep+motionOctaves)));
-                double g=tan(TAU*.5*cutoff/48000),k=2-1.6*s->resonance;
+                double g=tan(TAU*.5*cutoff/48000),k=2-1.6*base_resonance(s,resonance,offset+i);
                 double gain=env*velocityGain;
                 v->lastL=lowpass_v2(l/normalization,g,k,&v->l1,&v->l2)*gain;
                 v->lastR=lowpass_v2(r/normalization,g,k,&v->r1,&v->r2)*gain;

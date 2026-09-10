@@ -1,5 +1,11 @@
 # 변경 이력
 
+## 검증 완료 — build147 신스 resonance 오토메이션
+
+- v2/v3 내장 신스의 raw 0…0.9·0…90% 곡선을 schema6·DSP·GUI/MCP에 연결했다. cutoff 동시 적용과 linear/hold를 지원한다.
+- Swift 전체 Core+선별 Audio 568개·MCP 22개와 Release 94.83초, native 값/오류·Undo/Redo·CPU 바운스/복원·앱 재시작 r219를 확인했다. data 독립 감사는 PASS_DATA_ONLY이며 UI 감사는 PASS_WITH_EXPLICIT_LIMITS이며 DSP 읽기 전용 검토도 PASS했다.
+- 지원 대상은 v2/v3 내장 신스로 한정한다. 전체 Audio suite·모든 폭·물리 청취는 미검증이다. [기록](docs/170-synth-resonance-automation.md).
+
 ## 검증 완료 — build146 낮은 오디오 화면 배치
 
 - 낮은 높이·600 이상 800 미만 폭에서 같은 subtree의 파형과 수치를 나란히 배치하고 다른 조건은 기존 stack을 유지한다.
