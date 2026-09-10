@@ -78,10 +78,14 @@ extension AppStore {
     }
     func applyAudioEdit(_ change:AudioEditing.Change,label:String) {
         guard let use=selectedUse,let node=selectedMusic,currentAudioClip != nil else{return}
+        let historyBefore:AudioEditHistoryContext?
+        switch change {case .split,.duplicate,.delete:historyBefore=capturedAudioHistoryContext();default:historyBefore=nil}
+        let historyID=historyBefore.map{_ in UUID()},historyRevision=project.musicRevision+1
+        defer {if let historyID,let historyBefore {attachAudioEditHistory(id:historyID,revision:historyRevision,before:historyBefore)}}
         if let pattern=sharedRhythmAudioPattern,let clip=currentAudioClip {
             let revision=project.musicRevision,sourceCursor=audioSplitOffset.map{clip.sourceStart+$0}
             var result:ID?
-            mutate(label){result=try SharedRhythmAudioEditing.apply(change,patternID:pattern.id,trackID:pattern.trackID,clipID:clip.id,in:&$0)}
+            mutate(label,audioHistoryID:historyID){result=try SharedRhythmAudioEditing.apply(change,patternID:pattern.id,trackID:pattern.trackID,clipID:clip.id,in:&$0)}
             guard project.musicRevision != revision else{return}
             selectedClipID=result ?? sharedRhythmAudioPattern?.audio.first?.id
             if selectedClipID==nil {
@@ -94,12 +98,16 @@ extension AppStore {
             case .replace:if let sourceCursor,let current=currentAudioClip {audioSplitOffset=min(current.duration,max(0,sourceCursor-current.sourceStart))}
             default:audioSplitOffset=nil
             }
+            switch change {
+            case .split,.duplicate,.delete:requestEditorNavigationFocus()
+            default:break
+            }
             return
         }
         let original=editOriginal,revision=project.musicRevision
         let sourceCursor=audioSplitOffset.map{(currentAudioClip?.sourceStart ?? 0)+$0}
         var result:ID?
-        mutate(label){result=try AudioEditing.apply(change,nodeID:node.id,useID:use.id,original:original,in:&$0)}
+        mutate(label,audioHistoryID:historyID){result=try AudioEditing.apply(change,nodeID:node.id,useID:use.id,original:original,in:&$0)}
         guard project.musicRevision != revision else{return}
         switch change {
         case .fade:break

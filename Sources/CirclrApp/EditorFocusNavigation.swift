@@ -67,7 +67,7 @@ extension AppStore {
                 switch selectedMusic?.content {
                 case .audio,.rhythmAudio:
                     // The current audio workspace uses OrbitAudioView in both canvas layouts.
-                    return view is OrbitAudioView || view is AudioLaneView
+                    return (view as? OrbitAudioView)?.isCurrent == true
                 case .midi,.rhythmMIDI:
                     if request.steps {return view is StepGridView}
                     return request.orbits ? view is OrbitMIDIView:view is PianoRollView
@@ -103,7 +103,17 @@ extension AppStore {
         if let target=find(editor) {
             editorFocusRequest=nil
             _=window.makeFirstResponder(target)
-        } else if finalAttempt {editorFocusRequest=nil}
+        } else if finalAttempt {
+            // Shared clips replace the inner view while retaining the same host.
+            // A still-current request must wait for that clip's mount, never be
+            // consumed by the outgoing clip or cancelled in the replacement gap.
+            let awaitingAudio:Bool
+            switch selectedMusic?.content {
+            case .audio,.rhythmAudio:awaitingAudio=request.page == .content && currentAudioClip != nil
+            default:awaitingAudio=false
+            }
+            if !awaitingAudio {editorFocusRequest=nil}
+        }
     }
 }
 

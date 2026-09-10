@@ -1,5 +1,11 @@
 # 변경 이력
 
+## 검증 완료 — build143 오디오 history 작업 위치
+
+- 일반·공유 오디오의 Undo/Redo에서 조건부로 파형과 focus를 복원하며 다른 노드 탐색은 유지한다. 공유 branch 요청과 이전 clip view의 조기 focus 소비를 수정했다.
+- 관련 43개 검사·최종 Release 45.24초·package 감사와 native 복귀/Tab·r198 재시작을 확인했다. 최종 state 5개 캡처는 PASS, UI 15쌍은 PASS_WITH_SCOPE_LIMITS다.
+- 공유 첫 수치 가시성·모든 scope/빠른 입력·장치 I/O·전체 suite는 완료하지 않았다. [기록](docs/165-audio-edit-history-return.md).
+
 ## 검증 완료 — build142 가져오기와 오디오 동선
 
 - 파일·대상을 고정하고 트랙 목록을 앞에 배치했다. 단일 import는 이전 pitch/공유 범위를 이어받지 않고 이번 use의 piano로 연다. 오디오 action row·파형·수치 접근도 개선했다.

@@ -6,7 +6,9 @@ macOS용 앨범·송폼 궤도 편집기. **앨범 → 곡·악장 → 섹션 �
 
 연결 UI는 [서클 둘레 8방향 IN/OUT과 다중 입출력](docs/22-eight-direction-ports.md)으로 확장 중이다. 포트의 신호 의미와 연결점 배치를 분리한다. 아래 일반 사용법은 배포된 0.19 앱 기준이며 새 포트 기능은 독립 개발 브랜치에서 검증한다.
 
-현재 **`codex/daw-integration`의 0.20.0 build 142**에 녹음 lifecycle과 8방향·다중 bus·그룹 포트를 통합했다. 같은 캔버스의 연결 편집·녹음 상태·스텝·오토메이션이 공존하며, 녹음 시작·정리 중 음악 편집과 Undo의 경쟁을 차단한다. build 23의 실제 편집·바운스·Undo·저장/재열기·닫기 최소화 및 출력별 모션 검증은 [통합 QA](qa/daw-integration-review.md)에 기록했다.
+현재 **`codex/daw-integration`의 0.20.0 build 143**에 녹음 lifecycle과 8방향·다중 bus·그룹 포트를 통합했다. 같은 캔버스의 연결 편집·녹음 상태·스텝·오토메이션이 공존하며, 녹음 시작·정리 중 음악 편집과 Undo의 경쟁을 차단한다. build 23의 실제 편집·바운스·Undo·저장/재열기·닫기 최소화 및 출력별 모션 검증은 [통합 QA](qa/daw-integration-review.md)에 기록했다.
+
+**build143은 오디오 편집 Undo/Redo 후 작업 위치를 복원한다.** 같은 주소·scope·clip일 때 파형으로 돌아가며 다른 노드로 이동한 사용자의 탐색은 유지한다. 일반·공유 복귀와 키보드 focus·재시작, 관련 43개 검사와 최종 Release 45.24초를 확인했다. 공유 화면의 첫 수치 가시성은 별도 개선으로 남아 있다. [검증 기록](docs/165-audio-edit-history-return.md).
 
 **build142는 가져올 파일·대상·트랙을 함께 보여주고, 새 MIDI를 이번 use의 노트 편집으로 연다.** 오디오 작업 버튼·파형·수치도 바로 접근하도록 배치했다. 실제 일반/공유 출발 import·취소·다중 트랙·오류와 오디오 split/Undo, 관련 49개 검사·Release 45.66초를 확인했다. [검증 범위](docs/164-import-and-audio-workflow.md).
 
