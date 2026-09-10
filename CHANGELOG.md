@@ -1,5 +1,10 @@
 # 변경 이력
 
+## 개발 중 — 0.20.0 build106 바운스 안내
+
+- baseline105 경로 밖+manual0의 여운 경고 숨김 재현. 경로/여운 독립 표시와 실제 표시 문자열만 dedup 적용.
+- source review·Release38.64초·실제 경고 동시 표시/설정 취소/자동 추정 복귀 통과. QA baseline1+final5·음악r22/자산2개·strict 재열기·physical0 확인. 실제 바운스/경로 복구는 미검증, exact dedup은 source review만. [계약](docs/121-bounce-notice-visibility.md).
+
 ## 개발 중 — 0.20.0 build105 오토메이션 compact 배치
 
 - compact adaptive 배치·stable identity·도구 flow·수치 버튼/Tab/reveal 적용. 실제 plot 약50→160px·64beat와1/5/9/13 눈금 확인.

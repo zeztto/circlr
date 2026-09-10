@@ -73,8 +73,17 @@ extension AppStore {
 
 struct TrackBounceStatus:View {
     @ObservedObject var store:AppStore
+    private var displayedPathMessage:String? {
+        guard store.trackBounceRecoveryContext != nil,let assessment=store.trackBounceAssessment else{return nil}
+        return store.trackBounceStatus(assessment)
+    }
+    private var displayedTailMessage:String? {
+        guard let notice=store.bounceTailNotice,notice != displayedPathMessage else{return nil}
+        return notice
+    }
     var body:some View {
-        if let assessment=store.trackBounceAssessment,let message=store.trackBounceStatus(assessment),
+        VStack(alignment:.leading,spacing:6) {
+        if let assessment=store.trackBounceAssessment,let message=displayedPathMessage,
            let context=store.trackBounceRecoveryContext {
             HStack(alignment:.center,spacing:8) {
                 Text(message).font(.system(size:12)).foregroundStyle(StudioTheme.secondary)
@@ -83,7 +92,8 @@ struct TrackBounceStatus:View {
                     .fixedSize().disabled(store.trackBounceRecoveryLocked)
                     .help("명령 검색 ⇧⌘P · 바운스 출력 연결 보기")
             }.accessibilityElement(children:.contain)
-        }else if let notice=store.bounceTailNotice {
+        }
+        if let notice=displayedTailMessage {
             let identity=store.numberEditIdentity
             HStack(alignment:.center,spacing:8) {
                 Text(notice).font(.system(size:12)).foregroundStyle(StudioTheme.secondary)
@@ -93,6 +103,7 @@ struct TrackBounceStatus:View {
                     .fixedSize().disabled(!store.bounceTailUIAvailable)
                     .help("명령 검색 ⇧⌘P · 바운스 여운 설정")
             }.accessibilityElement(children:.contain)
+        }
         }
     }
 }
