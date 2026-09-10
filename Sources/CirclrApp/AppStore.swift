@@ -84,11 +84,15 @@ import CirclrAudio
     @Published var panMode = false
     @Published var status = "섹션을 만들어 곡 구성을 시작하세요" {didSet{if status != oldValue{recordActivity("앱",status)}}}
     @Published var activity:[ActivityEvent]=[]
-    @Published var consoleOpen=true
-    @Published var consoleLogHeight:Double=122
+    private let consolePreferences=ConsolePreferences()
+    @Published var consoleOpen=true {didSet{if oldValue != consoleOpen{consolePreferences.saveOpen(consoleOpen)}}}
+    @Published private(set) var consoleLogHeight:Double=ConsolePreferences.defaultHeight
     func setConsoleLogHeight(_ height:Double) {
         guard height.isFinite else{return}
-        consoleLogHeight=min(180,max(40,height))
+        let bounded=ConsolePreferences.boundedHeight(height)
+        guard bounded != consoleLogHeight else{return}
+        consoleLogHeight=bounded
+        consolePreferences.saveHeight(bounded)
     }
     @Published var consoleBounds = CGRect.zero
     @Published var agentJob:AgentJob? {didSet{if let job=agentJob {
@@ -187,6 +191,8 @@ import CirclrAudio
     private var recoveryURL:URL { storageRoot.appendingPathComponent("recovery.json") }
     struct Recovery: Codable { var project: Project; var root: URL?; var date: Date }
     init() {
+        consoleOpen=consolePreferences.isOpen
+        consoleLogHeight=consolePreferences.logHeight
         playback.onOutputChange = {[weak self] in self?.refreshOutputStatus()}
         do { try FileManager.default.createDirectory(at:storageRoot,withIntermediateDirectories:true) } catch { status = "복구 폴더 준비 실패: \(error.localizedDescription)" }
         selectedTrackID = project.addTrack(name:"악기 1")

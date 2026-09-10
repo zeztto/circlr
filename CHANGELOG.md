@@ -1,5 +1,11 @@
 # 변경 이력
 
+## 검증 완료 — 0.20.0 build120 콘솔 작업 영역 유지
+
+- 앱별 UserDefaults에 콘솔 열림/로그높이 저장·복원. 기본true/122pt,40…180pt 범위와 잘못된 저장 타입/비유한값 보호. 음악·프로젝트·Undo 경로와 분리했다.
+- helper31개·source review blocker0·Release44.77초. 실제 접힌 상태/180pt 및 열린 상태/40pt 재실행 복원과 native7개 저장 상태·JPEG8장 검토를 완료했다.
+- 음악revision14·manifest/disk exact·자산2개·사용자 domain 두 키 불변 확인. QA는기본122pt/열림으로 복귀 후 종료했고 사용자PID86114 유지. 실제 오디오 실행 없음. [기록](docs/137-console-preferences.md).
+
 ## 검증 완료 — 0.20.0 build119 신스 수치 접근
 
 - baseline118에서 Tab10회로 움직임0.55를 선택해도 화면 밖에 남는 현상을 실제 확인했다. eager2열 Layout과 엔진별6/9/11필드 focus registry·자동 스크롤로 수정했다.
