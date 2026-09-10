@@ -1,5 +1,11 @@
 # 변경 이력
 
+## 검증 완료 — 0.20.0 build119 신스 수치 접근
+
+- baseline118에서 Tab10회로 움직임0.55를 선택해도 화면 밖에 남는 현상을 실제 확인했다. eager2열 Layout과 엔진별6/9/11필드 focus registry·자동 스크롤로 수정했다.
+- 실제 정·역방향 Tab, 초안1000. 상태에서 콘솔 높이 변경/Esc, 움직임0.55→0.7/Undo, engine1/2 및 engine3 복원, 정확한 manifest 재열기를 검증했다.
+- Release45.18초·소스 review blocker0·QA/production 패키지 서명 검증. UI-only helper5종 stub과 production helpers는 분리했고 사용자 앱PID86114 유지. 물리오디오·VoiceOver 발화는 미검증. [기록](docs/136-synth-parameter-access.md).
+
 ## 제한된 검증 완료 — 0.20.0 build118 악기 미리 듣기 worker 격리
 
 - 지속 `circlr-audition-worker`, 필요한 자산만 포함하는 private 요청 파일, 세션·순서·capability·token IPC와 독립 stdin 취소 처리.

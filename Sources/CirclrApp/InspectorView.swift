@@ -69,10 +69,22 @@ struct TrackInspector:View {
 struct SynthInspector:View {
     @ObservedObject var store:AppStore
     let patch:SynthPatch
+    @Environment(\.numberEditing) private var numberEditing
+    @State private var engineOneFocus=NumberFieldFocus(Array(Self.fieldOrder.prefix(6)),revealOnFocus:true)
+    @State private var engineTwoFocus=NumberFieldFocus(Array(Self.fieldOrder.prefix(9)),revealOnFocus:true)
+    @State private var engineThreeFocus=NumberFieldFocus(Self.fieldOrder,revealOnFocus:true)
+    private static let fieldOrder=["필터 Hz","Detune cent","Attack 초","Decay 초","Sustain","Release 초",
+                                   "공명","스테레오 폭","필터 엔벌로프 · 옥타브","배음","움직임"]
+    private var editingContext:NumberEditingContext {
+        // Preserve the host's draft identity, live target check and name registry.
+        var context=numberEditing
+        context.fieldFocus=patch.engineVersion==3 ? engineThreeFocus:patch.engineVersion>=2 ? engineTwoFocus:engineOneFocus
+        return context
+    }
     func binding(_ key:WritableKeyPath<SynthPatch,Double>)->Binding<Double> {Binding(get:{store.selectedTrack?.instrument.synth?[keyPath:key] ?? patch[keyPath:key]},set:{v in store.updateTrack("신스 편집"){$0.instrument.synth?[keyPath:key]=v}})}
     var body:some View {
         VStack(alignment:.leading,spacing:12) {
-            LazyVGrid(columns:[GridItem(.flexible(minimum:240),spacing:28),GridItem(.flexible(minimum:240))],alignment:.leading,spacing:10) {
+            SynthParameterLayout {
                 parameter("필터 Hz",\.cutoff,40...20000)
                 parameter("Detune cent",\.detune,0...60)
                 parameter("Attack 초",\.attack,0.001...5)
@@ -90,7 +102,7 @@ struct SynthInspector:View {
                 }
             }
             if patch.engineVersion<3 {Button("신스 엔진 3으로 전환"){store.updateTrack("신스 엔진 전환"){$0.instrument.synth?.engineVersion=3}}}
-        }
+        }.environment(\.numberEditing,editingContext)
     }
     func parameter(_ title:String,_ key:WritableKeyPath<SynthPatch,Double>,_ range:ClosedRange<Double>)->some View {
         HStack(spacing:10) {
@@ -100,4 +112,35 @@ struct SynthInspector:View {
         }
     }
 
+}
+
+/// Keep offscreen fields alive for ordered Tab navigation without replacing them on resize.
+private struct SynthParameterLayout:SwiftUI.Layout {
+    private let horizontalGap:CGFloat=28
+    private let verticalGap:CGFloat=10
+    private func metrics(width:CGFloat,subviews:Subviews)->(cell:CGFloat,heights:[CGFloat]) {
+        let cell=max(0,(width-horizontalGap)/2)
+        var heights:[CGFloat]=[]
+        for index in subviews.indices {
+            let row=index/2
+            if row==heights.count {heights.append(0)}
+            heights[row]=max(heights[row],subviews[index].sizeThatFits(.init(width:cell,height:nil)).height)
+        }
+        return (cell,heights)
+    }
+    func sizeThatFits(proposal:ProposedViewSize,subviews:Subviews,cache:inout ())->CGSize {
+        let width=proposal.width ?? 508
+        let layout=metrics(width:width,subviews:subviews)
+        return .init(width:width,height:layout.heights.reduce(0,+)+CGFloat(max(0,layout.heights.count-1))*verticalGap)
+    }
+    func placeSubviews(in bounds:CGRect,proposal:ProposedViewSize,subviews:Subviews,cache:inout ()) {
+        let layout=metrics(width:bounds.width,subviews:subviews)
+        var y=bounds.minY
+        for index in subviews.indices {
+            let row=index/2,column=index%2
+            if index>0 && column==0 {y+=layout.heights[row-1]+verticalGap}
+            subviews[index].place(at:.init(x:bounds.minX+CGFloat(column)*(layout.cell+horizontalGap),y:y),anchor:.topLeading,
+                                 proposal:.init(width:layout.cell,height:layout.heights[row]))
+        }
+    }
 }

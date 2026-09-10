@@ -2,6 +2,10 @@
 
 갱신: 2026-09-10. 계획 시작 기준: 0.11 native 앱, 0.12 음악 에이전트 키트 소스. 기존 출고 표기는 0.19.0이며 실행 중 사용자 앱의 별도 관측 버전은0.14다. build115는 mocked lifecycle·presentation·offscreen widget·Release 범위의 제한된 검증을 완료했고 build116의 아래 mixed-candidate 검증도 완료했다. 목표는 송폼 중심의 전문 음악 제작을 먼저 완성하고, 이를 아티스트의 작품·세계관 관리로 확장하는 것이다.
 
+## 검증 완료 — build119 신스 수치 접근
+
+신스11개 필드의 마지막 수치가 Tab 선택만 되고 화면 밖에 남던 문제를 실제 재현해 eager 배치·명시적 focus 순서·자동 스크롤로 수정했다. 엔진1/2/3, 정·역방향 이동, 초안 보존, 적용/Undo·저장/재열기를 확인했다. 다음 UI 점검은 다른 긴 속성 폼의 포커스 노출과 입력 간 이동 깊이이며, 재실행 시 콘솔 높이가 기본값으로 돌아오는 기존 동작도 별도 개선 후보로 기록한다. [검증 기록](136-synth-parameter-access.md).
+
 ## 제한된 검증 완료 — build118 미리 듣기 worker
 
 문서133의 지속 worker·private manifest·token IPC·유휴 종료 통지·취소/cleanup을 구현했다. 관련 mock 테스트32개와 source review를 통과했다. 다음 오디오 단계는 명시적으로 분리된 native 연주 gate에서 내장 synth/sampler/AU의 소리·note-off·반복 연주 latency·장치 종료/복구를 확인하는 것이다. 앱 내 캔버스 접근성·낮은 편집 깊이 개선은 계속 별도 UI 검증으로 진행한다. [검증 기록](135-audition-worker-isolation.md).
