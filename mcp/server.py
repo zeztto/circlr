@@ -100,7 +100,17 @@ OPERATION["oneOf"].append({"type": "object", "properties": {"kind": {"enum": ["e
 OPERATION["oneOf"].append({"type": "object", "properties": {"kind": {"enum": ["clear_use_tempo_override"]}}, "required": ["arrangementID", "useID"]})
 OPERATION["properties"]["kind"]["enum"].append("clear_use_tempo_override")
 OPERATION["properties"]["kind"]["enum"].extend(ARRANGEMENT_OPERATIONS + ["select_arrangement", "insert_section", "edit_shared_audio"])
-OPERATION["description"] = "clear_use_tempo_override requires arrangementID/useID, removes only that use tempo override, and requires midiTempoImport=1. edit_shared_audio requires patternID, trackID, clipID and edit (split/duplicate/fade/delete). patternID is rejected on other kinds; arrangementID/compositionID/nodeID/useID/laneID are rejected on edit_shared_audio. original is rejected on kinds other than set_automation. It edits the shared rhythm pattern across its uses; split uses sourceOffset seconds, duplicate uses beatOffset, fade uses fadeIn/fadeOut seconds, as in edit_audio. set_automation accepts original: omitted/false edits this use, true edits the shared section source and retains existing use overrides. insert_section requires arrangementID, useID (insert after), name (1–120 trimmed characters), bars (1–4096), and at {x,y}; it atomically inserts a new section into a linear path, preserving editing selection. Branches, loops and non-default transitions fail without changes. duplicate_arrangement and rename_arrangement require explicit compositionID, arrangementID and name (1–120 characters after trimming whitespace). Duplicate shares section sources and assets, preserving every owner's playback choice and the editing canvas. Rename changes only the arrangement name. select_arrangement requires compositionID and arrangementID (no name needed); it deliberately changes the owner's playback choice and visible editing branch."
+OPERATION["description"] = "clear_use_tempo_override requires arrangementID/useID, removes only that use tempo override, and requires midiTempoImport=1. edit_shared_audio requires patternID, trackID, clipID and edit (split/duplicate/fade/delete). patternID is rejected except on edit_shared_audio/edit_pitch_bend; arrangementID/compositionID/nodeID/useID/laneID are rejected on edit_shared_audio. original is rejected on kinds other than set_automation/edit_pitch_bend. It edits the shared rhythm pattern across its uses; split uses sourceOffset seconds, duplicate uses beatOffset, fade uses fadeIn/fadeOut seconds, as in edit_audio. set_automation accepts original: omitted/false edits this use, true edits the shared section source and retains existing use overrides. insert_section requires arrangementID, useID (insert after), name (1–120 trimmed characters), bars (1–4096), and at {x,y}; it atomically inserts a new section into a linear path, preserving editing selection. Branches, loops and non-default transitions fail without changes. duplicate_arrangement and rename_arrangement require explicit compositionID, arrangementID and name (1–120 characters after trimming whitespace). Duplicate shares section sources and assets, preserving every owner's playback choice and the editing canvas. Rename changes only the arrangement name. select_arrangement requires compositionID and arrangementID (no name needed); it deliberately changes the owner's playback choice and visible editing branch."
+
+
+BEND_RANGE = schema({"semitones": {"type": "integer", "minimum": 0, "maximum": 127}, "cents": {"type": "integer", "minimum": 0, "maximum": 127}}, ["semitones", "cents"])
+BEND_CHANGE = schema({"kind": {"type": "string", "enum": ["insert", "update", "remove", "setInitial", "clear"]},
+    "beat": {"type": "number", "minimum": 0, "maximum": 131072}, "rawValue": {"type": "integer", "minimum": 0, "maximum": 16383},
+    "range": BEND_RANGE, "index": {"type": "integer", "minimum": 0, "maximum": 99999}, "channel": {"type": "integer", "minimum": 0, "maximum": 15}}, ["kind"])
+OPERATION["properties"]["change"] = BEND_CHANGE
+OPERATION["properties"]["kind"]["enum"].append("edit_pitch_bend")
+OPERATION["oneOf"].append({"type": "object", "properties": {"kind": {"enum": ["edit_pitch_bend"]}}, "required": ["change"]})
+OPERATION["description"] += " edit_pitch_bend requires midiPitchBendEditing=1 and change. Normal target: arrangementID/useID/laneID/original boolean (explicit); shared target: patternID/trackID only. change: insert uses beat and exactly one rawValue or range; update adds index; remove uses index; setInitial uses channel/rawValue/range; clear has only kind. Indices address current revision; inspect lanes and snapshot patterns expose the stored pitchBend sequence."
 
 
 def tool(name, method, description, properties=None, required=(), write=False):
@@ -225,10 +235,26 @@ def validate_operation_scopes(operations):
         kind = operation["kind"]
         if operation.get("parameter") == "synthCutoff" and kind != "set_automation":
             raise ValueError(f"operations[{index}].parameter: synthCutoff requires set_automation")
-        if "original" in operation and kind != "set_automation":
+        if "original" in operation and kind not in {"set_automation", "edit_pitch_bend"}:
             raise ValueError(f"operations[{index}].original: supported only by set_automation")
-        if "patternID" in operation and kind != "edit_shared_audio":
+        if "patternID" in operation and kind not in {"edit_shared_audio", "edit_pitch_bend"}:
             raise ValueError(f"operations[{index}].patternID: supported only by edit_shared_audio")
+        if "change" in operation and kind != "edit_pitch_bend":
+            raise ValueError("change requires edit_pitch_bend")
+        if kind == "edit_pitch_bend":
+            change = operation["change"]
+            ck = change["kind"]
+            fields = {"insert": {"kind", "beat"}, "update": {"kind", "beat", "index"}, "remove": {"kind", "index"}, "setInitial": {"kind", "channel", "rawValue", "range"}, "clear": {"kind"}}[ck]
+            if ck in {"insert", "update"}:
+                if ("rawValue" in change) == ("range" in change):
+                    raise ValueError("change requires exactly one rawValue or range")
+                fields = fields | ({"rawValue"} if "rawValue" in change else {"range"})
+            if set(change) != fields:
+                raise ValueError("change has missing or inapplicable fields")
+            address = {"arrangementID", "useID", "laneID", "original", "patternID", "trackID", "nodeID", "compositionID", "clipID"}.intersection(operation)
+            expected = {"patternID", "trackID"} if "patternID" in operation else {"arrangementID", "useID", "laneID", "original"}
+            if address != expected:
+                raise ValueError("edit_pitch_bend requires one explicit normal or shared target")
         if kind == "edit_shared_audio":
             ambiguous = {"arrangementID", "compositionID", "nodeID", "useID", "laneID"}.intersection(operation)
             if ambiguous:
@@ -262,6 +288,8 @@ def call_tool(path, name, arguments, read_only=False):
             required_capabilities.append("midiTempoImport")
         if entry["method"] == "import_midi":
             required_capabilities.append("midiPitchBendImport")
+        if entry["method"] == "apply" and any(op["kind"] == "edit_pitch_bend" for op in arguments["operations"]):
+            required_capabilities.append("midiPitchBendEditing")
         if required_capabilities:
             # This read does not weaken the final app-side revision/atomicity guard.
             probe = rpc(path, {"id": str(uuid.uuid4()), "method": "snapshot", "arguments": {}})

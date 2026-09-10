@@ -54,7 +54,7 @@ extension AppStore {
          "playback":capturePlaybackVisualization?() ?? ["playing":playback.playing,"seconds":playback.seconds],"output":json(playback.outputStatus),"audition":json(auditionOutput.status),
          "view":["zoom":hierarchyZoom,"layout":project.usesOrbits ? "orbit":"freeform","consoleOpen":consoleOpen,"consoleBounds":[consoleBounds.minX,consoleBounds.minY,consoleBounds.width,consoleBounds.height]],
          "library":["open":libraryOpen,"folders":library.folders.count,"files":library.entries.count,"selectedFiles":library.chosenIDs.count,"scanning":library.scanning,"searching":library.searching,"previewPreparing":library.previewPreparing,"previewPlaying":library.previewing,"previewPending":library.previewPending,"previewSeconds":library.previewSeconds],
-         "runtime":["version":Bundle.main.object(forInfoDictionaryKey:"CFBundleShortVersionString") as? String ?? "development","build":Bundle.main.object(forInfoDictionaryKey:"CFBundleVersion") as? String ?? "development","capabilities":["soundCatalog":1,"synthCutoffAutomation":1,"midiTempoImport":1,"midiPitchBendImport":1],"bundleID":Bundle.main.bundleIdentifier ?? "","windows":NSApplication.shared.windows.filter{$0.identifier?.rawValue=="main"}.map{["visible":$0.isVisible,"minimized":$0.isMiniaturized]}]]
+         "runtime":["version":Bundle.main.object(forInfoDictionaryKey:"CFBundleShortVersionString") as? String ?? "development","build":Bundle.main.object(forInfoDictionaryKey:"CFBundleVersion") as? String ?? "development","capabilities":["soundCatalog":1,"synthCutoffAutomation":1,"midiTempoImport":1,"midiPitchBendImport":1,"midiPitchBendEditing":1],"bundleID":Bundle.main.bundleIdentifier ?? "","windows":NSApplication.shared.windows.filter{$0.identifier?.rawValue=="main"}.map{["visible":$0.isVisible,"minimized":$0.isMiniaturized]}]]
     }
     func receiveAgent(_ data:Data,source:String)->[String:Any] {
         do {
@@ -136,10 +136,20 @@ extension AppStore {
                 guard nameEditing.resolve() else{throw CirclrError("이름 편집을 적용한 뒤 편곡안을 선택하세요")}
                 try AgentProjectEditing.check(request,project:project)
             }
-            let leaving=explicitArrangement == nil ? nil:capturedArrangementWorkspace()
+            var leaving=explicitArrangement == nil ? nil:capturedArrangementWorkspace()
             let previousChoice=explicitArrangement.flatMap{$0.compositionID}.flatMap{project.album?.composition($0)?.selectedArrangementID}
             let previousActive=project.activeArrangementID
             let candidate=try AgentProjectEditing.apply(request,to:project)
+            // This pre-mutation snapshot is cached after project reconciliation;
+            // reconcile it too so restore cannot reintroduce a stale event index.
+            if let memory=leaving,let state=memory.workspace.pitchBend {
+                var workspace=memory.workspace
+                let key=EditorWorkspaceKey(node:memory.address,original:workspace.original)
+                workspace.pitchBend=state.reconciled(from:pitchBendSource(at:key,in:project),to:pitchBendSource(at:key,in:candidate))
+                leaving=ArrangementWorkspaceMemory(projectID:memory.projectID,arrangementID:memory.arrangementID,
+                    compositionID:memory.compositionID,address:memory.address,workspace:workspace,
+                    midiStepMode:memory.midiStepMode,capturedAt:memory.capturedAt)
+            }
             mutate("에이전트 편집 · \(args.operations?.count ?? 0)개"){$0=candidate}
             cancelAudition()
             if let compositionID=explicitArrangement?.compositionID,let arrangementID=explicitArrangement?.arrangementID {

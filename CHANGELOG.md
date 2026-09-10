@@ -1,5 +1,11 @@
 # 변경 이력
 
+## 검증 완료 — build135 피치 벤드 편집과 SMF 내보내기
+
+- 같은 캔버스 편집·MCP edit_pitch_bend·raw/RPN SMF 저장을 연결했다. 외부 변경 뒤 index 보호, range/value 구분과 표현 구간 보기를 개선했다.
+- 관련 26개, 전체 회귀 816개·내부 skip 2개·실패 0개, Python 28/6개를 확인했다. 실제 재생 테스트 1개는 제외했다. 최종 Release 47.35초와 패키지 검증을 통과했다.
+- native 편집/Undo·stale 거절·SMF 저장/재가져오기·취소/재시작 r126을 확인했다. UI/artifact 최종 독립 감사도 PASS했으며 전체 DAW·물리 청취·모든 backend 완료는 아니다. [기록](docs/157-pitch-bend-edit-and-export.md).
+
 ## 검증 완료 — 0.20.0 build134 MIDI pitch bend 가져오기
 
 - preserve 기본·명시적 omit과 raw controller/RPN 보존, channel별 미지원 오류, schema5 atomic 적용을 GUI/MCP에 연결했다. CC121 reset과 마지막 bend의 길이 경계를 처리한다.

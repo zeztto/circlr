@@ -112,11 +112,12 @@ public enum MIDIGenerator {
 }
 
 public enum MIDIFile {
-    /// Export actual source lanes without silently dropping stored expression.
-    /// Raw bend/RPN encoding is not implemented yet, including a center-only seed.
-    public static func encode(sources:[(String,Lane)],tempo:Double,meter:Meter)throws->Data {
-        guard !sources.contains(where:{$0.1.pitchBend != nil}) else{throw CirclrError("선택한 연주에 피치 벤드가 있습니다. 현재 MIDI 저장은 피치 벤드·RPN 표현을 지원하지 않아 파일을 만들지 않았습니다")}
-        return try encode(lanes:sources.map{($0.0,$0.1.notes)},tempo:tempo,meter:meter)
+    /// Preserves source expression with independent melodic MIDI channels.
+    public static func encode(sources:[(String,Lane)],tempo:Double,meter:Meter,tempoChanges:[TempoChange]=[])throws->Data {
+        if tempoChanges.isEmpty && !sources.contains(where:{$0.1.pitchBend != nil}) {
+            return try encode(lanes:sources.map{($0.0,$0.1.notes)},tempo:tempo,meter:meter)
+        }
+        return try MIDIExpressionExport.encode(sources:sources,tempo:tempo,meter:meter,tempoChanges:tempoChanges)
     }
     /// SMF format 1, 960 PPQN. Off events sort before on events at the same tick.
     public static func encode(lanes: [(String,[Note])], tempo: Double, meter: Meter) throws -> Data {

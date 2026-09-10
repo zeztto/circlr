@@ -13,6 +13,28 @@ SPEC.loader.exec_module(server)
 
 
 class MCPTests(unittest.TestCase):
+    def test_pitch_bend_edit_scopes_changes_and_capability(self):
+        normal = dict(kind='edit_pitch_bend', arrangementID='a', useID='u', laneID='l', original=False)
+        shared = dict(kind='edit_pitch_bend', patternID='patt', trackID='t')
+        changes = [dict(kind='insert', beat=1, rawValue=8192), dict(kind='update', index=0, beat=2, range=dict(semitones=2, cents=0)), dict(kind='remove', index=0), dict(kind='setInitial', channel=0, rawValue=8192, range=dict(semitones=2,cents=0)), dict(kind='clear')]
+        probe = dict(ok=True, result=dict(projectID='p', revision=8, runtime=dict(capabilities=dict(midiPitchBendEditing=1))))
+        for address in [normal, shared]:
+            for change in changes:
+                args = dict(projectID='p', expectedRevision=8, operations=[dict(address, change=change)])
+                with patch.object(server, 'rpc', side_effect=[probe, dict(ok=True)]) as rpc:
+                    self.assertFalse(server.call_tool('/qa.sock', 'circlr_apply', args)['isError'])
+                    self.assertEqual(rpc.call_args.args[1]['arguments']['operations'], args['operations'])
+        invalid = [dict(normal, clipID='audio', change=dict(kind='clear')), dict(normal, change=dict(kind='clear', index=0)), dict(normal, change=dict(kind='insert',beat=0,rawValue=0,range=dict(semitones=2,cents=0))), dict(shared, original=False, change=dict(kind='clear')), dict(normal, patternID='patt', change=dict(kind='clear')), {k:v for k,v in dict(normal,change=dict(kind='clear')).items() if k!='original'}]
+        for op in invalid:
+            with patch.object(server, 'rpc') as rpc:
+                with self.assertRaises(ValueError):server.call_tool('/qa.sock','circlr_apply',dict(projectID='p',expectedRevision=8,operations=[op]))
+                rpc.assert_not_called()
+        for value in [None,False,0,2,'1']:
+            probe['result']['runtime']['capabilities']['midiPitchBendEditing']=value
+            with patch.object(server,'rpc',return_value=probe) as rpc:
+                self.assertTrue(server.call_tool('/qa.sock','circlr_apply',dict(projectID='p',expectedRevision=8,operations=[dict(normal,change=dict(kind='clear'))]))['isError'])
+                rpc.assert_called_once()
+
     def test_shared_audio_edit_variants_forward_explicit_shared_target(self):
         variants = [('split', {'sourceOffset': 0.5}), ('duplicate', {'beatOffset': 4}),
                     ('fade', {'fadeIn': 0.1, 'fadeOut': 0.2}), ('delete', {})]

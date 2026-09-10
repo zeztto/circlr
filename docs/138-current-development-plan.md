@@ -1,6 +1,6 @@
 # 현행 개발 계획
 
-기준: 2026-09-10, integration-worktree의 build120 소스(`b06c4a9`)에서 시작해 build127의 소스·검증 기록을 기준으로 build134 검증 결과까지 반영했다. 이 문서는 다음 실행과 완료 판단을 위한 계획이며 [누적 로드맵](25-development-roadmap.md)의 과거 검증 결과를 새로 수행한 검사로 바꾸지 않는다. 전체 DAW·음악 품질·접근성은 아직 완료되지 않았다.
+기준: 2026-09-10, integration-worktree의 build120 소스(`b06c4a9`)에서 시작해 build127의 소스·검증 기록을 기준으로 build135 검증 결과까지 반영했다. 이 문서는 다음 실행과 완료 판단을 위한 계획이며 [누적 로드맵](25-development-roadmap.md)의 과거 검증 결과를 새로 수행한 검사로 바꾸지 않는다. 전체 DAW·음악 품질·접근성은 아직 완료되지 않았다.
 
 ## 제품의 완료 방향
 
@@ -62,7 +62,7 @@ build131은 [MIDI tempo import 계획](151-midi-tempo-import-plan.md)의 기본 
 
 [신스 cutoff automation 계획](148-synth-cutoff-automation-plan.md)은 build129에서 descriptor·voice 보존 DSP·GUI/MCP·schema를 구현하고 기계검증·실제 Hz 편집/오류 거절을 확인했다. GUI/schema 독립 감사와 production 서명/UUID도 통과했으며 바운스·복원·재열기 r79 및 PCM 독립 감사도 통과했다. 최종 종합 UI 데이터 감사도 통과했다. [현재 검증](149-synth-cutoff-automation-validation.md)을 기준으로 판단한다.
 
-**현재 결과:** [MIDI pitch bend 계획154](154-midi-pitch-bend-plan.md)에서 optional 프로젝트 저장·schema5와 compiled source/occurrence packet, 미지원 렌더·typed MIDI 저장 거절까지 연결했다. build133에서 내장 신스 DSP와 기존 PCM 보존을 연결하고 MIDI 가져오기 취소 복귀를 검증했다. [최종 검증](155-pitch-bend-synth-and-import-return.md). build134에서 SMF bend/RPN 가져오기와 preserve/omit·미지원 처리, GUI/MCP 동일 적용을 구현했다. [가져오기 검증](156-midi-pitch-bend-import.md)의 최종 독립 감사도 통과했다. 다음은 곡선 UI·MCP 표현 편집과 SMF 내보내기 왕복이다. 최종 Core/Audio 회귀는 바운스 저장/복원을 포함한 793개·내부 skip 2개·실패 0개를 확인했다. 실제 재생 포함 테스트 1개는 제외했으며 GUI/MCP 표현 편집·SMF 내보내기·AU/sampler와 물리 청취 검증은 아직 남아 있다. build131에서 확인한 가져오기 오류·대상 표시는 build132에서 개선했다. 전체 앱 사용성의 다른 장애는 실제 한 곡 동선에서 계속 확인한다. [MIDI tempo 가져오기](152-midi-tempo-import-validation.md)는 위 범위를 구현·검증했으며 새 모델 도입 단계로 다시 세지 않는다. build129에서 `AutomationParameter`에 synthCutoff를 추가했으며 native 편집·바운스·재열기와 독립 감사를 통과했다. 신스 filter 같은 다음 파라미터는 descriptor·단위·범위·초깃값·시간 의미·DSP 반영을 먼저 정한 뒤 UI에 노출한다. plugin parameter는 실제 descriptor와 state 복원 계약을 갖춘 뒤 추가한다.
+**현재 결과:** [MIDI pitch bend 계획154](154-midi-pitch-bend-plan.md)에서 optional 프로젝트 저장·schema5와 compiled source/occurrence packet, 미지원 렌더·typed MIDI 저장 거절까지 연결했다. build133에서 내장 신스 DSP와 기존 PCM 보존을 연결하고 MIDI 가져오기 취소 복귀를 검증했다. [최종 검증](155-pitch-bend-synth-and-import-return.md). build134에서 SMF bend/RPN 가져오기와 preserve/omit·미지원 처리, GUI/MCP 동일 적용을 구현했다. [가져오기 검증](156-midi-pitch-bend-import.md)의 최종 독립 감사도 통과했다. 곡선 UI·MCP 표현 편집과 SMF 내보내기는 [build135](157-pitch-bend-edit-and-export.md)에서 구현하고 최종 회귀 816개·내부 skip 2개·실패 0개, Release·native 편집/파일 왕복을 확인했다. UI/artifact 최종 독립 감사도 PASS했다. 다음은 실제 한 곡의 표현 편집·편곡·파일 왕복 사용성을 통합 검증하며 AU/sampler와 물리 청취 경계를 별도로 해결하는 것이다. 현재 최종 Core/Audio 회귀는 816개·내부 skip 2개·실패 0개다. 실제 재생 포함 테스트 1개는 제외했으며 AU/sampler와 물리 청취 검증은 아직 남아 있다. build131에서 확인한 가져오기 오류·대상 표시는 build132에서 개선했다. 전체 앱 사용성의 다른 장애는 실제 한 곡 동선에서 계속 확인한다. [MIDI tempo 가져오기](152-midi-tempo-import-validation.md)는 위 범위를 구현·검증했으며 새 모델 도입 단계로 다시 세지 않는다. build129에서 `AutomationParameter`에 synthCutoff를 추가했으며 native 편집·바운스·재열기와 독립 감사를 통과했다. 신스 filter 같은 다음 파라미터는 descriptor·단위·범위·초깃값·시간 의미·DSP 반영을 먼저 정한 뒤 UI에 노출한다. plugin parameter는 실제 descriptor와 state 복원 계약을 갖춘 뒤 추가한다.
 
 MIDI CC/페달/피치 벤드·tempo map은 노트 import와 다른 이벤트·시간 계약이 필요하다. 기존 파일을 여는 것만으로 재해석하지 않으며 가져오기 전 적용 범위를 설명한다. 오디오 crossfade·comping·time warp, 실시간 automation write/touch/latch, punch/loop 녹음은 원본/테이크·공통 clock·취소 수명에 의존하므로 독립 체크박스로 쌓지 않는다. [기본 DAW 계획](31-daw-basics-plan.md)의 남은 조건을 유지한다.
 

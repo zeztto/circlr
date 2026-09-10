@@ -62,6 +62,7 @@ public struct AgentOperation:Codable {
     public var pattern:MIDIPattern?
     public var patternID:ID?
     public var original:Bool?
+    public var change:AgentPitchBendChange?
     public var append:Bool?
     public var instrument:Instrument?
     public var synthVoice:SynthVoice?
@@ -111,14 +112,16 @@ public enum AgentProjectEditing {
         var p=input
         var explicitSelection:ID?
         for op in operations {
-            guard op.original==nil || op.kind=="set_automation" else{throw CirclrError("original은 set_automation에만 지정할 수 있습니다")}
-            guard op.patternID==nil || op.kind=="edit_shared_audio" else{throw CirclrError("patternID는 edit_shared_audio에만 지정할 수 있습니다")}
+            guard op.original==nil || ["set_automation","edit_pitch_bend"].contains(op.kind) else{throw CirclrError("original은 set_automation·edit_pitch_bend에만 지정할 수 있습니다")}
+            guard op.patternID==nil || ["edit_shared_audio","edit_pitch_bend"].contains(op.kind) else{throw CirclrError("patternID는 edit_shared_audio·edit_pitch_bend에만 지정할 수 있습니다")}
+            guard op.change==nil || op.kind=="edit_pitch_bend" else{throw CirclrError("change는 edit_pitch_bend에만 지정하세요")}
             if op.kind=="edit_shared_audio" {
                 guard op.arrangementID==nil,op.useID==nil,op.nodeID==nil,op.laneID==nil,op.compositionID==nil else{throw CirclrError("공유 오디오에는 patternID·trackID·clipID만 대상으로 지정하세요")}
             }
             p.activeArrangementID=input.activeArrangementID
             if let ai=op.arrangementID {guard p.arrangements.contains(where:{$0.id==ai}) else {throw CirclrError("편곡 ID를 찾을 수 없습니다")};p.activeArrangementID=ai}
             switch op.kind {
+            case "edit_pitch_bend":try AgentPitchBendEditing.apply(op,in:&p)
             case "duplicate_arrangement", "rename_arrangement":
                 guard let compositionID=op.compositionID,let arrangementID=op.arrangementID,let name=op.name else {
                     throw CirclrError("compositionID, arrangementID, name이 필요합니다")

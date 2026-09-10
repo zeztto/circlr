@@ -42,6 +42,7 @@ extension AppStore {
     }
     func openStepEditor() {
         guard canOpenStepEditor,nameEditing.resolve() else{return}
+        pitchBendOpen=false
         if let address=currentStepEditorAddress {
             midiStepMode=true
             connectionsOpen=false;hierarchySettingsOpen=false;automationOpen=false;embeddedPlugin=nil;hierarchyTransitionID=nil

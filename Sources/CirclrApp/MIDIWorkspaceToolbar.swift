@@ -22,10 +22,7 @@ struct MIDIWorkspaceActions:View {
     private var sharedPattern:RhythmPattern? {store.editPatternID.flatMap{id in store.project.patterns.first{$0.id==id}}}
     var body:some View {
             HStack(spacing:spacing) {
-            Picker("MIDI 편집 방식",selection:$store.midiStepMode) {
-                Text(store.project.usesOrbits ? "궤도":"피아노 롤").tag(false)
-                Text("스텝").tag(true)
-            }.pickerStyle(.segmented).labelsHidden().frame(width:110)
+            MIDIEditorModeControls(store:store)
             let generation=store.midiGenerationRequest
             Menu(sharedPattern == nil ? "MIDI":"공유 리듬 MIDI") {
                 Button("MIDI 파일 가져오기"){store.chooseMIDIImport()}
@@ -80,5 +77,22 @@ struct MIDIWorkspaceToolbarLayout:SwiftUI.Layout {
             subviews[index].place(at:CGPoint(x:bounds.minX+position.x,y:bounds.minY+position.y),anchor:.topLeading,
                                  proposal:ProposedViewSize(width:isLastOnRow ? bounds.width-position.x:size.width,height:size.height))
         }
+    }
+}
+
+struct MIDIEditorModeControls:View {
+    @ObservedObject var store:AppStore
+    var body:some View {
+        HStack(spacing:4) {
+            mode(store.project.usesOrbits ? "궤도":"피아노 롤",selected:!store.pitchBendOpen && !store.midiStepMode){store.pitchBendOpen=false;store.midiStepMode=false}
+            mode("스텝",selected:!store.pitchBendOpen && store.midiStepMode){store.pitchBendOpen=false;store.midiStepMode=true}
+            mode("피치 벤드",selected:store.pitchBendOpen){store.pitchBendOpen=true;store.automationOpen=false}
+        }.fixedSize()
+    }
+    private func mode(_ title:String,selected:Bool,action:@escaping()->Void)->some View {
+        StudioModeButton(title:title,label:"MIDI 편집 방식 · "+title,selected:selected,help:title+" 편집") {
+            guard store.nameEditing.resolve() else{return}
+            action()
+        }.frame(width:CGFloat(title.count)*12+18,height:28)
     }
 }

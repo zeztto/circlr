@@ -20,10 +20,15 @@ extension AppStore {
         }catch{fail(error)}
     }
     func exportMIDI() {
-        guard let lane=currentLane else{return}
-        let panel=NSSavePanel();panel.title="MIDI 저장";panel.nameFieldStringValue=(selectedCircle?.title ?? "연주")+".mid";panel.allowedContentTypes=[UTType(filenameExtension:"mid")!]
+        guard nameEditing.resolve(),let lane=currentLane,let clock=currentClock else{return}
+        let identity=numberEditIdentity,context=currentContext,title=selectedCircle?.title ?? "연주"
+        let panel=NSSavePanel();panel.title="MIDI 저장";panel.nameFieldStringValue=title+".mid";panel.allowedContentTypes=[UTType(filenameExtension:"mid")!]
         guard panel.runModal() == .OK,let url=panel.url else{return}
-        do {try MIDIFile.encode(sources:[(selectedCircle?.title ?? "연주",lane)],tempo:currentContext.tempo,meter:currentContext.meter).write(to:url,options:.atomic);status="MIDI 저장 완료"}catch{fail(error)}
+        guard identity==numberEditIdentity,currentLane==lane,currentContext==context,currentClock==clock else{status="연주나 편집 대상이 바뀌었습니다. MIDI 저장을 다시 실행하세요";return}
+        do {
+            let data=try MIDIFile.encode(sources:[(title,lane)],tempo:clock.tempos.first?.bpm ?? context.tempo,meter:context.meter,tempoChanges:Array(clock.tempos.dropFirst()))
+            try data.write(to:url,options:.atomic);status="MIDI 저장 완료"
+        }catch{fail(error)}
     }
     func chooseSampleInstrument() {
         guard let trackID=selectedTrackID else{return}

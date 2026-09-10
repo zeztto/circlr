@@ -1,23 +1,30 @@
 #!/usr/bin/env python3
 """Clone the task package with no-I/O helpers; never launch or replace a user app."""
 import hashlib
+import argparse
 import json
 from pathlib import Path
 import plistlib
 import shutil
+import re
 import subprocess
 import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "dist/써클러.app"
-OUT = ROOT / "qa/generated/midi-import-return/expression134"
 HELPERS = ("circlr-output-worker", "circlr-au-effect-worker", "circlr-au-instrument-worker",
            "circlr-output-device-catalog", "circlr-audition-worker")
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--build", type=int, default=134)
+    parser.add_argument("--candidate", default="expression134")
+    args = parser.parse_args()
+    assert args.build > 0 and re.fullmatch(r"[a-z0-9-]{1,32}", args.candidate)
+    OUT = ROOT / "qa/generated/midi-import-return" / args.candidate
     info = plistlib.loads((SOURCE / "Contents/Info.plist").read_bytes())
-    assert str(info["CFBundleVersion"]) == "134"
+    assert str(info["CFBundleVersion"]) == str(args.build)
     subprocess.run(["codesign", "--verify", "--deep", "--strict", str(SOURCE)], check=True)
     OUT.mkdir(parents=True, exist_ok=False)
     app = OUT / "써클러 통합 검증.app"
@@ -40,7 +47,7 @@ if __name__ == "__main__":
     uuid = lambda path: subprocess.check_output(["dwarfdump", "--uuid", str(path)], text=True).split()[1]
     assert uuid(mac / "circlr") == uuid(SOURCE / "Contents/MacOS/circlr")
     sha = lambda path: hashlib.sha256(path.read_bytes()).hexdigest()
-    (OUT / "package.json").write_text(json.dumps(dict(app=str(app), build="134",
+    (OUT / "package.json").write_text(json.dumps(dict(app=str(app), build=str(args.build),
         sourceUUID=uuid(mac / "circlr"), mainSHA256=sha(mac / "circlr"),
         helpers={name: sha(mac / name) for name in HELPERS}), ensure_ascii=False, indent=2) + "\n")
     print(app)

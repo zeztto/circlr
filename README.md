@@ -6,9 +6,11 @@ macOS용 앨범·송폼 궤도 편집기. **앨범 → 곡·악장 → 섹션 �
 
 연결 UI는 [서클 둘레 8방향 IN/OUT과 다중 입출력](docs/22-eight-direction-ports.md)으로 확장 중이다. 포트의 신호 의미와 연결점 배치를 분리한다. 아래 일반 사용법은 배포된 0.19 앱 기준이며 새 포트 기능은 독립 개발 브랜치에서 검증한다.
 
-현재 **`codex/daw-integration`의 0.20.0 build 134**에 녹음 lifecycle과 8방향·다중 bus·그룹 포트를 통합했다. 같은 캔버스의 연결 편집·녹음 상태·스텝·오토메이션이 공존하며, 녹음 시작·정리 중 음악 편집과 Undo의 경쟁을 차단한다. build 23의 실제 편집·바운스·Undo·저장/재열기·닫기 최소화 및 출력별 모션 검증은 [통합 QA](qa/daw-integration-review.md)에 기록했다.
+현재 **`codex/daw-integration`의 0.20.0 build 135**에 녹음 lifecycle과 8방향·다중 bus·그룹 포트를 통합했다. 같은 캔버스의 연결 편집·녹음 상태·스텝·오토메이션이 공존하며, 녹음 시작·정리 중 음악 편집과 Undo의 경쟁을 차단한다. build 23의 실제 편집·바운스·Undo·저장/재열기·닫기 최소화 및 출력별 모션 검증은 [통합 QA](qa/daw-integration-review.md)에 기록했다.
 
-**build134는 MIDI 파일의 pitch bend와 RPN range를 가져온다.** 기본 preserve와 명시적 omit, channel별 오류 안내·schema5·GUI/MCP 동일 적용을 연결했다. 회귀 793개·내부 skip 2개·실패 0개, Release 85.97초와 native 적용/Undo·저장/재열기를 확인했다. 최종 독립 감사와 QA 종료 확인도 통과했다. 곡선 UI·MCP 표현 편집·SMF 내보내기·AU/sampler는 후속 범위다. [검증 기록](docs/156-midi-pitch-bend-import.md).
+**build135는 같은 캔버스의 피치 벤드 편집·MCP 편집과 SMF 표현 내보내기를 연결한다.** 최종 회귀 816개·내부 skip 2개·실패 0개, Release 47.35초와 패키지 검증을 통과했다. 실제 편집·외부 변경 보호·SMF 저장/재가져오기·취소/재시작을 확인했다. UI/artifact 최종 독립 감사도 PASS했으며 물리 청취·모든 backend 지원 완료는 아니다. [검증 기록](docs/157-pitch-bend-edit-and-export.md).
+
+**build134는 MIDI 파일의 pitch bend와 RPN range를 가져온다.** 기본 preserve와 명시적 omit, channel별 오류 안내·schema5·GUI/MCP 동일 적용을 연결했다. 회귀 793개·내부 skip 2개·실패 0개, Release 85.97초와 native 적용/Undo·저장/재열기를 확인했다. 최종 독립 감사와 QA 종료 확인도 통과했다. build134 당시 후속 범위였던 곡선 UI·MCP 표현 편집·SMF 내보내기는 위 build135에서 구현했다. AU/sampler 표현 재생은 남아 있다. [검증 기록](docs/156-midi-pitch-bend-import.md).
 
 **build133은 source별 pitch bend를 내장 신스로 렌더하고 MIDI 가져오기 취소 시 편집 위치를 복원한다.** Core/Audio 회귀 780개·내부 skip 2개·실패 0개와 별도 바운스 저장/복원 검사를 통과했다. 수정 후보 Release 44.41초·패키지 서명, 실제 노트/스텝 복귀·Escape·가져오기/Undo·저장/재열기를 확인했다. build133 당시 SMF bend import/export·곡선 UI·MCP 표현 편집·AU/sampler와 물리 청취는 미지원 또는 미검증 범위였으며, 파일 가져오기는 위 build134에서 구현했다. [검증 기록](docs/155-pitch-bend-synth-and-import-return.md).
 
