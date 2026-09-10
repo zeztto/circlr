@@ -165,11 +165,12 @@ struct AlbumCanvas: NSViewRepresentable {
                     if hit !== self,!hit.isDescendant(of:self){return event}
                     var candidate:NSView?=hit
                     while let view=candidate,view !== self {
-                        if view is OrbitAudioView {return event}
+                        if view is OrbitAudioView || view is NSScrollView {return event}
                         candidate=view.superview
                     }
                 }
-                // Audio owns source-time navigation; elsewhere Shift keeps editor scroll available.
+                // Waveforms own source-time navigation and scroll views own their content.
+                // On the remaining editor surface, Shift still keeps editor scroll available.
                 if event.modifierFlags.contains(.shift), let editor = self.editor, editor.frame.contains(self.convert(event.locationInWindow, from: nil)) { return event }
                 self.scrollWheel(with: event); return nil
             }

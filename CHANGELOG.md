@@ -1,5 +1,11 @@
 # 변경 이력
 
+## 검증 완료 — 0.20.0 build117 오디오 수치 접근·휠 분리
+
+- 파형·도구·수치를 같은 스크롤 영역으로 연결하고640pt 미만 편집 폭에서는2열로 배치. eager field 등록으로 Tab/Shift+Tab 접근 유지.
+- NSScrollView의 휠을 전체 캔버스 확대가 가로채지 않도록 수정. 파형 자체 휠 확대와 빈 공간의 캔버스 확대는 유지하며 Return/Escape 시 파형을 화면에 드러냄.
+- Release46.45초·UUID `1D43D21B-ACD0-3BD6-8ABA-5AD820194588`, native9개 상태·PNG9장 직접 검토·gain/Undo·원본2개 SHA·정확한 재열기 통과. 다른 편집기 전체와 물리I/O 미검증, 사용자 앱 유지. [검증 기록](docs/134-audio-workspace-layout.md).
+
 ## 검증 완료 — 0.20.0 build116 공유 리듬 오디오 편집
 
 - 같은 캔버스에서 공유 리듬의 클립 선택·파형/수치 편집·공유 범위 안내를 연결. trim/fades/volume/beat/tempo·split/duplicate/delete 구현.

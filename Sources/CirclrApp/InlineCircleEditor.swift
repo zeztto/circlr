@@ -37,7 +37,7 @@ struct InlineCircleEditor: View {
                     Text("노트·클립은 모든 사용에 반영").fixedSize()
                         .help("노트·클립 편집은 같은 리듬 패턴을 사용하는 모든 곳에 반영됩니다. 서클 편집 범위 선택과 별개입니다.")
                 } else {
-                Text(store.currentAudioClip != nil && !store.automationVisible && !store.hierarchySettingsOpen && !store.connectionsOpen && store.midiImportDraft==nil ? "파형 위 휠로 확대·축소 · ⇧ 휠로 원본 시간 이동":"휠로 확대·축소 · ⇧ 휠로 편집 영역 이동")
+                Text(store.currentAudioClip != nil && !store.automationVisible && !store.hierarchySettingsOpen && !store.connectionsOpen && store.midiImportDraft==nil ? "파형 위 휠로 확대·축소 · ⇧ 휠로 원본 시간 이동":"빈 공간 휠로 확대·축소 · 목록 위 휠로 스크롤")
                 }; Spacer(); Text("⌘S 저장") }
                 .font(.system(size: 11)).foregroundStyle(StudioTheme.secondary)
         }

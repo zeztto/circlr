@@ -2,6 +2,10 @@
 
 갱신: 2026-09-10. 계획 시작 기준: 0.11 native 앱, 0.12 음악 에이전트 키트 소스. 기존 출고 표기는 0.19.0이며 실행 중 사용자 앱의 별도 관측 버전은0.14다. build115는 mocked lifecycle·presentation·offscreen widget·Release 범위의 제한된 검증을 완료했고 build116의 아래 mixed-candidate 검증도 완료했다. 목표는 송폼 중심의 전문 음악 제작을 먼저 완성하고, 이를 아티스트의 작품·세계관 관리로 확장하는 것이다.
 
+## 검증 완료 — build117 오디오 수치 접근
+
+고정 파형 아래의 좁은 수치 영역을 하나의 스크롤 흐름으로 바꾸고640pt 미만 폭에서2열로 배치했다. 실제 native 검증에서 발견한 캔버스 wheel 가로채기와 화면 밖 파형 포커스 복귀를 수정했다. Release46.45초·native9개 상태·PNG9장, gain/Undo·일반 audio·wheel 역할 분리·exact 재열기·자산 보존을 확인했다. 다른 편집기 전체·물리I/O 검증은 남아 있다. [검증 기록](134-audio-workspace-layout.md).
+
 ## 검증 완료 — build116 공유 리듬 오디오 편집
 
 현행 우선순위의 한 곡 작업 흐름을 따라 공유 리듬 `.rhythmAudio`의 AudioLane 표시를 같은 캔버스의 파형·수치 편집으로 연결한다. 클립 선택·공유 범위 안내·trim/fades/volume/beat/tempo·split/duplicate/delete를 구현했다. Core는 pattern.audio만 원자적으로 변경하고 ordinary graph를 보존하며 stale identity·Undo/재열기·noIO를 검증했다. 실제 baseline115 r14·PNG/AX와 Core7개(offline PCM1개 포함)·0.390초를 확인했다. graph/legacy expanded cycle offset을 검사했으나 legacy 전체 PCM은 미검증이다. 최대2개 keyed cache를 적용했고 final2 Release44.04초·regression32개·native17개 상태를 확인했으나 clip 초안 잔류·저장 선택/viewport 복원을 수정했다. frozen final3 Release42.71초·source v6 review와 보완5개 native 상태를 확인했고 final2 17개와 final3 5개를 구분한 checker·exact Undo/reopen/disk·signed main SHA/UUID·final3 PNG4장 검토를 통과했다. draft-switched 수치는 AX only이며 compact·물리 I/O·legacy 전체 PCM은 미검증이다. QA 종료 후 사용자 PID86114를 유지했다. [계약](132-shared-rhythm-audio-workspace.md).

@@ -21,3 +21,9 @@ stop→stdin EOF→필요 시 TERM/KILL→reap·reader drain·임시 파일 정�
 3. Package·tool·packaging QA.
 
 mock child hang/crash/EOF·stale session·token 재트리거/late off·자손 pipe 상속·launch 전 취소·cleanup을 검증한다. 이 단계에서 실제 HAL은 실행하지 않는다. 실제 음·latency·voice·HAL 복구는 별도 native gate이며 HAL 자체를 정상화했다고 주장하지 않는다. 출력 장치 선택 확장도 별도 범위다.
+
+## 다음 구현에서 유지할 추가 계약
+
+준비 완료 후 worker가 유휴 상태에서 종료되어도 앱의 `ready` 상태가 남지 않아야 한다. Backend의 failure callback은 등록 전 실패도 보존하고, transport가 session을 검증한 뒤 실패·요청 해제·정리를 수행한다. 기존 mock backend에는 기본 no-op 구현을 제공할 수 있다.
+
+Transport가 이미 note·cleanup 구간을 계측하므로 helper에서는 준비 단계 trace만 전달해 중복 시작/완료를 피한다. Host의 note 구간은 ack 대기를, cleanup 구간은 소유 process 정리까지 포함한다. 이 추가 계약도 아직 구현된 기능이 아니다.

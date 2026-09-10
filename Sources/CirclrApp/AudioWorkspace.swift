@@ -138,7 +138,7 @@ extension AppStore {
 
 @MainActor final class AudioEditorFocus {
     weak var view:NSView?
-    func focus(){guard let view else{return};view.window?.makeFirstResponder(view)}
+    func focus(){guard let view else{return};view.scrollToVisible(view.bounds);view.window?.makeFirstResponder(view)}
 }
 
 struct AudioWorkspaceView:View {
@@ -165,7 +165,8 @@ struct AudioWorkspaceView:View {
     var body:some View {
         let scopeIdentity=store.numberEditIdentity
         GeometryReader { geometry in
-        VStack(alignment:.leading,spacing:8) {
+        ScrollView {
+        VStack(alignment:.leading,spacing:10) {
             HStack(spacing:12) {
                 if store.isSharedRhythmAudio {
                     Text("공유 패턴 · 모든 사용에 반영").font(.system(size:11)).fixedSize()
@@ -181,9 +182,7 @@ struct AudioWorkspaceView:View {
             }
             OrbitAudioEditor(store:store,clip:liveClip,asset:asset,viewport:$viewport,focusTarget:focusTarget)
                 .frame(maxWidth:.infinity)
-                .frame(height:min(store.project.usesOrbits ? 160:140,max(80,geometry.size.height-100)))
-            ScrollView {
-            VStack(alignment:.leading,spacing:10) {
+                .frame(height:geometry.size.height < 320 ? 112:(store.project.usesOrbits ? 160:140))
                 if store.isSharedRhythmAudio {
                     if let issue=store.audioSplitIssue {Text("분할: "+issue).font(.system(size:11)).foregroundStyle(StudioTheme.secondary).fixedSize(horizontal:false,vertical:true)}
                     if let issue=store.audioDuplicateIssue,issue != store.audioSplitIssue {Text("복제: "+issue).font(.system(size:11)).foregroundStyle(StudioTheme.secondary).fixedSize(horizontal:false,vertical:true)}
@@ -224,8 +223,7 @@ struct AudioWorkspaceView:View {
                     .disabled(!cursorOutside).help("화면 밖 분할 커서를 현재 배율로 찾기 · C")
                     }.fixedSize(horizontal:true,vertical:false)
                 }
-            Grid(alignment:.leading,horizontalSpacing:16,verticalSpacing:6) {
-                GridRow {
+            AudioWorkspaceFieldLayout {
                     field("배치",unit:"박",value:binding(\.beat),range:0...131072,presentation:.beatPosition)
                     field("원본 시작",unit:"초",value:trimBinding(end:false),range:trim.start)
                         .help("원본 시간 기준 · 파형에서 ← → 시작 조절 · ⇧ 0.1초 · 기본 0.01초")
@@ -233,18 +231,14 @@ struct AudioWorkspaceView:View {
                         .help("원본 시간 기준 · 파형에서 ⌥← → 끝 조절 · ⇧ 0.1초 · 기본 0.01초")
                     field("분할 위치",unit:"초",value:Binding(get:{store.audioCutOffset},set:{store.audioSplitOffset=$0}),range:0...liveClip.duration)
                         .help("선택 시작 기준 · 파형 클릭으로 이동 · ⌘T로 분할")
-                }
-                GridRow {
                     field("볼륨",unit:"dB",value:binding(\.gain),range:0...4,presentation:.gainDecibels)
                     field("페이드 인",unit:"ms",value:fadeBinding(input:true),range:0...max(0,(liveClip.duration-fadeOut)*1000))
                         .help("원본 시간 기준 페이드 · 이전 페이드도 유지")
                     field("페이드 아웃",unit:"ms",value:fadeBinding(input:false),range:0...max(0,(liveClip.duration-fadeIn)*1000))
                         .help("원본 시간 기준 페이드 · 이전 페이드도 유지")
                     field("원본",unit:"BPM",value:binding(\.sourceBPM),range:1...999)
-                }
             }
-            }.padding(.trailing,6)
-            }.frame(maxHeight:.infinity)
+        }.padding(.trailing,6).padding(.bottom,8)
         }
         }
         .environment(\.numberEditing,NumberEditingContext(snapshot:store.numberEditIdentity,current:{store.numberEditIdentity},focusCanvas:{focusTarget.focus()},fieldFocus:fieldFocus))
@@ -288,5 +282,37 @@ struct AudioWorkspaceView:View {
         guarded({(input ? fadeIn:fadeOut)*1000},{value in
             store.applyAudioEdit(.fade(input:input ? value/1000:fadeIn,output:input ? fadeOut:value/1000),label:input ? "페이드 인":"페이드 아웃")
         })
+    }
+}
+
+/// Eager layout keeps every numeric field registered for Tab navigation, including offscreen rows.
+private struct AudioWorkspaceFieldLayout:SwiftUI.Layout {
+    private let horizontalGap:CGFloat=16
+    private let verticalGap:CGFloat=10
+    private func metrics(width:CGFloat,subviews:Subviews)->(columns:Int,cell:CGFloat,heights:[CGFloat]) {
+        let columns=width < 640 ? 2:4
+        let cell=max(0,(width-CGFloat(columns-1)*horizontalGap)/CGFloat(columns))
+        var heights:[CGFloat]=[]
+        for index in subviews.indices {
+            let row=index/columns
+            if row==heights.count {heights.append(0)}
+            heights[row]=max(heights[row],subviews[index].sizeThatFits(.init(width:cell,height:nil)).height)
+        }
+        return (columns,cell,heights)
+    }
+    func sizeThatFits(proposal:ProposedViewSize,subviews:Subviews,cache:inout ())->CGSize {
+        let width=proposal.width ?? 600
+        let layout=metrics(width:width,subviews:subviews)
+        return .init(width:width,height:layout.heights.reduce(0,+)+CGFloat(max(0,layout.heights.count-1))*verticalGap)
+    }
+    func placeSubviews(in bounds:CGRect,proposal:ProposedViewSize,subviews:Subviews,cache:inout ()) {
+        let layout=metrics(width:bounds.width,subviews:subviews)
+        var y=bounds.minY
+        for index in subviews.indices {
+            let row=index/layout.columns,column=index%layout.columns
+            if index>0 && column==0 {y+=layout.heights[row-1]+verticalGap}
+            subviews[index].place(at:.init(x:bounds.minX+CGFloat(column)*(layout.cell+horizontalGap),y:y),anchor:.topLeading,
+                                 proposal:.init(width:layout.cell,height:layout.heights[row]))
+        }
     }
 }

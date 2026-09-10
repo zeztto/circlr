@@ -51,7 +51,7 @@ def capture(name, candidate='final'):
         preserved = directory / 'production-helpers/circlr-output-worker'
         assert hashlib.sha256(preserved.read_bytes()).hexdigest() == injection['productionHelperSHA256']['circlr-output-worker']
     expected_build = package['build']
-    assert expected_build in ['115','116']
+    assert expected_build in ['115','116','117']
     assert candidate != 'baseline', 'Baseline is seed metadata, not a packaged candidate'
     assert package['build'] == expected_build
     assert package['projectID'] == str(uuid.uuid5(uuid.NAMESPACE_URL, 'circlr-integration-qa/shared-audio-workspace')).upper()

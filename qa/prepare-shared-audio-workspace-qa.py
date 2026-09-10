@@ -106,7 +106,7 @@ def package(candidate, binary_dir, info_path):
     binary_dir = binary_dir.resolve()
     original_hashes = {name:hashlib.sha256((binary_dir / name).read_bytes()).hexdigest() for name in names}
     info = plistlib.loads(info_path.read_bytes())
-    assert info['CFBundleVersion'] in ['115','116'] and info['CFBundleShortVersionString'] == '0.20.0'
+    assert info['CFBundleVersion'] in ['115','116','117'] and info['CFBundleShortVersionString'] == '0.20.0'
     source_uuid = subprocess.check_output(['dwarfdump','--uuid',str(binary_dir / 'circlr')],text=True).split()[1]
     app = directory / '써클러 통합 검증.app'
     macos = app / 'Contents/MacOS'; macos.mkdir(parents=True)
