@@ -183,6 +183,21 @@ struct AudioWorkspaceView:View {
             OrbitAudioEditor(store:store,clip:liveClip,asset:asset,viewport:$viewport,focusTarget:focusTarget)
                 .frame(maxWidth:.infinity)
                 .frame(height:geometry.size.height < 320 ? 112:(store.project.usesOrbits ? 160:140))
+            AudioWorkspaceFieldLayout {
+                    field("배치",unit:"박",value:binding(\.beat),range:0...131072,presentation:.beatPosition)
+                    field("원본 시작",unit:"초",value:trimBinding(end:false),range:trim.start)
+                        .help("원본 시간 기준 · 파형에서 ← → 시작 조절 · ⇧ 0.1초 · 기본 0.01초")
+                    field("원본 끝",unit:"초",value:trimBinding(end:true),range:trim.end)
+                        .help("원본 시간 기준 · 파형에서 ⌥← → 끝 조절 · ⇧ 0.1초 · 기본 0.01초")
+                    field("분할 위치",unit:"초",value:Binding(get:{store.audioCutOffset},set:{store.audioSplitOffset=$0}),range:0...liveClip.duration)
+                        .help("선택 시작 기준 · 파형 클릭으로 이동 · ⌘T로 분할")
+                    field("볼륨",unit:"dB",value:binding(\.gain),range:0...4,presentation:.gainDecibels)
+                    field("페이드 인",unit:"ms",value:fadeBinding(input:true),range:0...max(0,(liveClip.duration-fadeOut)*1000))
+                        .help("원본 시간 기준 페이드 · 이전 페이드도 유지")
+                    field("페이드 아웃",unit:"ms",value:fadeBinding(input:false),range:0...max(0,(liveClip.duration-fadeIn)*1000))
+                        .help("원본 시간 기준 페이드 · 이전 페이드도 유지")
+                    field("원본",unit:"BPM",value:binding(\.sourceBPM),range:1...999)
+            }
                 if store.isSharedRhythmAudio {
                     if let issue=store.audioSplitIssue {Text("분할: "+issue).font(.system(size:11)).foregroundStyle(StudioTheme.secondary).fixedSize(horizontal:false,vertical:true)}
                     if let issue=store.audioDuplicateIssue,issue != store.audioSplitIssue {Text("복제: "+issue).font(.system(size:11)).foregroundStyle(StudioTheme.secondary).fixedSize(horizontal:false,vertical:true)}
@@ -223,21 +238,6 @@ struct AudioWorkspaceView:View {
                     .disabled(!cursorOutside).help("화면 밖 분할 커서를 현재 배율로 찾기 · C")
                     }.fixedSize(horizontal:true,vertical:false)
                 }
-            AudioWorkspaceFieldLayout {
-                    field("배치",unit:"박",value:binding(\.beat),range:0...131072,presentation:.beatPosition)
-                    field("원본 시작",unit:"초",value:trimBinding(end:false),range:trim.start)
-                        .help("원본 시간 기준 · 파형에서 ← → 시작 조절 · ⇧ 0.1초 · 기본 0.01초")
-                    field("원본 끝",unit:"초",value:trimBinding(end:true),range:trim.end)
-                        .help("원본 시간 기준 · 파형에서 ⌥← → 끝 조절 · ⇧ 0.1초 · 기본 0.01초")
-                    field("분할 위치",unit:"초",value:Binding(get:{store.audioCutOffset},set:{store.audioSplitOffset=$0}),range:0...liveClip.duration)
-                        .help("선택 시작 기준 · 파형 클릭으로 이동 · ⌘T로 분할")
-                    field("볼륨",unit:"dB",value:binding(\.gain),range:0...4,presentation:.gainDecibels)
-                    field("페이드 인",unit:"ms",value:fadeBinding(input:true),range:0...max(0,(liveClip.duration-fadeOut)*1000))
-                        .help("원본 시간 기준 페이드 · 이전 페이드도 유지")
-                    field("페이드 아웃",unit:"ms",value:fadeBinding(input:false),range:0...max(0,(liveClip.duration-fadeIn)*1000))
-                        .help("원본 시간 기준 페이드 · 이전 페이드도 유지")
-                    field("원본",unit:"BPM",value:binding(\.sourceBPM),range:1...999)
-            }
         }.padding(.trailing,6).padding(.bottom,8)
         }
         }

@@ -1,6 +1,6 @@
 # 현행 개발 계획
 
-기준: 2026-09-10, integration-worktree의 build120 소스(`b06c4a9`)에서 시작해 build123의 소스·검증 기록까지 반영했다. 이 문서는 다음 실행과 완료 판단을 위한 계획이며 [누적 로드맵](25-development-roadmap.md)의 과거 검증 결과를 새로 수행한 검사로 바꾸지 않는다. 전체 DAW·음악 품질·접근성은 아직 완료되지 않았다.
+기준: 2026-09-10, integration-worktree의 build120 소스(`b06c4a9`)에서 시작해 build127의 소스·검증 기록을 기준으로 build128 진행 결과를 반영했다. 이 문서는 다음 실행과 완료 판단을 위한 계획이며 [누적 로드맵](25-development-roadmap.md)의 과거 검증 결과를 새로 수행한 검사로 바꾸지 않는다. 전체 DAW·음악 품질·접근성은 아직 완료되지 않았다.
 
 ## 제품의 완료 방향
 
@@ -36,6 +36,8 @@
 
 ### 2. 한 곡을 끊김 없이 만드는 단일 캔버스
 
+build128 compact의 동일 창에서 오디오 핵심 수치 4개·완전한 스텝6행과 실제 입력/Undo를 확인했다. 최종 재열기·production 서명/UUID·독립 13개 compact capture 감사도 통과했다. [가시성 검증](147-editor-space.md).
+
 build127에서 세션 내 편곡별 오디오·automation·스텝 작업 복귀와 문서 reset·삭제 대상 fallback을 확인했다. 소스 검토·Release·최종 15개 capture 감사·r62 재열기/disk 일치·production 서명/UUID를 통과했다. 도구 한글 입력은 TextEdit와 써클러에서 동일하게 축소됐으며 실제 IME는 미검증이다. [복귀/입력 진단](146-input-delivery-and-arrangement-return.md).
 
 build126은 적용 A를 유지한 강조 B 이름 변경·강조 유지·Undo/Redo를 검증했다. 최종 Release는 통과했고 저장/재열기·독립7개 snapshot 감사·production 서명/UUID도 통과했다. 당시 후속으로 정한 도구/앱 입력 비교와 편곡별 복귀는 위 build127에서 진행했다. 실제 한국어 IME 검증은 남아 있다. [이름 변경 검증](145-inactive-arrangement-rename.md).
@@ -51,6 +53,8 @@ build122 진행: 새 앨범에서 첫 섹션 생성 동선을 확인했고, 공�
 **의존·경계:** [공유 리듬 오디오](132-shared-rhythm-audio-workspace.md), [오디오 배치](134-audio-workspace-layout.md), [신스 접근](136-synth-parameter-access.md), [콘솔 복원](137-console-preferences.md). 입출력을 차단한 QA로 편집 동선은 진행할 수 있지만 소리·녹음을 완료했다고 말할 수 없다.
 
 ### 3. 전자음악의 표현 편집과 엔진 계약 확장
+
+다음 실질 엔진 작업은 [신스 cutoff automation 계획](148-synth-cutoff-automation-plan.md)의 descriptor·voice 보존 DSP·GUI/MCP·PCM·바운스/복원이다. 절대 Hz와 Hz 선형/log 표시, 미지원 타깃 거절·schema 경계를 명시한 계획이며 아직 구현하지 않았다.
 
 **다음 행동:** 2번의 제작 흐름에서 필요한 표현을 확인하고, 첫 대상 하나의 저장→편집→MCP→renderer 경로를 끝까지 연결한다. 현재 `AutomationParameter`는 gain/pan뿐이다. 신스 filter 같은 다음 파라미터는 descriptor·단위·범위·초깃값·시간 의미·DSP 반영을 먼저 정한 뒤 UI에 노출한다. plugin parameter는 실제 descriptor와 state 복원 계약을 갖춘 뒤 추가한다.
 

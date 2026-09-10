@@ -55,12 +55,14 @@ extension AppStore {
     }
 }
 
-struct StepEditor:View {
+struct StepEditor<Inspector:View>:View {
     @ObservedObject var store:AppStore
-    let topPitch:Int
+    @Binding var topPitch:Int
     @Binding var state:StepEditorState
     let focusTarget:MIDIEditorFocus
     @Binding var scroll:EditorScrollPosition
+    let inspectorGap:CGFloat
+    @ViewBuilder let inspector:()->Inspector
     @State private var rowRequest:StepRowRequest?
     var grid:StepGrid? {try? StepGrid(subdivisions:state.subdivisions,beats:store.editorBeats)}
     var selected:Note? {store.currentLane?.notes.first{$0.id==store.selectedNoteID}}
@@ -69,22 +71,32 @@ struct StepEditor:View {
         return StepRows.filter(store.stepRows(extra:state.extraPitches),query:state.rowQuery).map(\.pitch)
     }
     var body:some View {
-        if let grid {
-            VStack(spacing:8) {
-                MIDIWorkspaceToolbarLayout {
-                    HStack(spacing:8) {
+        VStack(spacing:8) {
+            MIDIWorkspaceToolbarLayout(gap:4) {
+                MIDIWorkspaceActions(store:store,focusTarget:focusTarget,spacing:6)
+                if let grid {
+                    HStack(spacing:6) {
                     Picker("스텝 행",selection:$state.drumMode){Text("드럼").tag(true);Text("음정").tag(false)}.pickerStyle(.segmented).labelsHidden().frame(width:110)
                     Menu(resolution(state.subdivisions)) {ForEach(StepGrid.resolutions,id:\.self){value in Button(resolution(value)){state.subdivisions=value;state.page=0;reveal();focusTarget.focus()}}}
                         .fixedSize().accessibilityLabel("스텝 분할").help("표시 격자만 바꿉니다. 기존 노트의 타이밍은 유지됩니다")
                     }
-                    HStack(spacing:8) {
+                    HStack(spacing:6) {
+                    if state.drumMode {
+                        StepRowSearch(store:store,state:$state,focusTarget:focusTarget)
+                    } else {
+                        Button{topPitch=max(12,topPitch-12);focusTarget.focus()}label:{Image(systemName:"minus")}.accessibilityLabel("표시 음역 한 옥타브 아래")
+                        Text(Scale.roots[(topPitch-1)%12]+String((topPitch-1)/12-1)).monospacedDigit().help("표시 범위의 가장 높은 음")
+                        Button{topPitch=min(128,topPitch+12);focusTarget.focus()}label:{Image(systemName:"plus")}.accessibilityLabel("표시 음역 한 옥타브 위")
+                    }
+                    }
+                    HStack(spacing:6) {
                     if state.drumMode {
                         Text("\(pitches.count)/\(store.stepRows(extra:state.extraPitches).count)행").fixedSize().monospacedDigit().foregroundStyle(StudioTheme.secondary).font(.system(size:11))
                         CommittedNumberField(title:"드럼 행 MIDI 음높이",value:Binding(get:{Double(state.newPitch)},set:{state.newPitch=Int($0)}),range:0...127,integerOnly:true,width:48)
                         Button{state.rowQuery="";state.extraPitches.insert(state.newPitch);rowRequest=StepRowRequest(pitch:state.newPitch)}label:{Image(systemName:"plus")}.accessibilityLabel("드럼 행 추가")
                     }
                     }
-                    HStack(spacing:8) {
+                    HStack(spacing:6) {
                     Button{page(-1,grid:grid)}label:{Image(systemName:"chevron.left")}.accessibilityLabel("이전 스텝 페이지").disabled(state.page<=0)
                     CommittedNumberField(title:"스텝 페이지",value:Binding(get:{Double(min(state.page,grid.pageCount-1)+1)},set:{state.page=Int($0)-1;store.selectedNoteID=nil}),range:1...Double(grid.pageCount),integerOnly:true,width:48)
                     Text("/ \(grid.pageCount)").fixedSize().monospacedDigit().foregroundStyle(StudioTheme.secondary)
@@ -95,6 +107,9 @@ struct StepEditor:View {
                     }.fixedSize()
                     }
                 }
+            }
+            HStack(alignment:.top,spacing:inspectorGap) {
+                if let grid {
                 VStack(spacing:0) {
                     StepColumnHeader(store:store,meter:store.meter,grid:grid,page:min(state.page,grid.pageCount-1))
                     ScrollView(.vertical) {
@@ -103,12 +118,14 @@ struct StepEditor:View {
                             .rememberEditorScroll($scroll)
                     }
                     if pitches.isEmpty {Text("일치하는 드럼 행이 없습니다").foregroundStyle(StudioTheme.secondary).padding(.vertical,8)}
-                }.frame(minHeight:100,maxHeight:.infinity)
+                }.frame(minHeight:100,maxHeight:.infinity).frame(maxWidth:.infinity)
+                } else {Text("스텝 편집은 131,072박 이하의 음악 서클에서 사용할 수 있습니다").foregroundStyle(StudioTheme.secondary)}
+                inspector()
             }
-            .onChange(of:selected){_,_ in reveal()}
-            .onChange(of:store.editorBeats){_,_ in state.page=min(state.page,(self.grid?.pageCount ?? 1)-1)}
-            .onChange(of:store.stepRowScope){_,_ in rowRequest=nil}
-        } else {Text("스텝 편집은 131,072박 이하의 음악 서클에서 사용할 수 있습니다").foregroundStyle(StudioTheme.secondary)}
+        }
+        .onChange(of:selected){_,_ in reveal()}
+        .onChange(of:store.editorBeats){_,_ in state.page=min(state.page,(self.grid?.pageCount ?? 1)-1)}
+        .onChange(of:store.stepRowScope){_,_ in rowRequest=nil}
     }
     func resolution(_ value:Int)->String {[1:"1/4",2:"1/8",3:"1/8 셋잇단",4:"1/16",6:"1/16 셋잇단",8:"1/32"][value] ?? "1/16"}
     func reveal(){if let selected,let grid,let index=grid.index(at:selected.beat){state.page=index/16}}

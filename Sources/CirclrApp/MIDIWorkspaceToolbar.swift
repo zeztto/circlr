@@ -6,10 +6,22 @@ struct MIDIWorkspaceToolbar<Trailing:View>:View {
     @ObservedObject var store:AppStore
     let focusTarget:MIDIEditorFocus
     @ViewBuilder let trailing:()->Trailing
-    private var sharedPattern:RhythmPattern? {store.editPatternID.flatMap{id in store.project.patterns.first{$0.id==id}}}
     var body:some View {
         MIDIWorkspaceToolbarLayout {
-            HStack(spacing:10) {
+            MIDIWorkspaceActions(store:store,focusTarget:focusTarget)
+            HStack(spacing:10) {trailing()}
+        }.frame(maxWidth:.infinity,alignment:.leading)
+    }
+}
+
+/// One instance of the shared actions in either editor's wrapping toolbar.
+struct MIDIWorkspaceActions:View {
+    @ObservedObject var store:AppStore
+    let focusTarget:MIDIEditorFocus
+    var spacing:CGFloat=10
+    private var sharedPattern:RhythmPattern? {store.editPatternID.flatMap{id in store.project.patterns.first{$0.id==id}}}
+    var body:some View {
+            HStack(spacing:spacing) {
             Picker("MIDI 편집 방식",selection:$store.midiStepMode) {
                 Text(store.project.usesOrbits ? "궤도":"피아노 롤").tag(false)
                 Text("스텝").tag(true)
@@ -37,14 +49,12 @@ struct MIDIWorkspaceToolbar<Trailing:View>:View {
                 .accessibilityLabel(store.midiRecording ? "MIDI 녹음 정지":"MIDI 녹음")
                 .disabled(store.editPatternID != nil)
             }
-            HStack(spacing:10) {trailing()}
-        }.frame(maxWidth:.infinity,alignment:.leading)
     }
 }
 
 /// Reflow existing groups without rebuilding controls or their editing state.
 struct MIDIWorkspaceToolbarLayout:SwiftUI.Layout {
-    private let gap:CGFloat=10
+    var gap:CGFloat=10
     private func arrangement(width:CGFloat,subviews:Subviews)->(positions:[CGPoint],height:CGFloat) {
         var positions:[CGPoint]=[],x:CGFloat=0,y:CGFloat=0,rowHeight:CGFloat=0
         for view in subviews {

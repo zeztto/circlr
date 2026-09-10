@@ -1,5 +1,11 @@
 # 변경 이력
 
+## 검증 완료 — 0.20.0 build128 편집 공간 가시성
+
+- 오디오 핵심 수치 4개를 처음부터 표시하고 스텝 도구 배치를 줄여 같은 창의 완전한 음정 행을 4개에서 6개로 늘렸다. 초기 후보의 2행 미달을 보완한 compact 결과다.
+- 최종 Release 44.07초·드럼 검색/페이지·MIDI 입력/Undo·오디오 오류/trim/분할/Undo를 확인했다. 최종 재열기·production 서명/UUID·독립 13개 compact capture 감사도 통과했다.
+- 물리 오디오·모든 창 크기 검증은 포함하지 않는다. [기록](docs/147-editor-space.md), [후속 cutoff 계획](docs/148-synth-cutoff-automation-plan.md).
+
 ## 검증 완료 — 0.20.0 build127 편곡별 작업 복귀
 
 - GUI/MCP 편곡 선택에서 임시 마지막 주소·workspace로 복귀한다. 문서 reset은 기억을 지우고 무효 대상은 composition으로 돌아간다.
