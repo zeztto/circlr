@@ -25,6 +25,16 @@ void circlr_synth_render_cutoff(CirclrSynth *synth, float *left, float *right, c
 // of that stream's active/releasing voices; later note-ons receive their own seed.
 int circlr_synth_owned_note_on(CirclrSynth *synth, uint64_t streamID, uint64_t voiceID, int pitch, int velocity, double semitones);
 int circlr_synth_owned_note_off(CirclrSynth *synth, uint64_t streamID, uint64_t voiceID);
+// Same render-owner/identity rules as owned events above. pedalDown must be 0/1.
+// With pedalDown=1, key release defers envelope release; voice pitch/filter/phase
+// and ownership remain intact. Already releasing voices cannot be recaptured.
+// The old owned_note_off is exactly the pedalDown=0 path.
+int circlr_synth_owned_note_off_pedal(CirclrSynth *synth, uint64_t streamID, uint64_t voiceID, int pedalDown);
+// Pedal-up (or source-end): release only deferred, no-longer-key-held voices in
+// this stream. Held keys and other streams are unchanged. Missing/stolen voices
+// and repeated releases succeed as no-ops. Both functions return 0 for invalid
+// input before any mutation, 1 otherwise; neither allocates or retains a table.
+int circlr_synth_owned_sustain_release(CirclrSynth *synth, uint64_t streamID);
 int circlr_synth_owned_pitch_bend(CirclrSynth *synth, uint64_t streamID, double semitones);
 
 // Render-consumer only. Both buffers are optional, one value per sample.

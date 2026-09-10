@@ -124,9 +124,12 @@ public enum SectionGraphRenderer {
                                          outputTracks:Set<ID>?=nil)throws {
         let needed=audibleExpressionInstruments(plan,project:project,applyOutputGain:applyOutputGain,outputTracks:outputTracks)
         let sources=audiblePerformanceSources(plan,project:project,applyOutputGain:applyOutputGain,outputTracks:outputTracks)
-        try MIDIPitchBendRenderer.validateSustain(sources.flatMap{plan.midiPerformances[$0] ?? []})
+        try MIDIPitchBendRenderer.validateSustain(sources.flatMap{plan.midiPerformances[$0] ?? []},supportsSustain:true)
         for node in plan.orderedNodes where needed.contains(node.id) {
             let packets=plan.connections.filter{$0.signal == .midi && $0.to.nodeID==node.id && sources.contains($0.from.nodeID)}.flatMap{plan.midiPerformances[$0.from.nodeID] ?? []}
+            if case .instrument(let trackID)=node.content,project.tracks.first(where:{$0.id==trackID})?.instrument.kind != .synthesizer {
+                try MIDIPitchBendRenderer.validateSustain(packets)
+            }
             if packets.contains(where:MIDIPitchBendRenderer.hasPitchExpression),case .instrument(let trackID)=node.content,
                project.tracks.first(where:{$0.id==trackID})?.instrument.kind != .synthesizer {throw unsupportedPitchBend()}
         }

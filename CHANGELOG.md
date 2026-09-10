@@ -1,10 +1,16 @@
 # 변경 이력
 
+## 개발 중 — build149 이후 내장 신스 서스테인 DSP
+
+- 원본 Note 길이를 유지하면서 페달에 따른 key-off 보류·해제와 source/반복 격리를 연결했다. 내장 신스 engine1/2/3의 오프라인 렌더를 지원한다.
+- 전체 Core+선별 Audio 635개·실패0개, 스테레오 WAV 바운스/저장/복원 2개 추가 확인, Release82.91초 및 독립 C/Swift 리뷰를 통과했다.
+- SMF parser·GUI/MCP·실제 장치 연주는 후속 범위다. 설치 앱은 교체하지 않았다. [검증 기록](docs/175-midi-sustain-render.md).
+
 ## 개발 중 — build149 이후 MIDI 서스테인 저장·컴파일
 
 - optional sustain과 schema7, 공유 패턴·테이크 복사, typed import의 offset·길이·이벤트 예산을 연결했다. 반복별 bend/sustain은 하나의 source stream으로 준비한다.
-- 활성 페달의 미지원 렌더와 원본 raw를 버릴 MIDI 저장을 거절한다. all-off PCM·기존 pitch 경계와 비기여 route 보관을 유지한다.
-- 전체 Core+선별 Audio 618개·실패0개, 실제 패키지 저장/재열기와 독립 소스 리뷰를 확인했다. 페달 DSP·SMF parser·GUI/MCP는 후속 범위다. [검증 기록](docs/174-midi-sustain-storage.md).
+- 당시 활성 페달의 미지원 렌더와 원본 raw를 버릴 MIDI 저장을 거절하도록 연결했다. 이후 신스 DSP 지원은 위 최신 기록에 구분했다. all-off PCM·기존 pitch 경계와 비기여 route 보관을 유지했다.
+- 전체 Core+선별 Audio 618개·실패0개, 실제 패키지 저장/재열기와 독립 소스 리뷰를 확인했다. 당시 페달 DSP·SMF parser·GUI/MCP는 후속 범위였으며, DSP 구현은 위 최신 기록에 구분했다. [검증 기록](docs/174-midi-sustain-storage.md).
 
 ## 개발 중 — build149 이후 MIDI 서스테인 Core 기초
 

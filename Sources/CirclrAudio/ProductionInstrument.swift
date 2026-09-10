@@ -23,6 +23,12 @@ public final class SynthEngine {
         let accepted = on ? circlr_synth_owned_note_on(handle,stream,voice,Int32(pitch),Int32(velocity),bend) : circlr_synth_owned_note_off(handle,stream,voice)
         guard accepted == 1 else {throw CirclrError("신스 독립 MIDI note를 적용할 수 없습니다")}
     }
+    func ownedNoteOffPedal(stream:UInt64,voice:UInt64,down:Bool)throws {
+        guard circlr_synth_owned_note_off_pedal(handle,stream,voice,down ? 1:0)==1 else {throw CirclrError("신스 서스테인 note-off를 적용할 수 없습니다")}
+    }
+    func ownedSustainRelease(stream:UInt64)throws {
+        guard circlr_synth_owned_sustain_release(handle,stream)==1 else {throw CirclrError("신스 서스테인 해제를 적용할 수 없습니다")}
+    }
     func ownedBend(stream:UInt64,semitones:Double)throws {
         guard circlr_synth_owned_pitch_bend(handle,stream,semitones) == 1 else {throw CirclrError("신스 피치 벤드 상태를 적용할 수 없습니다")}
     }
@@ -42,7 +48,7 @@ public enum ProductionInstrument {
         guard instrument.kind == .synthesizer || !automation.contains(where:{$0.parameter == .synthCutoff || $0.parameter == .synthResonance}) else {
             throw CirclrError("필터 cutoff·resonance 오토메이션은 내장 신스에만 적용할 수 있습니다")
         }
-        try MIDIPitchBendRenderer.validateSustain(performances)
+        try MIDIPitchBendRenderer.validateSustain(performances,supportsSustain:instrument.kind == .synthesizer)
         guard !performances.contains(where:MIDIPitchBendRenderer.hasPitchExpression) || instrument.kind == .synthesizer else { throw CirclrError("피치 벤드 연주는 내장 신스에서만 렌더할 수 있습니다") }
         if instrument.kind == .synthesizer {
             if !performances.isEmpty { return try synth(notes,patch:instrument.synth ?? SynthPatch(),clock:clock,tail:tail,automation:automation,performances:performances) }

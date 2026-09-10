@@ -5,7 +5,7 @@
 #define VOICES 64
 #define EVENTS 2048
 #define TAU 6.28318530717958647692
-typedef struct { int pitch, active, released; uint64_t streamID, voiceID; double lastL,lastR; double age, releaseAge, releaseLevel, level, velocity, frequency, phase[7], tinePhase, l1,l2,r1,r2; } Voice;
+typedef struct { int pitch, active, released, keyHeld, deferredRelease; uint64_t streamID, voiceID; double lastL,lastR; double age, releaseAge, releaseLevel, level, velocity, frequency, phase[7], tinePhase, l1,l2,r1,r2; } Voice;
 typedef struct { int pitch, velocity, on; } Event;
 struct CirclrSynth { int style,version; double resonance,width,filterEnvelope,stealL,stealR; double cutoff,attack,decay,sustain,release,detune; Voice voices[VOICES]; Event events[EVENTS]; atomic_uint read,write; atomic_bool overflow; double character,motion,motionPhase; unsigned chorusWrite; float chorusL[2048],chorusR[2048]; };
 CirclrSynth *circlr_synth_create(int style,double cutoff,double attack,double decay,double sustain,double release,double detune) {
@@ -57,16 +57,32 @@ int circlr_synth_owned_note_on(CirclrSynth *s,uint64_t streamID,uint64_t voiceID
     Voice *v=&s->voices[chosen];
     if(s->version>=2 && v->active){s->stealL+=v->lastL;s->stealR+=v->lastR;}
     *v=(Voice){0};v->active=1;v->pitch=pitch;v->velocity=fmin(127,velocity)/127.0;v->frequency=frequency;
-    v->streamID=streamID;v->voiceID=voiceID;
+    v->streamID=streamID;v->voiceID=voiceID;v->keyHeld=1;
     for(int n=0;n<7;n++)v->phase[n]=fmod(n*0.173+pitch*0.019,1);
     return 1;
 }
 int circlr_synth_owned_note_off(CirclrSynth *s,uint64_t streamID,uint64_t voiceID) {
-    if(!s || !streamID || !voiceID)return 0;
+    return circlr_synth_owned_note_off_pedal(s,streamID,voiceID,0);
+}
+int circlr_synth_owned_note_off_pedal(CirclrSynth *s,uint64_t streamID,uint64_t voiceID,int pedalDown) {
+    if(!s || !streamID || !voiceID || (pedalDown!=0 && pedalDown!=1))return 0;
     for(int i=0;i<VOICES;i++){
         Voice *v=&s->voices[i];
         if(v->active && v->streamID==streamID && v->voiceID==voiceID && !v->released){
-            v->released=1;v->releaseLevel=v->level;break;
+            v->keyHeld=0;
+            if(pedalDown){v->deferredRelease=1;}
+            else{v->deferredRelease=0;v->released=1;v->releaseLevel=v->level;}
+            break;
+        }
+    }
+    return 1;
+}
+int circlr_synth_owned_sustain_release(CirclrSynth *s,uint64_t streamID) {
+    if(!s || !streamID)return 0;
+    for(int i=0;i<VOICES;i++){
+        Voice *v=&s->voices[i];
+        if(v->active && v->streamID==streamID && !v->keyHeld && v->deferredRelease && !v->released){
+            v->deferredRelease=0;v->released=1;v->releaseLevel=v->level;
         }
     }
     return 1;

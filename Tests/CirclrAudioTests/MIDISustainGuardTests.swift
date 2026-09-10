@@ -38,6 +38,11 @@ final class MIDISustainGuardTests:XCTestCase {
         XCTAssertNoThrow(try MIDIPitchBendRenderer.validateSustain([packet(events:states)]))
         XCTAssertThrowsError(try MIDIPitchBendRenderer.validateSustain([packet(events:states+[.init(seconds:1,state:.init(rawValue:0))])]))
     }
+    func testActiveSustainBudgetIncludesInitialAndSyntheticEnd()throws {
+        let states=Array(repeating:MIDITimedSustainState(seconds:1,state:.init(rawValue:0)),count:999997)
+        XCTAssertNoThrow(try MIDIPitchBendRenderer.validateSustain([packet(raw:64,events:states)],supportsSustain:true))
+        XCTAssertThrowsError(try MIDIPitchBendRenderer.validateSustain([packet(raw:64,events:states+[.init(seconds:1,state:.init(rawValue:0))])],supportsSustain:true))
+    }
     private func fixture()throws->(Project,SectionSignalPlan,MusicClock) {
         var p=Project();_=p.addTrack(name:"pedal");_=p.addSection(name:"A",at:Point(),bars:1)
         p.tracks[0].instrument = .synthesizer(.keys)
@@ -49,11 +54,14 @@ final class MIDISustainGuardTests:XCTestCase {
         plan.midiPerformances[source]=[packet(raw:127)]
         return (p,plan,clock)
     }
-    func testActiveSustainRejectsBeforeAUHelperAndDirectSynth()async throws {
+    func testActiveSustainRejectsBeforeAUHelperButAllowsSynth()async throws {
         var (p,plan,clock)=try fixture();p.tracks[0].instrument.kind = .audioUnit;p.tracks[0].instrument.plugin=nil
         do {_=try await SectionGraphRenderer.render(plan,project:p,root:nil,clock:clock,tail:0);XCTFail("Sustain must reject before AU preparation")}
         catch {XCTAssertTrue(error.localizedDescription.contains("Sustain"),error.localizedDescription)}
-        XCTAssertThrowsError(try ProductionInstrument.synth([],patch:SynthPatch(),clock:clock,tail:0,performances:[packet(raw:127)]))
+        for version in 1...3 {
+            var patch=SynthPatch();patch.engineVersion=version
+            XCTAssertNoThrow(try ProductionInstrument.synth([],patch:patch,clock:clock,tail:0,performances:[packet(raw:127)]))
+        }
     }
     func testMutedDisconnectedAndZeroGainPathsDoNotBlockStoredSustain()throws {
         let (p,plan,_)=try fixture()
@@ -83,14 +91,15 @@ final class MIDISustainGuardTests:XCTestCase {
         }
     }
     func testPreOutputBounceMustNotHideSustainBehindDestinationMute()throws {
-        let (p,plan,_)=try fixture();var muted=plan
+        var (p,plan,_)=try fixture();p.tracks[0].instrument.kind = .audioUnit;var muted=plan
         let output=try XCTUnwrap(muted.orderedNodes.firstIndex{if case .output=$0.content{return true};return false})
         muted.orderedNodes[output].muted=true;muted.orderedNodes[output].gain=0
         XCTAssertNoThrow(try SectionGraphRenderer.validatePitchBendSupport(muted,project:p))
         XCTAssertThrowsError(try SectionGraphRenderer.validatePitchBendSupport(muted,project:p,applyOutputGain:false))
     }
     func testUnusedRouterPortAndZeroRouteRenderSilenceButActiveRouteFails()async throws {
-        var (p,_,clock)=try fixture();var graph=try XCTUnwrap(p.sections[0].graph)
+        var (p,_,clock)=try fixture();p.tracks[0].instrument.kind = .audioUnit;p.tracks[0].instrument.plugin=nil
+        var graph=try XCTUnwrap(p.sections[0].graph)
         let instrument=try XCTUnwrap(graph.nodes.first{if case .instrument=$0.content{return true};return false})
         let output=try XCTUnwrap(graph.nodes.first{if case .output=$0.content{return true};return false})
         graph.edges.removeAll{$0.signal == .audio}

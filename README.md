@@ -10,7 +10,7 @@ macOS용 앨범·송폼 궤도 편집기. **앨범 → 곡·악장 → 섹션 �
 
 **build149는 낮은 오토메이션 화면에서 곡선을 보며 수치와 안내를 스크롤한다.** controls wheel과 canvas zoom을 구분하고, 서클 확대·축소 중 수치 초안 보존·오류 복구·범위 맞춤을 확인했다. 최종 Release 48.72초와 data·패키지 검증을 통과했다. [검증 범위](docs/172-automation-guidance.md).
 
-후속 개발로 MIDI CC64의 raw 값·순서를 프로젝트 schema7과 반복별 연주 데이터에 연결했다. 전체 Core+선별 Audio 618개 검사를 통과했고, 미지원 출력의 조용한 표현 손실을 차단했다. 실제 페달 DSP·SMF parser·GUI/MCP 편집은 아직 연결하지 않았다. [저장·컴파일 검증](docs/174-midi-sustain-storage.md), [전체 구현 계획](docs/173-midi-sustain-plan.md).
+후속 개발로 MIDI CC64를 프로젝트 schema7·반복별 연주 데이터·내장 신스 engine1/2/3의 오프라인 DSP에 연결했다. 전체 Core+선별 Audio 635개와 Release를 통과했고, 페달 유지·해제·source 격리와 바운스/복원을 검증했다. SMF parser·GUI/MCP 페달 편집과 실제 장치 연주는 아직 후속 범위다. [서스테인 렌더 검증](docs/175-midi-sustain-render.md), [전체 구현 계획](docs/173-midi-sustain-plan.md).
 
 **build148은 신스 cutoff·resonance에서 해당 오토메이션으로 바로 이동한다.** 같은 대상·범위를 유지하며 유효 초안은 한 번 확정하고 잘못된 입력은 이동을 차단한다. 단순 열기의 곡선 불변과 실제 직접 진입·Undo, Release 48.28초를 확인했다. [검증 기록](docs/171-synth-automation-shortcuts.md).
 

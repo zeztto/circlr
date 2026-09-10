@@ -17,15 +17,17 @@ enum MIDIPitchBendRenderer {
         stream.hasPitchBendExpression || stream.initialPitchBend.rawValue != 8192 ||
         stream.initialPitchBend.range != MIDIPitchBendRange() || !stream.pitchBendStates.isEmpty
     }
-    /// Until pedal DSP exists, valid all-off packets are effect-free; any down
-    /// transition must fail rather than silently shorten held notes.
-    static func validateSustain(_ streams:[MIDIPerformanceStream])throws {
+    static func hasActiveSustain(_ stream:MIDIPerformanceStream)->Bool {
+        stream.initialSustain.isDown || stream.sustainStates.contains{$0.state.isDown}
+    }
+    /// Validate every packet before backend selection; all-off packets are effect-free.
+    static func validateSustain(_ streams:[MIDIPerformanceStream],supportsSustain:Bool=false)throws {
         var budget=0,ids=Set<ID>()
         for stream in streams {
             try Task.checkCancellation()
             guard stream.notes.count<=500000,stream.pitchBendStates.count<=1_000_000,
                   stream.sustainStates.count<=1_000_000 else {throw CirclrError("서스테인(Sustain) 연주 이벤트 수를 확인하세요")}
-            let cost=stream.notes.count*2+stream.pitchBendStates.count+stream.sustainStates.count+1
+            let cost=stream.notes.count*2+stream.pitchBendStates.count+stream.sustainStates.count+1+(hasActiveSustain(stream) ? 2:0)
             guard cost<=1_000_000-budget else {throw CirclrError("서스테인(Sustain)·피치 벤드 연주 이벤트가 너무 많습니다")}
             budget+=cost
             guard !stream.id.isEmpty,!stream.sourceNodeID.isEmpty,ids.insert(stream.id).inserted,
@@ -39,7 +41,7 @@ enum MIDIPitchBendRenderer {
                       (0...127).contains(event.state.rawValue) else {throw CirclrError("서스테인(Sustain) 연주 값·시간순서·범위를 확인하세요")}
                 previous=event.seconds;down = down || event.state.isDown
             }
-            if down {throw CirclrError("서스테인(Sustain)(CC64) 오디오 렌더는 아직 지원하지 않습니다. 페달 표현을 제거한 뒤 렌더하세요")}
+            if down && !supportsSustain {throw CirclrError("서스테인(Sustain)(CC64) 연주는 내장 신스에서만 렌더할 수 있습니다")}
         }
     }
     private struct NoteKey:Hashable {
@@ -49,8 +51,9 @@ enum MIDIPitchBendRenderer {
     private enum Action {
         case off(stream:UInt64,voice:UInt64,pitch:Int)
         case bend(stream:UInt64,semitones:Double)
+        case pedal(stream:UInt64,down:Bool)
         case on(stream:UInt64,voice:UInt64,pitch:Int,velocity:Int)
-        var priority:Int {switch self {case .off:return 0;case .bend:return 1;case .on:return 2}}
+        var priority:Int {switch self {case .off:return 0;case .bend,.pedal:return 1;case .on:return 2}}
     }
     private struct Event {let frame:Int;let order:Int;let action:Action}
 
@@ -60,7 +63,7 @@ enum MIDIPitchBendRenderer {
             throw CirclrError("신스 연주 event 수·렌더 block 크기를 확인하세요")
         }
         guard patch.engineVersion>=2 || !automation.contains(where:{$0.parameter == .synthResonance}) else {throw CirclrError("Resonance 오토메이션은 내장 신스 engine 2·3에서만 지원합니다")}
-        try validateSustain(performances)
+        try validateSustain(performances,supportsSustain:true)
         let frames=try ProductionInstrument.frameCount(clock:clock,tail:tail)
         var budget=notes.count*2, available:[NoteKey:Int]=[:]
         for note in notes {
@@ -69,6 +72,7 @@ enum MIDIPitchBendRenderer {
             available[NoteKey(note),default:0]+=1
         }
         var identities=Set<ID>(),allCenter=true
+        let anyPedal=performances.contains(where:hasActiveSustain)
         var owners:[NoteKey:[UInt64]]=[:]
         func validateState(_ state:MIDIPitchBendState)throws {
             guard (0...16383).contains(state.rawValue) else {throw CirclrError("피치 벤드 raw 값을 확인하세요")}
@@ -85,6 +89,10 @@ enum MIDIPitchBendRenderer {
             budget+=1+stream.pitchBendStates.count
             guard stream.sustainStates.count<=1_000_000-budget else {throw CirclrError("서스테인(Sustain)·피치 벤드 연주 이벤트가 너무 많습니다")}
             budget+=stream.sustainStates.count
+            if hasActiveSustain(stream) {
+                guard budget<=999998 else {throw CirclrError("서스테인 종료 이벤트를 포함한 연주 이벤트가 너무 많습니다")}
+                budget+=2 // initial pedal and synthetic end release
+            }
             try validateState(stream.initialPitchBend)
             allCenter = allCenter && stream.initialPitchBend.semitones == 0
             var previous=stream.startSeconds
@@ -97,7 +105,7 @@ enum MIDIPitchBendRenderer {
             for note in stream.notes {
                 try ArrangementCompiler.validateNote(note)
                 let onset=clock.seconds(at:note.beat)
-                guard note.beat<clock.beats,onset+1e-9>=stream.startSeconds,(note.beat+note.length).isFinite,
+                guard note.beat<clock.beats,onset+1e-9>=stream.startSeconds,onset<stream.endSeconds,(note.beat+note.length).isFinite,
                       let remaining=available[NoteKey(note)],remaining>0 else {
                     throw CirclrError("피치 벤드 연주의 MIDI note 출처·위치를 확인하세요")
                 }
@@ -106,7 +114,7 @@ enum MIDIPitchBendRenderer {
             }
         }
         // This exact old path preserves allocation/order/phase/limiter behavior.
-        if allCenter {return try ProductionInstrument.synth(notes,patch:patch,clock:clock,tail:tail,automation:automation,blockSize:blockSize)}
+        if allCenter && !anyPedal {return try ProductionInstrument.synth(notes,patch:patch,clock:clock,tail:tail,automation:automation,blockSize:blockSize)}
         var events:[Event]=[]
         func append(_ frame:Int,_ action:Action) {events.append(.init(frame:frame,order:events.count,action:action))}
         func frame(_ seconds:Double)throws->Int {
@@ -123,13 +131,28 @@ enum MIDIPitchBendRenderer {
             append(max(first+1,last),.off(stream:stream,voice:voice,pitch:note.pitch))
         }
         for (index,stream) in performances.enumerated() {
+            try Task.checkCancellation()
             let owner=UInt64(index+2)
             append(try frame(stream.startSeconds),.bend(stream:owner,semitones:stream.initialPitchBend.semitones))
-            for state in stream.pitchBendStates {append(try frame(state.seconds),.bend(stream:owner,semitones:state.state.semitones))}
+            for (index,state) in stream.pitchBendStates.enumerated() {
+                if index%256==0 {try Task.checkCancellation()}
+                append(try frame(state.seconds),.bend(stream:owner,semitones:state.state.semitones))
+            }
+            if hasActiveSustain(stream) {
+                append(try frame(stream.startSeconds),.pedal(stream:owner,down:stream.initialSustain.isDown))
+                for (index,state) in stream.sustainStates.enumerated() {
+                    if index%256==0 {try Task.checkCancellation()}
+                    append(try frame(state.seconds),.pedal(stream:owner,down:state.state.isDown))
+                }
+                // Last among this stream's same-frame controllers. Key-held voices
+                // remain alive; only note-offs deferred by this pedal are released.
+                append(try frame(stream.endSeconds),.pedal(stream:owner,down:false))
+            }
         }
         // Preserve original fan-in note order, including equal-time voice allocation.
         var consumed:[NoteKey:Int]=[:]
-        for note in notes {
+        for (noteIndex,note) in notes.enumerated() {
+            if noteIndex%256==0 {try Task.checkCancellation()}
             let key=NoteKey(note),index=consumed[key,default:0]
             if let matches=owners[key],index<matches.count {
                 try addNote(note,stream:matches[index]);consumed[key]=index+1
@@ -144,16 +167,20 @@ enum MIDIPitchBendRenderer {
         var result=PCM(frames:frames),cutoff=try SynthCutoffCursor(automation),resonance=try SynthResonanceCursor(automation)
         var cutoffSamples=[Double](repeating:patch.cutoff,count:blockSize)
         var resonanceSamples=[Double](repeating:patch.resonance,count:blockSize)
-        var currentBend=[Double](repeating:0,count:performances.count+2),cursor=0,index=0
+        var currentBend=[Double](repeating:0,count:performances.count+2)
+        var currentPedal=[Bool](repeating:false,count:performances.count+2),cursor=0,index=0
         while cursor<frames {
             try Task.checkCancellation()
             while index<events.count && events[index].frame<=cursor {
                 let action=events[index].action
                 switch action {
-                case .off(let stream,let voice,let pitch):try engine.ownedNote(stream:stream,voice:voice,pitch:pitch,velocity:0,on:false,bend:0)
+                case .off(let stream,let voice,_):try engine.ownedNoteOffPedal(stream:stream,voice:voice,down:currentPedal[Int(stream)])
                 case .bend(let stream,let semitones):
                     currentBend[Int(stream)]=semitones
                     try engine.ownedBend(stream:stream,semitones:semitones)
+                case .pedal(let stream,let down):
+                    currentPedal[Int(stream)]=down
+                    if !down {try engine.ownedSustainRelease(stream:stream)}
                 case .on(let stream,let voice,let pitch,let velocity):
                     try engine.ownedNote(stream:stream,voice:voice,pitch:pitch,velocity:velocity,on:true,bend:currentBend[Int(stream)])
                 }
