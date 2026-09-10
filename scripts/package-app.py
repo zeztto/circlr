@@ -17,6 +17,9 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('binary', type=Path)
     args = parser.parse_args()
+    audition_worker = args.binary.with_name("circlr-audition-worker")
+    if not audition_worker.is_file():
+        raise ValueError("Build circlr-audition-worker beside the app binary before packaging")
     output_worker = args.binary.with_name("circlr-output-worker")
     if not output_worker.is_file():
         raise ValueError("Build circlr-output-worker beside the app binary before packaging")
@@ -50,6 +53,7 @@ def main():
         (stage / 'Contents/MacOS').mkdir(parents=True)
         (stage / 'Contents/Resources').mkdir()
         shutil.copy2(args.binary, stage / 'Contents/MacOS/circlr')
+        shutil.copy2(audition_worker, stage / 'Contents/MacOS/circlr-audition-worker')
         shutil.copy2(output_worker, stage / 'Contents/MacOS/circlr-output-worker')
         shutil.copy2(au_effect_worker, stage / 'Contents/MacOS/circlr-au-effect-worker')
         shutil.copy2(au_instrument_worker, stage / 'Contents/MacOS/circlr-au-instrument-worker')
@@ -70,6 +74,8 @@ def main():
             raise ValueError('Bundled icon differs from source')
         if (stage / 'Contents/Resources/Assets.car').read_bytes() != catalog_source.read_bytes():
             raise ValueError('Bundled icon catalog differs from source')
+        subprocess.run(['codesign', '--force', '--sign', '-', str(stage / 'Contents/MacOS/circlr-audition-worker')], check=True)
+        subprocess.run(['codesign', '--verify', '--strict', str(stage / 'Contents/MacOS/circlr-audition-worker')], check=True)
         subprocess.run(['codesign', '--force', '--sign', '-', str(stage / 'Contents/MacOS/circlr-output-worker')], check=True)
         subprocess.run(['codesign', '--force', '--sign', '-', str(stage / 'Contents/MacOS/circlr-au-effect-worker')], check=True)
         subprocess.run(['codesign', '--force', '--sign', '-', str(stage / 'Contents/MacOS/circlr-au-instrument-worker')], check=True)

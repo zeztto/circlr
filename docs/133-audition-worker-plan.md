@@ -1,10 +1,10 @@
 # 악기 미리 듣기 worker 격리 계획
 
-상태: 후속 설계만 작성했으며 미구현이다. build116 공유 리듬 오디오 편집의 완료 범위와 분리한다. 실제 음·latency·voice·HAL 복구를 검증한 결과가 아니다.
+상태: build118에서 protocol/service/process proxy·패키징과 mock lifecycle 검증을 구현했다. [구현 검증 기록](135-audition-worker-isolation.md)을 함께 읽는다. 실제 음·latency·voice·HAL 복구는 아직 미검증이다.
 
 ## 프로세스와 연주 수명
 
-악기 target마다 지속되는 `circlr-audition-worker` 하나를 두고 앱은 process proxy로 접근한다. note마다 offline worker를 실행하지 않는다. 지속 voice·note-off·oneShot 의미를 보존해야 한다. NativeAuditionBackend를 helper 전용 파일로 이동하고 LiveSynth/LiveSampler/AUHost를 재사용한다. 앱의 기존 mock factory는 유지한다.
+악기 target마다 지속되는 `circlr-audition-worker` 하나를 두고 앱은 process proxy로 접근한다. note마다 offline worker를 실행하지 않는다. 지속 voice·note-off·oneShot 의미를 보존해야 한다. NativeAuditionBackend를 별도 파일로 이동하고 helper service에서 생성하며 LiveSynth/LiveSampler/AUHost를 재사용한다. 앱의 기존 mock factory는 유지한다.
 
 wire는 session UUID·sequence·capability·prepare/ready·token별 note-on/off와 ack·trace/failure·stop/stopped를 포함한다. stdin 독립 reader는 native 작업이 막혀도 취소와 held token 상태를 갱신하여 `isCurrent`에서 관측할 수 있게 한다. host가 ack를 기다릴 때에도 STOP/current=false가 release로 전달되어야 한다. 오래된 token의 note-off가 같은 pitch의 새 note를 끄지 못하게 한다.
 
@@ -26,4 +26,4 @@ mock child hang/crash/EOF·stale session·token 재트리거/late off·자손 pi
 
 준비 완료 후 worker가 유휴 상태에서 종료되어도 앱의 `ready` 상태가 남지 않아야 한다. Backend의 failure callback은 등록 전 실패도 보존하고, transport가 session을 검증한 뒤 실패·요청 해제·정리를 수행한다. 기존 mock backend에는 기본 no-op 구현을 제공할 수 있다.
 
-Transport가 이미 note·cleanup 구간을 계측하므로 helper에서는 준비 단계 trace만 전달해 중복 시작/완료를 피한다. Host의 note 구간은 ack 대기를, cleanup 구간은 소유 process 정리까지 포함한다. 이 추가 계약도 아직 구현된 기능이 아니다.
+Transport가 이미 note·cleanup 구간을 계측하므로 helper에서는 준비 단계 trace만 전달해 중복 시작/완료를 피한다. Host의 note 구간은 ack 대기를, cleanup 구간은 소유 process 정리까지 포함한다. 이 추가 계약은 build118에 구현했다. 등록 시 버퍼링된 실패는 후속 drain에도 유지하며, 정리 중 cancel이나 새 요청이 들어오면 이전 실패 게시를 generation으로 거절한다.

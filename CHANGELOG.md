@@ -1,5 +1,12 @@
 # 변경 이력
 
+## 제한된 검증 완료 — 0.20.0 build118 악기 미리 듣기 worker 격리
+
+- 지속 `circlr-audition-worker`, 필요한 자산만 포함하는 private 요청 파일, 세션·순서·capability·token IPC와 독립 stdin 취소 처리.
+- 준비8초·note 응답2초 제한, STOP/EOF/TERM/KILL·소유 child reap·reader/파일 정리. 실행 중 worker 유휴 종료도 실패 상태로 전달.
+- buffered failure가 대기로 사라지는 문제와 cleanup 중 cancel이 실패에 덮이는 문제를 RED 재현 후 수정. 관련32개 테스트/6.512초 통과, read-only reviewer v3 blocker0.
+- 실제 HAL·악기 음질·연주 latency는 미검증이며 사용자 원본 앱을 교체하지 않았다. [계약과 패키징 검증](docs/135-audition-worker-isolation.md).
+
 ## 검증 완료 — 0.20.0 build117 오디오 수치 접근·휠 분리
 
 - 파형·도구·수치를 같은 스크롤 영역으로 연결하고640pt 미만 편집 폭에서는2열로 배치. eager field 등록으로 Tab/Shift+Tab 접근 유지.

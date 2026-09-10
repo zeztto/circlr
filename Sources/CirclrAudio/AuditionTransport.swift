@@ -18,7 +18,9 @@ public struct AuditionNoteToken:Equatable,Sendable {
 protocol AuditionBackend:AnyObject,Sendable {
     func note(_ pitch:Int,velocity:Int,on:Bool,isCurrent:@escaping @Sendable()->Bool)throws
     func stop()
+    func installFailureHandler(_ handler:@escaping @Sendable(String)->Void)
 }
+extension AuditionBackend {func installFailureHandler(_ handler:@escaping @Sendable(String)->Void){}}
 
 /// UI writes only desired notes. Backend preparation, note work and cleanup never run on MainActor.
 public final class AuditionTransport:@unchecked Sendable {
@@ -26,6 +28,7 @@ public final class AuditionTransport:@unchecked Sendable {
     private struct Request {let id:UUID;let target:AuditionTarget;let control:MediaPreviewCancellation;var notes:[Int:Held]=[:]}
     private let lock=NSLock()
     private var desired:Request?
+    private var intentGeneration=UUID()
     private var value=AuditionStatus()
     private var startedAt:TimeInterval?
     private var traceStartedAt:TimeInterval?
@@ -41,7 +44,7 @@ public final class AuditionTransport:@unchecked Sendable {
     private var preparingID:UUID?
     private var sounding:[Int:AuditionNoteToken]=[:]
 
-    public convenience init(){self.init(timeout:10,diagnosticFactory:{try await NativeAuditionBackend(target:$0,control:$1,report:$2)})}
+    public convenience init(){self.init(timeout:10,diagnosticFactory:{try WorkerAuditionBackend(target:$0,control:$1,report:$2)})}
     convenience init(timeout:TimeInterval,factory:@escaping @Sendable(AuditionTarget,MediaPreviewCancellation)async throws->any AuditionBackend) {
         self.init(timeout:timeout,diagnosticFactory:{target,control,report in
             report(.backendPreparation,.entered)
@@ -76,6 +79,7 @@ public final class AuditionTransport:@unchecked Sendable {
             lock.unlock();schedule();return nil
         }
         if desired?.target.matches(target) != true {
+            intentGeneration=UUID()
             if desired != nil {interruptLocked(.superseded)}
             desired?.control.cancel();desired=Request(id:UUID(),target:target,control:MediaPreviewCancellation())
             let pending=value.pending
@@ -93,7 +97,7 @@ public final class AuditionTransport:@unchecked Sendable {
         lock.unlock();schedule()
     }
     public func cancel() {
-        lock.lock();if desired != nil || value.pending {interruptLocked(.cancelled)}
+        lock.lock();intentGeneration=UUID();if desired != nil || value.pending {interruptLocked(.cancelled)}
         desired?.control.cancel();desired=nil;value.heldNotes=0
         if value.phase != .idle {value.phase = .stopping}
         lock.unlock();schedule()
@@ -105,11 +109,14 @@ public final class AuditionTransport:@unchecked Sendable {
         queue.async {self.lock.lock();self.drainQueued=false;self.lock.unlock();self.drain()}
     }
     private func phase(_ phase:AuditionStatus.Phase,message:String?=nil) {
-        lock.lock();value.phase=phase;value.message=message
+        lock.lock();defer{lock.unlock()};phaseLocked(phase,message:message)
+    }
+    // Caller holds lock so intent validation and publication are atomic.
+    private func phaseLocked(_ phase:AuditionStatus.Phase,message:String?=nil) {
+        value.phase=phase;value.message=message
         if value.pending {if startedAt==nil{startedAt=ProcessInfo.processInfo.systemUptime}}
         else {startedAt=nil;value.elapsedSeconds=0}
         if phase == .idle || phase == .failed {traceAccepting=false}
-        lock.unlock()
     }
     private func discardBackend() {
         guard backend != nil else{return}
@@ -122,7 +129,12 @@ public final class AuditionTransport:@unchecked Sendable {
         guard preparingID==nil else{return}
         let next=request()
         if backendID != next?.id {discardBackend()}
-        guard let next=request() else{phase(.idle);return}
+        guard let next=request() else {
+            // A buffered backend failure can precede an already queued drain.
+            // Explicit cancel or a new note clears failure; an empty drain must not.
+            if status.phase != .failed {phase(.idle)}
+            return
+        }
         guard backendID==next.id,let backend else{prepare(next);return}
         do {
             for (pitch,token) in sounding where next.notes[pitch]?.token != token {
@@ -141,11 +153,26 @@ public final class AuditionTransport:@unchecked Sendable {
             }
             if request()?.id==next.id {phase(.ready)}else{schedule()}
         }catch{
-            lock.lock();let same=desired?.id==next.id
+            lock.lock();let same=desired?.id==next.id;let generation=intentGeneration
             if same {interruptLocked(.failed);desired?.control.cancel();desired=nil;value.heldNotes=0}
             lock.unlock();discardBackend()
-            if same {phase(.failed,message:error.localizedDescription)}else{schedule()}
+            if same {publishFailure(error.localizedDescription,generation:generation)}else{schedule()}
         }
+    }
+    private func backendFailed(_ id:UUID,message:String) {
+        guard backendID==id else{return}
+        lock.lock();let same=desired?.id==id;let generation=intentGeneration
+        if same {interruptLocked(.failed);desired?.control.cancel();desired=nil;value.heldNotes=0}
+        lock.unlock()
+        discardBackend()
+        if same {publishFailure(message,generation:generation)}else{schedule()}
+    }
+    private func publishFailure(_ message:String,generation:UUID) {
+        lock.lock()
+        let current=intentGeneration==generation && desired==nil
+        if current {phaseLocked(.failed,message:message)}
+        lock.unlock()
+        if !current {schedule()}
     }
     private func sendNote(_ backend:any AuditionBackend,id:UUID,pitch:Int,velocity:Int,on:Bool,isCurrent:@escaping @Sendable()->Bool)throws {
         report(id,.note,.entered)
@@ -169,14 +196,19 @@ public final class AuditionTransport:@unchecked Sendable {
                 switch result {
                 case .success(let ready):
                     self.backend=ready;self.backendID=request.id
+                    ready.installFailureHandler{[weak self] message in
+                        guard let self else{return}
+                        self.queue.async{self.backendFailed(request.id,message:message)}
+                    }
                     if self.request()?.id != request.id || request.control.isCancelled {self.discardBackend()}
                     // Release the factory result before preparing a successor on the same queue.
                     self.schedule()
                 case .failure(let error):
                     self.lock.lock();let same=self.desired?.id==request.id
                     if same {self.interruptLocked(.failed);self.desired=nil;self.value.heldNotes=0;request.control.cancel()}
+                    if same {self.phaseLocked(.failed,message:error.localizedDescription)}
                     self.lock.unlock()
-                    if same {self.phase(.failed,message:error.localizedDescription)}else{self.schedule()}
+                    if !same {self.schedule()}
                 }
             }
         }
@@ -191,52 +223,4 @@ public final class AuditionTransport:@unchecked Sendable {
             self.lock.unlock()
         }
     }
-}
-
-private final class NativeAuditionBackend:AuditionBackend,@unchecked Sendable {
-    private var synth:LiveSynth?
-    private var sampler:LiveSampler?
-    private var engine:AVAudioEngine?
-    private var unit:AVAudioUnit?
-    private let drums:Bool
-    init(target:AuditionTarget,control:MediaPreviewCancellation,report:@escaping AuditionDiagnosticReporter)async throws {
-        drums=target.instrument.drums
-        let current:@Sendable()->Bool = {!control.isCancelled}
-        switch target.instrument.kind {
-        case .synthesizer:synth=try LiveSynth(patch:target.instrument.synth ?? SynthPatch(),isCurrent:current,report:report)
-        case .sampler:
-            guard let settings=target.instrument.sample else{throw CirclrError("샘플을 선택하세요")}
-            sampler=try LiveSampler(settings:settings,project:target.project,root:target.root,isCurrent:current,report:report)
-        case .soundBank,.audioUnit:
-            report(.auInstantiation,.entered)
-            let unit=try await AudioUnitHost.instrument(target.instrument)
-            report(.auInstantiation,.completed)
-            guard current() else{throw CancellationError()}
-            report(.engineCreation,.entered)
-            let engine=AVAudioEngine();self.engine=engine;self.unit=unit
-            report(.engineCreation,.completed)
-            report(.mixerAcquisition,.entered)
-            let mixer=engine.mainMixerNode
-            report(.mixerAcquisition,.completed)
-            report(.routing,.entered)
-            engine.attach(unit);engine.connect(unit,to:mixer,format:AVAudioFormat(standardFormatWithSampleRate:PCM.rate,channels:2))
-            report(.routing,.completed)
-            guard current() else{throw CancellationError()}
-            report(.engineStart,.entered)
-            try engine.start()
-            report(.engineStart,.completed)
-        }
-        guard current() else{stop();throw CancellationError()}
-    }
-    func note(_ pitch:Int,velocity:Int,on:Bool,isCurrent:@escaping @Sendable()->Bool)throws {
-        guard !on || isCurrent() else{return}
-        if let synth {synth.note(pitch,velocity:velocity,on:on)}
-        else if let sampler {try sampler.note(pitch,velocity:velocity,on:on,isCurrent:isCurrent)}
-        else {
-            guard let midi=unit?.auAudioUnit.scheduleMIDIEventBlock else{throw CirclrError("선택한 Audio Unit은 MIDI 입력을 지원하지 않습니다")}
-            let bytes:[UInt8]=[(on ? 0x90:0x80)|(drums ? 9:0),UInt8(clamping:pitch),UInt8(clamping:velocity)]
-            bytes.withUnsafeBufferPointer{midi(AUEventSampleTimeImmediate,0,3,$0.baseAddress!)}
-        }
-    }
-    func stop(){synth?.stop();sampler?.stop();engine?.stop()}
 }

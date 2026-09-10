@@ -6,7 +6,9 @@ macOS용 앨범·송폼 궤도 편집기. **앨범 → 곡·악장 → 섹션 �
 
 연결 UI는 [서클 둘레 8방향 IN/OUT과 다중 입출력](docs/22-eight-direction-ports.md)으로 확장 중이다. 포트의 신호 의미와 연결점 배치를 분리한다. 아래 일반 사용법은 배포된 0.19 앱 기준이며 새 포트 기능은 독립 개발 브랜치에서 검증한다.
 
-현재 **`codex/daw-integration`의 0.20.0 build 117**에 녹음 lifecycle과 8방향·다중 bus·그룹 포트를 통합했다. 같은 캔버스의 연결 편집·녹음 상태·스텝·오토메이션이 공존하며, 녹음 시작·정리 중 음악 편집과 Undo의 경쟁을 차단한다. build 23의 실제 편집·바운스·Undo·저장/재열기·닫기 최소화 및 출력별 모션 검증은 [통합 QA](qa/daw-integration-review.md)에 기록했다.
+현재 **`codex/daw-integration`의 0.20.0 build 118**에 녹음 lifecycle과 8방향·다중 bus·그룹 포트를 통합했다. 같은 캔버스의 연결 편집·녹음 상태·스텝·오토메이션이 공존하며, 녹음 시작·정리 중 음악 편집과 Undo의 경쟁을 차단한다. build 23의 실제 편집·바운스·Undo·저장/재열기·닫기 최소화 및 출력별 모션 검증은 [통합 QA](qa/daw-integration-review.md)에 기록했다.
+
+**build118은 악기 미리 듣기를 지속 worker 프로세스로 분리했다.** 준비·응답 시간 제한, 세션·note token 검증, 취소·종료·요청 파일 정리를 적용했다. 유휴 종료와 정리 중 취소의 오류 상태 경쟁을 수정했고 mock 프로세스·transport·진단 테스트32개를 통과했다. 실제 악기 음질·연주 지연·물리 장치 복구는 미검증이다. [검증 기록](docs/135-audition-worker-isolation.md).
 
 **build117은 오디오 수치 편집의 스크롤 접근을 개선했다.** 파형·도구·수치를 같은 스크롤 흐름에 배치하고 작은 서클에서는2열로 표시한다. 편집 영역의 휠을 캔버스 확대가 가로채지 않으며 Return/Escape는 파형 위치까지 복귀한다. Release46.45초·native9개 상태와 PNG9장 검토, gain/Undo·정확한 저장/재열기·자산 보존을 확인했다. 물리 I/O는 미검증이며 사용자 앱은 유지한다. [검증 기록](docs/134-audio-workspace-layout.md).
 
