@@ -22,6 +22,7 @@ struct AlbumCanvas: NSViewRepresentable {
     var animation: Timer?
     var animationDestination: HierarchyCamera?
     var scrollMonitor: Any?
+    private var forwardingAutomationScroll=false
     private var paletteKeyMonitor:Any?
     private var paletteFocusObserver:NSObjectProtocol?
     private var pendingPaletteKeys:[(UUID,NSEvent)]=[]
@@ -163,6 +164,7 @@ struct AlbumCanvas: NSViewRepresentable {
                 if self.store.consoleBounds.contains(self.convert(event.locationInWindow,from:nil)){return event}
                 if let content=self.window?.contentView,let hit=content.hitTest(content.convert(event.locationInWindow,from:nil)) {
                     if hit !== self,!hit.isDescendant(of:self){return event}
+                    if self.forwardAutomationControlsScroll(event){return nil}
                     var candidate:NSView?=hit
                     while let view=candidate,view !== self {
                         if view is OrbitAudioView || view is NSScrollView {return event}
@@ -609,7 +611,29 @@ struct AlbumCanvas: NSViewRepresentable {
         dragNode=nil;dragPreview=nil;dragPositions=[:];panning=false;connecting=nil;connectionToken=nil;refreshPortTools();needsDisplay=true
     }
     override func otherMouseUp(with event:NSEvent){mouseUp(with:event)}
+    private func forwardAutomationControlsScroll(_ event:NSEvent)->Bool {
+        guard !forwardingAutomationScroll,event.window===window,store.automationVisible,!store.project.usesOrbits,
+              let editor,editor.window===window,!editor.isHiddenOrHasHiddenAncestor,
+              editor.visibleRect.contains(editor.convert(event.locationInWindow,from:nil)) else{return false}
+        if let content=window?.contentView,let hit=content.hitTest(content.convert(event.locationInWindow,from:nil)),
+           hit !== self,hit !== editor,!hit.isDescendant(of:editor) {return false}
+        func owner(in view:NSView)->NSScrollView? {
+            guard view.window===window,!view.isHiddenOrHasHiddenAncestor,
+                  view.visibleRect.contains(view.convert(event.locationInWindow,from:nil)) else{return nil}
+            for child in view.subviews.reversed() {if let found=owner(in:child){return found}}
+            guard let scroll=view as? NSScrollView,
+                  scroll.contentView.visibleRect.contains(scroll.contentView.convert(event.locationInWindow,from:nil)),
+                  scroll.contentView.visibleRect.width>0,scroll.contentView.visibleRect.height>0 else{return nil}
+            return scroll
+        }
+        guard let scroll=owner(in:editor) else{return false}
+        forwardingAutomationScroll=true
+        defer{forwardingAutomationScroll=false}
+        scroll.scrollWheel(with:event)
+        return true
+    }
     override func scrollWheel(with event:NSEvent) {
+        if forwardingAutomationScroll || forwardAutomationControlsScroll(event){return}
         let p=convert(event.locationInWindow,from:nil)
         if store.consoleBounds.contains(p){super.scrollWheel(with:event);return}
         if event.modifierFlags.contains(.shift) {setCamera(HierarchyCamera(pan:Point(camera.pan.x-event.scrollingDeltaX,camera.pan.y-event.scrollingDeltaY),zoom:camera.zoom));return}

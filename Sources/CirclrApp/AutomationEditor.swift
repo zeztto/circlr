@@ -102,9 +102,33 @@ extension AppStore {
     }
 }
 
+private struct AutomationControlsHeight:PreferenceKey {
+    static let defaultValue:CGFloat=0
+    static func reduce(value:inout CGFloat,nextValue:()->CGFloat){value=max(value,nextValue())}
+}
+private struct AutomationLinearLayout:SwiftUI.Layout {
+    let controlsHeight:CGFloat
+    private let gap:CGFloat=12
+    func sizeThatFits(proposal:ProposedViewSize,subviews:Subviews,cache:inout ())->CGSize {
+        .init(width:proposal.width ?? 800,height:proposal.height ?? (80+gap+controlsHeight))
+    }
+    func placeSubviews(in bounds:CGRect,proposal:ProposedViewSize,subviews:Subviews,cache:inout ()) {
+        guard subviews.count==2 else{return}
+        if bounds.width>=600 && bounds.width<800 && bounds.height<240 {
+            let width=(bounds.width-gap)/2
+            subviews[0].place(at:bounds.origin,anchor:.topLeading,proposal:.init(width:width,height:max(80,bounds.height)))
+            subviews[1].place(at:.init(x:bounds.minX+width+gap,y:bounds.minY),anchor:.topLeading,proposal:.init(width:width,height:bounds.height))
+        } else {
+            let controls=min(controlsHeight,max(0,bounds.height-80-gap)),plot=max(80,bounds.height-controls-gap)
+            subviews[0].place(at:bounds.origin,anchor:.topLeading,proposal:.init(width:bounds.width,height:plot))
+            subviews[1].place(at:.init(x:bounds.minX,y:bounds.minY+plot+gap),anchor:.topLeading,proposal:.init(width:bounds.width,height:controls))
+        }
+    }
+}
 struct AutomationEditor:View {
     @ObservedObject var store:AppStore
     @State private var focusTarget=AutomationFocusTarget()
+    @State private var linearControlsHeight:CGFloat=88
     @State private var gainFields=NumberFieldFocus(["오토메이션 위치 박","오토메이션 볼륨 dB"],revealOnFocus:true)
     @State private var panFields=NumberFieldFocus(["오토메이션 위치 박","오토메이션 팬 %"],revealOnFocus:true)
     @State private var cutoffFields=NumberFieldFocus(["오토메이션 위치 박","오토메이션 필터 cutoff Hz"],revealOnFocus:true)
@@ -142,15 +166,36 @@ struct AutomationEditor:View {
                 originalToggle
                 pointActions.fixedSize(horizontal:true,vertical:false)
             }
-            plot.frame(minHeight:80,maxHeight:.infinity)
-            HStack(spacing:12) {
-                navigation
-                if let point=store.selectedAutomationPoint {
-                    timeControl(point);valueControl(point);Spacer(minLength:8);shapeControl(point)
-                }else{emptyHint;Spacer(minLength:0)}
-            }.frame(height:32)
-            HStack(spacing:12){scopeText.lineLimit(1);rangeButton;Spacer(minLength:4);if store.selectedAutomationPoint != nil {positionText}else{valueHint.lineLimit(1)}}
-                .font(.system(size:12)).foregroundStyle(StudioTheme.secondary)
+            GeometryReader { geometry in
+                AutomationLinearLayout(controlsHeight:linearControlsHeight) {
+                    plot
+                    ScrollView {
+                        VStack(alignment:.leading,spacing:8) {
+                            MIDIWorkspaceToolbarLayout(gap:12) {
+                                navigation.fixedSize(horizontal:true,vertical:false)
+                                if let point=store.selectedAutomationPoint {
+                                    timeControl(point).fixedSize(horizontal:true,vertical:false)
+                                    valueControl(point).fixedSize(horizontal:true,vertical:false)
+                                    shapeControl(point).fixedSize(horizontal:true,vertical:false)
+                                }else{emptyHint}
+                            }
+                            MIDIWorkspaceToolbarLayout(gap:12) {
+                                Text(compactScopeDescription).fixedSize(horizontal:true,vertical:false)
+                                    .help(scopeDescription+" · "+scopeHelp).accessibilityLabel(scopeDescription+" · "+scopeHelp)
+                                rangeButton.fixedSize(horizontal:true,vertical:false)
+                                if store.selectedAutomationPoint != nil {positionText.fixedSize(horizontal:true,vertical:false)}
+                                Text(shortValueHint).fixedSize(horizontal:true,vertical:false)
+                                    .help(valueHintDescription).accessibilityLabel(valueHintDescription)
+                            }.font(.system(size:12)).foregroundStyle(StudioTheme.secondary)
+                        }.frame(maxWidth:.infinity,alignment:.leading)
+                            .fixedSize(horizontal:false,vertical:true)
+                            .background(GeometryReader { size in
+                                Color.clear.preference(key:AutomationControlsHeight.self,value:size.size.height)
+                            })
+                    }
+                }.frame(width:geometry.size.width,height:geometry.size.height)
+            }.onPreferenceChange(AutomationControlsHeight.self) {if $0>0 {linearControlsHeight=$0}}
+
         }
     }
     var orbital:some View {
@@ -271,19 +316,34 @@ struct AutomationEditor:View {
         }
     }
     var emptyHint:some View {Text(available ? "빈 곳 클릭 또는 점 추가 · Return":"이번 사용에 추가된 서클입니다. 공유 원본 편집을 끄고 조절하세요.").foregroundStyle(StudioTheme.secondary)}
-    var valueHint:Text {
+    var valueHint:Text {Text(valueHintDescription)}
+    private var valueHintDescription:String {
         switch store.automationParameter {
-        case .gain:return Text("0 dB 원래 레벨 · −∞ 무음")
-        case .pan:return Text("−100 왼쪽 · 0 중앙 · +100 오른쪽")
-        case .synthResonance:return Text("0–90% · 선형 눈금과 보간\n곡선이 없거나 꺼지면 신스 설정값 사용 · ↑↓ 1% · ⌥ 0.1% · ⇧ 10%")
-        case .synthCutoff:return Text("40–20,000 Hz · 로그 눈금 · Hz 선형 보간\n곡선이 없거나 꺼지면 신스 설정값 사용 · ↑↓ 100 Hz · ⌥ 1 Hz · ⇧ 1,000 Hz")
+        case .gain:return "0 dB 원래 레벨 · −∞ 무음"
+        case .pan:return "−100 왼쪽 · 0 중앙 · +100 오른쪽"
+        case .synthResonance:return "0–90% · 선형 눈금과 보간\n곡선이 없거나 꺼지면 신스 설정값 사용 · ↑↓ 1% · ⌥ 0.1% · ⇧ 10%"
+        case .synthCutoff:return "40–20,000 Hz · 로그 눈금 · Hz 선형 보간\n곡선이 없거나 꺼지면 신스 설정값 사용 · ↑↓ 100 Hz · ⌥ 1 Hz · ⇧ 1,000 Hz"
         }
     }
-    var scopeText:some View {
+    private var shortValueHint:String {
+        switch store.automationParameter {
+        case .gain,.pan:return valueHintDescription
+        case .synthCutoff:return "40–20k Hz · ↑↓100 · ⌥1 · ⇧1000"
+        case .synthResonance:return "0–90% · ↑↓1 · ⌥0.1 · ⇧10%"
+        }
+    }
+    private var scopeHelp:String {"위치는 서클 시작부터의 4분음표 박입니다. 개별 길이가 없는 오디오의 자동 반복에서도 곡선은 연속 진행합니다."}
+    private var scopeDescription:String {
         let scope=store.editOriginal ? "공유 원본":"이번 사용"
         let timing=store.automationNode?.lengthBeats.map{String(format:"%.2f박 · %d회 반복",$0,store.automationNode?.repeatCount ?? 1)} ?? "서클 시작부터 연속 진행"
-        return Text(scope+" · "+timing).help("위치는 서클 시작부터의 4분음표 박입니다. 개별 길이가 없는 오디오의 자동 반복에서도 곡선은 연속 진행합니다.")
+        return scope+" · "+timing
     }
+    private var compactScopeDescription:String {
+        let scope=store.editOriginal ? "공유 원본":"이번 사용"
+        let timing=store.automationNode?.lengthBeats.map{String(format:"%.10g박 ×%d",$0,store.automationNode?.repeatCount ?? 1)} ?? "연속"
+        return scope+" · "+timing
+    }
+    var scopeText:some View {Text(scopeDescription).help(scopeHelp)}
     @ViewBuilder var rangeButton:some View {
         if hidden>0 || store.automationViewport.fittedBeats != nil {
             Button(hidden>0 ? "전체 점 보기 (\(hidden))":"서클 길이 보기") {

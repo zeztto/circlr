@@ -1,5 +1,11 @@
 # 변경 이력
 
+## 검증 완료 — build149 오토메이션 안내와 compact 편집
+
+- 낮은 화면의 plot·세로 controls 병렬 배치와 줄바꿈 안내를 연결했다. controls wheel의 canvas zoom 전달과 넓은 grid 높이 감소를 수정했다.
+- Release 48.72초·source/package 감사와 native draft resize·invalid 보호·범위 맞춤·wheel·r233 재시작 및 data 감사를 확인했다. 최종 UI 감사는 22쌍 PASS_WITH_EXPLICIT_LIMITS·findings 0개다.
+- 추가 unit/full suite와 폭 600 미만·모든 입력·실제 momentum hardware·물리 I/O는 미실행이다. [기록](docs/172-automation-guidance.md).
+
 ## 검증 완료 — build148 신스 오토메이션 직접 이동
 
 - cutoff/resonance 버튼으로 같은 주소·parameter·scope의 곡선 편집을 연다. 유효 수치 초안은 한 번 확정하고 invalid/빈 이름은 이동을 차단한다.
