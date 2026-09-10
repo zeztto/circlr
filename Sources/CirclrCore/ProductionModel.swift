@@ -113,12 +113,11 @@ public enum MIDIGenerator {
 
 public enum MIDIFile {
     /// Preserves source expression with independent melodic MIDI channels.
-    public static func encode(sources:[(String,Lane)],tempo:Double,meter:Meter,tempoChanges:[TempoChange]=[])throws->Data {
-        guard !sources.contains(where:{$0.1.sustain != nil}) else {throw CirclrError("서스테인 MIDI 파일 저장은 아직 지원하지 않습니다. 페달 표현을 보존할 수 없습니다")}
-        if tempoChanges.isEmpty && !sources.contains(where:{$0.1.pitchBend != nil}) {
+    public static func encode(sources:[(String,Lane)],tempo:Double,meter:Meter,tempoChanges:[TempoChange]=[],sustainEndBeat:Double?=nil)throws->Data {
+        if tempoChanges.isEmpty && !sources.contains(where:{$0.1.pitchBend != nil || $0.1.sustain != nil}) {
             return try encode(lanes:sources.map{($0.0,$0.1.notes)},tempo:tempo,meter:meter)
         }
-        return try MIDIExpressionExport.encode(sources:sources,tempo:tempo,meter:meter,tempoChanges:tempoChanges)
+        return try MIDIExpressionExport.encode(sources:sources,tempo:tempo,meter:meter,tempoChanges:tempoChanges,sustainEndBeat:sustainEndBeat)
     }
     /// SMF format 1, 960 PPQN. Off events sort before on events at the same tick.
     public static func encode(lanes: [(String,[Note])], tempo: Double, meter: Meter) throws -> Data {

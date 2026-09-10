@@ -25,11 +25,13 @@ extension AppStore {
         scope.revision=project.musicRevision
         guard scope==numberEditIdentity,let lane=currentLane,let clock=currentClock else{return}
         let identity=numberEditIdentity,context=currentContext,title=selectedCircle?.title ?? "연주"
+        let sustainEnd:Double? = lane.sustain == nil ? nil:max(clock.beats,lane.notes.map{$0.beat+$0.length}.max() ?? 0,lane.pitchBend?.events.last?.beat ?? 0,lane.sustain?.events.last?.beat ?? 0)
         let panel=NSSavePanel();panel.title="MIDI 저장";panel.nameFieldStringValue=title+".mid";panel.allowedContentTypes=[UTType(filenameExtension:"mid")!]
+        if let sustainEnd {panel.message="피치 벤드와 페달을 보존합니다. \(String(format:"%.10g",sustainEnd))박 길이의 파일 끝에 페달 해제를 추가합니다."}
         guard panel.runModal() == .OK,let url=panel.url else{return}
         guard identity==numberEditIdentity,currentLane==lane,currentContext==context,currentClock==clock else{status="연주나 편집 대상이 바뀌었습니다. MIDI 저장을 다시 실행하세요";return}
         do {
-            let data=try MIDIFile.encode(sources:[(title,lane)],tempo:clock.tempos.first?.bpm ?? context.tempo,meter:context.meter,tempoChanges:Array(clock.tempos.dropFirst()))
+            let data=try MIDIFile.encode(sources:[(title,lane)],tempo:clock.tempos.first?.bpm ?? context.tempo,meter:context.meter,tempoChanges:Array(clock.tempos.dropFirst()),sustainEndBeat:sustainEnd)
             try data.write(to:url,options:.atomic);status="MIDI 저장 완료"
         }catch{fail(error)}
     }

@@ -15,8 +15,8 @@ extension ImportedMIDI {
     public func issues(selectedIDs:Set<String>)->[MIDIImportExpressionIssue] {
         let selected=tracks.filter{selectedIDs.contains($0.id)},channels=Set(selected.map(\.channel))
         var result=expressionIssues.filter{$0.channel == nil || channels.contains($0.channel!)}
-        if selected.contains(where:{$0.channel==9 && $0.pitchBend != nil}) {
-            result.append(.init(channel:9,code:"drum_backend_unsupported",message:"드럼 채널의 피치 벤드 연주는 아직 지원하지 않습니다. 표현 제외를 선택하면 노트만 가져옵니다"))
+        if selected.contains(where:{$0.channel==9 && ($0.pitchBend != nil || $0.sustain != nil)}) {
+            result.append(.init(channel:9,code:"drum_backend_unsupported",message:"드럼 채널의 피치 벤드·sustain 연주는 아직 지원하지 않습니다. 표현 제외를 선택하면 노트만 가져옵니다"))
         }
         return result
     }
@@ -24,7 +24,7 @@ extension ImportedMIDI {
         guard !selectedIDs.isEmpty,selectedIDs.isSubset(of:Set(tracks.map(\.id))) else {throw CirclrError("가져올 MIDI 트랙을 다시 선택하세요")}
         if expressionPolicy == .preserve,let issue=issues(selectedIDs:selectedIDs).first {throw CirclrError(issue.message)}
         return tracks.filter{selectedIDs.contains($0.id)}.map {
-            MIDIImportPart(name:$0.name,notes:$0.notes,drums:$0.channel==9,pitchBend:expressionPolicy == .preserve ? $0.pitchBend:nil)
+            MIDIImportPart(name:$0.name,notes:$0.notes,drums:$0.channel==9,pitchBend:expressionPolicy == .preserve ? $0.pitchBend:nil,sustain:expressionPolicy == .preserve ? $0.sustain:nil)
         }
     }
 }
@@ -33,6 +33,7 @@ extension ImportedMIDI {
 /// AudioToolbox's track numbering is irrelevant: its notes retain MIDI channel.
 struct MIDIExpressionScan {
     var sequences:[Int:MIDIPitchBendSequence]=[:]
+    var sustains:[Int:MIDISustainSequence]=[:]
     var issues:[MIDIImportExpressionIssue]=[]
     var ignoredEvents=0
     private struct Raw {let tick:Int;let order:Int;let status:UInt8;let a:Int;let b:Int}
@@ -40,6 +41,8 @@ struct MIDIExpressionScan {
         var rpnMSB=127,rpnLSB=127,nrpn=false
         var range=MIDIPitchBendRange()
         var hasExplicitExpression=false
+        var hasExplicitSustain=false
+        var sustainEvents:[MIDISustainEvent]=[]
         var events:[MIDIPitchBendEvent]=[]
         var selectors:[Int]=[]
     }
@@ -121,6 +124,11 @@ struct MIDIExpressionScan {
                 consumed.insert(event.order)
             } else if kind==0xb0 {
                 switch event.a {
+                case 64:
+                    guard beat<=131072,channels[ch].sustainEvents.count<100000 else{throw invalid()}
+                    channels[ch].sustainEvents.append(.init(beat:beat,rawValue:event.b))
+                    channels[ch].hasExplicitSustain=true
+                    consumed.insert(event.order)
                 case 101,100:
                     channels[ch].nrpn=false
                     if event.a==101 {channels[ch].rpnMSB=event.b} else{channels[ch].rpnLSB=event.b}
@@ -151,7 +159,8 @@ struct MIDIExpressionScan {
                     }
                 case 121:
                     if event.b==0 {
-                        guard beat<=131072,channels[ch].events.count<100000 else{throw invalid()}
+                        guard beat<=131072,channels[ch].events.count<100000,channels[ch].sustainEvents.count<100000 else{throw invalid()}
+                        channels[ch].sustainEvents.append(.init(beat:beat,rawValue:0))
                         // Reset wheel and parameter selection, retaining sensitivity.
                         channels[ch].events.append(.init(beat:beat,kind:.value(8192)))
                         channels[ch].rpnMSB=127;channels[ch].rpnLSB=127;channels[ch].nrpn=false
@@ -170,6 +179,10 @@ struct MIDIExpressionScan {
         for ch in channels.indices where channels[ch].hasExplicitExpression {
             let sequence=MIDIPitchBendSequence(channel:ch,events:channels[ch].events)
             try sequence.validate();result.sequences[ch]=sequence
+        }
+        for ch in channels.indices where channels[ch].hasExplicitSustain {
+            let sequence=MIDISustainSequence(channel:ch,events:channels[ch].sustainEvents)
+            try sequence.validate();result.sustains[ch]=sequence
         }
         result.ignoredEvents=raw.count-consumed.count
         return result

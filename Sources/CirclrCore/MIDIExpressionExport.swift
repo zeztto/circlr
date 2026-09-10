@@ -4,9 +4,14 @@ import Foundation
 /// exports reserve channel 9 and allocate every source its own melodic channel.
 enum MIDIExpressionExport {
     private struct Event {let tick:Int;let priority:Int;let order:Int;let bytes:[UInt8]}
-    static func encode(sources:[(String,Lane)],tempo:Double,meter:Meter,tempoChanges:[TempoChange])throws->Data {
-        guard !sources.contains(where:{$0.1.sustain != nil}) else {throw CirclrError("서스테인 MIDI 파일 저장은 아직 지원하지 않습니다. 페달 표현을 보존할 수 없습니다")}
-        let expressive=sources.contains{$0.1.pitchBend != nil}
+    static func encode(sources:[(String,Lane)],tempo:Double,meter:Meter,tempoChanges:[TempoChange],sustainEndBeat:Double?=nil)throws->Data {
+        let hasSustain=sources.contains{$0.1.sustain != nil}
+        if hasSustain {
+            guard let end=sustainEndBeat,end.isFinite,end>0,end<=131072 else {
+                throw CirclrError("서스테인 MIDI 저장에는 유한한 0 초과 131072박 이하의 명시적 끝이 필요합니다")
+            }
+        }
+        let expressive=sources.contains{$0.1.pitchBend != nil || $0.1.sustain != nil}
         guard sources.count<256,(!expressive || sources.count<=15),
               [1,2,4,8,16,32].contains(meter.denominator),(1...32).contains(meter.numerator),tempoChanges.count<4096 else {
             throw CirclrError("표현 MIDI는 드럼 채널을 제외한 독립 연주 15개까지 저장합니다. 트랙 수·박자·템포 변화 수를 확인하세요")
@@ -21,6 +26,7 @@ enum MIDIExpressionExport {
             guard beat.isFinite,(0...131072).contains(beat) else{throw CirclrError("MIDI 위치는 유한한 0–131072박이어야 합니다")}
             return Int((beat*960).rounded())
         }
+        let endTick=hasSustain ? try tick(sustainEndBeat!):nil
         func bytes(_ n:Int,_ count:Int)->[UInt8] {(0..<count).reversed().map{UInt8(truncatingIfNeeded:n >> ($0*8))}}
         func variable(_ n:Int)->[UInt8] {var v=n,out=[UInt8(v&127)];v >>= 7;while v>0 {out.insert(UInt8(v&127)|128,at:0);v >>= 7};return out}
         func chunk(_ name:String,_ body:[UInt8])->[UInt8] {Array(name.utf8)+bytes(body.count,4)+body}
@@ -34,7 +40,8 @@ enum MIDIExpressionExport {
         if expressive {
             for (index,source) in sources.enumerated() {
                 try source.1.pitchBend?.validate()
-                if let preferred=source.1.pitchBend?.channel,preferred != 9,used.insert(preferred).inserted {assigned[index]=preferred}
+                try MIDISustainStorage.validate(sustain:source.1.sustain,pitchBend:source.1.pitchBend)
+                if let preferred=source.1.pitchBend?.channel ?? source.1.sustain?.channel,preferred != 9,used.insert(preferred).inserted {assigned[index]=preferred}
             }
             for index in sources.indices where assigned[index]==nil {
                 guard let channel=melodic.first(where:{!used.contains($0)}) else{throw CirclrError("독립 MIDI 채널이 부족합니다")}
@@ -98,9 +105,21 @@ enum MIDIExpressionExport {
                 guard decodedCount<=100000 else {throw CirclrError("RPN을 MIDI 메시지로 변환한 피치 벤드 상태가 채널당 100,000개를 넘습니다")}
                 try range(bend.initialRange,at:0);try wheel(bend.initialValue,at:0)
                 for event in bend.events {
+                    if hasSustain,event.beat>sustainEndBeat! {throw CirclrError("피치 벤드가 서스테인 저장 끝을 넘습니다")}
                     let time=try tick(event.beat)
                     switch event.kind {case .value(let value):try wheel(value,at:time);case .range(let value):try range(value,at:time)}
                 }
+            }
+            if hasSustain {
+                let sustain=lane.sustain ?? MIDISustainSequence()
+                guard sustain.events.count<=99998 else {throw CirclrError("초기값·종료 페달 해제를 포함한 CC64 이벤트가 채널당 100,000개를 넘습니다")}
+                try append(0,1,[UInt8(0xb0|channel),64,UInt8(sustain.initialValue)])
+                for event in sustain.events {
+                    guard event.beat<=sustainEndBeat! else{throw CirclrError("서스테인 이벤트가 저장 끝을 넘습니다")}
+                    try append(try tick(event.beat),1,[UInt8(0xb0|channel),64,UInt8(event.rawValue)])
+                }
+                // Preserve end-tick raw pedal transitions, then release at the explicit source boundary.
+                try append(endTick!,3,[UInt8(0xb0|channel),64,0])
             }
             var noteEnds:[Int:(beat:Double,tick:Int)]=[:]
             let notes=expressive ? lane.notes.enumerated().sorted {
@@ -111,6 +130,11 @@ enum MIDIExpressionExport {
                 try ArrangementCompiler.validateNote(note)
                 let first=try tick(note.beat),last=max(first+1,try tick(note.beat+note.length))
                 guard last<=131072*960 else{throw CirclrError("MIDI note의 최소 tick 길이가 파일 시간 범위를 넘습니다")}
+                if let endTick {
+                    guard note.beat+note.length<=sustainEndBeat!,last<=endTick else {
+                        throw CirclrError("MIDI note가 서스테인 저장 끝 또는 마지막 tick을 넘습니다")
+                    }
+                }
                 if expressive,let prior=noteEnds[note.pitch],note.beat<prior.beat || first<prior.tick {
                     throw CirclrError("\(source.0): 같은 source의 겹치는 pitch \(note.pitch) 노트는 독립 voice ID를 MIDI에 보존할 수 없습니다. 겹침을 정리한 뒤 저장하세요")
                 }

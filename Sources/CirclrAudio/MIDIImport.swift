@@ -8,8 +8,9 @@ public struct ImportedMIDITrack:Identifiable {
     public var channel:Int
     public var notes:[Note]
     public var pitchBend:MIDIPitchBendSequence? = nil
-    public init(id:String,name:String,channel:Int,notes:[Note],pitchBend:MIDIPitchBendSequence?=nil) {
-        self.id=id;self.name=name;self.channel=channel;self.notes=notes;self.pitchBend=pitchBend
+    public var sustain:MIDISustainSequence? = nil
+    public init(id:String,name:String,channel:Int,notes:[Note],pitchBend:MIDIPitchBendSequence?=nil,sustain:MIDISustainSequence?=nil) {
+        self.id=id;self.name=name;self.channel=channel;self.notes=notes;self.pitchBend=pitchBend;self.sustain=sustain
     }
 }
 public struct ImportedMIDI {
@@ -97,7 +98,7 @@ public enum MIDIImport {
             let expression=try MIDIExpressionScan.read(data)
             result.expressionIssues=expression.issues
             result.ignoredPerformanceEvents=expression.ignoredEvents
-            for i in result.tracks.indices {result.tracks[i].pitchBend=expression.sequences[result.tracks[i].channel]}
+            for i in result.tracks.indices {result.tracks[i].pitchBend=expression.sequences[result.tracks[i].channel];result.tracks[i].sustain=expression.sustains[result.tracks[i].channel]}
         } catch is CancellationError {throw CancellationError()}
         catch {result.expressionIssues=[.init(code:"expression_parse_failed",message:error.localizedDescription)]}
         return result

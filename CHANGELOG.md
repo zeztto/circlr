@@ -1,10 +1,15 @@
 # 변경 이력
 
+## 검증 완료 — build150 MIDI 서스테인 파일 연결
+
+- CC64 raw·CC121·preserve/omit와 GUI/MCP 가져오기 preview를 연결했다. midiSustainImport: 1과 명시적 export 끝·합성 pedal-up을 사용한다.
+- Swift 666개·MCP 24개·Release 86.84초와 native preserve import·종료 off export·Undo/Redo를 확인했다. 재열기 manifest 독립 비교도 PASS했으며 GUI drum/cancel·페달 직접 편집·물리 연주는 미검증이다. [기록](docs/176-midi-sustain-file-workflow.md).
+
 ## 개발 중 — build149 이후 내장 신스 서스테인 DSP
 
 - 원본 Note 길이를 유지하면서 페달에 따른 key-off 보류·해제와 source/반복 격리를 연결했다. 내장 신스 engine1/2/3의 오프라인 렌더를 지원한다.
 - 전체 Core+선별 Audio 635개·실패0개, 스테레오 WAV 바운스/저장/복원 2개 추가 확인, Release82.91초 및 독립 C/Swift 리뷰를 통과했다.
-- SMF parser·GUI/MCP·실제 장치 연주는 후속 범위다. 설치 앱은 교체하지 않았다. [검증 기록](docs/175-midi-sustain-render.md).
+- 당시 SMF parser·GUI/MCP·실제 장치 연주는 후속 범위였으며 파일 연결은 위 build150에서 진행한다. 설치 앱은 교체하지 않았다. [검증 기록](docs/175-midi-sustain-render.md).
 
 ## 개발 중 — build149 이후 MIDI 서스테인 저장·컴파일
 

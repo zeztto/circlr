@@ -10,7 +10,7 @@ class MIDIImportMCPTests(unittest.TestCase):
     def args(self,**extra):
         return dict(projectID='p',expectedRevision=3,path='/tmp/score.mid',arrangementID='a',useID='u',**extra)
     def probe(self,**extra):
-        return dict(ok=True,result=dict(projectID='p',revision=3,runtime=dict(capabilities=dict(midiTempoImport=1,midiPitchBendImport=1)),**extra))
+        return dict(ok=True,result=dict(projectID='p',revision=3,runtime=dict(capabilities=dict(midiTempoImport=1,midiPitchBendImport=1,midiSustainImport=1)),**extra))
     def test_default_and_preview_arguments_are_not_injected(self):
         for extra in ({},{'previewOnly':True},{'expressionPolicy':'preserve'},{'expressionPolicy':'omit','previewOnly':True},{'expressionPolicy':'omit'},{'trackIDs':['0:0'],'atBeat':2,'extendSection':True,'tempoPolicy':'applyFile'}):
             args=self.args(**extra)
@@ -31,12 +31,27 @@ class MIDIImportMCPTests(unittest.TestCase):
             p=self.probe();p['result']['runtime']['capabilities']['midiTempoImport']=cap;probes.append(p)
         for cap in [None,False,0,2,'1']:
             p=self.probe();p['result']['runtime']['capabilities']['midiPitchBendImport']=cap;probes.append(p)
+        for cap in [None,False,True,0,2,'1']:
+            p=self.probe();p['result']['runtime']['capabilities']['midiSustainImport']=cap;probes.append(p)
+        missing=self.probe();del missing['result']['runtime']['capabilities']['midiSustainImport'];probes.append(missing)
         for key,value in [('projectID','other'),('revision',4)]:
             p=self.probe();p['result'][key]=value;probes.append(p)
         for p in probes:
             with patch.object(s,'rpc',return_value=p) as rpc:
                 self.assertTrue(s.call_tool('/unused','circlr_import_midi',self.args())['isError'])
                 rpc.assert_called_once();self.assertEqual(rpc.call_args.args[1]['method'],'snapshot')
+    def test_old_app_cannot_silently_drop_sustain_for_any_policy(self):
+        old=self.probe();del old['result']['runtime']['capabilities']['midiSustainImport']
+        for extra in ({},{'previewOnly':True},{'expressionPolicy':'omit'}):
+            with patch.object(s,'rpc',return_value=old) as rpc:
+                self.assertTrue(s.call_tool('/unused','circlr_import_midi',self.args(**extra))['isError'])
+                rpc.assert_called_once()
+    def test_clear_tempo_does_not_require_unrelated_sustain_capability(self):
+        old=self.probe();del old['result']['runtime']['capabilities']['midiSustainImport']
+        args=dict(projectID='p',expectedRevision=3,operations=[dict(kind='clear_use_tempo_override',arrangementID='a',useID='u')])
+        with patch.object(s,'rpc',side_effect=[old,dict(ok=True)]) as rpc:
+            self.assertFalse(s.call_tool('/unused','circlr_apply',args)['isError'])
+            self.assertEqual(rpc.call_count,2)
     def test_preview_is_not_a_readonly_session_bypass(self):
         with patch.object(s,'rpc') as rpc:
             with self.assertRaises(ValueError):s.call_tool('/unused','circlr_import_midi',self.args(previewOnly=True),read_only=True)

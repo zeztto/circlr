@@ -6,11 +6,13 @@ macOS용 앨범·송폼 궤도 편집기. **앨범 → 곡·악장 → 섹션 �
 
 연결 UI는 [서클 둘레 8방향 IN/OUT과 다중 입출력](docs/22-eight-direction-ports.md)으로 확장 중이다. 포트의 신호 의미와 연결점 배치를 분리한다. 아래 일반 사용법은 배포된 0.19 앱 기준이며 새 포트 기능은 독립 개발 브랜치에서 검증한다.
 
-현재 **`codex/daw-integration`의 0.20.0 build 149**에 녹음 lifecycle과 8방향·다중 bus·그룹 포트를 통합했다. 같은 캔버스의 연결 편집·녹음 상태·스텝·오토메이션이 공존하며, 녹음 시작·정리 중 음악 편집과 Undo의 경쟁을 차단한다. build 23의 실제 편집·바운스·Undo·저장/재열기·닫기 최소화 및 출력별 모션 검증은 [통합 QA](qa/daw-integration-review.md)에 기록했다.
+현재 **`codex/daw-integration`의 0.20.0 build 150**에 녹음 lifecycle과 8방향·다중 bus·그룹 포트를 통합했다. 같은 캔버스의 연결 편집·녹음 상태·스텝·오토메이션이 공존하며, 녹음 시작·정리 중 음악 편집과 Undo의 경쟁을 차단한다. build 23의 실제 편집·바운스·Undo·저장/재열기·닫기 최소화 및 출력별 모션 검증은 [통합 QA](qa/daw-integration-review.md)에 기록했다.
+
+**build150은 MIDI 파일의 서스테인 페달을 보존해 가져오고 저장한다.** CC64 raw·CC121·preserve/omit와 명시적 종료 pedal-up을 연결했다. Swift 666개·MCP 24개, 실제 가져오기/내보내기·Undo/Redo와 Release를 확인했다. 페달 직접 편집과 파일 접근 대기의 안내는 후속 범위다. [검증 기록](docs/176-midi-sustain-file-workflow.md).
 
 **build149는 낮은 오토메이션 화면에서 곡선을 보며 수치와 안내를 스크롤한다.** controls wheel과 canvas zoom을 구분하고, 서클 확대·축소 중 수치 초안 보존·오류 복구·범위 맞춤을 확인했다. 최종 Release 48.72초와 data·패키지 검증을 통과했다. [검증 범위](docs/172-automation-guidance.md).
 
-후속 개발로 MIDI CC64를 프로젝트 schema7·반복별 연주 데이터·내장 신스 engine1/2/3의 오프라인 DSP에 연결했다. 전체 Core+선별 Audio 635개와 Release를 통과했고, 페달 유지·해제·source 격리와 바운스/복원을 검증했다. SMF parser·GUI/MCP 페달 편집과 실제 장치 연주는 아직 후속 범위다. [서스테인 렌더 검증](docs/175-midi-sustain-render.md), [전체 구현 계획](docs/173-midi-sustain-plan.md).
+후속 개발로 MIDI CC64를 프로젝트 schema7·반복별 연주 데이터·내장 신스 engine1/2/3의 오프라인 DSP에 연결했다. 전체 Core+선별 Audio 635개와 Release를 통과했고, 페달 유지·해제·source 격리와 바운스/복원을 검증했다. 당시 SMF parser·GUI/MCP 페달 편집·실제 장치 연주는 후속 범위였으며 파일 연결은 위 build150에서 진행한다. [서스테인 렌더 검증](docs/175-midi-sustain-render.md), [전체 구현 계획](docs/173-midi-sustain-plan.md).
 
 **build148은 신스 cutoff·resonance에서 해당 오토메이션으로 바로 이동한다.** 같은 대상·범위를 유지하며 유효 초안은 한 번 확정하고 잘못된 입력은 이동을 차단한다. 단순 열기의 곡선 불변과 실제 직접 진입·Undo, Release 48.28초를 확인했다. [검증 기록](docs/171-synth-automation-shortcuts.md).
 

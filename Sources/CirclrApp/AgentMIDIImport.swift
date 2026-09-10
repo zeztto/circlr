@@ -28,8 +28,22 @@ struct AgentMIDIImportResult:Codable {
         }
     }
 
+    struct Sustain:Codable {
+        var eventCount:Int
+        var initialValue:Int
+        var initialIsDown:Bool
+        var finalValue:Int
+        var finalIsDown:Bool
+        var lastEventBeat:Double?
+        init(_ sequence:MIDISustainSequence) {
+            eventCount=sequence.events.count;initialValue=sequence.initialValue
+            initialIsDown=sequence.initialValue>=64
+            finalValue=sequence.events.last?.rawValue ?? sequence.initialValue
+            finalIsDown=finalValue>=64;lastEventBeat=sequence.events.last?.beat
+        }
+    }
     struct Issue:Codable {var channel:Int?;var beat:Double?;var code:String;var message:String}
-    struct Track:Codable {var id:String;var name:String;var channel:Int;var noteCount:Int;var beats:Double;var pitchBend:PitchBend?}
+    struct Track:Codable {var id:String;var name:String;var channel:Int;var noteCount:Int;var beats:Double;var pitchBend:PitchBend?;var sustain:Sustain?}
     var tracks:[Track]
     var selectedTrackIDs:[String]
     var laneIDs:[ID]
@@ -64,19 +78,23 @@ extension AppStore {
                 try Task.checkCancellation()
                 let document=try Self.readAgentMIDI(url)
                 var summaries:[Int:AgentMIDIImportResult.PitchBend]=[:]
+                var sustainSummaries:[Int:AgentMIDIImportResult.Sustain]=[:]
                 // The raw parser merges controller state per channel; note tracks
                 // on that channel share it. Summarize each sequence once off-main.
                 for track in document.tracks {
                     try Task.checkCancellation()
+                    if sustainSummaries[track.channel]==nil,let sustain=track.sustain {
+                        sustainSummaries[track.channel]=AgentMIDIImportResult.Sustain(sustain)
+                    }
                     if summaries[track.channel]==nil,let expression=track.pitchBend {
                         summaries[track.channel]=try AgentMIDIImportResult.PitchBend(expression)
                     }
                 }
                 try Task.checkCancellation()
-                return (document,summaries)
+                return (document,summaries,sustainSummaries)
             }
             do {
-                let (document,summaries)=try await withTaskCancellationHandler {try await worker.value} onCancel:{worker.cancel()}
+                let (document,summaries,sustainSummaries)=try await withTaskCancellationHandler {try await worker.value} onCancel:{worker.cancel()}
                 guard !Task.isCancelled,self.productionGeneration==generation else{return}
                 try AgentProjectEditing.check(request,project:self.project)
                 let currentActive=self.project.activeArrangementID
@@ -103,7 +121,7 @@ extension AppStore {
                 }catch{if preview{previewIssue=error.localizedDescription}else{throw error}}
                 candidate.activeArrangementID=currentActive
                 try Task.checkCancellation()
-                let result=AgentMIDIImportResult(tracks:document.tracks.map{.init(id:$0.id,name:$0.name,channel:$0.channel,noteCount:$0.notes.count,beats:$0.notes.map{$0.beat+$0.length}.max() ?? 0,pitchBend:$0.pitchBend == nil ? nil:summaries[$0.channel])},selectedTrackIDs:ids,laneIDs:preview ? []:laneIDs,tempoChanges:document.tempoChanges,tempoImportIssue:document.tempoImportIssue,ignoredPerformanceEvents:document.ignoredPerformanceEvents,previewOnly:preview,expressionPolicy:expressionPolicy,selectedIssues:selectedIssues,tempoPolicy:policy,previousSectionSeconds:before,sectionSeconds:after,previewIssue:previewIssue)
+                let result=AgentMIDIImportResult(tracks:document.tracks.map{.init(id:$0.id,name:$0.name,channel:$0.channel,noteCount:$0.notes.count,beats:$0.notes.map{$0.beat+$0.length}.max() ?? 0,pitchBend:$0.pitchBend == nil ? nil:summaries[$0.channel],sustain:$0.sustain == nil ? nil:sustainSummaries[$0.channel])},selectedTrackIDs:ids,laneIDs:preview ? []:laneIDs,tempoChanges:document.tempoChanges,tempoImportIssue:document.tempoImportIssue,ignoredPerformanceEvents:document.ignoredPerformanceEvents,previewOnly:preview,expressionPolicy:expressionPolicy,selectedIssues:selectedIssues,tempoPolicy:policy,previousSectionSeconds:before,sectionSeconds:after,previewIssue:previewIssue)
                 if !preview {
                     try UseTempoOverrideEditing.validateChanges(from:self.project,to:candidate)
                     let revision=self.project.musicRevision

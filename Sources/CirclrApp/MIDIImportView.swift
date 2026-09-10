@@ -154,16 +154,16 @@ struct MIDIImportView:View {
     private var beats:Double {draft.sectionBeats}
     private var expressionPolicy:MIDIImportExpressionPolicy {omitExpression ? .omit:.preserve}
     private var selectedTracks:[ImportedMIDITrack] {draft.document.tracks.filter{selected.contains($0.id)}}
-    private var hasExpression:Bool {selectedTracks.contains{$0.pitchBend != nil} || !draft.document.issues(selectedIDs:selected).isEmpty}
+    private var hasExpression:Bool {selectedTracks.contains{$0.pitchBend != nil || $0.sustain != nil} || !draft.document.issues(selectedIDs:selected).isEmpty}
     private var end:Double {
         let noteEnd=selectedTracks.flatMap(\.notes).map{$0.beat+$0.length}.max() ?? 0
-        return start+max(noteEnd,lastBendBeat ?? 0)
+        return start+max(noteEnd,lastExpressionBeat ?? 0)
     }
-    private var lastBendBeat:Double? {
+    private var lastExpressionBeat:Double? {
         guard !omitExpression else{return nil}
-        return selectedTracks.compactMap{$0.pitchBend?.events.last?.beat}.max()
+        return selectedTracks.flatMap{[$0.pitchBend?.events.last?.beat,$0.sustain?.events.last?.beat].compactMap{$0}}.max()
     }
-    private var exceeds:Bool {end>beats+1e-8 || lastBendBeat.map{start+$0>=beats}==true}
+    private var exceeds:Bool {end>beats+1e-8 || lastExpressionBeat.map{start+$0>=beats}==true}
     private var current:Bool {store.midiImportDraft?.id==draft.id && store.project.id==draft.projectID && store.project.musicRevision==draft.revision && store.mediaImportGeneration==draft.generation && store.project.activeArrangementID==draft.arrangementID && store.selectedUse?.id==draft.useID}
     private var ready:Bool {!selected.isEmpty && impact != nil && previewError==nil && startError==nil && (omitExpression || draft.document.issues(selectedIDs:selected).isEmpty) && store.canStartMediaImport && current}
     private var target:String {
@@ -183,7 +183,7 @@ struct MIDIImportView:View {
         if let startError {return "시작 위치 · "+startError}
         if !omitExpression,let first=draft.document.issues(selectedIDs:selected).first {
             let count=draft.document.issues(selectedIDs:selected).count
-            return "피치 벤드 · "+(first.channel.map{"채널 \($0+1) · "} ?? "")+first.message+(count>1 ? " · 추가 \(count-1)개 문제":"")
+            return "MIDI 표현 · "+(first.channel.map{"채널 \($0+1) · "} ?? "")+first.message+(count>1 ? " · 추가 \(count-1)개 문제":"")
         }
         return commitError ?? previewError
     }
@@ -211,8 +211,8 @@ struct MIDIImportView:View {
                     .accessibilityLabel("MIDI 가져오기 오류 · "+message)
             }
             if hasExpression {
-                Toggle("피치 벤드를 제외하고 노트만 가져오기",isOn:$omitExpression)
-                    .help("이 선택은 피치 벤드와 범위 변경만 제외합니다. 템포 가져오기 선택과는 별개입니다.")
+                Toggle("피치 벤드·페달을 제외하고 노트만 가져오기",isOn:$omitExpression)
+                    .help("이 선택은 피치 벤드·범위 변경과 서스테인 페달을 제외합니다. 템포 가져오기 선택과는 별개입니다.")
             }
             ScrollView {
                 VStack(alignment:.leading,spacing:12) {
@@ -245,17 +245,17 @@ struct MIDIImportView:View {
                         Text("섹션 전체 · 기존 \(seconds(impact.previousSectionSeconds))초 → 적용 후 \(seconds(impact.sectionSeconds))초")
                     }
                     Text(tempoPolicy == .applyFile
-                         ? "이번 사용의 기존 MIDI·오디오·오토메이션도 바뀐 시간 기준을 따릅니다. 공유 원본과 다른 사용은 유지합니다. 선택 연주(노트·피치 벤드)의 끝에서 기존 템포로 돌아가며, 그 뒤의 파일 템포 이벤트는 적용하지 않습니다."
+                         ? "이번 사용의 기존 MIDI·오디오·오토메이션도 바뀐 시간 기준을 따릅니다. 공유 원본과 다른 사용은 유지합니다. 선택 연주(노트·피치 벤드·페달)의 끝에서 기존 템포로 돌아가며, 그 뒤의 파일 템포 이벤트는 적용하지 않습니다."
                          : "노트의 선행 쉼표·박 위치를 유지하고 현재 섹션의 템포를 사용합니다. 파일 템포는 적용하지 않습니다.")
                         .foregroundStyle(StudioTheme.secondary).fixedSize(horizontal:false,vertical:true)
-                    Text("박자표는 현재 섹션을 사용합니다. 피치 벤드 범위 RPN 이외의 CC·프로그램 변경은 가져오지 않습니다.")
+                    Text("박자표는 현재 섹션을 사용합니다. 피치 벤드 범위 RPN·서스테인 CC64와 CC121 페달 초기화를 반영합니다. 그 외 CC·프로그램 변경은 가져오지 않습니다.")
                         .foregroundStyle(StudioTheme.secondary).fixedSize(horizontal:false,vertical:true)
                     if draft.document.ignoredPerformanceEvents>0 {Text("\(draft.document.ignoredPerformanceEvents)개 기타 연주 이벤트 제외 · 페달 등 제외된 연주를 확인하세요").foregroundStyle(StudioTheme.secondary)}
                     if let issue=draft.document.tempoImportIssue,tempoPolicy == .keepCurrent {
                         Text("파일 템포 사용 불가 · "+issue+" · 현재 템포로 노트는 가져올 수 있습니다.").foregroundStyle(StudioTheme.secondary)
                     }
                     if hasExpression {
-                        Text("범위 정보가 없는 채널은 기본 ±2반음을 사용합니다. 피치 벤드는 같은 채널의 연주 전체에 적용됩니다.")
+                        Text("범위 정보가 없는 채널은 기본 ±2반음을 사용합니다. 피치 벤드와 페달은 같은 채널의 연주 전체에 적용됩니다. 페달 raw 64 이상은 누름, 63 이하는 뗌이며 원래 값을 보존합니다.")
                             .foregroundStyle(StudioTheme.secondary).fixedSize(horizontal:false,vertical:true)
                         let issues=draft.document.issues(selectedIDs:selected)
                         ForEach(Array(issues.enumerated()),id:\.offset) {_,issue in
@@ -287,11 +287,18 @@ struct MIDIImportView:View {
         bendSummaries=summaries
     }
     private func expressionSummary(_ track:ImportedMIDITrack)->String {
-        guard let bend=track.pitchBend else {
-            return draft.document.issues(selectedIDs:[track.id]).isEmpty ? "피치 벤드 없음":"피치 벤드 가져오기 문제 있음 · 위 안내 확인"
+        var parts:[String]=[]
+        if let bend=track.pitchBend {
+            if let summary=bendSummaries[bend.channel] {
+                parts.append("피치 벤드 \(summary.values)개 · 범위 변경 \(summary.rangeChanges)개 · 초기 범위 ±\(number(summary.initialRange))반음")
+            }else{parts.append("피치 벤드 있음")}
         }
-        guard let summary=bendSummaries[bend.channel] else{return "피치 벤드 있음"}
-        return "피치 벤드 \(summary.values)개 · 범위 변경 \(summary.rangeChanges)개 · 초기 범위 ±\(number(summary.initialRange))반음"+(omitExpression ? " · 제외":" · 보존")
+        if let sustain=track.sustain {
+            let state=sustain.initialValue>=64 ? "누름":"뗌"
+            parts.append("페달 CC64 \(sustain.events.count)개 · 초기 raw \(sustain.initialValue) · \(state)")
+        }
+        if parts.isEmpty {return draft.document.issues(selectedIDs:[track.id]).isEmpty ? "피치 벤드·페달 없음":"MIDI 표현 가져오기 문제 있음 · 위 안내 확인"}
+        return parts.joined(separator:"\n")+(omitExpression ? " · 제외":" · 보존")
     }
     private func number(_ value:Double)->String {String(format:"%.2f",locale:Locale(identifier:"en_US_POSIX"),value)}
     private func seconds(_ value:Double)->String {String(format:"%.3f",locale:Locale(identifier:"en_US_POSIX"),value)}

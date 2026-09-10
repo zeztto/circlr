@@ -1,6 +1,6 @@
 # 내장 신스의 서스테인 연주
 
-기준: `5ce63cc`의 저장·컴파일 연결 이후 [서스테인 계획173](173-midi-sustain-plan.md)의 DSP 단계. 내장 신스 engine1/2/3의 오프라인 렌더에 CC64를 연결했다. SMF parser와 페달 편집 GUI/MCP는 아직 후속 단계이며, 설치 앱과 build149 패키지는 교체하지 않았다.
+기준: `5ce63cc`의 저장·컴파일 연결 이후 [서스테인 계획173](173-midi-sustain-plan.md)의 DSP 단계. 내장 신스 engine1/2/3의 오프라인 렌더에 CC64를 연결했다. 당시 SMF parser와 페달 편집 GUI/MCP는 후속 단계였다. 파일 연결은 [build150](176-midi-sustain-file-workflow.md)에서 통합 검증 중이며, 설치 앱과 build149 패키지는 교체하지 않았다.
 
 ## 연주 동작
 

@@ -1,6 +1,6 @@
 # MIDI 서스테인 페달의 저장·연주·편집 계약
 
-기준: build149 커밋 `67f9643` 이후의 소스 조사. 최초 단계는 독립 Core 상태 타입과 검증이다. 이후 프로젝트 저장·컴파일은 [검증174](174-midi-sustain-storage.md), 내장 신스 오프라인 DSP는 [검증175](175-midi-sustain-render.md)에서 연결했다. SMF parser·GUI/MCP는 아래 후속 단계이며, 설치 앱에서 페달을 편집·연주할 수 있다는 의미가 아니다. 설치 앱과 build 번호는 유지한다.
+기준: build149 커밋 `67f9643` 이후의 소스 조사. 최초 단계는 독립 Core 상태 타입과 검증이다. 이후 프로젝트 저장·컴파일은 [검증174](174-midi-sustain-storage.md), 내장 신스 오프라인 DSP는 [검증175](175-midi-sustain-render.md)에서 연결했다. SMF parser·파일 GUI/MCP는 [build150](176-midi-sustain-file-workflow.md)에서 파일 실행 검증을 완료했고 최종 재열기 독립 비교도 PASS했다. 페달 직접 편집은 후속 단계이며, 설치 앱에서 페달을 편집·연주할 수 있다는 의미가 아니다. 설치 앱과 build 번호는 유지한다.
 
 ## 해결할 문제와 근거
 
