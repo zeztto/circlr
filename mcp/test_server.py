@@ -200,7 +200,7 @@ class MCPTests(unittest.TestCase):
         self.assertEqual(len(replies), 3)
         self.assertEqual(replies[0]["result"]["protocolVersion"], "2025-11-25")
         tools = replies[1]["result"]["tools"]
-        self.assertEqual(len(tools), 23)
+        self.assertEqual(len(tools), 24)
         self.assertTrue(all("method" not in item for item in tools))
         self.assertTrue(replies[2]["result"]["isError"])
 

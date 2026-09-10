@@ -24,9 +24,9 @@ public enum ProjectStore {
         let data = try Data(contentsOf: manifest)
         struct Header:Decodable {let schemaVersion:Int}
         let header=try JSONDecoder().decode(Header.self,from:data)
-        guard (1...3).contains(header.schemaVersion) else {throw CirclrError("더 새로운 프로젝트 형식입니다. 원본을 덮어쓰지 마세요")}
+        guard (1...4).contains(header.schemaVersion) else {throw CirclrError("더 새로운 프로젝트 형식입니다. 원본을 덮어쓰지 마세요")}
         let project = try JSONDecoder().decode(Project.self, from: data)
-        guard (1...3).contains(project.schemaVersion) else { throw CirclrError("더 새로운 프로젝트 형식입니다. 원본을 덮어쓰지 마세요") }
+        guard (1...4).contains(project.schemaVersion) else { throw CirclrError("더 새로운 프로젝트 형식입니다. 원본을 덮어쓰지 마세요") }
         guard !project.arrangements.isEmpty, project.arrangements.contains(where: { $0.id == project.activeArrangementID }) else { throw CirclrError("유효한 편곡안이 없습니다") }
         try validateStructure(project)
         for asset in project.assets {
@@ -36,7 +36,7 @@ public enum ProjectStore {
         return LoadedProject(project: project, root: url)
     }
     public static func validateStructure(_ p:Project) throws {
-        guard (1...3).contains(p.schemaVersion) else {throw CirclrError("지원하지 않는 프로젝트 형식입니다")}
+        guard (1...4).contains(p.schemaVersion) else {throw CirclrError("지원하지 않는 프로젝트 형식입니다")}
         try AutomationCompiler.validateTargets(in:p)
         try p.portLayout?.validate()
         func unique(_ ids:[ID]) throws { guard ids.allSatisfy({!$0.isEmpty}),Set(ids).count==ids.count else { throw CirclrError("프로젝트에 비어 있거나 중복된 ID가 있습니다") } }
@@ -71,6 +71,7 @@ public enum ProjectStore {
             for u in a.uses {
                 let (section, context, clock) = try ArrangementCompiler.context(project:p,use:u,arrangementID:a.id)
                 _ = try SectionGraphCompiler.compile(project:p,section:section,use:u,context:context,clock:clock)
+                if u.tempoOverride != nil {try UseTempoOverrideEditing.validateAudio(in:p,useID:u.id,arrangementID:a.id)}
             }
         }
         for pattern in p.patterns {try ArrangementCompiler.validatePattern(pattern,project:p)}

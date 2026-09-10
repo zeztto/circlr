@@ -69,9 +69,13 @@ struct UnifiedMusicSettings:View {
     var body:some View {
         VStack(alignment:.leading,spacing:8) {
             HStack(alignment:.top,spacing:24) {
+                if let use=store.selectedUse,let tempo=use.tempoOverride {
+                    UseTempoControls(store:store,useID:use.id,arrangementID:store.project.activeArrangementID,tempo:tempo,identity:store.numberEditIdentity)
+                } else {
                 field("템포",source:source(\.tempo,\.tempo)) {
                     HStack(spacing:8){ValueField(title:"",value:value(\.tempo,\.tempo),width:75,range:1...999);Text("BPM").foregroundStyle(StudioTheme.secondary)}
                 }.frame(maxWidth:.infinity,alignment:.leading)
+                }
                 field("박자",source:source(\.meter,\.meter)) {
                     let meter=value(\.meter,\.meter)
                     HStack(spacing:10){CountControl(title:"",value:meter.numerator,range:1...64);Text("/").foregroundStyle(StudioTheme.secondary);CompactChoice(selection:meter.denominator,options:[1,2,4,8,16,32,64].map{($0,String($0))},label:"박자 분모")}

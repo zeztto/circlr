@@ -24,6 +24,7 @@ struct AgentJob:Codable {
     var endWindowSeconds:Double?
     var endWindowPeak:Double?
     var endWindowRMS:Double?
+    var midiImport:AgentMIDIImportResult?
     var endWindowHasSignal:Bool?
 }
 extension AppStore {
@@ -53,7 +54,7 @@ extension AppStore {
          "playback":capturePlaybackVisualization?() ?? ["playing":playback.playing,"seconds":playback.seconds],"output":json(playback.outputStatus),"audition":json(auditionOutput.status),
          "view":["zoom":hierarchyZoom,"layout":project.usesOrbits ? "orbit":"freeform","consoleOpen":consoleOpen,"consoleBounds":[consoleBounds.minX,consoleBounds.minY,consoleBounds.width,consoleBounds.height]],
          "library":["open":libraryOpen,"folders":library.folders.count,"files":library.entries.count,"selectedFiles":library.chosenIDs.count,"scanning":library.scanning,"searching":library.searching,"previewPreparing":library.previewPreparing,"previewPlaying":library.previewing,"previewPending":library.previewPending,"previewSeconds":library.previewSeconds],
-         "runtime":["version":Bundle.main.object(forInfoDictionaryKey:"CFBundleShortVersionString") as? String ?? "development","build":Bundle.main.object(forInfoDictionaryKey:"CFBundleVersion") as? String ?? "development","capabilities":["soundCatalog":1,"synthCutoffAutomation":1],"bundleID":Bundle.main.bundleIdentifier ?? "","windows":NSApplication.shared.windows.filter{$0.identifier?.rawValue=="main"}.map{["visible":$0.isVisible,"minimized":$0.isMiniaturized]}]]
+         "runtime":["version":Bundle.main.object(forInfoDictionaryKey:"CFBundleShortVersionString") as? String ?? "development","build":Bundle.main.object(forInfoDictionaryKey:"CFBundleVersion") as? String ?? "development","capabilities":["soundCatalog":1,"synthCutoffAutomation":1,"midiTempoImport":1],"bundleID":Bundle.main.bundleIdentifier ?? "","windows":NSApplication.shared.windows.filter{$0.identifier?.rawValue=="main"}.map{["visible":$0.isVisible,"minimized":$0.isMiniaturized]}]]
     }
     func receiveAgent(_ data:Data,source:String)->[String:Any] {
         do {
@@ -157,6 +158,7 @@ extension AppStore {
             captureViewport();project=try ProjectStore.saveSession(project,to:url,mediaRoot:mediaRoot);projectURL=url;mediaRoot=url;dirty=false;clearSavedRecovery();status="에이전트 저장 완료";return agentState()
         case "open":
             return try beginAgentOpen(request,source:source)
+        case "import_midi":return try beginAgentMIDIImport(request,source:source)
         case "bounce","export":return try beginAgentRender(request,source:source)
         case "restore_bounce":
             guard let use=args.useID,let node=args.nodeID else {throw CirclrError("useID와 nodeID가 필요합니다")}

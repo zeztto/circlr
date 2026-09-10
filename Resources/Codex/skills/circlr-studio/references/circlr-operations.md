@@ -80,3 +80,13 @@ New synth patches use engineVersion=2: mono bass, velocity-shaped harmonic keys,
 `circlr_record` starts the currently selected section/track and requires projectID plus expectedRevision. Only call it when the user requests microphone recording. First inspect the selection or focus the requested music circle; do not select an unrelated track. macOS may ask the user for microphone access. Read `snapshot.recording`: phase authorizing/starting/recording/cancelling/finishing/failed/idle, busy, seconds, peak, format (rate/channels), message and recoveryPath. A start reply is an acknowledgement, not evidence of recorded audio.
 
 `circlr_stop` cancels pending input or closes the collection gate and finalizes asynchronously. Wait until busy=false and inspect the actual assets/takes and music revision. Never retry a pending/finishing worker, start a second capture, or bypass macOS permission. The current input is the default device's first two channels (one for mono). A disconnected or stalled input finalizes received frames. Late completion cannot write into a different project or deleted destination; recoveryPath preserves that file. There is no accompaniment/latency synchronization or input channel selector in this version.
+
+## MIDI 파일과 tempo 가져오기 (build131)
+
+지원 앱의 `runtime.capabilities.midiTempoImport=1`을 먼저 확인한다. `circlr_import_midi`에 최신 projectID/expectedRevision, 절대 로컬 SMF path, arrangementID/useID를 보낸다. format0/1 regular file 최대16MiB이며 SMPTE/format2는 지원하지 않는다. 먼저 `previewOnly:true`로 job을 완료까지 읽어 tracks의 실제 `index:channel` ID와 tempoChanges/tempoImportIssue/previewIssue를 확인한다. preview의 completed는 음악 적용 성공이 아니다.
+
+실제 요청의 `trackIDs`를 생략하면 모든 note 트랙을 가져온다. `tempoPolicy:"keepCurrent"`가 기본이며 `"applyFile"`은 이번 use에만 파일 tempo map을 적용한다. `atBeat`는 로컬4분음표 박(기본0), `extendSection`은 기본false다. tempoImportIssue가 있으면 applyFile은 실패하며 자동으로 현재 tempo 유지로 바꾸지 않는다. 다른 use·원본을 보존하고 한 Undo로 적용하며 캔버스 선택을 이동시키지 않는다.
+
+`circlr_job`의 terminal 결과를 확인하고 snapshot/inspect로 실제 lane·clock·revision을 재조회한다. `circlr_stop`은 진행 중 job 취소에 사용하며 취소 뒤 성공을 가정하지 않는다. 파일 읽기/parse만 detached이고 Core preview/apply는 MainActor이므로 전체 계산의 즉시 선점 취소를 약속하지 않는다.
+
+가져온 map을 해제하려면 `circlr_apply`의 `{"kind":"clear_use_tempo_override","arrangementID":"ACTUAL_ID","useID":"ACTUAL_ID"}`를 사용한다. ID는 snapshot의 실제 값으로 대체한다. 해제 전에는 해당 use의 BPM/source 변경이 거절된다. 해제는 보관된 이전 설정으로 돌아가며 다른 use와 node별 tempo를 바꾸지 않는다. 새 map은 schema4를 사용한다. MIDI CC/페달/pitch bend·박자표까지 import했다고 해석하지 않는다.

@@ -1,6 +1,6 @@
 # 현행 개발 계획
 
-기준: 2026-09-10, integration-worktree의 build120 소스(`b06c4a9`)에서 시작해 build127의 소스·검증 기록을 기준으로 build130 진행 결과까지 반영했다. 이 문서는 다음 실행과 완료 판단을 위한 계획이며 [누적 로드맵](25-development-roadmap.md)의 과거 검증 결과를 새로 수행한 검사로 바꾸지 않는다. 전체 DAW·음악 품질·접근성은 아직 완료되지 않았다.
+기준: 2026-09-10, integration-worktree의 build120 소스(`b06c4a9`)에서 시작해 build127의 소스·검증 기록을 기준으로 build131 검증 결과까지 반영했다. 이 문서는 다음 실행과 완료 판단을 위한 계획이며 [누적 로드맵](25-development-roadmap.md)의 과거 검증 결과를 새로 수행한 검사로 바꾸지 않는다. 전체 DAW·음악 품질·접근성은 아직 완료되지 않았다.
 
 ## 제품의 완료 방향
 
@@ -56,9 +56,11 @@ build122 진행: 새 앨범에서 첫 섹션 생성 동선을 확인했고, 공�
 
 ### 3. 전자음악의 표현 편집과 엔진 계약 확장
 
+build131은 [MIDI tempo import 계획](151-midi-tempo-import-plan.md)의 기본 keepCurrent·이번 use 파일 tempo 적용·schema4·명시적 복귀를 구현했다. 기계검증 496개·렌더 1개·MCP 13/27개·Release 81.94초를 통과했으며 native GUI/MCP·오프라인 바운스/복원·r95 저장/재열기와 production 서명까지 확인했다. [구현 검증](152-midi-tempo-import-validation.md)을 기준으로 완료 여부를 판단한다.
+
 [신스 cutoff automation 계획](148-synth-cutoff-automation-plan.md)은 build129에서 descriptor·voice 보존 DSP·GUI/MCP·schema를 구현하고 기계검증·실제 Hz 편집/오류 거절을 확인했다. GUI/schema 독립 감사와 production 서명/UUID도 통과했으며 바운스·복원·재열기 r79 및 PCM 독립 감사도 통과했다. 최종 종합 UI 데이터 감사도 통과했다. [현재 검증](149-synth-cutoff-automation-validation.md)을 기준으로 판단한다.
 
-**다음 행동:** [MIDI tempo 가져오기 계획](151-midi-tempo-import-plan.md)의 전체 이벤트 읽기·이번 use의 구간별 tempo 적용·GUI/MCP·오프라인 렌더를 연결한다. 현재는 계획이며 모델/schema 도입 선택부터 검증한다. build129에서 `AutomationParameter`에 synthCutoff를 추가했으며 native 편집·바운스·재열기와 독립 감사를 통과했다. 신스 filter 같은 다음 파라미터는 descriptor·단위·범위·초깃값·시간 의미·DSP 반영을 먼저 정한 뒤 UI에 노출한다. plugin parameter는 실제 descriptor와 state 복원 계약을 갖춘 뒤 추가한다.
+**다음 행동:** build131에서 확인한 가져오기 오류 문구의 수치 인접 피드백과 대상 use 별명 표시를 검토한다. Apply가 막히는 이유를 스크롤 없이 알 수 있어야 한다. [MIDI tempo 가져오기](152-midi-tempo-import-validation.md)는 위 범위를 구현·검증했으며 새 모델 도입 단계로 다시 세지 않는다. build129에서 `AutomationParameter`에 synthCutoff를 추가했으며 native 편집·바운스·재열기와 독립 감사를 통과했다. 신스 filter 같은 다음 파라미터는 descriptor·단위·범위·초깃값·시간 의미·DSP 반영을 먼저 정한 뒤 UI에 노출한다. plugin parameter는 실제 descriptor와 state 복원 계약을 갖춘 뒤 추가한다.
 
 MIDI CC/페달/피치 벤드·tempo map은 노트 import와 다른 이벤트·시간 계약이 필요하다. 기존 파일을 여는 것만으로 재해석하지 않으며 가져오기 전 적용 범위를 설명한다. 오디오 crossfade·comping·time warp, 실시간 automation write/touch/latch, punch/loop 녹음은 원본/테이크·공통 clock·취소 수명에 의존하므로 독립 체크박스로 쌓지 않는다. [기본 DAW 계획](31-daw-basics-plan.md)의 남은 조건을 유지한다.
 

@@ -143,6 +143,7 @@ public enum MusicContextEditing {
         case .sound, .signal, .group: throw CirclrError("음악 설정의 대상이 아닙니다")
         }
         if candidate==project {return}
+        try UseTempoOverrideEditing.validateChanges(from:project,to:candidate)
         // Global and parent edits can affect arrangements which are not currently selected.
         for arrangement in candidate.arrangements {_ = try ArrangementCompiler.compile(candidate,arrangementID:arrangement.id)}
         if candidate.album != nil {_ = try AlbumCompiler.compile(candidate)}

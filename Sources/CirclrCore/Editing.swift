@@ -13,6 +13,7 @@ public enum ProjectEditing {
         let i = project.activeIndex
         guard let ui = project.arrangements[i].uses.firstIndex(where: { $0.id == id }) else { throw CirclrError("분리할 서클을 선택하세요") }
         let use = project.arrangements[i].uses[ui]
+        guard use.tempoOverride==nil else{throw CirclrError("이번 사용 템포 맵을 먼저 해제한 뒤 원본에서 분리하세요")}
         let (section, context, _) = try ArrangementCompiler.context(project: project, use: use)
         var new = section; new.id = newID(); new.name = use.name
         new.bars = use.barsOverride ?? section.bars

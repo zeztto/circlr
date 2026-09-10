@@ -22,8 +22,12 @@ struct ContextInspector:View {
     func setting<T>(_ key:WritableKeyPath<ContextSettings,Setting<T>>,_ fallback:T)->Binding<Setting<T>> {Binding(get:{use.settings[keyPath:key]},set:{v in store.updateUse("서클 음악 설정"){$0.settings[keyPath:key]=v}})}
     func value<T>(_ key:WritableKeyPath<ContextSettings,Setting<T>>,_ fallback:T)->Binding<T> {Binding(get:{store.selectedUse?.settings[keyPath:key].value ?? fallback},set:{v in store.updateUse("서클 음악 설정"){$0.settings[keyPath:key] = .local(v)}})}
     var body:some View{VStack(alignment:.leading,spacing:20){
+        if let tempo=use.tempoOverride {
+            UseTempoControls(store:store,useID:use.id,arrangementID:store.project.activeArrangementID,tempo:tempo,identity:store.numberEditIdentity)
+        } else {
         SourcePicker(title:"템포",setting:setting(\.tempo,store.currentContext.tempo),fallback:store.currentContext.tempo)
         if use.settings.tempo.source == .local {CompactNumber("BPM",value:value(\.tempo,store.currentContext.tempo),range:1...999)}
+        }
         SourcePicker(title:"박자",setting:setting(\.meter,store.currentContext.meter),fallback:store.currentContext.meter)
         if use.settings.meter.source == .local {MeterEditor(meter:value(\.meter,store.currentContext.meter))}
         SourcePicker(title:"스케일",setting:setting(\.scale,store.currentContext.scale),fallback:store.currentContext.scale)

@@ -1,5 +1,11 @@
 # 변경 이력
 
+## 검증 완료 — 0.20.0 build131 MIDI tempo map 가져오기
+
+- 기본 keepCurrent를 유지하며 applyFile은 이번 use의 tempo map을 schema4로 적용한다. 기존 설정을 보관하고 명시적 해제로 복귀한다. GUI와 MCP importer의 preview/job·revision·한 Undo 계약을 연결했다.
+- 관련 기계검증 496개·렌더 통합 1개, MCP 13/27개·Release 81.94초를 통과했다. native 적용/복귀·오프라인 바운스·원본 복원·r95 저장/재열기와 production 서명도 확인했다.
+- 실제 입출력·청취·MIDI CC/pitch bend 완료를 뜻하지 않는다. [기록](docs/152-midi-tempo-import-validation.md).
+
 ## 검증 완료 — 0.20.0 build130 오토메이션 편집 공간
 
 - 가로 파라미터 선택과 자동 줄바꿈으로 같은 창의 곡선 눈금 영역을 약60→90px로 확대했다.

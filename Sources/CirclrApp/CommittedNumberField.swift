@@ -92,6 +92,12 @@ extension View {
     }
 }
 
+/// Optional explicit commit for a form action that must consume its current numeric draft.
+@MainActor final class NumberFieldCommitTarget {
+    fileprivate var action:(()->Bool)?
+    func commit()->Bool {action?() ?? false}
+}
+
 /// Every host root supplies a live context; a removed view's binding cannot edit its successor.
 struct CommittedNumberField: View {
     let title: String
@@ -102,12 +108,14 @@ struct CommittedNumberField: View {
     var alignment: TextAlignment = .trailing
     var presentation:NumberEditPresentation = .number
     var validate:((Double)throws->Void)?
+    var commitTarget:NumberFieldCommitTarget? = nil
+    var onValidityChange:((String?)->Void)? = nil
     @Environment(\.numberEditing) private var context
     @State private var error=""
     @State private var editing=false
 
     var body: some View {
-        NativeNumberField(title:title,value:$value,range:range,integerOnly:integerOnly,alignment:alignment,presentation:presentation,validate:validate,context:context,error:$error,editing:$editing)
+        NativeNumberField(title:title,value:$value,range:range,integerOnly:integerOnly,alignment:alignment,presentation:presentation,validate:validate,commitTarget:commitTarget,onValidityChange:onValidityChange,context:context,error:$error,editing:$editing)
             .id(presentation).frame(height:18).padding(.horizontal,8).frame(width:width,height:32)
             .background(StudioTheme.raised,in:RoundedRectangle(cornerRadius:5))
             .overlay(RoundedRectangle(cornerRadius:5).strokeBorder(error.isEmpty ? (editing ? StudioTheme.accent:StudioTheme.line):Color.red,lineWidth:editing || !error.isEmpty ? 1.5:1))
@@ -126,6 +134,8 @@ private struct NativeNumberField: NSViewRepresentable {
     let alignment:TextAlignment
     let presentation:NumberEditPresentation
     let validate:((Double)throws->Void)?
+    let commitTarget:NumberFieldCommitTarget?
+    let onValidityChange:((String?)->Void)?
     let context:NumberEditingContext
     @Binding var error:String
     @Binding var editing:Bool
@@ -143,6 +153,7 @@ private struct NativeNumberField: NSViewRepresentable {
     }
     func updateNSView(_ field:Control,context:Context) {
         let coordinator=context.coordinator;coordinator.parent=self
+        commitTarget?.action={ [weak coordinator] in coordinator?.commit() ?? false }
         coordinator.draft.refresh(value:value,context:self.context.beforeTyping(),editing:coordinator.active || coordinator.draft.isDirty)
         // Reassigning even identical text can destroy AppKit's select-all after Tab.
         if field.stringValue != coordinator.draft.text {field.stringValue=coordinator.draft.text}
@@ -162,11 +173,18 @@ private struct NativeNumberField: NSViewRepresentable {
         init(_ parent:NativeNumberField) {self.parent=parent;draft=NumberEditSession(presentation:parent.presentation);draft.reset(value:parent.value)}
         func begin() {
             active=true;draft.begin(value:parent.value,context:parent.context.beforeTyping())
-            parent.editing=true;parent.error=""
+            parent.editing=true;parent.error="";parent.onValidityChange?(nil)
         }
         func controlTextDidChange(_ notification:Notification) {
             guard let field=notification.object as? NSTextField else {return}
             draft.type(field.stringValue,value:parent.value,context:parent.context.beforeTyping())
+            if let report=parent.onValidityChange {
+                do {
+                    let next=try draft.resolve(value:parent.value,context:parent.context.current(),range:parent.range,integerOnly:parent.integerOnly)
+                    if let next {try parent.validate?(next)}
+                    report(nil)
+                } catch {report(error.localizedDescription)}
+            }
         }
         func control(_ control:NSControl,textShouldEndEditing fieldEditor:NSText) -> Bool {
             // This callback precedes selection of the next field. Invalid drafts may blur,
@@ -178,7 +196,7 @@ private struct NativeNumberField: NSViewRepresentable {
         }
         func control(_ control:NSControl,textView:NSTextView,doCommandBy command:Selector) -> Bool {
             if command == #selector(NSResponder.cancelOperation(_:)) {
-                draft.reset(value:parent.value);parent.error=""
+                draft.reset(value:parent.value);parent.error="";parent.onValidityChange?(nil)
                 (control as? NSTextField)?.stringValue=draft.text
                 finishFocus(control);return true
             }
@@ -204,8 +222,9 @@ private struct NativeNumberField: NSViewRepresentable {
                 if let next {try parent.validate?(next)}
                 draft.reset(value:next ?? parent.value);parent.error=""
                 if let next {parent.value=next}
+                parent.onValidityChange?(nil)
                 return true
-            } catch {parent.error=error.localizedDescription;return false}
+            } catch {parent.error=error.localizedDescription;parent.onValidityChange?(error.localizedDescription);return false}
         }
     }
     final class Control:NSTextField {

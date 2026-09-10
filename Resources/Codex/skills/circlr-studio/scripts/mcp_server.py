@@ -97,8 +97,10 @@ OPERATION["oneOf"].append({"type": "object", "properties": {"kind": {"enum": ["i
 OPERATION["oneOf"].append({"type": "object", "properties": {"kind": {"enum": ["edit_shared_audio"]},
     "edit": {"type": "string", "enum": ["split", "duplicate", "fade", "delete"]}},
     "required": ["patternID", "trackID", "clipID", "edit"]})
+OPERATION["oneOf"].append({"type": "object", "properties": {"kind": {"enum": ["clear_use_tempo_override"]}}, "required": ["arrangementID", "useID"]})
+OPERATION["properties"]["kind"]["enum"].append("clear_use_tempo_override")
 OPERATION["properties"]["kind"]["enum"].extend(ARRANGEMENT_OPERATIONS + ["select_arrangement", "insert_section", "edit_shared_audio"])
-OPERATION["description"] = "edit_shared_audio requires patternID, trackID, clipID and edit (split/duplicate/fade/delete). patternID is rejected on other kinds; arrangementID/compositionID/nodeID/useID/laneID are rejected on edit_shared_audio. original is rejected on kinds other than set_automation. It edits the shared rhythm pattern across its uses; split uses sourceOffset seconds, duplicate uses beatOffset, fade uses fadeIn/fadeOut seconds, as in edit_audio. set_automation accepts original: omitted/false edits this use, true edits the shared section source and retains existing use overrides. insert_section requires arrangementID, useID (insert after), name (1–120 trimmed characters), bars (1–4096), and at {x,y}; it atomically inserts a new section into a linear path, preserving editing selection. Branches, loops and non-default transitions fail without changes. duplicate_arrangement and rename_arrangement require explicit compositionID, arrangementID and name (1–120 characters after trimming whitespace). Duplicate shares section sources and assets, preserving every owner's playback choice and the editing canvas. Rename changes only the arrangement name. select_arrangement requires compositionID and arrangementID (no name needed); it deliberately changes the owner's playback choice and visible editing branch."
+OPERATION["description"] = "clear_use_tempo_override requires arrangementID/useID, removes only that use tempo override, and requires midiTempoImport=1. edit_shared_audio requires patternID, trackID, clipID and edit (split/duplicate/fade/delete). patternID is rejected on other kinds; arrangementID/compositionID/nodeID/useID/laneID are rejected on edit_shared_audio. original is rejected on kinds other than set_automation. It edits the shared rhythm pattern across its uses; split uses sourceOffset seconds, duplicate uses beatOffset, fade uses fadeIn/fadeOut seconds, as in edit_audio. set_automation accepts original: omitted/false edits this use, true edits the shared section source and retains existing use overrides. insert_section requires arrangementID, useID (insert after), name (1–120 trimmed characters), bars (1–4096), and at {x,y}; it atomically inserts a new section into a linear path, preserving editing selection. Branches, loops and non-default transitions fail without changes. duplicate_arrangement and rename_arrangement require explicit compositionID, arrangementID and name (1–120 characters after trimming whitespace). Duplicate shares section sources and assets, preserving every owner's playback choice and the editing canvas. Rename changes only the arrangement name. select_arrangement requires compositionID and arrangementID (no name needed); it deliberately changes the owner's playback choice and visible editing branch."
 
 
 def tool(name, method, description, properties=None, required=(), write=False):
@@ -131,6 +133,13 @@ TOOLS = [
     tool("disconnect_ports", "disconnect_ports", "Disconnect the exact logical cable. One Undo; other section uses stay unchanged. Composition sequence cables cannot be disconnected.", {**LAYOUT_REVISION, "connectionID": CONNECTION_ID}, ("expectedLayoutRevision", "connectionID"), True),
     tool("move_ports", "move_ports", "Atomically place 1–128 distinct existing cables in eight directions. One layout Undo; changes layoutRevision only, preserving music and audio. Unchanged placements are a no-op.", {**LAYOUT_REVISION, "moves": {"type": "array", "items": PLACED_CONNECTION, "minItems": 1, "maxItems": 128}}, ("expectedLayoutRevision", "moves"), True),
     tool("apply", "apply", "Atomically apply 1–128 edits as one Undo action. set_automation uses gain 0–4, pan -1–1, or synthCutoff 40–20000 Hz on built-in synth instrument nodes only. Cutoff batches require a fresh matching snapshot with runtime.capabilities.synthCutoffAutomation=1; unsupported apps receive no mutation. Final target and revision validation remain app-side. edit_shared_audio requires patternID, trackID, clipID and edit (split/duplicate/fade/delete), affecting all uses of the shared rhythm pattern; offsets and fades match edit_audio. set_automation original defaults to false (this use); true edits shared section source while retaining use overrides. set_notes/generate_midi replace notes unless append=true. duplicate_arrangement/rename_arrangement require explicit compositionID, arrangementID and a name of 1–120 characters after trimming; duplicate shares section sources/assets while preserving playback choices and the editing canvas. select_arrangement requires compositionID and arrangementID and deliberately changes playback choice and the visible editing branch. Stable IDs are required; stale revisions fail without changes.", {"operations": {"type": "array", "items": OPERATION, "minItems": 1, "maxItems": 128}}, ("operations",), True),
+    tool("import_midi", "import_midi", "Read a local regular SMF format 0/1 file (maximum 16 MiB) in a background job. Requires midiTempoImport=1 capability and matching project/revision. previewOnly=true returns track IDs, tempo metadata and optional previewIssue without changing the document. Omitted trackIDs imports all note tracks; explicit IDs are index:channel from preview. keepCurrent (default) retains current tempo; applyFile applies the file tempo to this use only and fails on tempoImportIssue. atBeat defaults to 0, extendSection defaults to false. One Undo; preserves editing selection. Read job until terminal. No playback/audition is started.", {
+        **SCOPE, "path": STRING,
+        "trackIDs": {"type": "array", "items": {"type": "string", "minLength": 1, "maxLength": 32}, "minItems": 1, "maxItems": 256},
+        "atBeat": {"type": "number", "minimum": 0, "maximum": 131072},
+        "extendSection": {"type": "boolean"}, "previewOnly": {"type": "boolean"},
+        "tempoPolicy": {"type": "string", "enum": ["keepCurrent", "applyFile"]}
+    }, ("path", "arrangementID", "useID"), True),
     tool("bounce", "bounce", "Start an asynchronous section track bounce including its internal effects and sidechain. Originals remain restorable; audio replaces output inputs. Read job until terminal state.", {**SCOPE, "trackID": STRING, "tailSeconds": TAIL_SECONDS}, ("useID", "trackID"), True),
     tool("restore_bounce", "restore_bounce", "Restore a bounced circle's original inputs; keep rendered audio as a disconnected archive.", {**SCOPE, "nodeID": STRING}, ("useID", "nodeID"), True),
     tool("export", "export", "Start asynchronous master WAV export, 48 kHz stereo 24-bit. Requires a NEW absolute .wav path. No file overwrite. Read job for completion and resolved tail/end-window measurements.", {"path": STRING, "tailSeconds": TAIL_SECONDS}, ("path",), True),
@@ -234,22 +243,34 @@ def call_tool(path, name, arguments, read_only=False):
     validate(arguments, entry["inputSchema"])
     if entry["method"] == "apply":
         validate_operation_scopes(arguments["operations"])
+    if entry["method"] == "import_midi":
+        if not arguments["path"].startswith("/") or "\0" in arguments["path"]:
+            raise ValueError("import_midi.path: absolute local path required")
+        ids = arguments.get("trackIDs")
+        if ids is not None and len(set(ids)) != len(ids):
+            raise ValueError("import_midi.trackIDs: duplicate IDs")
     request = {"id": str(uuid.uuid4()), "method": entry["method"], "arguments": {k: v for k, v in arguments.items() if k not in REVISION}}
     for key in REVISION:
         if key in arguments:
             request[key] = arguments[key]
     try:
+        required_capabilities = []
         if entry["method"] == "apply" and any(op.get("parameter") == "synthCutoff" for op in arguments["operations"]):
+            required_capabilities.append("synthCutoffAutomation")
+        if entry["method"] == "import_midi" or (entry["method"] == "apply" and any(op["kind"] == "clear_use_tempo_override" for op in arguments["operations"])):
+            required_capabilities.append("midiTempoImport")
+        if required_capabilities:
             # This read does not weaken the final app-side revision/atomicity guard.
             probe = rpc(path, {"id": str(uuid.uuid4()), "method": "snapshot", "arguments": {}})
             state = probe.get("result") if isinstance(probe, dict) and probe.get("ok") is True else None
             if not isinstance(state, dict):
-                raise ValueError("Cannot verify synthCutoffAutomation capability; read snapshot again")
+                raise ValueError("Cannot verify app capabilities; read snapshot again")
             runtime = state.get("runtime", {})
             capabilities = runtime.get("capabilities", {}) if isinstance(runtime, dict) else {}
-            capability = capabilities.get("synthCutoffAutomation") if isinstance(capabilities, dict) else None
-            if type(capability) is not int or capability != 1:
-                raise ValueError("This app does not support synthCutoffAutomation=1; update the app before cutoff edits")
+            for required in required_capabilities:
+                capability = capabilities.get(required) if isinstance(capabilities, dict) else None
+                if type(capability) is not int or capability != 1:
+                    raise ValueError(f"This app does not support {required}=1; update the app before editing")
             if state.get("projectID") != request["projectID"] or type(state.get("revision")) is not int or state.get("revision") != request["expectedRevision"]:
                 raise ValueError("stale_revision: snapshot differs from projectID/expectedRevision")
         result = rpc(path, request)

@@ -35,6 +35,11 @@ public struct AgentArguments:Codable {
     public var nodeID:ID?
     public var jobID:ID?
     public var path:String?
+    public var trackIDs:[String]?
+    public var atBeat:Double?
+    public var extendSection:Bool?
+    public var tempoPolicy:MIDIImportTempoPolicy?
+    public var previewOnly:Bool?
     public var afterSequence:Int?
     public var detail:Bool?
     public var minimized:Bool?
@@ -134,6 +139,9 @@ public enum AgentProjectEditing {
                 }
                 try ArrangementSelection.select(arrangementID,compositionID:compositionID,in:&p)
                 explicitSelection=arrangementID
+            case "clear_use_tempo_override":
+                guard op.arrangementID != nil,let useID=op.useID else{throw CirclrError("arrangementID·useID가 필요합니다")}
+                try UseTempoOverrideEditing.clear(useID:useID,in:&p)
             case "set_global":guard let context=op.context else {throw CirclrError("context가 필요합니다")};p.global=context
             case "rename_project":guard let name=op.name,!name.isEmpty,name.count<=256 else {throw CirclrError("name이 필요합니다")};p.name=name
             case "set_instrument":
@@ -274,6 +282,7 @@ public enum AgentProjectEditing {
         }
         // Only an explicit selection may navigate the musician's current canvas.
         p.activeArrangementID=explicitSelection ?? input.activeArrangementID
+        try UseTempoOverrideEditing.validateChanges(from:input,to:p)
         try ProjectStore.validateStructure(p)
         return p
     }

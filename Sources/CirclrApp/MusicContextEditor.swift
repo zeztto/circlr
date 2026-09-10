@@ -34,8 +34,14 @@ struct MusicContextEditor: View {
     var body: some View {
         VStack(alignment:.leading,spacing:6) {
             if snapshot != nil {
+                if case .section(let arrangementID,let useID)=address,
+                   let use=store.project.arrangements.first(where:{$0.id==arrangementID})?.uses.first(where:{$0.id==useID}),
+                   let tempo=use.tempoOverride {
+                    UseTempoControls(store:store,useID:useID,arrangementID:arrangementID,tempo:tempo,identity:store.numberEditIdentity,requiredAddress:address)
+                } else {
                 row(.tempo) {
                     HStack(spacing:8) {ValueField(title:"템포 BPM",value:binding(\.tempo,MusicContextChange.tempo),width:92,showsLabel:false,range:1...999);Text("BPM").foregroundStyle(StudioTheme.secondary)}
+                }
                 }
                 row(.meter) {
                     HStack(spacing:10) {

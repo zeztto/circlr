@@ -1,6 +1,8 @@
 # 써클러 개발 방향과 실행 계획
 
-build130은 오토메이션 가시성과 빈 곡선 키보드 이동을 개선했다. [검증150](150-automation-editing-space.md). 다음 엔진 범위는 [MIDI tempo 가져오기](151-midi-tempo-import-plan.md)이며 계획을 구현 증거로 계산하지 않는다.
+build131에서 MIDI 파일 tempo map의 이번 use 적용·명시적 이전 설정 복귀를 연결했다. 기본 keepCurrent는 유지하고 applyFile은 schema4를 사용한다. 기계검증 496개·렌더 1개·MCP 13/27개·Release 81.94초를 통과했으며 native GUI/MCP·오프라인 바운스/복원·r95 저장/재열기와 production 서명까지 확인했다. [현재 검증](152-midi-tempo-import-validation.md). 다음은 가져오기 오류의 수치 인접 피드백과 대상 use 별명 표시를 검토한다. 전체 제작·물리 오디오·청취 목표는 남아 있다.
+
+build130은 오토메이션 가시성과 빈 곡선 키보드 이동을 개선했다. [검증150](150-automation-editing-space.md). 당시 다음 엔진 범위였던 [MIDI tempo 가져오기](151-midi-tempo-import-plan.md)는 위 build131에서 구현·검증했다.
 
 build129에서 내장 신스 cutoff의 Core/DSP·GUI/MCP·schema를 연결하고 기계검증·Release 77.59초·실제 Hz 편집/오류 거절을 확인했다. GUI/schema의 독립 감사·production 서명/UUID도 통과했으며 native 바운스·원본 복원·재열기 r79도 확인했다. PCM 최대 1LSB·원본 복원 byte-exact를 독립 감사했으며 최종 종합 UI 데이터 감사도 통과했다. [구현 검증](149-synth-cutoff-automation-validation.md). 실제 청취·물리 오디오·전체 제작 목표는 남아 있다.
 

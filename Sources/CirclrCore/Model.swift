@@ -148,6 +148,7 @@ public struct SectionUse: Codable, Equatable, Identifiable {
     public var isEnd = true
     public var settings = ContextSettings()
     public var barsOverride: Int?
+    public var tempoOverride:UseTempoOverride?
     public var laneOverrides: [ID: Lane] = [:]
     public var addedLanes: [Lane] = []
     public var excludedLaneIDs: [ID] = []
@@ -155,7 +156,7 @@ public struct SectionUse: Codable, Equatable, Identifiable {
     public var gain: Double = 1
     public var graphEdits: SectionGraphEdits?
     public init(sectionID: ID, name: String) { self.sectionID = sectionID; self.name = name }
-    public var isVariant: Bool { !laneOverrides.isEmpty || !addedLanes.isEmpty || !excludedLaneIDs.isEmpty || barsOverride != nil || !effects.isEmpty || settings != ContextSettings() || gain != 1 || graphEdits.map({ !$0.isEmpty }) == true }
+    public var isVariant: Bool { !laneOverrides.isEmpty || !addedLanes.isEmpty || !excludedLaneIDs.isEmpty || barsOverride != nil || tempoOverride != nil || !effects.isEmpty || settings != ContextSettings() || gain != 1 || graphEdits.map({ !$0.isEmpty }) == true }
 }
 public struct RhythmPattern: Codable, Equatable, Identifiable {
     public var id: ID = newID()

@@ -182,14 +182,20 @@ public enum ArrangementCompiler {
         let ownerID = arrangementID ?? project.arrangements.first(where: { $0.uses.contains(where: { $0.id == use.id }) })?.id ?? project.activeArrangementID
         let parent = try project.compositionContext(for: ownerID)
         let definition = try ContextResolver.inheriting(global: project.global, parent: parent, settings: section.settings)
-        let c = try ContextResolver.inheriting(global: project.global, parent: definition, settings: use.settings)
+        var c = try ContextResolver.inheriting(global: project.global, parent: definition, settings: use.settings)
         // An explicit per-use/global tempo or meter replaces the definition's map.
-        let tempoMap = use.settings.tempo.source == .inherit ? section.tempoChanges : []
+        let tempoMap = use.tempoOverride?.changes ?? (use.settings.tempo.source == .inherit ? section.tempoChanges : [])
+        if let mapOverride=use.tempoOverride {
+            guard project.schemaVersion>=4 else{throw CirclrError("이번 사용 템포 맵에는 version 4 프로젝트가 필요합니다")}
+            c.tempo=mapOverride.initialBPM
+        }
         let meterMap = use.settings.meter.source == .inherit ? section.meterChanges : []
-        return (section, c, try MusicClock(bars: use.barsOverride ?? section.bars, context: c, meterChanges: meterMap, tempoChanges: tempoMap))
+        let clock=try MusicClock(bars:use.barsOverride ?? section.bars,context:c,meterChanges:meterMap,tempoChanges:tempoMap)
+        try use.tempoOverride?.validate(beats:clock.beats)
+        return (section,c,clock)
     }
     public static func compile(_ project: Project, arrangementID: ID? = nil, onlyUseID: ID? = nil) throws -> ExecutionPlan {
-        guard (1...3).contains(project.schemaVersion) else { throw CirclrError("이 프로젝트의 형식 버전을 지원하지 않습니다") }
+        guard (1...4).contains(project.schemaVersion) else { throw CirclrError("이 프로젝트의 형식 버전을 지원하지 않습니다") }
         guard let a = project.arrangements.first(where: { $0.id == (arrangementID ?? project.activeArrangementID) }) else { throw CirclrError("편곡안을 찾을 수 없습니다") }
         if a.uses.isEmpty { return ExecutionPlan(revision: project.musicRevision, arrangementID: a.id, occurrences: [], transitions: [], duration: 0, warnings: []) }
         var flow = try ArrangementFlowCursor(a, onlyUseID: onlyUseID)
