@@ -175,18 +175,16 @@ struct AudioWorkspaceView:View {
         GeometryReader { geometry in
         ScrollView {
         VStack(alignment:.leading,spacing:10) {
+            if !store.isSharedRhythmAudio {
             HStack(spacing:12) {
-                if store.isSharedRhythmAudio {
-                    Text("공유 패턴 · 모든 사용에 반영").font(.system(size:11)).fixedSize()
-                } else {
                 Toggle(store.editOriginal ? "공유 원본":"이번 사용",isOn:Binding(get:{store.editOriginal},set:{value in
                     if store.setAudioEditScope(original:value,identity:scopeIdentity) {focusTarget.focus()}
                 })).fixedSize().accessibilityLabel("오디오 공유 원본 편집")
                     .accessibilityValue(store.editOriginal ? "공유 원본":"이번 사용")
                     .help(store.editOriginal ? "같은 원본을 사용하는 다른 섹션 사용에도 오디오 편집이 반영됩니다":"오디오 편집은 이번 사용에만 반영됩니다. 체크하면 공유 원본을 편집합니다")
-                }
                 Text(asset.name).foregroundStyle(StudioTheme.secondary).lineLimit(1).help(asset.name)
                 Spacer(minLength:0)
+            }
             }
                 MIDIWorkspaceToolbarLayout {
                     HStack(spacing:10) {

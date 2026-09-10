@@ -1,5 +1,11 @@
 # 변경 이력
 
+## 검증 완료 — build144 공유 오디오 상단 밀도
+
+- 공유 picker 행에 scope 안내를 합치고 아래 중복 행을 제거해 최초 수치 4개의 가시성을 개선했다. 일반 오디오·파형 높이·키보드 guard는 유지한다.
+- Release 46.26초·package 감사와 native 최초 화면·Tab·clip 전환·Undo/Redo·r208 저장/재열기를 확인했다. UI 12쌍은 PASS_WITH_SCOPE_LIMITS, state 4개 캡처는 PASS다.
+- 추가 unit/full suite는 실행하지 않았다. 첫 Tab 스크롤·좁은 폭·tooltip·VoiceOver·물리 I/O의 한계를 구분한다. [기록](docs/166-shared-audio-editor-density.md).
+
 ## 검증 완료 — build143 오디오 history 작업 위치
 
 - 일반·공유 오디오의 Undo/Redo에서 조건부로 파형과 focus를 복원하며 다른 노드 탐색은 유지한다. 공유 branch 요청과 이전 clip view의 조기 focus 소비를 수정했다.
