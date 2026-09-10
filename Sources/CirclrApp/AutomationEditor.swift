@@ -68,6 +68,9 @@ extension AppStore {
 struct AutomationEditor:View {
     @ObservedObject var store:AppStore
     @State private var focusTarget=AutomationFocusTarget()
+    @State private var gainFields=NumberFieldFocus(["오토메이션 위치 박","오토메이션 볼륨 dB"],revealOnFocus:true)
+    @State private var panFields=NumberFieldFocus(["오토메이션 위치 박","오토메이션 팬 %"],revealOnFocus:true)
+    private var fieldFocus:NumberFieldFocus {store.automationParameter == .gain ? gainFields:panFields}
     var lane:AutomationLane? {store.currentAutomation}
     var hidden:Int {lane?.points.filter{$0.beat>store.automationDisplayedBeats}.count ?? 0}
     var available:Bool {store.automationNode != nil}
@@ -75,9 +78,9 @@ struct AutomationEditor:View {
         Group {if store.project.usesOrbits {orbital}else{linear}}
             .onChange(of:store.automationParameter){_,_ in focusTarget.focus()}
             .onChange(of:store.editOriginal){_,_ in focusTarget.focus()}
-            .environment(\.numberEditing,NumberEditingContext(snapshot:store.numberEditIdentity,current:{store.numberEditIdentity},focusCanvas:{focusTarget.focus()}))
+            .environment(\.numberEditing,NumberEditingContext(snapshot:store.numberEditIdentity,current:{store.numberEditIdentity},focusCanvas:{focusTarget.focus()},fieldFocus:fieldFocus))
     }
-    var plot:some View {AutomationPlot(store:store,displayBeats:store.automationDisplayedBeats,focusTarget:focusTarget).disabled(!available)}
+    var plot:some View {AutomationPlot(store:store,displayBeats:store.automationDisplayedBeats,focusTarget:focusTarget,fieldFocus:fieldFocus).disabled(!available)}
     var linear:some View {
         VStack(alignment:.leading,spacing:8) {
             HStack(spacing:12){parameterControls;Spacer(minLength:8);originalToggle;pointActions}
@@ -93,7 +96,9 @@ struct AutomationEditor:View {
         }
     }
     var orbital:some View {
-        HStack(alignment:.top,spacing:20) {
+        GeometryReader { geometry in
+        let compact=geometry.size.width<700
+        HStack(alignment:.top,spacing:compact ? 12:20) {
             ScrollView {
             VStack(alignment:.leading,spacing:12) {
                 parameterControls
@@ -103,30 +108,37 @@ struct AutomationEditor:View {
                 rangeButton
                 Text("각도는 시간 · 반경은 "+store.automationParameter.label).font(.system(size:12)).foregroundStyle(StudioTheme.secondary)
             }.frame(maxWidth:.infinity,alignment:.leading).padding(.trailing,6)
-            }.frame(width:225,alignment:.leading)
+            }.frame(width:compact ? 170:225,alignment:.leading)
             plot.frame(minWidth:100,maxWidth:.infinity,maxHeight:.infinity)
             ScrollView {
             VStack(alignment:.leading,spacing:12) {
                 navigation
-                if let point=store.selectedAutomationPoint {timeControl(point);positionText;valueControl(point);shapeControl(point)}else{emptyHint}
+                if let point=store.selectedAutomationPoint {
+                    Button("수치 입력"){_ = fieldFocus.enter(in:focusTarget.view?.window)}
+                        .help("곡선에서 Tab 첫 수치 · ⇧Tab 마지막 수치 · Return/Esc 곡선 복귀")
+                    timeControl(point);positionText;valueControl(point);shapeControl(point)
+                }else{emptyHint}
                 valueHint.font(.system(size:12)).foregroundStyle(StudioTheme.secondary)
             }.frame(maxWidth:.infinity,alignment:.leading).padding(.trailing,6)
-            }.frame(width:250,alignment:.leading)
+            }.frame(width:compact ? 210:250,alignment:.leading)
+        }
         }
     }
     var parameterControls:some View {
-        HStack(spacing:10) {
+        MIDIWorkspaceToolbarLayout {
             Picker("오토메이션 대상",selection:$store.automationParameter){ForEach(AutomationParameter.allCases,id:\.self){Text($0.label).tag($0)}}
                 .pickerStyle(.segmented).labelsHidden().frame(width:112)
+            HStack(spacing:10) {
             Toggle("적용",isOn:Binding(get:{lane?.enabled ?? false},set:{store.setAutomation(enabled:$0)})).disabled(lane==nil).fixedSize()
             Text("\(lane?.points.count ?? 0)개 점").foregroundStyle(StudioTheme.secondary).fixedSize()
+            }.fixedSize()
         }
     }
     var originalToggle:some View {Toggle("공유 원본 편집",isOn:$store.editOriginal).fixedSize()}
     var pointActions:some View {
-        HStack(spacing:12) {
-            Button("점 추가"){act{store.addAutomationPoint()}}.disabled(!available)
-            Button("점 삭제"){act{store.removeAutomationPoint()}}.disabled(store.selectedAutomationPoint==nil)
+        MIDIWorkspaceToolbarLayout {
+            Button("점 추가"){act{store.addAutomationPoint()}}.fixedSize().disabled(!available)
+            Button("점 삭제"){act{store.removeAutomationPoint()}}.fixedSize().disabled(store.selectedAutomationPoint==nil)
             Menu("곡선") {
                 Button("선택 점 복제"){act{store.duplicateAutomationPoint()}}.disabled(store.selectedAutomationPoint==nil)
                 Button("곡선 지우기"){act{store.setAutomation([])}}.disabled(lane==nil)
@@ -172,8 +184,8 @@ struct AutomationEditor:View {
     }
     func shapeControl(_ point:AutomationPoint)->some View {
         let identity=store.numberEditIdentity
-        return HStack(spacing:10) {
-            Text("다음 점까지").foregroundStyle(StudioTheme.secondary)
+        return MIDIWorkspaceToolbarLayout {
+            Text("다음 점까지").fixedSize().foregroundStyle(StudioTheme.secondary)
             Picker("다음 점까지",selection:Binding(get:{store.selectedAutomationPoint?.shape ?? point.shape},set:{v in
                 guard store.numberEditIdentity==identity,var current=store.selectedAutomationPoint,current.id==point.id else{return}
                 current.shape=v;store.editAutomationPoint(current)
@@ -213,9 +225,11 @@ struct AutomationPlot:NSViewRepresentable {
     @ObservedObject var store:AppStore
     let displayBeats:Double
     let focusTarget:AutomationFocusTarget
+    let fieldFocus:NumberFieldFocus
     @Environment(\.isEnabled) private var enabled
     func makeNSView(context:Context)->AutomationPlotView {let view=AutomationPlotView(store:store);focusTarget.view=view;return view}
     func updateNSView(_ view:AutomationPlotView,context:Context){
+        view.fieldFocus=fieldFocus
         view.displayBeats=displayBeats;view.plotClock=store.automationClock;view.allowsEditing=enabled
         if !enabled || (view.dragIdentity != nil && (view.dragIdentity != store.numberEditIdentity || view.dragExtent != displayBeats)) {view.preview=nil;view.origin=nil;view.dragIdentity=nil;view.dragExtent=nil}
         view.needsDisplay=true
@@ -226,7 +240,9 @@ struct AutomationPlot:NSViewRepresentable {
     var preview:AutomationPoint?,origin:AutomationPoint?
     var dragIdentity:NumberEditIdentity?
     var dragExtent:Double?
+    var dragFrame:NSRect?
     var allowsEditing=true
+    var fieldFocus:NumberFieldFocus?
     var displayBeats=32.0
     var plotClock:MusicClock?
     var accessibilityPoints:[ID:AutomationPointAccessibility]=[:]
@@ -236,9 +252,15 @@ struct AutomationPlot:NSViewRepresentable {
     var accessibilityOrbital:Bool?
     override var isFlipped:Bool {true}
     override var acceptsFirstResponder:Bool {true}
-    init(store:AppStore){self.store=store;super.init(frame:.zero);setAccessibilityElement(true);setAccessibilityRole(.group);setAccessibilityLabel("오토메이션 곡선 · Return 점 추가 · 대괄호 점 선택 · Home·End 첫·끝 점 · 방향키 시간과 값 · Delete 삭제 · 겹친 점 Option 클릭")}
+    init(store:AppStore){self.store=store;super.init(frame:.zero);setAccessibilityElement(true);setAccessibilityRole(.group);setAccessibilityLabel("오토메이션 곡선 · Tab 첫 수치 · Shift Tab 마지막 수치 · Return 점 추가 · 대괄호 점 선택 · Home·End 첫·끝 점 · 방향키 시간과 값 · Delete 삭제 · 겹친 점 Option 클릭")}
     required init?(coder:NSCoder){fatalError()}
     override func viewDidMoveToWindow(){super.viewDidMoveToWindow();DispatchQueue.main.async{[weak self] in guard let self,let window=self.window,!(window.firstResponder is NSTextView) else{return};window.makeFirstResponder(self)}}
+    override func layout() {
+        super.layout()
+        if let dragFrame,dragFrame != convert(bounds,to:nil) {
+            preview=nil;origin=nil;dragIdentity=nil;dragExtent=nil;self.dragFrame=nil;needsDisplay=true
+        }
+    }
     var rect:NSRect {bounds.insetBy(dx:42,dy:24)}
     var center:NSPoint {NSPoint(x:bounds.midX,y:bounds.midY)}
     var radius:Double {max(20,min(rect.width,rect.height)/2)}
@@ -352,7 +374,7 @@ struct AutomationPlot:NSViewRepresentable {
         let hits=points.filter{$0.beat<=displayBeats && hypot(position($0).x-p.x,position($0).y-p.y)<12}
         let hitID=AutomationDisplay.hit(in:hits.map(\.id),selected:store.selectedAutomationPointID,cycle:event.modifierFlags.contains(.option))
         if let hit=hits.first(where:{$0.id==hitID}) {
-            store.selectedAutomationPointID=hit.id;origin=hit;preview=hit;dragIdentity=store.numberEditIdentity;dragExtent=displayBeats
+            store.selectedAutomationPointID=hit.id;origin=hit;preview=hit;dragIdentity=store.numberEditIdentity;dragExtent=displayBeats;dragFrame=convert(bounds,to:nil)
         } else {
             let (q,v)=coordinate(p),grid=Double(store.automationContext.beatGrid.subdivisions),beat=min(displayBeats,max(0,(q*grid).rounded()/grid))
             if let existing=points.first(where:{abs($0.beat-beat)<1e-9}){store.selectedAutomationPointID=existing.id}
@@ -360,15 +382,15 @@ struct AutomationPlot:NSViewRepresentable {
         };needsDisplay=true
     }
     override func mouseDragged(with event:NSEvent) {
-        guard allowsEditing,var point=origin,dragIdentity==store.numberEditIdentity,dragExtent==displayBeats else{return}
+        guard allowsEditing,var point=origin,dragIdentity==store.numberEditIdentity,dragExtent==displayBeats,dragFrame==convert(bounds,to:nil) else{return}
         let (q,v)=coordinate(convert(event.locationInWindow,from:nil)),grid=Double(store.automationContext.beatGrid.subdivisions)
         point.beat=min(displayBeats,max(0,event.modifierFlags.contains(.shift) ? q:(q*grid).rounded()/grid));point.value=v
         let others=points.filter{$0.id != point.id};guard !others.contains(where:{abs($0.beat-point.beat)<1e-9}) else{return}
         preview=point;needsDisplay=true
     }
     override func mouseUp(with event:NSEvent) {
-        defer{origin=nil;preview=nil;dragIdentity=nil;dragExtent=nil;needsDisplay=true}
-        guard allowsEditing,let preview,preview != origin,dragIdentity==store.numberEditIdentity,dragExtent==displayBeats else{return}
+        defer{origin=nil;preview=nil;dragIdentity=nil;dragExtent=nil;dragFrame=nil;needsDisplay=true}
+        guard allowsEditing,let preview,preview != origin,dragIdentity==store.numberEditIdentity,dragExtent==displayBeats,dragFrame==convert(bounds,to:nil) else{return}
         store.editAutomationPoint(preview)
     }
     override func keyDown(with event:NSEvent) {
@@ -378,6 +400,10 @@ struct AutomationPlot:NSViewRepresentable {
         case 30:store.chooseAutomationPoint(1)
         case 115:store.chooseAutomationBoundary(last:false)
         case 119:store.chooseAutomationBoundary(last:true)
+        case 48:
+            if store.selectedAutomationPoint != nil,!event.modifierFlags.contains(.option),
+               fieldFocus?.enter(last:event.modifierFlags.contains(.shift),in:window)==true {return}
+            super.keyDown(with:event)
         case 36,76:store.addAutomationPoint()
         case 51,117:store.removeAutomationPoint()
         case 53:preview=nil;origin=nil;dragIdentity=nil;dragExtent=nil;store.automationOpen=false

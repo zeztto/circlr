@@ -1,5 +1,11 @@
 # 변경 이력
 
+## 개발 중 — 0.20.0 build105 오토메이션 compact 배치
+
+- compact adaptive 배치·stable identity·도구 flow·수치 버튼/Tab/reveal 적용. 실제 plot 약50→160px·64beat와1/5/9/13 눈금 확인.
+- Release38.43초·초안 줌 왕복·위치/gain/pan 입력·invalid 거절·Undo·최소 폭 linear 무겹침 확인. QA baseline1+final9·자산2개·정확한 음악 delta/복원·source hash·strict r28 재열기 통과.
+- physical0·사용자 앱 유지. 동시 drag/resize·원본 불가 group·IME·대량 점은 native 미검증이며 하단 안내는 우측 스크롤 아래에 남는다. [계약](docs/120-automation-compact-layout.md).
+
 ## 개발 중 — 0.20.0 build104 연결 focus·선택 행 유지
 
 - stable identity·측정 높이·connections 전용 reanchor와 공통 `PortKeyboardFocus`의 선택 행 inner/outer reveal 적용.

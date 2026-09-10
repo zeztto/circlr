@@ -6,7 +6,9 @@ macOS용 앨범·송폼 궤도 편집기. **앨범 → 곡·악장 → 섹션 �
 
 연결 UI는 [서클 둘레 8방향 IN/OUT과 다중 입출력](docs/22-eight-direction-ports.md)으로 확장 중이다. 포트의 신호 의미와 연결점 배치를 분리한다. 아래 일반 사용법은 배포된 0.19 앱 기준이며 새 포트 기능은 독립 개발 브랜치에서 검증한다.
 
-현재 **`codex/daw-integration`의 0.20.0 build 104**에 녹음 lifecycle과 8방향·다중 bus·그룹 포트를 통합했다. 같은 캔버스의 연결 편집·녹음 상태·스텝·오토메이션이 공존하며, 녹음 시작·정리 중 음악 편집과 Undo의 경쟁을 차단한다. build 23의 실제 편집·바운스·Undo·저장/재열기·닫기 최소화 및 출력별 모션 검증은 [통합 QA](qa/daw-integration-review.md)에 기록했다.
+현재 **`codex/daw-integration`의 0.20.0 build 105**에 녹음 lifecycle과 8방향·다중 bus·그룹 포트를 통합했다. 같은 캔버스의 연결 편집·녹음 상태·스텝·오토메이션이 공존하며, 녹음 시작·정리 중 음악 편집과 Undo의 경쟁을 차단한다. build 23의 실제 편집·바운스·Undo·저장/재열기·닫기 최소화 및 출력별 모션 검증은 [통합 QA](qa/daw-integration-review.md)에 기록했다.
+
+**build105는 작은 오토메이션 편집기의 곡선 공간과 수치 이동을 개선했다.** Release38.43초와 실제 약160px plot·초안 왕복·위치/gain/pan 입력·Undo·수치 버튼을 확인했다. QA10개 상태·자산2개·strict r28 재열기와 시각 검토를 통과했다. 동시 drag/resize·IME·대량 점 등은 미검증이다. [계약](docs/120-automation-compact-layout.md).
 
 **build104는 연결 편집기의 폭 전환에서 입력 focus와 선택 행을 유지한다.** 최종 Release40.00초와 실제 target/search/filter 왕복·caret 삽입·목록 이동·키보드 재연결/취소를 확인했다. QA11개 상태·음악r36/자산2개·strict 재열기와 시각 검토를 통과했다. 케이블 적용·IME 조합 등은 미검증이다. [계약](docs/119-connection-focus-continuity.md).
 
