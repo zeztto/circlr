@@ -68,6 +68,7 @@ extension AppStore {
     func handleAudioEditKey(_ event:NSEvent)->Bool {
         if event.modifierFlags.contains(.control){return false}
         if event.modifierFlags.contains(.command) {
+            guard event.modifierFlags.intersection([.command,.control,.option,.shift]) == .command else{return false}
             if event.keyCode==17 {splitAudio();return true}
             if event.keyCode==2 {duplicateAudio();return true}
             return false

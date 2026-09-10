@@ -21,7 +21,7 @@ struct RootView: View {
             if let palette=store.commandPalette {
                 ZStack(alignment:.top) {
                     Color.black.opacity(0.25).contentShape(Rectangle()).onTapGesture{store.commandPalette=nil;store.focusCanvas?()}
-                    StudioCommandPalette(store:store,palette:palette).padding(.top,85)
+                    StudioCommandPalette(store:store,palette:palette).id(palette.id).padding(.top,85)
                 }
             }
         }

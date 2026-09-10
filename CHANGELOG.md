@@ -1,5 +1,11 @@
 # 변경 이력
 
+## 검증 완료 — 0.20.0 build108 테이크 검색
+
+- StudioPalette·직접 버튼/⌥⌘T/전체 명령·키보드 검색 적용. 초기 shortcut이 split에 잡히던 문제를 정확한 modifier guard로 수정.
+- final2 키보드 성공 뒤 final3 목록 높이를 초기3개 기준194로 줄이고 필터 중 유지. 최종 Release39.82초·실제 선택/검색0/취소/Undo·⌘T split 회귀·명령/query reset·stale 거절·시각/source 검토 통과.
+- checker9개 상태·검색 AX·테이크5개·자산2개·output0·r30 strict 복원/재열기/disk 대조 통과. physical I/O0·사용자 앱 유지. 앱별 출력 장치 계획은 미구현. [계약](docs/124-take-search.md).
+
 ## 개발 중 — 0.20.0 build107 테이크 요약·AU instrument worker
 
 - 테이크 이름·노트/클립 수·현재 내용 일치, exact target·legacy 첫 matching·nonempty payload 비교. active 체크와 구분.

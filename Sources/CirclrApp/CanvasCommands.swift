@@ -12,6 +12,12 @@ struct StudioCommand: Identifiable {
 struct StudioPalette: Identifiable {
     let id = UUID()
     let commands: [StudioCommand]
+    var title=""
+    var placeholder="명령 또는 서클 이름 검색"
+    var emptyMessage="일치하는 명령이 없습니다"
+    var footer="↑ ↓ 선택 · Return 실행"
+    var countUnit="명령"
+    var listHeight:CGFloat=360
 }
 
 extension AppStore {
@@ -68,6 +74,7 @@ extension AppStore {
         if let trackID=selectedTrackID {add("sound-search","음색·악기 찾기"){[weak self] in self?.showInstrumentPicker(trackID:trackID)}}
         if case .effect=selectedMusic?.content {add("effect-search","Audio Unit 이펙트 찾기"){[weak self] in self?.showSoundPicker(.musicEffect)}}
         if selectedSignal?.kind == .effect {add("signal-effect-search","전역 Audio Unit 이펙트 찾기"){[weak self] in self?.showSoundPicker(.signalEffect)}}
+        if !recordedTakeChoices.isEmpty {add("take-search","녹음 테이크 찾기","⌥⌘T"){[weak self] in self?.showRecordedTakes()}}
         add("navigation","섹션·트랙으로 바로 이동","⌘J"){[weak self] in self?.showNavigation()}
         if let owner=arrangementPickerOwner {add("arrangement-search","편곡안 찾기","⌥⌘J"){[weak self] in self?.showArrangementPicker(compositionID:owner.id)}}
         add("parent","상위 서클로 이동","Esc"){[weak self] in self?.hierarchyParent()}
@@ -255,15 +262,16 @@ struct StudioCommandPalette:View {
     }
     var body:some View {
         VStack(spacing:0) {
+            if !palette.title.isEmpty {Text(palette.title).font(.headline).frame(maxWidth:.infinity,alignment:.leading).padding([.top,.horizontal],17)}
             HStack(spacing:10) {
-                CommandSearchField(text:$query,onMove:{delta in selection=max(0,min(results.count-1,selection+delta))},onSubmit:execute,onCancel:{store.commandPalette=nil;store.focusCanvas?()})
+                CommandSearchField(text:$query,onMove:{delta in selection=max(0,min(results.count-1,selection+delta))},onSubmit:execute,onCancel:{store.commandPalette=nil;store.focusCanvas?()},placeholder:palette.placeholder)
                 Text("Esc").font(.system(size:10,design:.monospaced)).foregroundStyle(StudioTheme.secondary)
             }.padding(17)
             Divider().overlay(StudioTheme.line)
-            if results.isEmpty {Text("일치하는 명령이 없습니다").foregroundStyle(StudioTheme.secondary).padding(30)}
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(spacing:2) {
+                        if results.isEmpty {Text(palette.emptyMessage).foregroundStyle(StudioTheme.secondary).frame(maxWidth:.infinity).padding(30)}
                         ForEach(Array(results.enumerated()),id:\.element.id) { index,command in
                             Button{store.performCommand(command)}label:{
                                 HStack {
@@ -274,12 +282,12 @@ struct StudioCommandPalette:View {
                             }.buttonStyle(.plain).id(command.id).accessibilityAddTraits(index==selection ? .isSelected:[])
                         }
                     }.padding(7)
-                }.frame(maxHeight:360)
+                }.frame(height:palette.listHeight)
                 .onChange(of:selection){_,value in if results.indices.contains(value){proxy.scrollTo(results[value].id,anchor:.center)}}
                 .onChange(of:query){_,_ in if let first=results.first{proxy.scrollTo(first.id,anchor:.top)}}
             }
             Divider().overlay(StudioTheme.line)
-            HStack{Text("↑ ↓ 선택 · Return 실행");Spacer();Text("\(results.count)개 명령")}.font(.system(size:10)).foregroundStyle(StudioTheme.secondary).padding(12)
+            HStack{Text(palette.footer);Spacer();Text("\(results.count)개 \(palette.countUnit)")}.font(.system(size:10)).foregroundStyle(StudioTheme.secondary).padding(12)
         }
         .frame(width:560).background(StudioTheme.surface,in:RoundedRectangle(cornerRadius:10))
         .overlay(RoundedRectangle(cornerRadius:10).strokeBorder(StudioTheme.line))
@@ -328,6 +336,7 @@ struct KeyboardHelpView:View {
     private let categories=["전체","공통","캔버스","MIDI","오디오","오토메이션"]
     private let rows:[(String,String)] = [
         ("⌥⌘J","이 곡·악장의 편곡안 찾기"),
+        ("⌥⌘T","녹음 테이크 찾기 · ↑↓ 선택 · Return 적용 · Esc 취소"),
         ("⌥⌘L","로컬 샘플 라이브러리"),("⌘4","MIDI 스텝 편집"),("⌘J","섹션·트랙 바로 이동"),("⌘1 / ⌘2 / ⌘3","같은 트랙의 MIDI·오디오 / 음색 / 이펙터"),("⇧⌘P","명령·서클 검색"),("⌥⌘0","캔버스로 포커스 이동"),("A / C","서클 생성 / 선택 서클 메뉴"),("L","IN/OUT·대상·8방향 연결 편집"),
         ("Tab · ← → ↑ ↓","다음·이전 서클 선택"),("⇧ 방향키","여러 서클 선택"),("Return / Esc","서클 안으로 / 상위 서클"),
         ("K / ⇧K · P / ⇧P","다음·이전 케이블 · IN/OUT 포트 선택"),

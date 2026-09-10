@@ -20,6 +20,7 @@ import OSLog
             CommandMenu("보기") {
                 Button("영상 녹화 시작 / 마치기…"){store.toggleMovieRecording()}.keyboardShortcut("r",modifiers:[.command,.shift])
                 Button("샘플 라이브러리…"){store.showMediaLibrary()}.keyboardShortcut("l",modifiers:[.command,.option])
+                Button("녹음 테이크 찾기…"){store.showRecordedTakes()}.keyboardShortcut("t",modifiers:[.command,.option]).disabled(store.recordedTakeChoices.isEmpty || store.trackBounceRecoveryLocked || store.midiImportDraft != nil)
                 Button("작업 이동…"){store.showNavigation()}.keyboardShortcut("j")
                 Button("편곡안 찾기…"){store.showArrangementPicker()}.keyboardShortcut("j",modifiers:[.command,.option]).disabled(store.arrangementPickerOwner==nil)
                 Button("이 트랙의 MIDI·오디오"){store.openTrackComponent(0)}.keyboardShortcut("1").disabled(store.currentStudioTrack==nil)
