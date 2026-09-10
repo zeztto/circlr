@@ -28,7 +28,7 @@ import OSLog
                 Button("이 트랙의 음색"){store.openTrackComponent(1)}.keyboardShortcut("2").disabled(store.currentStudioTrack==nil)
                 Button("오디오 녹음 시작 / 정지"){store.startAudioRecording()}.keyboardShortcut("r",modifiers:[.command,.option]).disabled(store.audioRecordingLocked || (!store.audioRecordingAvailable && !store.audioRecordingBusy))
                 Button("MIDI 파일 가져오기"){store.chooseMIDIImport()}.keyboardShortcut("i",modifiers:[.command,.option]).disabled(store.selectedUse == nil)
-                Button("MIDI 스텝 편집"){store.openStepEditor()}.keyboardShortcut("4").disabled(store.currentStudioTrack?.destinations.contains{$0.role=="MIDI"} != true)
+                Button("MIDI 스텝 편집"){store.openStepEditor()}.keyboardShortcut("4").disabled(!store.canOpenStepEditor)
                 Button("볼륨·팬 오토메이션"){store.showAutomation()}.keyboardShortcut("5").disabled(store.selectedMusic==nil)
                 Button("커서에서 오디오 분할"){if store.audioCommandAvailable{store.splitAudio()}}.keyboardShortcut("t").disabled(!store.audioCommandAvailable)
                 Button("이 트랙의 이펙트"){store.openTrackComponent(2)}.keyboardShortcut("3").disabled(store.currentStudioTrack==nil)

@@ -37,20 +37,35 @@ public enum StudioNavigation {
                     let lanes=try ArrangementCompiler.effectiveLanes(section:section,use:use)
                     let reachability=try SectionGraphReachability(graph:graph)
                     let ordered=reachability.orderedNodes
+                    let (_,context,_)=try ArrangementCompiler.context(project:project,use:use,arrangementID:arrangement.id)
+                    // Match scene visibility: a rhythm source needs its resolved pattern;
+                    // audio additionally needs clips, while empty MIDI remains editable.
+                    let visible=try ordered.filter { node in
+                        switch node.content {
+                        case .rhythmMIDI(let trackID),.rhythmAudio(let trackID):
+                            let resolved=try ContextResolver.inheriting(global:project.global,parent:context,settings:node.settings)
+                            guard let pattern=project.patterns.first(where:{$0.id==resolved.rhythm.patternID && $0.trackID==trackID}) else{return false}
+                            if case .rhythmAudio=node.content{return !pattern.audio.isEmpty}
+                            return true
+                        default:return true
+                        }
+                    }
                     let outputs=Dictionary(uniqueKeysWithValues:ordered.map{($0.id,reachability.outputTracks(from:$0.id))})
                     var tracks:[StudioTrackRoute]=[]
                     for track in project.tracks {
                         let laneIDs=Set(lanes.filter{$0.trackID==track.id}.map(\.id))
-                        let destinations=ordered.compactMap { node->StudioDestination? in
+                        let destinations=visible.compactMap { node->StudioDestination? in
                             let owned:Bool
+                            var name=node.name,role=node.content.label
                             switch node.content {
                             case .midi(let lane),.audio(let lane,_):owned=laneIDs.contains(lane)
                             case .instrument(let id),.output(let id):owned=id==track.id
-                            case .rhythmMIDI,.rhythmAudio:return nil
+                            case .rhythmMIDI(let id):owned=id==track.id;name += " · 공유 리듬";role="MIDI"
+                            case .rhythmAudio(let id):owned=id==track.id;name += " · 공유 리듬";role="오디오"
                             case .effect,.mix,.router:owned=outputs[node.id]?.contains(track.id)==true
                             }
                             guard owned else{return nil}
-                            return StudioDestination(id:.music(arrangementID:arrangement.id,useID:use.id,nodeID:node.id),name:node.name,role:node.content.label,connected:outputs[node.id]?.contains(track.id)==true)
+                            return StudioDestination(id:.music(arrangementID:arrangement.id,useID:use.id,nodeID:node.id),name:name,role:role,connected:outputs[node.id]?.contains(track.id)==true)
                         }
                         if !destinations.isEmpty {tracks.append(StudioTrackRoute(id:track.id,name:track.name,destinations:destinations))}
                     }

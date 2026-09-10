@@ -21,10 +21,27 @@ extension AppStore {
               let seconds=PlaybackPosition.localSeconds(for:node,at:meter.seconds,plan:plan,album:nil,albumID:project.album?.id) else{return nil}
         return Int(clock.beat(atSeconds:seconds)*Double(grid.subdivisions))
     }
+    private var currentStepEditorAddress:CircleAddress? {
+        switch selectedMusic?.content {
+        case .midi,.rhythmMIDI:return hierarchySelection
+        default:return nil
+        }
+    }
+    var canOpenStepEditor:Bool {
+        currentStepEditorAddress != nil || currentStudioTrack?.destinations.contains{StudioNavigationRole(source:$0.role) == .midi} == true
+    }
     func openStepEditor() {
+        guard canOpenStepEditor,nameEditing.resolve() else{return}
+        if let address=currentStepEditorAddress {
+            midiStepMode=true
+            connectionsOpen=false;hierarchySettingsOpen=false;automationOpen=false;embeddedPlugin=nil;hierarchyTransitionID=nil
+            focusHierarchy(address,detail:true)
+            return
+        }
+        guard let route=currentStudioTrack else{return}
         midiStepMode=true
-        if let music=selectedMusic,case .midi=music.content,let address=hierarchySelection {focusHierarchy(address,detail:true);return}
-        if let route=currentStudioTrack,let destination=route.destinations.first(where:{$0.role=="MIDI" && $0.connected}) ?? route.destinations.first(where:{$0.role=="MIDI"}) {navigateStudio(destination.id,track:route.id)}
+        automationOpen=false
+        openTrackRoles([.midi],trackID:route.id)
     }
     func editStep(grid:StepGrid,index:Int,pitch:Int,enabled:Bool?=nil) {
         guard let lane=currentLane else{return}
