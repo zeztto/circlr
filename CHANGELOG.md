@@ -1,5 +1,11 @@
 # 변경 이력
 
+## 검증 완료 — build145 트랙 경로 배치
+
+- 약 680px 폭의 긴 트랙명·역할 7개를 트랙 행과 줄바꿈 역할 영역으로 나누고 넓은 화면은 한 행을 유지한다.
+- Release 48.43초·소스/패키지 감사와 native 역할 이동·chooser·공유 오디오 Tab·MIDI 복귀를 확인했다. data 감사는 PASS_DATA_ONLY, 최종 UI 감사는 PASS_WITH_SCOPE_LIMITS다.
+- compact 오디오의 최초 수치 가시성과 모든 폭·invalid draft·VoiceOver·물리 I/O는 완료하지 않았다. [기록](docs/167-track-route-density.md).
+
 ## 검증 완료 — build144 공유 오디오 상단 밀도
 
 - 공유 picker 행에 scope 안내를 합치고 아래 중복 행을 제거해 최초 수치 4개의 가시성을 개선했다. 일반 오디오·파형 높이·키보드 guard는 유지한다.

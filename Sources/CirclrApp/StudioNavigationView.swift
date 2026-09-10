@@ -71,13 +71,14 @@ struct StudioRouteButtons:View {
     @ObservedObject var store:AppStore
     let route:StudioTrackRoute
     var body:some View {
-        HStack(spacing:4) {
+        Group {
             ForEach(["MIDI","오디오","악기","이펙터","오디오 라우터","믹스","출력"],id:\.self) { role in
                 let items=route.destinations.filter{$0.role==role}
                 if let first=items.first {
                     if items.count==1 {
                         if first.id != store.hierarchySelection {
                             Button{if let kind=StudioNavigationRole(source:role){store.openTrackRoles([kind],trackID:route.id)}}label:{title(role,selected:false)}
+                                .fixedSize(horizontal:true,vertical:false)
                                 .help(first.name+(first.connected ? "":" · 출력에 연결되지 않은 원본"))
                                 .accessibilityLabel(route.name+" · "+displayName(role))
                         }
@@ -121,19 +122,18 @@ struct StudioRouteBar:View {
                     HStack(spacing:8) {
                         trackButton(route).frame(maxWidth:110)
                         TrackBounceStatus(store:store).frame(minWidth:280)
-                        routeControls(route).fixedSize(horizontal:true,vertical:false)
+                        HStack(spacing:8) {routeControls(route)}.fixedSize(horizontal:true,vertical:false)
                     }
                     HStack(spacing:8) {
                         trackButton(route).frame(maxWidth:110)
                         TrackBounceStatus(store:store).frame(minWidth:280)
-                        ScrollView(.horizontal) {routeControls(route)}
+                        ScrollView(.horizontal) {HStack(spacing:8) {routeControls(route)}}
                             .frame(width:250,height:32)
                     }
                 }.padding(.vertical,2)
             }else{
-                HStack(spacing:8) {
+                StudioRouteBarLayout {
                     trackButton(route)
-                    Spacer(minLength:4)
                     routeControls(route)
                 }.padding(.vertical,2)
             }
@@ -146,13 +146,49 @@ struct StudioRouteBar:View {
             .help(route.name+" · 다른 트랙으로 이동 · ⌘J")
     }
     private func routeControls(_ route:StudioTrackRoute)->some View {
-        HStack(spacing:8) {
+        Group {
             StudioRouteButtons(store:store,route:route).buttonStyle(.plain)
             if store.canInsertMusicEffect {
                 Menu("이펙트 추가") {
                     ForEach(EffectKind.allCases,id:\.self) {kind in Button(AppStore.effectName(kind)){store.addMusicEffect(kind)}}
                 }.menuStyle(.borderlessButton).fixedSize().help("선택한 오디오 경로에 이펙터 추가")
             }
+        }
+    }
+}
+
+private struct StudioRouteBarLayout:SwiftUI.Layout {
+    let gap:CGFloat=8
+    private func arrangement(width:CGFloat,subviews:Subviews)->(positions:[CGPoint],sizes:[CGSize],height:CGFloat) {
+        guard let title=subviews.first else{return ([],[],0)}
+        let titleSize=title.sizeThatFits(ProposedViewSize(width:width,height:nil))
+        let controls=subviews.dropFirst().map{$0.sizeThatFits(.unspecified)}
+        let controlsWidth=controls.reduce(CGFloat.zero){$0+$1.width}+CGFloat(max(0,controls.count-1))*gap
+        let naturalTitle=title.sizeThatFits(.unspecified)
+        if naturalTitle.width+gap+controlsWidth<=width {
+            let height=max(naturalTitle.height,controls.map(\.height).max() ?? 0)
+            var positions=[CGPoint(x:0,y:(height-naturalTitle.height)/2)],x=width-controlsWidth
+            for size in controls {positions.append(CGPoint(x:x,y:(height-size.height)/2));x+=size.width+gap}
+            return (positions,[naturalTitle]+controls,height)
+        }
+        var positions=[CGPoint.zero],x:CGFloat=0,y=titleSize.height+gap,rowHeight:CGFloat=0
+        for size in controls {
+            if x>0,x+size.width>width {x=0;y+=rowHeight+gap;rowHeight=0}
+            positions.append(CGPoint(x:x,y:y));x+=size.width+gap;rowHeight=max(rowHeight,size.height)
+        }
+        return (positions,[titleSize]+controls,controls.isEmpty ? titleSize.height:y+rowHeight)
+    }
+    func sizeThatFits(proposal:ProposedViewSize,subviews:Subviews,cache:inout ())->CGSize {
+        let ideal=subviews.reduce(CGFloat.zero){$0+$1.sizeThatFits(.unspecified).width}+CGFloat(max(0,subviews.count-1))*gap
+        let width=proposal.width ?? ideal
+        return CGSize(width:width,height:arrangement(width:width,subviews:subviews).height)
+    }
+    func placeSubviews(in bounds:CGRect,proposal:ProposedViewSize,subviews:Subviews,cache:inout ()) {
+        let result=arrangement(width:bounds.width,subviews:subviews)
+        for index in subviews.indices {
+            let position=result.positions[index],size=result.sizes[index]
+            subviews[index].place(at:CGPoint(x:bounds.minX+position.x,y:bounds.minY+position.y),anchor:.topLeading,
+                proposal:ProposedViewSize(width:size.width,height:size.height))
         }
     }
 }
