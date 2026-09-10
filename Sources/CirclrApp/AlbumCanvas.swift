@@ -226,8 +226,8 @@ struct AlbumCanvas: NSViewRepresentable {
             case .focus(let address, let detail): focus(address, detail: detail)
             case .parent:
                 let parent = store.selectedCircle?.parent ?? editorAddress.flatMap { scene?.node($0)?.parent } ?? .album
-                store.selectHierarchy(parent); focus(parent)
-            case .fit: store.selectHierarchy(.album); focus(.album)
+                store.rememberCircleWorkspace();store.selectHierarchy(parent); focus(parent)
+            case .fit: store.rememberCircleWorkspace();store.selectHierarchy(.album); focus(.album)
             case .restore:
                 removePrecisionEditor()
                 connecting=nil;orbitDrag=nil;clearCableSelection()
@@ -532,6 +532,10 @@ struct AlbumCanvas: NSViewRepresentable {
         }
     }
     override func mouseDown(with event:NSEvent) {
+        var identity=store.numberEditIdentity
+        guard store.resolveActiveNumericDraft(),store.nameEditing.resolve() else{return}
+        identity.revision=store.project.musicRevision
+        guard identity==store.numberEditIdentity else{return}
         interruptPlaybackFollow()
         window?.makeFirstResponder(self); animation?.invalidate(); animation=nil
         down=convert(event.locationInWindow,from:nil);panOrigin=camera.pan;dragNode=nil;dragPreview=nil
@@ -551,7 +555,8 @@ struct AlbumCanvas: NSViewRepresentable {
         clearCableSelection()
         guard let node=hit(down) else{panning=true;return}
         if !event.modifierFlags.contains(.shift), store.hierarchySelections.contains(node.id), store.hierarchySelections.count > 1 { store.hierarchySelection=node.id }
-        else { store.selectHierarchy(node.id,additive:event.modifierFlags.contains(.shift)) }
+        else if event.modifierFlags.contains(.shift) { store.selectHierarchy(node.id,additive:true) }
+        else { guard store.selectUserWorkspace(node.id) else{return} }
         if event.clickCount==2 {
             if node.role == .group, store.selectedHierarchyGroup?.collapsed == true { store.updateHierarchyGroup { $0.collapsed=false }; update() }
             focus(node.id,detail:node.role == .music);return
@@ -610,7 +615,7 @@ struct AlbumCanvas: NSViewRepresentable {
         let delta=event.scrollingDeltaY*direction
         let exponent=max(-0.35,min(0.35,delta*(event.hasPreciseScrollingDeltas ? 0.009:0.07)))
         setCamera(camera.zoomed(to:camera.zoom*exp(exponent),around:Point(p.x,p.y)))
-        if let leaf=hit(p),leaf.role == .music,leaf.radius*camera.zoom>=325,store.hierarchySelection != leaf.id {store.selectHierarchy(leaf.id);placeEditor()}
+        if let leaf=hit(p),leaf.role == .music,leaf.radius*camera.zoom>=325,store.hierarchySelection != leaf.id {if store.selectUserWorkspace(leaf.id){placeEditor()}}
     }
     override func magnify(with event:NSEvent){let p=convert(event.locationInWindow,from:nil);setCamera(camera.zoomed(to:camera.zoom*exp(event.magnification),around:Point(p.x,p.y)))}
     private func focusPaletteSearch(_ field:CommandSearchField.SearchControl)->Bool {
@@ -708,7 +713,7 @@ struct AlbumCanvas: NSViewRepresentable {
     weak var canvas:AlbumCanvasView?
     let address:CircleAddress
     init(parent:AlbumCanvasView,address:CircleAddress){self.canvas=parent;self.address=address;super.init();setAccessibilityParent(parent);setAccessibilityRole(.button);setAccessibilityEnabled(true)}
-    override func accessibilityPerformPress()->Bool {canvas?.store.focusHierarchy(address,detail:true);return canvas != nil}
+    override func accessibilityPerformPress()->Bool {canvas?.store.focusUserWorkspace(address,detail:true) ?? false}
 }
 
 @MainActor final class CircleMenuAction: NSObject {
@@ -733,7 +738,7 @@ extension AlbumCanvasView {
             item.target=self;item.representedObject=CircleMenuAction(block);(target ?? menu).addItem(item)
         }
         func submenu(_ title:String)->NSMenu {let item=NSMenuItem(title:title,action:nil,keyEquivalent:"");let child=NSMenu();item.submenu=child;menu.addItem(item);return child}
-        action("확대해서 편집"){[weak self] in self?.store.hierarchySettingsOpen=false;self?.store.focusHierarchy(node.id,detail:node.role == .music)}
+        action("확대해서 편집"){[weak self] in _ = self?.store.focusUserWorkspace(node.id,detail:node.role == .music)}
         action(store.hierarchySelections.contains(node.id) ? "선택에서 제외":"선택에 추가"){[weak self] in self?.store.selectHierarchy(node.id,additive:true)}
         let colors = submenu("서클 색상")
         let colorProjectID = store.project.id

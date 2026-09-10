@@ -8,6 +8,7 @@ struct StudioNavigationIntent {
     var trackID:ID?
     var role:StudioNavigationRole?
     var roles:[StudioNavigationRole]?
+    var workspaceIntent:CircleWorkspaceIntent?
 }
 
 extension AppStore {
@@ -25,34 +26,43 @@ extension AppStore {
         return studioRoutes.first{$0.id == .section(arrangementID:project.activeArrangementID,useID:use.id)}
     }
     var currentStudioTrack:StudioTrackRoute? {currentStudioSection?.tracks.first{$0.id==selectedTrackID}}
-    func showNavigation(section:CircleAddress?=nil,track:ID?=nil,role:StudioNavigationRole?=nil,roles:[StudioNavigationRole]?=nil) {
+    func showNavigation(section:CircleAddress?=nil,track:ID?=nil,role:StudioNavigationRole?=nil,roles:[StudioNavigationRole]?=nil,workspaceIntent:CircleWorkspaceIntent?=nil) {
+        var scope=numberEditIdentity
+        guard resolveActiveNumericDraft(),nameEditing.resolve() else{return}
+        scope.revision=project.musicRevision
+        guard scope==numberEditIdentity else{return}
         arrangementPickerRequest=nil
         soundPickerRequest=nil;libraryOpen=false;commandPalette=nil;keyboardHelp=false
-        navigationIntent=StudioNavigationIntent(anchorSectionID:section ?? currentStudioSection?.id,sectionID:section,trackID:track,role:role,roles:roles)
+        navigationIntent=StudioNavigationIntent(anchorSectionID:section ?? currentStudioSection?.id,sectionID:section,trackID:track,role:role,roles:roles,workspaceIntent:workspaceIntent)
         navigationOpen=true
     }
-    func navigateStudio(_ destination:CircleAddress,track:ID?=nil) {
-        do {
-            _ = try StudioNavigation.scene(revealing:destination,in:project)
-            navigationOpen=false;hierarchySettingsOpen=false;hierarchyTransitionID=nil
-            if let track {selectedTrackID=track}
-            focusCanvas?();focusHierarchy(destination,detail:{if case .music=destination{return true};return false}())
-        }catch{fail(error)}
+    @discardableResult func navigateStudio(_ destination:CircleAddress,track:ID?=nil,explicitIntent:CircleWorkspaceIntent?=nil)->Bool {
+        guard focusUserWorkspace(destination,detail:{if case .music=destination{return true};return false}(),explicitIntent:explicitIntent) else{return false}
+        navigationOpen=false
+        // Selection resolves concrete source owners. A routing destination may
+        // use the caller's track only when it still reaches that output.
+        if let track,let node=selectedMusic,let graph=selectedGraph {
+            switch node.content {
+            case .effect,.mix,.router:if StudioNavigation.outputTracks(from:node.id,graph:graph).contains(track){selectedTrackID=track}
+            default:break
+            }
+        }
+        focusCanvas?();return true
     }
     func openTrackComponent(_ index:Int) {
         guard (0...2).contains(index),let track=currentStudioTrack else{status="작업할 섹션과 트랙을 선택하세요";return}
         let roles:[StudioNavigationRole]=index==0 ? [.midi,.audio]:index==1 ? [.instrument]:[.effect]
         openTrackRoles(roles,trackID:track.id)
     }
-    func openTrackRoles(_ roles:[StudioNavigationRole],trackID:ID) {
+    func openTrackRoles(_ roles:[StudioNavigationRole],trackID:ID,workspaceIntent:CircleWorkspaceIntent?=nil) {
         guard nameEditing.resolve(),let section=currentStudioSection,let track=currentStudioTrack,track.id==trackID else{return}
         let choices=track.destinations.filter{destination in
             StudioNavigationRole(source:destination.role).map{roles.contains($0)} ?? false
         }
-        if choices.count==1,let destination=choices.first {navigateStudio(destination.id,track:track.id)}
+        if choices.count==1,let destination=choices.first {navigateStudio(destination.id,track:track.id,explicitIntent:workspaceIntent)}
         else {
             showNavigation(section:section.id,track:track.id,role:roles.count==1 ? roles.first:nil,
-                           roles:roles.count>1 ? roles:nil)
+                           roles:roles.count>1 ? roles:nil,workspaceIntent:workspaceIntent)
         }
     }
 }
@@ -270,7 +280,7 @@ struct StudioNavigationView:View {
     }
     private func open(_ entry:StudioNavigationEntry) {
         guard store.project.id==projectID,rows.contains(where:{$0.id==entry.id}) else{notice="대상이 변경됐습니다. 현재 목록에서 다시 선택하세요.";return}
-        store.navigateStudio(entry.target,track:entry.trackID)
+        store.navigateStudio(entry.target,track:entry.trackID,explicitIntent:store.navigationIntent.workspaceIntent)
     }
     private func openSelected(){if let entry=rows.first(where:{$0.id==active}){open(entry)}}
     private func close(){store.navigationOpen=false;store.focusCanvas?()}

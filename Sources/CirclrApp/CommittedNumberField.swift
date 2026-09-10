@@ -77,21 +77,33 @@ extension EnvironmentValues {
     }
 }
 extension AppStore {
-    /// File/job actions consume only the live numeric editor in the main key window.
-    /// No cached binding or detached/other-window coordinator is invoked.
+    /// Resolve live mounted fields, including invalid drafts AppKit already blurred.
+    /// Detached coordinators and controls in other windows are never invoked.
     func resolveActiveNumericDraft()->Bool {
-        guard let window=NSApp.keyWindow,window.identifier?.rawValue=="main" else{return true}
-        guard let responder=window.firstResponder,let content=window.contentView else{return true}
-        func activeField(in view:NSView)->NativeNumberField.Control? {
-            if let field=view as? NativeNumberField.Control,field.window===window,
-               let editor=field.currentEditor(),editor===responder {return field}
-            for child in view.subviews {if let field=activeField(in:child){return field}}
-            return nil
+        guard let window=NSApp.keyWindow,window.identifier?.rawValue=="main",let content=window.contentView else{return true}
+        var fields:[NativeNumberField.Control]=[]
+        func collect(_ view:NSView) {
+            guard !view.isHiddenOrHasHiddenAncestor else{return}
+            if let field=view as? NativeNumberField.Control,field.window===window,field.isEnabled {fields.append(field)}
+            for child in view.subviews {collect(child)}
         }
-        guard let field=activeField(in:content) else{return true}
-        guard field.window===window,field.isEnabled,
-              let editor=field.currentEditor(),window.firstResponder===editor else{return false}
-        return field.resolveForAction?() ?? false
+        collect(content)
+        let active=fields.first {field in
+            guard let editor=field.currentEditor() else{return false}
+            return window.firstResponder===editor
+        }
+        if let active,active.resolveForAction?() != true {return false}
+        for field in fields where field !== active {
+            guard field.window===window,!field.isHiddenOrHasHiddenAncestor,field.isEnabled,
+                  field.hasUnresolvedDraft?()==true else{continue}
+            guard field.resolveForAction?()==true else {
+                field.preserveDraftOnNextFocus=true
+                _=window.makeFirstResponder(field)
+                field.preserveDraftOnNextFocus=false
+                return false
+            }
+        }
+        return true
     }
     var numberEditIdentity: NumberEditIdentity {
         NumberEditIdentity(projectID:project.id,revision:project.musicRevision,generation:mediaImportGeneration,
@@ -163,7 +175,10 @@ private struct NativeNumberField: NSViewRepresentable {
         field.isBordered=false;field.drawsBackground=false;field.focusRingType = .none
         field.font = .monospacedDigitSystemFont(ofSize:13,weight:.regular)
         field.delegate=context.coordinator
-        field.began={ [weak coordinator=context.coordinator] in coordinator?.begin() }
+        field.began={ [weak coordinator=context.coordinator,weak field] in
+            coordinator?.begin(preservingDraft:field?.preserveDraftOnNextFocus == true)
+        }
+        field.hasUnresolvedDraft={ [weak coordinator=context.coordinator] in coordinator?.draft.isDirty ?? false }
         field.resolveForAction={ [weak coordinator=context.coordinator,weak field] in
             guard let coordinator,let field else{return false}
             if (field.currentEditor() as? NSTextView)?.hasMarkedText()==true {
@@ -194,9 +209,11 @@ private struct NativeNumberField: NSViewRepresentable {
         var draft:NumberEditSession<NumberEditIdentity?>
         var active=false
         init(_ parent:NativeNumberField) {self.parent=parent;draft=NumberEditSession(presentation:parent.presentation);draft.reset(value:parent.value)}
-        func begin() {
-            active=true;draft.begin(value:parent.value,context:parent.context.beforeTyping())
-            parent.editing=true;parent.error="";parent.onValidityChange?(nil)
+        func begin(preservingDraft:Bool=false) {
+            active=true;parent.editing=true
+            if preservingDraft && draft.isDirty {return}
+            draft.begin(value:parent.value,context:parent.context.beforeTyping())
+            parent.error="";parent.onValidityChange?(nil)
         }
         func controlTextDidChange(_ notification:Notification) {
             guard let field=notification.object as? NSTextField else {return}
@@ -252,6 +269,8 @@ private struct NativeNumberField: NSViewRepresentable {
     }
     final class Control:NSTextField {
         var resolveForAction:(()->Bool)?
+        var hasUnresolvedDraft:(()->Bool)?
+        var preserveDraftOnNextFocus=false
         var began:(()->Void)?
         override func becomeFirstResponder() -> Bool {
             let result=super.becomeFirstResponder()

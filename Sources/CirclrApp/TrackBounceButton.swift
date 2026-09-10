@@ -47,7 +47,7 @@ extension AppStore {
         let section=CircleAddress.section(arrangementID:context.identity.arrangementID,useID:context.useID)
         commandPalette=nil
         if case .multipleOutputs=assessment.issue {
-            showNavigation(section:section,track:context.trackID,role:.output);return
+            showNavigation(section:section,track:context.trackID,role:.output,workspaceIntent:.content);return
         }
         let destination:CircleAddress
         let port:String?
@@ -65,7 +65,7 @@ extension AppStore {
         }
         do {
             _ = try StudioNavigation.scene(revealing:destination,in:project)
-            navigateStudio(destination,track:context.trackID)
+            guard navigateStudio(destination,track:context.trackID,explicitIntent:.content) else{return}
             if let port {showConnections(portID:port)}
         }catch{fail(error)}
     }

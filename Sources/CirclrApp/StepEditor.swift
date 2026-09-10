@@ -41,18 +41,13 @@ extension AppStore {
         currentStepEditorAddress != nil || currentStudioTrack?.destinations.contains{StudioNavigationRole(source:$0.role) == .midi} == true
     }
     func openStepEditor() {
-        guard canOpenStepEditor,nameEditing.resolve() else{return}
-        pitchBendOpen=false
+        guard canOpenStepEditor else{return}
         if let address=currentStepEditorAddress {
-            midiStepMode=true
-            connectionsOpen=false;hierarchySettingsOpen=false;automationOpen=false;embeddedPlugin=nil;hierarchyTransitionID=nil
-            focusHierarchy(address,detail:true)
+            _=focusUserWorkspace(address,detail:true,explicitIntent:.steps)
             return
         }
         guard let route=currentStudioTrack else{return}
-        midiStepMode=true
-        automationOpen=false
-        openTrackRoles([.midi],trackID:route.id)
+        openTrackRoles([.midi],trackID:route.id,workspaceIntent:.steps)
     }
     func editStep(grid:StepGrid,index:Int,pitch:Int,enabled:Bool?=nil) {
         guard let lane=currentLane else{return}

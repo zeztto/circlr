@@ -80,7 +80,7 @@ extension AppStore {
             candidate.musicRevision=baseline.musicRevision+1
             identity.revision=candidate.musicRevision
             guard project==candidate,numberEditIdentity==identity else{return}
-            navigateStudio(destination,track:trackID)
+            navigateStudio(destination,track:trackID,explicitIntent:.content)
         }catch{fail(error)}
     }
 }

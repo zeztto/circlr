@@ -45,6 +45,7 @@ extension AppStore {
               case .music(let ai,let ui,_)=hierarchySelection,let address=hierarchySelection else{return}
         let viewport=captureHierarchyViewport?()
         guard identity==numberEditIdentity,canOpenCurrentSectionSettings else{return}
+        rememberCircleWorkspace()
         let workspace=viewport?.workspace ?? capturedStudioWorkspace
         let section=CircleAddress.section(arrangementID:ai,useID:ui)
         let saved=SectionSettingsReturnState(projectID:project.id,generation:mediaImportGeneration,

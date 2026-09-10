@@ -1,5 +1,11 @@
 # 변경 이력
 
+## 검증 완료 — build139 서클별 편집 화면 기억
+
+- 첫 방문 기본 화면·재방문 scope별 기억·명시적 스텝 요청 우선을 연결했다. invalid canvas 이동 재현을 수정해 잘못된 수치·이름을 보존하고 이동을 차단한다.
+- 최종 Release 47.96초, 초기 workspace 21개와 최종 Number/Name 18개 검사, native 왕복·r166 음악/자산 불변·재시작을 확인했다. 이전 실패 후보는 최종 통과와 구분해 기록한다.
+- 실제 I/O와 source 변경·clamp·scope 전체 조합은 이번 native 검증이 아니다. [기록](docs/161-circle-editor-memory.md).
+
 ## 검증 완료 — build138 섹션 설정 왕복
 
 - 원래 child 노드·모드·viewport 복귀와 앨범 대상 label·설정 단축키를 연결했다. 정상 설정 변경과 invalid/stale·삭제 경계를 구분하고 길이 축소·pitch source 변경에 맞춰 복귀한다.

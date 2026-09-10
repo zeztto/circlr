@@ -16,7 +16,7 @@ extension AppStore {
         guard bounceTailUIAvailable,nameEditing.resolve(),numberEditIdentity==identity else{return}
         if selectedMusic==nil || audioIsOutsideSharedOriginal {
             guard let use=selectedUse,let output=trackBounceAssessment?.target?.outputNodeID else{return}
-            navigateStudio(.music(arrangementID:project.activeArrangementID,useID:use.id,nodeID:output),track:selectedTrackID)
+            guard navigateStudio(.music(arrangementID:project.activeArrangementID,useID:use.id,nodeID:output),track:selectedTrackID,explicitIntent:.content) else{return}
         }
         connectionsOpen=false;hierarchySettingsOpen=false;automationOpen=false;embeddedPlugin=nil;hierarchyTransitionID=nil
         if let address=hierarchySelection {focusHierarchy(address,detail:true)}

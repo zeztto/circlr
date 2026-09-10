@@ -27,6 +27,10 @@ extension AppStore {
         hierarchyTransitionID=nil;focusHierarchy(address,detail:true);hierarchySettingsOpen=true
     }
     func showCommands() {
+        var identity=numberEditIdentity
+        guard resolveActiveNumericDraft(),nameEditing.resolve() else{return}
+        identity.revision=project.musicRevision
+        guard identity==numberEditIdentity else{return}
         if outputPreferencesOpen {closeOutputPreferences()}
         arrangementPickerRequest=nil
         soundPickerRequest=nil
@@ -124,7 +128,7 @@ extension AppStore {
             }
         }
         for node in hierarchyScene?.nodes ?? [] {
-            commands.append(StudioCommand(id:"find-\(node.id)",title:node.title,detail:(hierarchyScene?.path(to:node.id).dropLast().map(\.title).joined(separator:" › ") ?? "")+" · \(node.subtitle)",run:{[weak self] in self?.focusHierarchy(node.id,detail:node.role == .music)}))
+            commands.append(StudioCommand(id:"find-\(node.id)",title:node.title,detail:(hierarchyScene?.path(to:node.id).dropLast().map(\.title).joined(separator:" › ") ?? "")+" · \(node.subtitle)",run:{[weak self] in _ = self?.focusUserWorkspace(node.id,detail:node.role == .music)}))
         }
         add("keyboard-help","키보드 사용법","⌘/"){[weak self] in self?.keyboardHelp=true}
         keyboardHelp=false;commandPalette=StudioPalette(commands:commands)
@@ -231,15 +235,17 @@ extension AlbumCanvasView {
         clearCableSelection()
         let index=candidates.firstIndex(where:{$0.id==current?.id}) ?? (forward ? -1:0)
         let next=candidates[(index+(forward ? 1:-1)+candidates.count)%candidates.count]
-        interruptPlaybackFollow();store.selectHierarchy(next.id,additive:additive);needsDisplay=true
+        if additive {store.selectHierarchy(next.id,additive:true)}
+        else {guard store.selectUserWorkspace(next.id) else{return}}
+        interruptPlaybackFollow();needsDisplay=true
         if !bounds.contains(screen(next)) {focus(next.id)}
         NSAccessibility.post(element:self,notification:.selectedChildrenChanged)
     }
     func enterSelectedCircle() {
         guard let address=store.hierarchySelection else{return}
         if let child=scene?.nodes.first(where:{$0.parent==address}),store.selectedMusic==nil,!store.hierarchySettingsOpen {
-            store.selectHierarchy(child.id);focus(child.id,detail:child.role == .music)
-        }else {focus(address,detail:true)}
+            guard store.selectUserWorkspace(child.id) else{return};focus(child.id,detail:child.role == .music)
+        }else {guard store.selectUserWorkspace(address) else{return};focus(address,detail:true)}
         DispatchQueue.main.asyncAfter(deadline:.now()+0.32){[weak self] in
             guard let self,let editor=self.editor else{return}
             func target(_ view:NSView)->NSView? {
