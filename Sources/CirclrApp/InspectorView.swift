@@ -46,13 +46,14 @@ struct TrackInspector:View {
     @ObservedObject var store:AppStore
     let track:Track
     var showsTrackLevel=true
+    var showsAutomationLinks=false
     var body:some View {
         VStack(alignment:.leading,spacing:12) {
             if showsTrackLevel {TrackLevelEditor(store:store,track:track)}
             SoundPickerButton(title:"음색·악기 찾기",current:store.instrumentName(track.instrument)) {store.showInstrumentPicker(trackID:track.id)}
             if track.instrument.kind != .sampler {Button("샘플 파일을 악기로 열기…"){store.chooseSampleInstrument()}}
             if track.instrument.kind == .synthesizer {
-                SynthInspector(store:store,patch:track.instrument.synth ?? SynthPatch())
+                SynthInspector(store:store,trackID:track.id,patch:track.instrument.synth ?? SynthPatch(),showsAutomationLinks:showsAutomationLinks)
             } else if track.instrument.kind == .sampler,let sample=track.instrument.sample {
                 Text(store.project.assets.first{$0.id==sample.assetID}?.name ?? "샘플").lineLimit(1)
                 Button("샘플 바꾸기"){store.chooseSampleInstrument()}
@@ -72,7 +73,9 @@ struct TrackInspector:View {
 }
 struct SynthInspector:View {
     @ObservedObject var store:AppStore
+    let trackID:ID
     let patch:SynthPatch
+    var showsAutomationLinks=false
     @Environment(\.numberEditing) private var numberEditing
     @State private var engineOneFocus=NumberFieldFocus(Array(Self.fieldOrder.prefix(6)),revealOnFocus:true)
     @State private var engineTwoFocus=NumberFieldFocus(Array(Self.fieldOrder.prefix(9)),revealOnFocus:true)
@@ -89,14 +92,14 @@ struct SynthInspector:View {
     var body:some View {
         VStack(alignment:.leading,spacing:12) {
             SynthParameterLayout {
-                parameter("필터 Hz",\.cutoff,40...20000)
+                parameter("필터 Hz",\.cutoff,40...20000,automation:.synthCutoff)
                 parameter("Detune cent",\.detune,0...60)
                 parameter("Attack 초",\.attack,0.001...5)
                 parameter("Decay 초",\.decay,0.001...10)
                 parameter("Sustain",\.sustain,0...1)
                 parameter("Release 초",\.release,0.005...10)
                 if patch.engineVersion>=2 {
-                    parameter("공명",\.resonance,0...0.9)
+                    parameter("공명",\.resonance,0...0.9,automation:.synthResonance)
                     parameter("스테레오 폭",\.stereoWidth,0...1)
                     parameter("필터 엔벌로프 · 옥타브",\.filterEnvelope,-4...4)
                 }
@@ -108,9 +111,17 @@ struct SynthInspector:View {
             if patch.engineVersion<3 {Button("신스 엔진 3으로 전환"){store.updateTrack("신스 엔진 전환"){$0.instrument.synth?.engineVersion=3}}}
         }.environment(\.numberEditing,editingContext)
     }
-    func parameter(_ title:String,_ key:WritableKeyPath<SynthPatch,Double>,_ range:ClosedRange<Double>)->some View {
-        HStack(spacing:10) {
+    func parameter(_ title:String,_ key:WritableKeyPath<SynthPatch,Double>,_ range:ClosedRange<Double>,automation:AutomationParameter?=nil)->some View {
+        let identity=store.numberEditIdentity
+        return HStack(spacing:10) {
             Text(title).foregroundStyle(StudioTheme.secondary).lineLimit(1)
+            if showsAutomationLinks,let automation,store.canOpenSynthAutomation(automation,trackID:trackID) {
+                Button("오토메이션") {store.openSynthAutomation(automation,trackID:trackID,identity:identity)}
+                    .buttonStyle(.plain).font(.system(size:12,weight:.medium)).foregroundStyle(StudioTheme.accent)
+                    .fixedSize(horizontal:true,vertical:false)
+                    .accessibilityLabel("\(title) 오토메이션 열기")
+                    .help("신스 설정값은 트랙 전체에 적용됩니다. 곡선은 현재 선택한 원본·이번 사용 범위에서 편집합니다.")
+            }
             Spacer(minLength:8)
             ValueField(title:title,value:binding(key),showsLabel:false,range:range)
         }

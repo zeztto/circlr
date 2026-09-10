@@ -29,6 +29,31 @@ extension AppStore {
     var selectedAutomationPoint:AutomationPoint? {currentAutomation?.points.first{$0.id==selectedAutomationPointID}}
     var automationEditorHasFocus:Bool {NSApp.keyWindow?.firstResponder is AutomationPlotView}
     var automationVisible:Bool {automationOpen && selectedMusic?.supportsAutomation==true && !hierarchySettingsOpen && embeddedPlugin==nil}
+    func canOpenSynthAutomation(_ parameter:AutomationParameter,trackID:ID)->Bool {
+        guard parameter == .synthCutoff || parameter == .synthResonance,
+              case .music(let arrangementID,let useID,let nodeID)=hierarchySelection,
+              arrangementID==project.activeArrangementID,selectedUse?.id==useID,
+              selectedTrackID==trackID,
+              let selected=selectedMusic,let editing=musicEditingNode,let automated=automationNode,
+              selected.id==nodeID,editing.id==nodeID,automated.id==nodeID else{return false}
+        for node in [selected,editing,automated] {
+            guard case .instrument(let owner)=node.content,owner==trackID,
+                  parameter.supports(node:node,in:project) else{return false}
+        }
+        return true
+    }
+    func openSynthAutomation(_ parameter:AutomationParameter,trackID:ID,identity:NumberEditIdentity) {
+        guard identity==numberEditIdentity,canOpenSynthAutomation(parameter,trackID:trackID) else{return}
+        var expected=identity
+        guard resolveActiveNumericDraft(),nameEditing.resolve() else{return}
+        expected.revision=project.musicRevision
+        guard expected==numberEditIdentity,canOpenSynthAutomation(parameter,trackID:trackID),
+              let address=hierarchySelection else{return}
+        focusHierarchy(address,detail:true)
+        connectionsOpen=false;hierarchySettingsOpen=false;embeddedPlugin=nil;pitchBendOpen=false
+        automationParameter=parameter;automationOpen=true
+        requestEditorNavigationFocus()
+    }
     func showAutomation() {
         var identity=numberEditIdentity
         guard resolveActiveNumericDraft(),nameEditing.resolve() else{return}

@@ -6,7 +6,9 @@ macOS용 앨범·송폼 궤도 편집기. **앨범 → 곡·악장 → 섹션 �
 
 연결 UI는 [서클 둘레 8방향 IN/OUT과 다중 입출력](docs/22-eight-direction-ports.md)으로 확장 중이다. 포트의 신호 의미와 연결점 배치를 분리한다. 아래 일반 사용법은 배포된 0.19 앱 기준이며 새 포트 기능은 독립 개발 브랜치에서 검증한다.
 
-현재 **`codex/daw-integration`의 0.20.0 build 147**에 녹음 lifecycle과 8방향·다중 bus·그룹 포트를 통합했다. 같은 캔버스의 연결 편집·녹음 상태·스텝·오토메이션이 공존하며, 녹음 시작·정리 중 음악 편집과 Undo의 경쟁을 차단한다. build 23의 실제 편집·바운스·Undo·저장/재열기·닫기 최소화 및 출력별 모션 검증은 [통합 QA](qa/daw-integration-review.md)에 기록했다.
+현재 **`codex/daw-integration`의 0.20.0 build 148**에 녹음 lifecycle과 8방향·다중 bus·그룹 포트를 통합했다. 같은 캔버스의 연결 편집·녹음 상태·스텝·오토메이션이 공존하며, 녹음 시작·정리 중 음악 편집과 Undo의 경쟁을 차단한다. build 23의 실제 편집·바운스·Undo·저장/재열기·닫기 최소화 및 출력별 모션 검증은 [통합 QA](qa/daw-integration-review.md)에 기록했다.
+
+**build148은 신스 cutoff·resonance에서 해당 오토메이션으로 바로 이동한다.** 같은 대상·범위를 유지하며 유효 초안은 한 번 확정하고 잘못된 입력은 이동을 차단한다. 단순 열기의 곡선 불변과 실제 직접 진입·Undo, Release 48.28초를 확인했다. [검증 기록](docs/171-synth-automation-shortcuts.md).
 
 **build147은 내장 신스 v2/v3의 resonance 오토메이션을 지원한다.** 0…90% 공명을 cutoff와 함께 편집하고 바운스할 수 있다. Swift 568개·MCP 22개와 Release 94.83초, 실제 값 오류·Undo/Redo·바운스/원본 복원·앱 재시작을 확인했다. 물리 청취와 모든 backend 지원은 별도 범위다. [검증 기록](docs/170-synth-resonance-automation.md).
 

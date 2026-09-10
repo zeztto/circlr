@@ -1,5 +1,11 @@
 # 변경 이력
 
+## 검증 완료 — build148 신스 오토메이션 직접 이동
+
+- cutoff/resonance 버튼으로 같은 주소·parameter·scope의 곡선 편집을 연다. 유효 수치 초안은 한 번 확정하고 invalid/빈 이름은 이동을 차단한다.
+- 최종 12pt 후보 Release 48.28초·package/source 검토, native 직접 진입·scope별 곡선 불변·Undo를 확인했다. 재시작 전체 manifest는 일치했고 data 감사는 PASS_WITH_ADDITIONAL_METADATA_CHANGE다. UI 감사는 PASS_WITH_EXPLICIT_LIMITS다.
+- 추가 unit/full suite는 실행하지 않았으며 미지원 host/stale는 소스 검토 범위다. [기록](docs/171-synth-automation-shortcuts.md).
+
 ## 검증 완료 — build147 신스 resonance 오토메이션
 
 - v2/v3 내장 신스의 raw 0…0.9·0…90% 곡선을 schema6·DSP·GUI/MCP에 연결했다. cutoff 동시 적용과 linear/hold를 지원한다.

@@ -120,7 +120,7 @@ struct InlineCircleEditor: View {
                         }.frame(maxWidth:660,alignment:.leading)
                     }.padding(.trailing, 8).rememberEditorScroll(scroll("effect")) }
                 case .instrument:
-                    if let track = store.selectedTrack { ScrollView { TrackInspector(store: store, track: track,showsTrackLevel:false).rememberEditorScroll(scroll("instrument")) } }
+                    if let track = store.selectedTrack { ScrollView { TrackInspector(store: store, track: track,showsTrackLevel:false,showsAutomationLinks:true).rememberEditorScroll(scroll("instrument")) } }
                 case .output:
                     if let track = store.selectedTrack { ScrollView { OutputEditor(store:store,track:track).rememberEditorScroll(scroll("output")) } }
                 case .mix: signalControls(node); Spacer()
