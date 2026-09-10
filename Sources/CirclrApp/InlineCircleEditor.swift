@@ -46,7 +46,10 @@ struct InlineCircleEditor: View {
         .font(.system(size: 13)).buttonStyle(CanvasButtonStyle()).controlSize(.regular)
         .tint(StudioTheme.accent).preferredColorScheme(.dark)
         .numberEditing(in:store)
-        .onExitCommand { store.hierarchySettingsOpen = false; store.hierarchyParent() }
+        .onExitCommand {
+            if let draft=store.midiImportDraft {store.cancelMIDIImport(draft.id)}
+            else {store.hierarchySettingsOpen = false;store.hierarchyParent()}
+        }
         .onAppear {
             loadViewState()
             // A false FocusState write can clear focus already assigned by the connection editor.

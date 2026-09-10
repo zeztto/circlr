@@ -1,6 +1,6 @@
 # MIDI pitch bend의 연주·편집 계약
 
-상태: build132 이후 설계와 Core 기초 구현 단계. 가져오기·GUI·렌더 지원 완료가 아니다. 전체 DAW와 UI 개선 목표의 표현 편집 작업이며 단계 완료를 기능 전체 완료로 바꾸지 않는다.
+상태: build132 이후 수립한 설계와 단계별 기록이다. 내장 신스 연결과 가져오기 취소 복귀는 [build133 검증](155-pitch-bend-synth-and-import-return.md)에서 완료했다. 가져오기·GUI·전체 backend 렌더 지원 완료가 아니다. 전체 DAW와 UI 개선 목표의 표현 편집 작업이며 단계 완료를 기능 전체 완료로 바꾸지 않는다.
 
 ## 실제 손실 지점과 방향
 
@@ -53,7 +53,7 @@ Core에서 중심·양끝·range 변경·같은 beat 순서·직렬화·불변 �
 
 `SectionGraphRenderer.swift`는 실제 출력으로 연결된 MIDI 연주의 미지원 pitch bend를 오류로 거절한다. 음소거·연결되지 않은 보관 서클까지 일괄 차단하는 계약은 아니다. `ProductionModel.swift`의 typed MIDI 저장 경로도 선택된 연주에 pitch bend가 있으면 파일을 만들지 않고 명시적으로 거절한다. 표현을 조용히 버린 notes-only 결과를 성공으로 반환하지 않기 위한 경계다.
 
-현재 패키지 앱은 build132다. 실제 SMF pitch bend/RPN parser, per-stream DSP, GUI 곡선 편집과 MCP 표현 명령은 아직 지원하지 않는다. 다음 실행은 packet을 소비하는 parser·DSP 계약과 nil/center 기존 PCM 보존을 구현하고, 그 결과를 GUI/MCP와 import/export 왕복에 연결하는 것이다. 이 저장·거절 경계를 전체 연주 기능 완료로 계산하지 않는다.
+이 저장·컴파일 연결 단계 당시 패키지 앱은 build132였다. 이 단계 당시 실제 SMF pitch bend/RPN parser, per-stream DSP, GUI 곡선 편집과 MCP 표현 명령은 미지원이었다. 이후 내장 신스 DSP만 build133에서 연결했으며 나머지 표현 편집과 AU/sampler 지원은 남아 있다. 다음 실행은 SMF bend/RPN parser와 명시적 미지원 처리를 구현하고, GUI/MCP 표현 편집 및 import/export 왕복에 연결하는 것이다. 내장 신스 DSP와 nil/center 기존 PCM 보존은 build133의 완료 범위로 유지한다. 이 저장·거절 경계를 전체 연주 기능 완료로 계산하지 않는다.
 
 ## 저장·컴파일 회귀 검증
 

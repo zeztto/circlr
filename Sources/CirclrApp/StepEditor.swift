@@ -3,6 +3,16 @@ import SwiftUI
 import Combine
 import CirclrCore
 
+/// Session-only keyboard cursor; an empty cell has no selected Note to remember it.
+struct MIDIImportStepCursor {
+    let scope:String
+    let revision:Int
+    let grid:StepGrid
+    let page:Int
+    let pitch:Int
+    let column:Int
+}
+
 extension AppStore {
     var stepRowScope:String {"\(project.id):\(mediaImportGeneration):\(String(describing:hierarchySelection)):\(selectedLaneID ?? editPatternID ?? ""):\(editOriginal)"}
     func stepRows(extra:Set<Int>)->[StepRow] {
@@ -173,6 +183,12 @@ struct StepGridCanvas:NSViewRepresentable {
     func makeNSView(context:Context)->StepGridView {
         let view=StepGridView(store:store,grid:grid,page:page,pitches:pitches)
         view.lastSelection=store.currentLane?.notes.first{$0.id==store.selectedNoteID}
+        store.captureStepCursor={ [weak view] in
+            guard let view,view.window != nil,view.store.midiStepMode,
+                  view.scope==view.store.stepRowScope,view.pitches.indices.contains(view.row),
+                  (0..<view.columns).contains(view.column) else{return nil}
+            return MIDIImportStepCursor(scope:view.scope,revision:view.store.project.musicRevision,grid:view.grid,page:view.page,pitch:view.pitches[view.row],column:view.column)
+        }
         focusTarget.view=view;return view
     }
     func updateNSView(_ view:StepGridView,context:Context) {
@@ -180,11 +196,21 @@ struct StepGridCanvas:NSViewRepresentable {
         let selectionChanged=view.lastSelection != note
         let changed=view.grid != grid || view.page != page || view.pitches != pitches || selectionChanged
         let cursorPitch=view.pitches.indices.contains(view.row) ? view.pitches[view.row]:nil
-        view.grid=grid;view.page=page;view.pitches=pitches;view.allowsEditing=enabled
+        view.grid=grid;view.page=page;view.pitches=pitches;view.allowsEditing=enabled;view.scope=store.stepRowScope
         view.row=cursorPitch.flatMap{pitches.firstIndex(of:$0)} ?? 0
         view.column=min(view.column,max(0,view.columns-1))
         if changed,let note,let index=grid.index(at:note.beat),index/16==page,let row=pitches.firstIndex(of:note.pitch) {
             view.row=row;view.column=index%16
+        }
+        if let cursor=store.pendingMIDIImportStepCursor {
+            if cursor.revision != store.project.musicRevision {
+                store.pendingMIDIImportStepCursor=nil
+            } else if cursor.scope==store.stepRowScope,cursor.grid==grid,cursor.page==page {
+                if let row=pitches.firstIndex(of:cursor.pitch),(0..<view.columns).contains(cursor.column) {
+                    view.row=row;view.column=cursor.column
+                }
+                store.pendingMIDIImportStepCursor=nil
+            }
         }
         if selectionChanged,!pitches.isEmpty {
             let identity=store.numberEditIdentity
@@ -216,6 +242,7 @@ struct StepGridCanvas:NSViewRepresentable {
     var page:Int
     var pitches:[Int]
     var row=0,column=0
+    var scope:String
     var lastSelection:Note?
     var lastRowRequestID:UUID?
     var allowsEditing=true
@@ -237,7 +264,7 @@ struct StepGridCanvas:NSViewRepresentable {
     override var isFlipped:Bool {true}
     override var acceptsFirstResponder:Bool {true}
     init(store:AppStore,grid:StepGrid,page:Int,pitches:[Int]) {
-        self.store=store;self.grid=grid;self.page=page;self.pitches=pitches;super.init(frame:.zero)
+        self.store=store;self.grid=grid;self.page=page;self.pitches=pitches;self.scope=store.stepRowScope;super.init(frame:.zero)
         setAccessibilityElement(true);setAccessibilityRole(.group);setAccessibilityLabel("스텝 편집기 · 방향키 선택 · Return 입력")
         setAccessibilityHelp("행 이름은 선택만 합니다. Home·End 첫·마지막 행, PageUp·PageDown 화면 단위 이동")
         meterSubscription=store.meter.$seconds.sink{[weak self] _ in DispatchQueue.main.async{self?.needsDisplay=true}}

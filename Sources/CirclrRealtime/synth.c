@@ -5,7 +5,7 @@
 #define VOICES 64
 #define EVENTS 2048
 #define TAU 6.28318530717958647692
-typedef struct { int pitch, active, released; double lastL,lastR; double age, releaseAge, releaseLevel, level, velocity, frequency, phase[7], tinePhase, l1,l2,r1,r2; } Voice;
+typedef struct { int pitch, active, released; uint64_t streamID, voiceID; double lastL,lastR; double age, releaseAge, releaseLevel, level, velocity, frequency, phase[7], tinePhase, l1,l2,r1,r2; } Voice;
 typedef struct { int pitch, velocity, on; } Event;
 struct CirclrSynth { int style,version; double resonance,width,filterEnvelope,stealL,stealR; double cutoff,attack,decay,sustain,release,detune; Voice voices[VOICES]; Event events[EVENTS]; atomic_uint read,write; atomic_bool overflow; double character,motion,motionPhase; unsigned chorusWrite; float chorusL[2048],chorusR[2048]; };
 CirclrSynth *circlr_synth_create(int style,double cutoff,double attack,double decay,double sustain,double release,double detune) {
@@ -31,6 +31,59 @@ void circlr_synth_note(CirclrSynth *s,int pitch,int velocity,int on) {
     unsigned w=atomic_load_explicit(&s->write,memory_order_relaxed),r=atomic_load_explicit(&s->read,memory_order_acquire);
     if(w-r>=EVENTS){atomic_store(&s->overflow,1);return;}
     s->events[w%EVENTS]=(Event){pitch,velocity,on};atomic_store_explicit(&s->write,w+1,memory_order_release);
+}
+// These entry points are synchronous and belong exclusively to the render owner.
+// Zero identities distinguish legacy queued voices; no controller table is retained.
+static int owned_frequency(int pitch,double semitones,double *frequency) {
+    if(pitch<0 || pitch>127 || !isfinite(semitones) || semitones < -128.27 || semitones > 128.27)return 0;
+    // Keep the zero-bend arithmetic exactly equal to the legacy note-on path.
+    double hz=440*pow(2,(pitch-69)/12.0);
+    if(semitones!=0)hz*=pow(2,semitones/12.0);
+    if(!isfinite(hz) || hz<=0)return 0;
+    *frequency=hz;return 1;
+}
+int circlr_synth_owned_note_on(CirclrSynth *s,uint64_t streamID,uint64_t voiceID,int pitch,int velocity,double semitones) {
+    double frequency;
+    if(!s || !streamID || !voiceID || velocity<1 || velocity>127 || !owned_frequency(pitch,semitones,&frequency))return 0;
+    for(int i=0;i<VOICES;i++){
+        Voice *v=&s->voices[i];
+        if(v->active && v->streamID==streamID && v->voiceID==voiceID)return 0;
+    }
+    int chosen=-1;double oldest=-1;
+    for(int i=0;i<VOICES;i++){
+        if(!s->voices[i].active){chosen=i;break;}
+        if(s->voices[i].age>oldest){oldest=s->voices[i].age;chosen=i;}
+    }
+    Voice *v=&s->voices[chosen];
+    if(s->version>=2 && v->active){s->stealL+=v->lastL;s->stealR+=v->lastR;}
+    *v=(Voice){0};v->active=1;v->pitch=pitch;v->velocity=fmin(127,velocity)/127.0;v->frequency=frequency;
+    v->streamID=streamID;v->voiceID=voiceID;
+    for(int n=0;n<7;n++)v->phase[n]=fmod(n*0.173+pitch*0.019,1);
+    return 1;
+}
+int circlr_synth_owned_note_off(CirclrSynth *s,uint64_t streamID,uint64_t voiceID) {
+    if(!s || !streamID || !voiceID)return 0;
+    for(int i=0;i<VOICES;i++){
+        Voice *v=&s->voices[i];
+        if(v->active && v->streamID==streamID && v->voiceID==voiceID && !v->released){
+            v->released=1;v->releaseLevel=v->level;break;
+        }
+    }
+    return 1;
+}
+int circlr_synth_owned_pitch_bend(CirclrSynth *s,uint64_t streamID,double semitones) {
+    double frequencies[VOICES],validatedFrequency;
+    if(!s || !streamID || !owned_frequency(69,semitones,&validatedFrequency))return 0;
+    // Validate the whole bounded pool before mutation, including release voices.
+    for(int i=0;i<VOICES;i++){
+        Voice *v=&s->voices[i];
+        if(v->active && v->streamID==streamID && !owned_frequency(v->pitch,semitones,&frequencies[i]))return 0;
+    }
+    for(int i=0;i<VOICES;i++){
+        Voice *v=&s->voices[i];
+        if(v->active && v->streamID==streamID)v->frequency=frequencies[i];
+    }
+    return 1;
 }
 static double blep(double p,double dt){if(p<dt){p/=dt;return p+p-p*p-1;}if(p>1-dt){p=(p-1)/dt;return p*p+p+p+1;}return 0;}
 static double saw(double p,double dt){return 2*p-1-blep(p,dt);}

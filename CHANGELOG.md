@@ -1,6 +1,12 @@
 # 변경 이력
 
-## 개발 진행 — MIDI pitch bend 저장·컴파일 계약
+## 검증 완료 — 0.20.0 build133 내장 신스 pitch bend와 가져오기 취소 복귀
+
+- schema5의 source별 표현을 내장 신스에 연결하고, MIDI 미리보기 취소의 viewport·스텝 cursor·Escape 복귀를 수정했다. 적용 성공 시 새 MIDI 선택은 유지한다.
+- Core/Audio 780개·내부 skip 2개·실패 0개, 별도 바운스 저장/복원 1개 PASS. 실제 재생 포함 테스트 1개는 제외했다. 수정 후보 Release 44.41초·패키지 서명과 native 편집 복귀·r96 적용/r97 Undo·저장/재열기를 확인했다.
+- SMF bend import/export·곡선 UI·MCP 표현 편집·AU/sampler와 물리 청취는 완료하지 않았다. stale 경계는 소스 검토 범위다. [검증 기록](docs/155-pitch-bend-synth-and-import-return.md).
+
+## 이전 개발 단계 — MIDI pitch bend 저장·컴파일 계약
 
 - raw wheel·RPN range 상태·시간순 이벤트의 검증/직렬화/hold 조회 타입을 추가했다. 경계·순서·저장 테스트 8개와 독립 검토를 통과했다.
 - optional Lane/RhythmPattern·schema5 저장과 source/occurrence packet을 연결했다. 미지원 오디오 렌더와 typed MIDI 저장은 표현을 버리는 대신 오류로 거절한다. 실제 SMF parser·GUI/MCP·DSP 지원은 다음 단계이며 패키지 앱은 build132를 유지한다. [계획과 결과](docs/154-midi-pitch-bend-plan.md).

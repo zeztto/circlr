@@ -23,7 +23,8 @@ final class MIDIPitchBendGuardTests:XCTestCase {
         catch {XCTAssertTrue(error.localizedDescription.contains("피치 벤드"),error.localizedDescription)}
     }
     func testMutedDisconnectedAndZeroGainPathsDoNotBlockStoredExpression()throws {
-        let p=try fixture(),(plan,_)=try signal(p)
+        var p=try fixture();let (plan,_)=try signal(p)
+        p.tracks[0].instrument.kind = .audioUnit;p.tracks[0].instrument.plugin=nil
         let source=try XCTUnwrap(plan.midiPerformances.first?.key)
         let instrument=try XCTUnwrap(plan.orderedNodes.firstIndex{if case .instrument=$0.content{return true};return false})
         for variant in 0..<4 {
@@ -37,6 +38,7 @@ final class MIDIPitchBendGuardTests:XCTestCase {
     }
     func testRouterUnusedPortAndZeroRouteStaySilentButActiveRouteRejects()async throws {
         var p=try fixture(),graph=try XCTUnwrap(p.sections[0].graph)
+        p.tracks[0].instrument.kind = .audioUnit;p.tracks[0].instrument.plugin=nil
         let instrument=try XCTUnwrap(graph.nodes.first{if case .instrument=$0.content{return true};return false})
         let output=try XCTUnwrap(graph.nodes.first{if case .output=$0.content{return true};return false})
         graph.edges.removeAll{$0.signal == .audio}
@@ -67,6 +69,7 @@ final class MIDIPitchBendGuardTests:XCTestCase {
     }
     func testPreOutputBounceStillRejectsWhenOnlyDestinationIsMuted()throws {
         var p=try fixture();var (plan,_)=try signal(p)
+        p.tracks[0].instrument.kind = .soundBank
         p.tracks[0].muted=true;p.tracks[0].gain=0
         let output=try XCTUnwrap(plan.orderedNodes.firstIndex{if case .output=$0.content{return true};return false})
         plan.orderedNodes[output].muted=true;plan.orderedNodes[output].gain=0
@@ -75,6 +78,7 @@ final class MIDIPitchBendGuardTests:XCTestCase {
     }
     func testDirectSectionReturnsPreTrackAudioSoTrackMuteDoesNotBypassGuard()throws {
         var p=try fixture();let (plan,_)=try signal(p)
+        p.tracks[0].instrument.kind = .sampler
         p.tracks[0].muted=true;p.tracks[0].gain=0
         XCTAssertThrowsError(try SectionGraphRenderer.validatePitchBendSupport(plan,project:p))
     }
@@ -125,5 +129,23 @@ final class MIDIPitchBendGuardTests:XCTestCase {
         var stored=try fixture();stored.arrangements[stored.activeIndex].uses[0].gain=0
         let muted=try await ArrangementRenderer.render(project:stored,root:nil,plan:ArrangementCompiler.compile(stored),tailSeconds:0,includeStems:false)
         XCTAssertEqual(muted.mix.peak,0)
+    }
+    func testSynthCenterPacketMatchesLegacyGraphWithoutDuplicateNotes()async throws {
+        var p=try fixture();let (expressive,clock)=try signal(p)
+        XCTAssertNoThrow(try SectionGraphRenderer.validatePitchBendSupport(expressive,project:p))
+        let rendered=try await SectionGraphRenderer.render(expressive,project:p,root:nil,clock:clock,tail:0.1)
+        p.sections[0].lanes[0].pitchBend=nil
+        let (ordinary,_)=try signal(p)
+        let expected=try await SectionGraphRenderer.render(ordinary,project:p,root:nil,clock:clock,tail:0.1)
+        let actual=try XCTUnwrap(rendered[p.tracks[0].id]),reference=try XCTUnwrap(expected[p.tracks[0].id])
+        XCTAssertGreaterThan(actual.peak,0);XCTAssertEqual(actual.left,reference.left);XCTAssertEqual(actual.right,reference.right)
+    }
+    func testOnlySynthBackendAcceptsAudiblePerformancePackets()throws {
+        var p=try fixture();let (plan,_)=try signal(p)
+        XCTAssertNoThrow(try SectionGraphRenderer.validatePitchBendSupport(plan,project:p))
+        for kind:Instrument.Kind in [.soundBank,.audioUnit,.sampler] {
+            p.tracks[0].instrument.kind=kind
+            XCTAssertThrowsError(try SectionGraphRenderer.validatePitchBendSupport(plan,project:p))
+        }
     }
 }

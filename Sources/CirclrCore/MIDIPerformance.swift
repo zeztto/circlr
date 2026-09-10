@@ -5,6 +5,7 @@ import Foundation
 public struct MIDITimedPitchBendState: Equatable, Sendable {
     public let seconds: Double
     public let state: MIDIPitchBendState
+    public init(seconds:Double,state:MIDIPitchBendState) {self.seconds=seconds;self.state=state}
 }
 
 /// An independent controller/voice domain. A renderer must additionally scope
@@ -19,6 +20,9 @@ public struct MIDIPerformanceStream: Equatable {
     public let endSeconds: Double
     public let initialPitchBend: MIDIPitchBendState
     public let pitchBendStates: [MIDITimedPitchBendState]
+    public init(id:ID,sourceNodeID:ID,sourceChannel:Int,notes:[Note],startSeconds:Double,endSeconds:Double,initialPitchBend:MIDIPitchBendState,pitchBendStates:[MIDITimedPitchBendState]) {
+        self.id=id;self.sourceNodeID=sourceNodeID;self.sourceChannel=sourceChannel;self.notes=notes;self.startSeconds=startSeconds;self.endSeconds=endSeconds;self.initialPitchBend=initialPitchBend;self.pitchBendStates=pitchBendStates
+    }
 }
 
 extension SectionGraphCompiler {

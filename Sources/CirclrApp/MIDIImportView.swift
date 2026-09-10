@@ -4,6 +4,15 @@ import UniformTypeIdentifiers
 import CirclrCore
 import CirclrAudio
 
+/// Transient return location for an abandoned import, never part of its music transaction.
+struct MIDIImportReturnWorkspace {
+    let address:CircleAddress
+    let workspace:StudioWorkspace
+    let midiStepMode:Bool
+    let viewport:HierarchyViewport?
+    let stepCursor:MIDIImportStepCursor?
+}
+
 struct MIDIImportDraft {
     let id=UUID()
     var fileName:String
@@ -16,6 +25,7 @@ struct MIDIImportDraft {
     var beat:Double
     var sectionBeats:Double
     var position:Point?
+    var returnWorkspace:MIDIImportReturnWorkspace? = nil
 }
 extension AppStore {
     func chooseMIDIImport() {
@@ -38,12 +48,45 @@ extension AppStore {
             guard values.isRegularFile==true,let size=values.fileSize,size>0,size<=16_777_216 else {throw CirclrError("16 MiB 이하의 MIDI 파일을 선택하세요")}
             let handle=try FileHandle(forReadingFrom:url);defer{try? handle.close()}
             let document=try MIDIImport.read(handle.read(upToCount:16_777_217) ?? Data())
+            // Capturing consumes pending canvas navigation, so recheck the document afterward.
+            // Parsing failures and a cancelled file panel never move the current editor.
+            let viewport=captureHierarchyViewport?()
+            let returnWorkspace=hierarchySelection.map { address in
+                MIDIImportReturnWorkspace(address:address,workspace:viewport?.workspace ?? capturedStudioWorkspace,midiStepMode:midiStepMode,viewport:viewport,stepCursor:captureStepCursor?())
+            }
+            guard canStartMediaImport,project.id==projectID,project.musicRevision==revision,mediaImportGeneration==generation,
+                  project.arrangements.first(where:{$0.id==arrangementID})?.uses.contains(where:{$0.id==useID})==true else {throw CirclrError("대상이 변경됐습니다. 파일을 다시 선택하세요")}
+            pendingMIDIImportStepCursor=nil
             hierarchySettingsOpen=false
             focusHierarchy(.section(arrangementID:arrangementID,useID:useID),detail:true)
-            midiImportDraft=MIDIImportDraft(fileName:url.lastPathComponent,document:document,projectID:projectID,revision:revision,arrangementID:arrangementID,useID:useID,generation:generation,beat:beat,sectionBeats:clock.beats,position:position)
+            midiImportDraft=MIDIImportDraft(fileName:url.lastPathComponent,document:document,projectID:projectID,revision:revision,arrangementID:arrangementID,useID:useID,generation:generation,beat:beat,sectionBeats:clock.beats,position:position,returnWorkspace:returnWorkspace)
             return true
         }catch{status="MIDI 가져오기 실패: \(error.localizedDescription)";return false}
     }
+    func cancelMIDIImport(_ draftID:UUID) {
+        guard let draft=midiImportDraft,draft.id==draftID else{return}
+        midiImportDraft=nil
+        guard project.id==draft.projectID,project.musicRevision==draft.revision,mediaImportGeneration==draft.generation,
+              project.activeArrangementID==draft.arrangementID,selectedUse?.id==draft.useID,
+              let saved=draft.returnWorkspace else{return}
+        guard (try? StudioNavigation.scene(revealing:saved.address,in:project)) != nil else {
+            status="이전 편집 서클이 없어 현재 위치를 유지합니다"
+            return
+        }
+        pendingMIDIImportStepCursor=saved.stepCursor
+        if let viewport=saved.viewport {
+            let wasUpdating=updatingHierarchyViewport
+            updatingHierarchyViewport=true;project.hierarchyView=viewport;updatingHierarchyViewport=wasUpdating
+            hierarchyCommand=HierarchyCommand(action:.restore)
+        } else {
+            let detail:Bool
+            if case .music=saved.address {detail=true}else{detail=false}
+            focusHierarchy(saved.address,detail:detail)
+            midiStepMode=saved.midiStepMode
+            restoreStudioWorkspace(saved.workspace)
+        }
+    }
+
     func commitMIDIImport(_ draft:MIDIImportDraft,selected:Set<String>,extend:Bool,beat:Double,tempoPolicy:MIDIImportTempoPolicy)->String? {
         guard midiImportDraft?.id==draft.id,project.id==draft.projectID,project.musicRevision==draft.revision,mediaImportGeneration==draft.generation,selectedUse?.id==draft.useID,project.activeArrangementID==draft.arrangementID,canStartMediaImport else {return "프로젝트가 변경됐습니다. 파일을 다시 선택하세요"}
         do {
@@ -118,7 +161,7 @@ struct MIDIImportView:View {
             HStack {
                 Text("MIDI 노트 가져오기").font(.system(size:16,weight:.semibold))
                 Spacer(minLength:8)
-                Button("취소"){store.midiImportDraft=nil}
+                Button("취소"){store.cancelMIDIImport(draft.id)}
                 Button("\(selected.count)개 서클 가져오기") {
                     guard startCommit.commit() else{return}
                     refreshPreview()
@@ -172,6 +215,7 @@ struct MIDIImportView:View {
                 }.frame(maxWidth:.infinity,alignment:.leading).padding(.trailing,8)
             }
         }.font(.system(size:13))
+            .onExitCommand{store.cancelMIDIImport(draft.id)}
             .onAppear{selected=Set(draft.document.tracks.map(\.id));refreshPreview()}
             .onChange(of:selected){_,_ in refreshPreview()}
             .onChange(of:start){_,_ in refreshPreview()}

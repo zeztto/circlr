@@ -11,3 +11,18 @@ void circlr_synth_render(CirclrSynth *synth, float *left, float *right, uint32_t
 // Render-consumer only. cutoffHz contains one base-Hz value per frame; NULL uses patch cutoff.
 // Values outside finite 40...20000 fall back to patch cutoff. Voice state is retained.
 void circlr_synth_render_cutoff(CirclrSynth *synth, float *left, float *right, const double *cutoffHz, uint32_t frames);
+
+// Synchronous render-owner events: call between render blocks, never concurrently.
+// Do not mix these with circlr_synth_note on the same instance. No queue, heap
+// allocation, mutex, or unbounded stream table; the existing 64-voice pool is shared.
+// streamID and voiceID must be nonzero. The caller uses a fresh stream per source
+// occurrence and does not reuse voice identities while an old note-off can arrive.
+// pitch: 0...127; velocity: 1...127; semitones: finite -128.27...128.27.
+// Return 1 on acceptance, 0 on invalid input without changing state. Note-on also
+// rejects an active (streamID, voiceID), including a releasing voice. At capacity,
+// note-on uses the legacy oldest-voice stealing policy. Off for a finished/stolen
+// voice and bend for an empty stream succeed as no-ops. Bend changes only frequency
+// of that stream's active/releasing voices; later note-ons receive their own seed.
+int circlr_synth_owned_note_on(CirclrSynth *synth, uint64_t streamID, uint64_t voiceID, int pitch, int velocity, double semitones);
+int circlr_synth_owned_note_off(CirclrSynth *synth, uint64_t streamID, uint64_t voiceID);
+int circlr_synth_owned_pitch_bend(CirclrSynth *synth, uint64_t streamID, double semitones);

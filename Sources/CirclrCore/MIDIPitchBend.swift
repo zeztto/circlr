@@ -28,6 +28,7 @@ public struct MIDIPitchBendEvent:Codable,Equatable,Sendable {
 public struct MIDIPitchBendState:Equatable,Sendable {
     public let rawValue:Int
     public let range:MIDIPitchBendRange
+    public init(rawValue:Int,range:MIDIPitchBendRange) {self.rawValue=rawValue;self.range=range}
     public var semitones:Double {(Double(rawValue)-8192)/8192*range.totalSemitones}
 }
 
