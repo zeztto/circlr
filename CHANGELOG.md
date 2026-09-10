@@ -1,5 +1,11 @@
 # 변경 이력
 
+## 개발 중 — build149 이후 MIDI 서스테인 Core 기초
+
+- 독립 CC64 sequence·raw 상태·순서 보존·전체 입력 검증과 상태 조회를 추가했다. 같은 beat의 pedal-up/down 이벤트를 합치지 않는다.
+- 신규 Sustain 6개와 기존 PitchBend 8개 검사, 총 14개·실패 0개 및 독립 소스 리뷰를 확인했다. 앱 build·프로젝트 schema는 유지한다.
+- 저장·컴파일·DSP·SMF·GUI/MCP 연결은 [후속 계획](docs/173-midi-sustain-plan.md)이다. 앱의 페달 지원·native 화면·실제 연주를 검증한 단계는 아니다.
+
 ## 검증 완료 — build149 오토메이션 안내와 compact 편집
 
 - 낮은 화면의 plot·세로 controls 병렬 배치와 줄바꿈 안내를 연결했다. controls wheel의 canvas zoom 전달과 넓은 grid 높이 감소를 수정했다.
