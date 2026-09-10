@@ -1,6 +1,6 @@
 # 현행 개발 계획
 
-기준: 2026-09-10, integration-worktree의 build120 소스(`b06c4a9`)에서 시작해 build127의 소스·검증 기록을 기준으로 build131 검증 결과까지 반영했다. 이 문서는 다음 실행과 완료 판단을 위한 계획이며 [누적 로드맵](25-development-roadmap.md)의 과거 검증 결과를 새로 수행한 검사로 바꾸지 않는다. 전체 DAW·음악 품질·접근성은 아직 완료되지 않았다.
+기준: 2026-09-10, integration-worktree의 build120 소스(`b06c4a9`)에서 시작해 build127의 소스·검증 기록을 기준으로 build132 검증 결과까지 반영했다. 이 문서는 다음 실행과 완료 판단을 위한 계획이며 [누적 로드맵](25-development-roadmap.md)의 과거 검증 결과를 새로 수행한 검사로 바꾸지 않는다. 전체 DAW·음악 품질·접근성은 아직 완료되지 않았다.
 
 ## 제품의 완료 방향
 
@@ -14,11 +14,11 @@
 |---|---|---|
 | 악기 미리 듣기 | 기본 `AuditionTransport`가 `WorkerAuditionBackend`를 사용하며 service에서 native backend 생성. build118 mock lifecycle·Release 패키징 기록 | 실제 synth/sampler/AU의 소리·latency·note-off·장치 복구. 프로세스 격리는 HAL 정상화 증거가 아님 |
 | 편집 접근 | build116 공유 리듬 오디오, build117 오디오 수치 접근, build119 신스 포커스 노출, build120 콘솔 설정 복원 | 한 곡 전체의 연속 사용성, 모든 폼·최소 높이·VoiceOver·IME 조합 |
-| 전자음악 편집 | 스텝·노트 선택/편집·노트 MIDI import·비파괴 오디오 편집·gain/pan automation 코드와 단계별 QA | CC/페달/피치 벤드·tempo map import, plugin/synth 자동화, 실시간 write/touch/latch, comping/time warp |
+| 전자음악 편집 | 스텝·노트 편집·비파괴 오디오 편집·gain/pan automation. build129 내장 신스 cutoff의 GUI/MCP·PCM·바운스/복원, build131 MIDI tempo map의 이번 use 적용·해제·오프라인 출력·저장/재열기 검증 | CC/페달/피치 벤드, cutoff 외 신스 파라미터·plugin 자동화, 실시간 write/touch/latch, comping/time warp. 실제 연주·청취는 별도 |
 | 입출력·영상 | 출력 helper, 녹음 상태·파일 처리, `CanvasMovieWriter`의 H.264/AAC·PCM timestamp 경로 | 정상 장치에서의 녹음→편집→재생, 실제 출력과 영상 동기·최소화/복원 |
 | AI·아티스트 | 로컬 socket/MCP, revision 검증·실제 작업 로그, 전문 음악 역할 kit | 앱 내 Codex 계정 대화, 통합 아티스트·멀티미디어 catalog |
 
-소스 근거: [미리 듣기 기본 연결](../Sources/CirclrAudio/AuditionTransport.swift), [worker 수명](../Sources/CirclrAudio/AuditionWorkerProcess.swift), [service](../Sources/CirclrAudio/AuditionWorkerService.swift), [automation의 gain/pan 계약](../Sources/CirclrCore/Automation.swift), [노트 import 범위](../Sources/CirclrAudio/MIDIImport.swift), [녹음 UI](../Sources/CirclrApp/RecordingWorkspace.swift), [영상 writer](../Sources/CirclrAudio/CanvasMovieWriter.swift), [에이전트 연결](../Sources/CirclrApp/AgentWorkspace.swift). 함수·타입의 존재만으로 실제 사용 성공을 주장하지 않는다.
+소스 근거: [미리 듣기 기본 연결](../Sources/CirclrAudio/AuditionTransport.swift), [worker 수명](../Sources/CirclrAudio/AuditionWorkerProcess.swift), [service](../Sources/CirclrAudio/AuditionWorkerService.swift), [gain/pan·신스 cutoff automation 계약](../Sources/CirclrCore/Automation.swift), [MIDI 노트·tempo import 범위](../Sources/CirclrAudio/MIDIImport.swift), [녹음 UI](../Sources/CirclrApp/RecordingWorkspace.swift), [영상 writer](../Sources/CirclrAudio/CanvasMovieWriter.swift), [에이전트 연결](../Sources/CirclrApp/AgentWorkspace.swift). 함수·타입의 존재만으로 실제 사용 성공을 주장하지 않는다.
 
 ## 실행 순서와 작업 흐름
 
@@ -35,6 +35,8 @@
 **의존·경계:** [미리 듣기 구현 기록](135-audition-worker-isolation.md), [기본 DAW 녹음 조건](31-daw-basics-plan.md), `AudioRecorder`·`PlaybackOutputConnection`·`CanvasMovieWriter`. mock worker·offline WAV·UI-only helper 검사는 하드웨어 결과를 대체하지 않는다. 원본 사용자 앱 교체는 이 검증과 별도 출고 판단이다.
 
 ### 2. 한 곡을 끊김 없이 만드는 단일 캔버스
+
+build132에서 가져오기 오류의 고정 표시·대상 별명과 실제 회복/취소/재열기를 확인했다. 첫 6개 화면 독립 감사는 PASS했으며 추가 unsupported 화면의 오류 고정·keepCurrent 회복과 음악 보존도 독립 감사 PASS로 확인했다. [피드백 검증](153-midi-import-feedback.md).
 
 build130은 가로 파라미터 선택으로 곡선 공간을 확보하고 빈 곡선 Tab의 다른 서클 이동을 수정했다. [검증150](150-automation-editing-space.md).
 
@@ -60,7 +62,7 @@ build131은 [MIDI tempo import 계획](151-midi-tempo-import-plan.md)의 기본 
 
 [신스 cutoff automation 계획](148-synth-cutoff-automation-plan.md)은 build129에서 descriptor·voice 보존 DSP·GUI/MCP·schema를 구현하고 기계검증·실제 Hz 편집/오류 거절을 확인했다. GUI/schema 독립 감사와 production 서명/UUID도 통과했으며 바운스·복원·재열기 r79 및 PCM 독립 감사도 통과했다. 최종 종합 UI 데이터 감사도 통과했다. [현재 검증](149-synth-cutoff-automation-validation.md)을 기준으로 판단한다.
 
-**다음 행동:** build131에서 확인한 가져오기 오류 문구의 수치 인접 피드백과 대상 use 별명 표시를 검토한다. Apply가 막히는 이유를 스크롤 없이 알 수 있어야 한다. [MIDI tempo 가져오기](152-midi-tempo-import-validation.md)는 위 범위를 구현·검증했으며 새 모델 도입 단계로 다시 세지 않는다. build129에서 `AutomationParameter`에 synthCutoff를 추가했으며 native 편집·바운스·재열기와 독립 감사를 통과했다. 신스 filter 같은 다음 파라미터는 descriptor·단위·범위·초깃값·시간 의미·DSP 반영을 먼저 정한 뒤 UI에 노출한다. plugin parameter는 실제 descriptor와 state 복원 계약을 갖춘 뒤 추가한다.
+**다음 행동:** MIDI pitch bend의 채널·범위·reset·sample timing과 GUI/MCP 편집 계약을 계획한다. build131에서 확인한 가져오기 오류·대상 표시는 build132에서 개선했다. 전체 앱 사용성의 다른 장애는 실제 한 곡 동선에서 계속 확인한다. [MIDI tempo 가져오기](152-midi-tempo-import-validation.md)는 위 범위를 구현·검증했으며 새 모델 도입 단계로 다시 세지 않는다. build129에서 `AutomationParameter`에 synthCutoff를 추가했으며 native 편집·바운스·재열기와 독립 감사를 통과했다. 신스 filter 같은 다음 파라미터는 descriptor·단위·범위·초깃값·시간 의미·DSP 반영을 먼저 정한 뒤 UI에 노출한다. plugin parameter는 실제 descriptor와 state 복원 계약을 갖춘 뒤 추가한다.
 
 MIDI CC/페달/피치 벤드·tempo map은 노트 import와 다른 이벤트·시간 계약이 필요하다. 기존 파일을 여는 것만으로 재해석하지 않으며 가져오기 전 적용 범위를 설명한다. 오디오 crossfade·comping·time warp, 실시간 automation write/touch/latch, punch/loop 녹음은 원본/테이크·공통 clock·취소 수명에 의존하므로 독립 체크박스로 쌓지 않는다. [기본 DAW 계획](31-daw-basics-plan.md)의 남은 조건을 유지한다.
 

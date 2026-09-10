@@ -98,8 +98,20 @@ struct MIDIImportView:View {
     private var current:Bool {store.midiImportDraft?.id==draft.id && store.project.id==draft.projectID && store.project.musicRevision==draft.revision && store.mediaImportGeneration==draft.generation && store.project.activeArrangementID==draft.arrangementID && store.selectedUse?.id==draft.useID}
     private var ready:Bool {!selected.isEmpty && impact != nil && previewError==nil && startError==nil && store.canStartMediaImport && current}
     private var target:String {
-        guard let arrangement=store.project.arrangements.first(where:{$0.id==draft.arrangementID}),let index=arrangement.uses.firstIndex(where:{$0.id==draft.useID}),let section=store.project.sections.first(where:{$0.id==arrangement.uses[index].sectionID}) else{return "대상 섹션을 찾을 수 없습니다"}
-        return arrangement.name+" · "+section.name+" · \(index+1)번째 사용"
+        guard let arrangement=store.project.arrangements.first(where:{$0.id==draft.arrangementID}),let index=arrangement.uses.firstIndex(where:{$0.id==draft.useID}) else{return "대상 섹션을 찾을 수 없습니다"}
+        return arrangement.name+" · "+arrangement.uses[index].name+" · \(index+1)번째 사용"
+    }
+    private var targetIdentity:String {"편곡 ID · \(draft.arrangementID) · 사용 ID · \(draft.useID)"}
+    private var targetLabel:some View {
+        Text("대상 · "+target).fixedSize(horizontal:false,vertical:true)
+            .help(targetIdentity)
+            .accessibilityHint(Text(targetIdentity))
+    }
+    private var errorSummary:String? {
+        if !current {return "대상이나 프로젝트가 변경됐습니다. 취소하고 파일을 다시 선택하세요."}
+        if !store.canStartMediaImport {return "재생·녹음을 정지한 뒤 가져오세요."}
+        if let startError {return "시작 위치 · "+startError}
+        return commitError ?? previewError
     }
     var body:some View {
         VStack(alignment:.leading,spacing:10) {
@@ -114,11 +126,14 @@ struct MIDIImportView:View {
                     commitError=store.commitMIDIImport(draft,selected:selected,extend:extend,beat:start,tempoPolicy:tempoPolicy)
                 }.disabled(!ready)
             }
+            if let message=errorSummary {
+                Text(message).foregroundStyle(Color.orange).fixedSize(horizontal:false,vertical:true)
+                    .accessibilityLabel("MIDI 가져오기 오류 · "+message)
+            }
             ScrollView {
                 VStack(alignment:.leading,spacing:12) {
                     Text(draft.fileName).lineLimit(2).help(draft.fileName)
-                    Text("대상 · "+target).fixedSize(horizontal:false,vertical:true)
-                    Text("사용 ID · "+draft.useID).font(.system(size:11)).foregroundStyle(StudioTheme.secondary).textSelection(.enabled)
+                    targetLabel
                     MIDIWorkspaceToolbarLayout {
                         Text("시작 위치")
                         CommittedNumberField(title:"MIDI 가져오기 시작 박",value:$start,range:0...beats,width:80,presentation:.beatPosition,validate:{value in guard value<beats else{throw CirclrError("MIDI 시작 위치는 현재 섹션 안으로 지정하세요")}},commitTarget:startCommit,onValidityChange:{startError=$0})
@@ -147,9 +162,6 @@ struct MIDIImportView:View {
                     if let issue=draft.document.tempoImportIssue,tempoPolicy == .keepCurrent {
                         Text("파일 템포 사용 불가 · "+issue+" · 현재 템포로 노트는 가져올 수 있습니다.").foregroundStyle(StudioTheme.secondary)
                     }
-                    if let message=startError ?? commitError ?? previewError {Text(message).foregroundStyle(Color.orange).fixedSize(horizontal:false,vertical:true).accessibilityLabel("MIDI 가져오기 오류 · "+message)}
-                    if !current {Text("대상이나 프로젝트가 변경됐습니다. 취소하고 파일을 다시 선택하세요.").foregroundStyle(Color.orange)}
-                    if !store.canStartMediaImport {Text("재생·녹음을 정지한 뒤 가져오세요.").foregroundStyle(Color.orange)}
                     Divider()
                     Text("가져올 트랙 · \(selected.count)/\(draft.document.tracks.count)").fontWeight(.semibold)
                     ForEach(draft.document.tracks) {track in

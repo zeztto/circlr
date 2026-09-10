@@ -6,7 +6,9 @@ macOS용 앨범·송폼 궤도 편집기. **앨범 → 곡·악장 → 섹션 �
 
 연결 UI는 [서클 둘레 8방향 IN/OUT과 다중 입출력](docs/22-eight-direction-ports.md)으로 확장 중이다. 포트의 신호 의미와 연결점 배치를 분리한다. 아래 일반 사용법은 배포된 0.19 앱 기준이며 새 포트 기능은 독립 개발 브랜치에서 검증한다.
 
-현재 **`codex/daw-integration`의 0.20.0 build 131**에 녹음 lifecycle과 8방향·다중 bus·그룹 포트를 통합했다. 같은 캔버스의 연결 편집·녹음 상태·스텝·오토메이션이 공존하며, 녹음 시작·정리 중 음악 편집과 Undo의 경쟁을 차단한다. build 23의 실제 편집·바운스·Undo·저장/재열기·닫기 최소화 및 출력별 모션 검증은 [통합 QA](qa/daw-integration-review.md)에 기록했다.
+현재 **`codex/daw-integration`의 0.20.0 build 132**에 녹음 lifecycle과 8방향·다중 bus·그룹 포트를 통합했다. 같은 캔버스의 연결 편집·녹음 상태·스텝·오토메이션이 공존하며, 녹음 시작·정리 중 음악 편집과 Undo의 경쟁을 차단한다. build 23의 실제 편집·바운스·Undo·저장/재열기·닫기 최소화 및 출력별 모션 검증은 [통합 QA](qa/daw-integration-review.md)에 기록했다.
+
+**build132는 MIDI 가져오기의 오류와 정확한 대상 이름을 바로 보여준다.** 고정 실행 영역의 입력/트랙/tempo 오류와 수정 후 회복, use 별명 일치·취소/재열기 음악 보존을 확인했다. 최종 Release 47.20초·production 서명을 통과했으며 추가 unsupported 화면의 오류 고정·keepCurrent 회복과 음악 보존도 독립 감사 PASS로 확인했다. [검증 기록](docs/153-midi-import-feedback.md).
 
 **build131은 MIDI 파일의 tempo map을 이번 섹션 사용에 가져온다.** 기본은 현재 템포 유지이며 파일 템포 적용은 schema4로 저장한다. 명시적으로 이전 설정에 복귀할 수 있다. 기계검증 496개와 렌더 1개, MCP 13/27개·Release 81.94초를 통과했으며 native GUI/MCP·오프라인 바운스/복원·r95 저장/재열기와 production 서명까지 확인했다. [구현과 검증](docs/152-midi-tempo-import-validation.md).
 

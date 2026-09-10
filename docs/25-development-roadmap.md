@@ -1,6 +1,8 @@
 # 써클러 개발 방향과 실행 계획
 
-build131에서 MIDI 파일 tempo map의 이번 use 적용·명시적 이전 설정 복귀를 연결했다. 기본 keepCurrent는 유지하고 applyFile은 schema4를 사용한다. 기계검증 496개·렌더 1개·MCP 13/27개·Release 81.94초를 통과했으며 native GUI/MCP·오프라인 바운스/복원·r95 저장/재열기와 production 서명까지 확인했다. [현재 검증](152-midi-tempo-import-validation.md). 다음은 가져오기 오류의 수치 인접 피드백과 대상 use 별명 표시를 검토한다. 전체 제작·물리 오디오·청취 목표는 남아 있다.
+build132에서 가져오기 오류의 고정 표시와 대상 use 별명·편곡·순서를 개선했다. 최종 Release 47.20초·native 오류/회복·취소/재열기·production 서명과 첫 6개 화면 감사를 통과했다. 추가 unsupported 화면의 오류 고정·keepCurrent 회복과 음악 보존도 독립 감사 PASS로 확인했다. [검증 기록](153-midi-import-feedback.md). 다음 음악 표현은 MIDI pitch bend 계약 계획이며 전체 사용성·DAW 목표는 남아 있다.
+
+build131에서 MIDI 파일 tempo map의 이번 use 적용·명시적 이전 설정 복귀를 연결했다. 기본 keepCurrent는 유지하고 applyFile은 schema4를 사용한다. 기계검증 496개·렌더 1개·MCP 13/27개·Release 81.94초를 통과했으며 native GUI/MCP·오프라인 바운스/복원·r95 저장/재열기와 production 서명까지 확인했다. [현재 검증](152-midi-tempo-import-validation.md). 당시 후속인 가져오기 오류·대상 표시 개선은 위 build132에서 진행했다. 전체 제작·물리 오디오·청취 목표는 남아 있다.
 
 build130은 오토메이션 가시성과 빈 곡선 키보드 이동을 개선했다. [검증150](150-automation-editing-space.md). 당시 다음 엔진 범위였던 [MIDI tempo 가져오기](151-midi-tempo-import-plan.md)는 위 build131에서 구현·검증했다.
 

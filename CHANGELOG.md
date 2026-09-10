@@ -1,5 +1,11 @@
 # 변경 이력
 
+## 검증 완료 — 0.20.0 build132 MIDI 가져오기 피드백
+
+- 고정 실행 영역에서 입력·선택·tempo 지원 오류를 표시하고 대상 use 별명·편곡·순서를 맞춘다.
+- 최종 Release 47.20초·production 서명, 실제 오류/회복·스크롤 후 고정 표시·취소/재열기·음악/자산 보존을 확인했다. 독립 첫 6개 화면 감사는 PASS, 추가 unsupported 화면의 오류 고정·keepCurrent 회복과 음악 보존도 독립 감사 PASS로 확인했다.
+- 초기 API 컴파일 실패는 수정 후 통과했다. 파일 대화상자 자동화의 키 불일치 원인은 미확정이며 전체 키보드/물리 오디오 완료를 뜻하지 않는다. [기록](docs/153-midi-import-feedback.md).
+
 ## 검증 완료 — 0.20.0 build131 MIDI tempo map 가져오기
 
 - 기본 keepCurrent를 유지하며 applyFile은 이번 use의 tempo map을 schema4로 적용한다. 기존 설정을 보관하고 명시적 해제로 복귀한다. GUI와 MCP importer의 preview/job·revision·한 Undo 계약을 연결했다.
