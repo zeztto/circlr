@@ -1,5 +1,11 @@
 # 변경 이력
 
+## 검증 완료 — 0.20.0 build110 테이크 번호 표시
+
+- 동명 테이크 행을 `#번호 · 이름`으로 표시하고 검색 안내에 번호 추가. 번호는 필터 전 현재 대상 eligible 순서이며 영구 ID·녹음 연번이 아님. 이전 출력 reader 수정 포함.
+- Release38.99초·UUID `DC416230-4D16-3A4F-AE22-B1E67F95A6EC`. 실제 ⌥⌘T·Down·#2 검색·Return 적용·⌘Z·재검색 reset·Esc·저장 재열기 확인.
+- checker5개 상태·AX4개·정확한 적용 대상/gain·시각4장 잘림 없음 통과. before30/applied31/undo32/restored32/reopened32, 자산2개·output/record0 유지. QA 앱 종료·사용자 PID86114 보존. [계약](docs/126-take-identity.md).
+
 ## 소스·회귀 검증 완료 — 출력 reader 정리
 
 - build109 Release 이후 별도 소스 수정이다. helper가 종료해도 자손 프로세스가 stdout/stderr pipe를 상속하면 reader가 host를 계속 보유하는 회귀를 재현했다.

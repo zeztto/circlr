@@ -6,7 +6,9 @@ macOS용 앨범·송폼 궤도 편집기. **앨범 → 곡·악장 → 섹션 �
 
 연결 UI는 [서클 둘레 8방향 IN/OUT과 다중 입출력](docs/22-eight-direction-ports.md)으로 확장 중이다. 포트의 신호 의미와 연결점 배치를 분리한다. 아래 일반 사용법은 배포된 0.19 앱 기준이며 새 포트 기능은 독립 개발 브랜치에서 검증한다.
 
-현재 **`codex/daw-integration`의 0.20.0 build 109**에 녹음 lifecycle과 8방향·다중 bus·그룹 포트를 통합했다. 같은 캔버스의 연결 편집·녹음 상태·스텝·오토메이션이 공존하며, 녹음 시작·정리 중 음악 편집과 Undo의 경쟁을 차단한다. build 23의 실제 편집·바운스·Undo·저장/재열기·닫기 최소화 및 출력별 모션 검증은 [통합 QA](qa/daw-integration-review.md)에 기록했다.
+현재 **`codex/daw-integration`의 0.20.0 build 110**에 녹음 lifecycle과 8방향·다중 bus·그룹 포트를 통합했다. 같은 캔버스의 연결 편집·녹음 상태·스텝·오토메이션이 공존하며, 녹음 시작·정리 중 음악 편집과 Undo의 경쟁을 차단한다. build 23의 실제 편집·바운스·Undo·저장/재열기·닫기 최소화 및 출력별 모션 검증은 [통합 QA](qa/daw-integration-review.md)에 기록했다.
+
+**build110은 동명 테이크를 `#번호 · 이름`으로 구분한다.** 번호는 필터 전 현재 대상의 eligible 순서이며 영구 ID나 녹음 연번이 아니다. Release38.99초·실제 ⌥⌘T/Down/번호 검색/Return/Undo/검색 reset/Esc/저장 재열기·checker5개 상태/AX4개·시각 검토를 통과했다. 음악r30→31→32와 정확한 적용 대상, 자산2개·output/record0을 확인했고 이전 출력 reader 수정도 포함한다. QA 앱은 종료하고 사용자 PID86114를 유지했다. [계약](docs/126-take-identity.md).
 
 **build109 Release 이후 출력 reader 수명 수정을 소스·회귀 테스트로 검증했다.** 자손이 stdout/stderr를 유지할 때 host가 해제되지 않는 baseline(1 test·2 failures·8.587초)을 재현하고 수정 후 OutputWorkerProcessTests16개/20.149초와 최종 source review를 통과했다. 후속 앱 raw executable Release 빌드도48.26초·exit0으로 완료했으며 재패키징·GUI/UI 재검증은 수행하지 않았다. 아래 build109 기존 Release 증거와 구분하고 사용자 앱은 그대로 유지한다.
 
