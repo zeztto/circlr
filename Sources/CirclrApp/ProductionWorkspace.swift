@@ -20,7 +20,10 @@ extension AppStore {
         }catch{fail(error)}
     }
     func exportMIDI() {
-        guard nameEditing.resolve(),let lane=currentLane,let clock=currentClock else{return}
+        var scope=numberEditIdentity
+        guard resolveActiveNumericDraft(),nameEditing.resolve() else{return}
+        scope.revision=project.musicRevision
+        guard scope==numberEditIdentity,let lane=currentLane,let clock=currentClock else{return}
         let identity=numberEditIdentity,context=currentContext,title=selectedCircle?.title ?? "연주"
         let panel=NSSavePanel();panel.title="MIDI 저장";panel.nameFieldStringValue=title+".mid";panel.allowedContentTypes=[UTType(filenameExtension:"mid")!]
         guard panel.runModal() == .OK,let url=panel.url else{return}
@@ -43,7 +46,10 @@ extension AppStore {
         }catch{fail(error)}
     }
     func bounceTrack() {
-        guard let use=selectedUse,let track=selectedTrack else{return}
+        var scope=numberEditIdentity
+        guard resolveActiveNumericDraft(),nameEditing.resolve() else{return}
+        scope.revision=project.musicRevision
+        guard scope==numberEditIdentity,let use=selectedUse,let track=selectedTrack else{return}
         var request=AgentRequest(method:"bounce");request.projectID=project.id;request.expectedRevision=project.musicRevision
         var args=AgentArguments();args.arrangementID=project.activeArrangementID;args.useID=use.id;args.trackID=track.id;args.tailSeconds=bounceTailSeconds;request.arguments=args
         do {_ = try executeAgent(request,source:"사용자")}catch{fail(error)}

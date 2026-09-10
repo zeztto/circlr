@@ -77,6 +77,22 @@ extension EnvironmentValues {
     }
 }
 extension AppStore {
+    /// File/job actions consume only the live numeric editor in the main key window.
+    /// No cached binding or detached/other-window coordinator is invoked.
+    func resolveActiveNumericDraft()->Bool {
+        guard let window=NSApp.keyWindow,window.identifier?.rawValue=="main" else{return true}
+        guard let responder=window.firstResponder,let content=window.contentView else{return true}
+        func activeField(in view:NSView)->NativeNumberField.Control? {
+            if let field=view as? NativeNumberField.Control,field.window===window,
+               let editor=field.currentEditor(),editor===responder {return field}
+            for child in view.subviews {if let field=activeField(in:child){return field}}
+            return nil
+        }
+        guard let field=activeField(in:content) else{return true}
+        guard field.window===window,field.isEnabled,
+              let editor=field.currentEditor(),window.firstResponder===editor else{return false}
+        return field.resolveForAction?() ?? false
+    }
     var numberEditIdentity: NumberEditIdentity {
         NumberEditIdentity(projectID:project.id,revision:project.musicRevision,generation:mediaImportGeneration,
             arrangementID:project.activeArrangementID,circle:hierarchySelection,trackID:selectedTrackID,
@@ -148,6 +164,13 @@ private struct NativeNumberField: NSViewRepresentable {
         field.font = .monospacedDigitSystemFont(ofSize:13,weight:.regular)
         field.delegate=context.coordinator
         field.began={ [weak coordinator=context.coordinator] in coordinator?.begin() }
+        field.resolveForAction={ [weak coordinator=context.coordinator,weak field] in
+            guard let coordinator,let field else{return false}
+            if (field.currentEditor() as? NSTextView)?.hasMarkedText()==true {
+                coordinator.parent.error="입력 중인 숫자를 먼저 확정하세요";return false
+            }
+            return coordinator.commit()
+        }
         field.setContentCompressionResistancePriority(.defaultLow,for:.horizontal)
         updateNSView(field,context:context);return field
     }
@@ -228,6 +251,7 @@ private struct NativeNumberField: NSViewRepresentable {
         }
     }
     final class Control:NSTextField {
+        var resolveForAction:(()->Bool)?
         var began:(()->Void)?
         override func becomeFirstResponder() -> Bool {
             let result=super.becomeFirstResponder()

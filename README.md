@@ -6,7 +6,9 @@ macOS용 앨범·송폼 궤도 편집기. **앨범 → 곡·악장 → 섹션 �
 
 연결 UI는 [서클 둘레 8방향 IN/OUT과 다중 입출력](docs/22-eight-direction-ports.md)으로 확장 중이다. 포트의 신호 의미와 연결점 배치를 분리한다. 아래 일반 사용법은 배포된 0.19 앱 기준이며 새 포트 기능은 독립 개발 브랜치에서 검증한다.
 
-현재 **`codex/daw-integration`의 0.20.0 build 135**에 녹음 lifecycle과 8방향·다중 bus·그룹 포트를 통합했다. 같은 캔버스의 연결 편집·녹음 상태·스텝·오토메이션이 공존하며, 녹음 시작·정리 중 음악 편집과 Undo의 경쟁을 차단한다. build 23의 실제 편집·바운스·Undo·저장/재열기·닫기 최소화 및 출력별 모션 검증은 [통합 QA](qa/daw-integration-review.md)에 기록했다.
+현재 **`codex/daw-integration`의 0.20.0 build 136**에 녹음 lifecycle과 8방향·다중 bus·그룹 포트를 통합했다. 같은 캔버스의 연결 편집·녹음 상태·스텝·오토메이션이 공존하며, 녹음 시작·정리 중 음악 편집과 Undo의 경쟁을 차단한다. build 23의 실제 편집·바운스·Undo·저장/재열기·닫기 최소화 및 출력별 모션 검증은 [통합 QA](qa/daw-integration-review.md)에 기록했다.
+
+**build136은 모든 MIDI 모드에서 가져오기·저장·바운스를 바로 실행한다.** 공통 버튼·tail과 Option+Command+I/E/B를 제공하고, 파일 작업 전에 수치 초안을 확정해 이전 값이 저장되는 문제를 수정했다. 작은 창의 네 모드 배치·오류 차단·실제 저장/바운스·취소/재시작, Core 13개와 Release 49.06초를 확인했다. [검증 범위](docs/158-midi-file-workflow.md).
 
 **build135는 같은 캔버스의 피치 벤드 편집·MCP 편집과 SMF 표현 내보내기를 연결한다.** 최종 회귀 816개·내부 skip 2개·실패 0개, Release 47.35초와 패키지 검증을 통과했다. 실제 편집·외부 변경 보호·SMF 저장/재가져오기·취소/재시작을 확인했다. UI/artifact 최종 독립 감사도 PASS했으며 물리 청취·모든 backend 지원 완료는 아니다. [검증 기록](docs/157-pitch-bend-edit-and-export.md).
 

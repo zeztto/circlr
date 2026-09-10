@@ -1,5 +1,11 @@
 # 변경 이력
 
+## 검증 완료 — build136 MIDI 공통 파일 작업
+
+- 네 MIDI 모드에 직접 가져오기·저장·바운스와 tail을 제공하고 공통 단축키를 연결했다. 작은 창에서 동작군을 줄바꿈한다.
+- 파일 작업 전에 실제 수치 초안을 확정하고 invalid/stale 입력을 차단한다. raw 12288의 실제 SMF 저장·취소 복귀·바운스/복원·재시작을 확인했다.
+- Core 13개·warning 없는 Release 49.06초와 native UI 감사를 통과했다. build135 전체 회귀를 이번 검사로 다시 세지 않는다. 일부 빠른 연속 조작·모든 모드의 전체 실행·물리 청취는 미검증 범위다. [기록](docs/158-midi-file-workflow.md).
+
 ## 검증 완료 — build135 피치 벤드 편집과 SMF 내보내기
 
 - 같은 캔버스 편집·MCP edit_pitch_bend·raw/RPN SMF 저장을 연결했다. 외부 변경 뒤 index 보호, range/value 구분과 표현 구간 보기를 개선했다.

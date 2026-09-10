@@ -20,19 +20,28 @@ struct PitchBendWorkspace:View {
     var body:some View {
         VStack(alignment:.leading,spacing:8) {
             MIDIWorkspaceToolbarLayout(gap:8) {
-                MIDIEditorModeControls(store:store)
+                MIDIWorkspaceFileActions(store:store)
+            }
+            MIDIWorkspaceToolbarLayout(gap:8) {
                 Button("초기 상태"){store.selectPitchBend(nil);focus.focus()}.help("초기 채널·14-bit 값·RPN 범위 편집 · 보기만으로 표현을 만들지 않습니다")
                 Button("값 추가"){store.addPitchBend();focus.focus()}
                 Button("범위 추가"){store.addPitchBend(range:true);focus.focus()}
                 Button("선택 삭제") {if let index=store.pitchBendState.selectedIndex{store.editPitchBend(.remove(index:index),identity:store.pitchBendIdentity)};focus.focus()}.disabled(store.selectedPitchBendEvent==nil)
                 Button("전체 표현 제거"){store.editPitchBend(.clear,identity:store.pitchBendIdentity);focus.focus()}.disabled(sequence==nil)
+                Button(store.pitchBendState.displayedBeats == nil ? "표현 구간 보기":"서클 길이 보기") {
+                    store.pitchBendState.displayedBeats=store.pitchBendState.displayedBeats == nil ? max(0.03125,sequence?.events.last?.beat ?? store.editorBeats):nil
+                    focus.focus()
+                }.fixedSize()
             }
             Text(scope+" · 재생은 내장 신스 경로만 지원 · 데이터 편집·저장 가능").font(.system(size:11)).foregroundStyle(StudioTheme.secondary).lineLimit(2)
             HStack(spacing:12) {
                 Text("● 값 · ■ 범위").foregroundStyle(StudioTheme.secondary)
                 Text(store.pitchBendSelectionReadout).monospacedDigit()
+                Spacer(minLength:0)
+                Text("[ ] 선택 · Tab 수치").foregroundStyle(StudioTheme.secondary)
             }.font(.system(size:11)).lineLimit(1)
             PitchBendPlot(store:store,focus:focus,fields:fieldFocus).frame(minHeight:72,maxHeight:.infinity)
+                .help("8192 중심 · hold · [ ] 선택 · ↑↓ 값 · ←→ 박 · Tab 수치 · Return 값 추가")
             ScrollView(.horizontal) {
                 HStack(spacing:10) {
                     if let event=store.selectedPitchBendEvent {
@@ -52,14 +61,7 @@ struct PitchBendWorkspace:View {
                     }
                 }.padding(.vertical,1)
             }.fixedSize(horizontal:false,vertical:true)
-            HStack(spacing:10) {
-                Text("8192 중심 · hold · [ ] 선택 · ↑↓ 값 · ←→ 박 · Tab 수치 · Return 값 추가").font(.system(size:11)).foregroundStyle(StudioTheme.secondary).lineLimit(1)
-                Spacer(minLength:0)
-                Button(store.pitchBendState.displayedBeats == nil ? "표현 구간 보기":"서클 길이 보기") {
-                    store.pitchBendState.displayedBeats=store.pitchBendState.displayedBeats == nil ? max(0.03125,sequence?.events.last?.beat ?? store.editorBeats):nil
-                    focus.focus()
-                }.fixedSize()
-            }
+
         }
         .environment(\.numberEditing,NumberEditingContext(snapshot:store.numberEditIdentity,current:{store.numberEditIdentity},focusCanvas:{focus.focus()},fieldFocus:fieldFocus))
     }

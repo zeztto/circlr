@@ -52,7 +52,7 @@ extension AppStore {
             let identity=numberEditIdentity
             add("bounce-tail-settings","바운스 여운 설정"){[weak self] in self?.beginBounceTailEditing(identity:identity)}
             if trackBounceIssue==nil,bounceTailAssessment != nil,!bounceTailEditing {
-                add("bounce-current-track","현재 트랙 바운스"){[weak self] in self?.runCurrentTrackBounce(identity:identity)}
+                add("bounce-current-track","현재 트랙 바운스","⌥⌘B"){[weak self] in self?.runCurrentTrackBounce(identity:identity)}
             }
         }
         if let context=sectionInsertionContext(),!sectionInsertionLocked {
@@ -103,13 +103,12 @@ extension AppStore {
             add("reuse","섹션 다시 사용","⌘D"){[weak self] in self?.reuse()}
             add("detach","공유 원본에서 독립 섹션으로 분리"){[weak self] in self?.detach()}
             add("section-play","선택 섹션만 재생"){[weak self] in self?.play(onlySelection:true)}
-            add("midi-import","MIDI 파일 가져오기…","⌥⌘I"){[weak self] in self?.chooseMIDIImport()}
+            if midiImportActionAvailable {add("midi-import","MIDI 가져오기…","⌥⌘I"){[weak self] in self?.chooseMIDIImport()}}
             add("record-midi","MIDI 녹음 시작 / 정지"){[weak self] in self?.startMIDIRecording()}
             add("record-audio","오디오 녹음 시작 / 정지","⌥⌘R"){[weak self] in self?.startAudioRecording()}
             add("rhythm","이 섹션의 리듬 패턴 만들기"){[weak self] in self?.makeHierarchyPattern()}
+            if midiExportActionAvailable {add("midi-export","MIDI 저장…","⌥⌘E"){[weak self] in self?.exportMIDI()}}
             if selectedTrackID != nil {
-                add("bounce","선택 트랙을 오디오로 바운스"){[weak self] in self?.bounceTrack()}
-                add("midi-export","선택 MIDI 파일 저장…"){[weak self] in self?.exportMIDI()}
                 if let request=midiGenerationRequest {
                     for pattern in MIDIPattern.allCases {
                         commands.append(StudioCommand(id:"pattern-\(pattern.rawValue)",title:"MIDI 패턴 생성 · \(pattern.label)",
@@ -369,7 +368,7 @@ struct KeyboardHelpView:View {
         ("Space","재생·정지"),("⇧⌘R","영상 녹화 시작·마치기"),("⌘K / ⌘D / ⌘G","섹션 추가 / 재사용 / 그룹"),("Delete","선택 서클·노트 삭제"),
         ("⌘N / ⌘O / ⌘S / ⇧⌘S","새 앨범·열기·저장 / 다른 이름으로 저장"),("⌘Z / ⇧⌘Z","실행 취소 / 다시 실행"),
         ("⌘I / ⌘E","오디오 가져오기 / WAV 내보내기"),("파일 드롭","섹션 위에 오디오 여러 개 또는 MIDI 한 개 놓기"),("⌃`","콘솔 접기·펼치기"),
-        ("MIDI · ⌘A / ⇧클릭","노트 전체 선택 / 선택 추가·제외"),("MIDI · Q / ⌘D","선택 퀀타이즈 / 선택 구간 뒤 복제"),("⌥⌘I","MIDI 파일 가져오기"),
+        ("MIDI · ⌘A / ⇧클릭","노트 전체 선택 / 선택 추가·제외"),("MIDI · Q / ⌘D","선택 퀀타이즈 / 선택 구간 뒤 복제"),("⌥⌘I","MIDI 가져오기"),("⌥⌘E","현재 MIDI 저장"),("⌥⌘B","현재 트랙 바운스 · 여운 설정 적용"),
         ("MIDI · ⌥P / ⌥T","같은 음높이 / 같은 시작 박 선택"),("MIDI · ⌥I / ⇧⌘A","선택 반전 / 전체 해제"),
         ("MIDI · Tab / Return","노트 선택 / 현재 위치에 노트 입력"),("MIDI · ← → / ↑ ↓","격자 단위 시간 이동 / 반음 이동"),
         ("MIDI · ⇧← → / ⇧↑ ↓","노트 길이 변경 / 옥타브 이동"),("MIDI · ⌥↑ ↓","세기 5단계 변경"),
@@ -385,7 +384,7 @@ struct KeyboardHelpView:View {
         ("⌘W / ⌘Q","최소화 / 앱 종료")
     ]
     private func group(_ row:(String,String))->String {
-        if row.0.hasPrefix("MIDI") || row.0.hasPrefix("피아노 롤") || row.0=="⌥⌘I" || row.0=="⌘4" {return "MIDI"}
+        if row.0.hasPrefix("MIDI") || row.0.hasPrefix("피아노 롤") || ["⌥⌘I","⌥⌘E","⌥⌘B","⌘4"].contains(row.0) {return "MIDI"}
         if row.0.hasPrefix("오디오") || row.0=="⌥⌘R" {return "오디오"}
         if row.0.contains("오토메이션") {return "오토메이션"}
         if row.0.hasPrefix("케이블") || row.0.hasPrefix("포트") || ["A / C","L","Tab · ← → ↑ ↓","⇧ 방향키","Return / Esc","K / ⇧K · P / ⇧P","R","+ − / F","⌥ 방향키","⇧⌥ 방향키"].contains(row.0) {return "캔버스"}

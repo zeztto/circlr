@@ -84,7 +84,7 @@ struct StepEditor<Inspector:View>:View {
     var body:some View {
         VStack(spacing:8) {
             MIDIWorkspaceToolbarLayout(gap:4) {
-                MIDIWorkspaceActions(store:store,focusTarget:focusTarget,spacing:6)
+                MIDIWorkspaceActions(store:store,focusTarget:focusTarget)
                 if let grid {
                     HStack(spacing:6) {
                     Picker("스텝 행",selection:$state.drumMode){Text("드럼").tag(true);Text("음정").tag(false)}.pickerStyle(.segmented).labelsHidden().frame(width:110)

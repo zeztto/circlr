@@ -18,16 +18,12 @@ struct MIDIWorkspaceToolbar<Trailing:View>:View {
 struct MIDIWorkspaceActions:View {
     @ObservedObject var store:AppStore
     let focusTarget:MIDIEditorFocus
-    var spacing:CGFloat=10
     private var sharedPattern:RhythmPattern? {store.editPatternID.flatMap{id in store.project.patterns.first{$0.id==id}}}
     var body:some View {
-            HStack(spacing:spacing) {
-            MIDIEditorModeControls(store:store)
+        Group {
+            MIDIWorkspaceFileActions(store:store)
             let generation=store.midiGenerationRequest
-            Menu(sharedPattern == nil ? "MIDI":"공유 리듬 MIDI") {
-                Button("MIDI 파일 가져오기"){store.chooseMIDIImport()}
-                Button("MIDI 저장"){store.exportMIDI()}
-                Divider()
+            Menu("노트 작업") {
                 if let generation {
                     Text(generation.rangeLabel).help("4분음표를 1박으로 표시합니다")
                     Text("기존 노트 유지 · 겹쳐 추가")
@@ -40,12 +36,41 @@ struct MIDIWorkspaceActions:View {
                 Button("전체 선택 · ⌘A"){store.chooseMIDINotes(.all);focusTarget.focus()}
                 Button("선택 해제 · ⇧⌘A"){store.chooseMIDINotes(.clear);focusTarget.focus()}
             }.id(MIDIGenerationMenuIdentity(request:generation)).fixedSize()
-                .help(sharedPattern.map{"공유 리듬 · \($0.name) · 노트·클립 변경은 같은 패턴을 사용하는 모든 곳에 반영됩니다"} ?? "MIDI 가져오기·저장·노트 선택")
-            TrackBounceButton(store:store)
+                .help(sharedPattern.map{"공유 리듬 · \($0.name) · 노트·클립 변경은 같은 패턴을 사용하는 모든 곳에 반영됩니다"} ?? "노트 생성·전체 선택·선택 해제")
             Button{store.startMIDIRecording()}label:{Image(systemName:store.midiRecording ? "stop.circle":"record.circle")}
                 .accessibilityLabel(store.midiRecording ? "MIDI 녹음 정지":"MIDI 녹음")
                 .disabled(store.editPatternID != nil)
-            }
+        }
+    }
+}
+
+/// Group intentionally exposes each action to the enclosing eager wrapping Layout.
+struct MIDIWorkspaceFileActions:View {
+    @ObservedObject var store:AppStore
+    var body:some View {
+        Group {
+            MIDIEditorModeControls(store:store)
+            Button("MIDI 가져오기…"){store.chooseMIDIImport()}
+                .fixedSize().disabled(!store.midiImportActionAvailable)
+                .help("현재 섹션에 새 MIDI 서클로 가져오기 · ⌥⌘I")
+            Button("MIDI 저장…"){store.exportMIDI()}
+                .fixedSize().disabled(!store.midiExportActionAvailable)
+                .help(store.midiExportActionHelp)
+            TrackBounceButton(store:store)
+        }
+    }
+}
+
+extension AppStore {
+    var midiImportActionAvailable:Bool {selectedUse != nil && canStartMediaImport && midiImportDraft == nil}
+    var midiExportActionAvailable:Bool {currentLane != nil && currentClock != nil && midiImportDraft == nil}
+    var midiExportActionHelp:String {
+        let scope=editPatternID.flatMap{id in project.patterns.first{$0.id==id}}.map{"공유 리듬 · "+$0.name}
+            ?? ((editOriginal ? "공유 원본":"이번 사용")+" · "+(selectedUse?.name ?? "MIDI"))
+        return scope+"의 현재 MIDI를 파일로 저장 · ⌥⌘E"
+    }
+    var midiTrackBounceActionAvailable:Bool {
+        !trackBounceRecoveryLocked && trackBounceIssue == nil && !bounceTailEditing && bounceTailAssessment != nil
     }
 }
 

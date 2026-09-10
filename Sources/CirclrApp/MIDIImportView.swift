@@ -29,6 +29,10 @@ struct MIDIImportDraft {
 }
 extension AppStore {
     func chooseMIDIImport() {
+        var scope=numberEditIdentity
+        guard resolveActiveNumericDraft(),nameEditing.resolve() else{return}
+        scope.revision=project.musicRevision
+        guard scope==numberEditIdentity else{return}
         guard let use=selectedUse,canStartMediaImport else {status="MIDI를 넣을 섹션을 선택하고 재생·녹음을 정지하세요";return}
         let projectID=project.id,revision=project.musicRevision,arrangementID=project.activeArrangementID,generation=mediaImportGeneration,beat=selectedBeat
         let panel=NSOpenPanel();panel.title="MIDI 노트 가져오기";panel.allowedContentTypes=[UTType(filenameExtension:"mid")!,UTType(filenameExtension:"midi")!];panel.allowsMultipleSelection=false
