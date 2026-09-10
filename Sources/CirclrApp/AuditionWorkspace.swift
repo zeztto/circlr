@@ -15,25 +15,17 @@ extension AppStore {
         let next=auditionOutput.status
         guard next != auditionStatus else{return}
         let previous=auditionStatus;auditionStatus=next
-        if previous.phase != next.phase,next.phase != .idle {
+        if auditionPresentation(for:previous).logIdentity != auditionPresentation.logIdentity,next.phase != .idle {
             recordActivity("미리 듣기",next.phase == .ready ? "악기 준비 완료":auditionDetail)
         }
     }
-    var auditionLabel:String? {
-        switch auditionStatus.phase {
-        case .preparing:return "미리 듣기 준비 \(auditionStatus.elapsedSeconds)초"
-        case .stopping:return "미리 듣기 정리 중"
-        case .failed:return "미리 듣기 실패"
-        case .idle,.ready:return nil
-        }
+    var auditionPresentation:AuditionPresentation {auditionPresentation(for:auditionStatus)}
+    private func auditionPresentation(for value:AuditionStatus)->AuditionPresentation {
+        let event=value.trace?.inFlight.flatMap{$0.stage == .note ? nil:$0} ?? value.trace?.events.last(where:{$0.stage != .note})
+        return AuditionPresentation(phase:value.phase.rawValue,stage:event?.stage.rawValue,stagePhase:event?.phase.rawValue,
+            elapsedSeconds:value.elapsedSeconds,message:value.message,interruption:value.trace?.interruption?.reason.rawValue,
+            interruptedStage:value.trace?.interruption?.inFlight?.stage.rawValue)
     }
-    var auditionDetail:String {
-        if let message=auditionStatus.message{return message}
-        switch auditionStatus.phase {
-        case .preparing:return "악기 미리 듣기 준비 중 · \(auditionStatus.elapsedSeconds)초. Space로 취소할 수 있습니다. 준비 전에 놓은 건반은 재생하지 않습니다."
-        case .stopping:return "연주 요청을 취소했습니다. 장치 응답 후 정리하며, 편집은 계속할 수 있습니다."
-        case .failed:return "미리 듣기를 준비하지 못했습니다. 악기 설정을 확인하고 다시 연주하세요."
-        case .idle,.ready:return ""
-        }
-    }
+    var auditionLabel:String? {auditionPresentation.label}
+    var auditionDetail:String {auditionPresentation.detail}
 }

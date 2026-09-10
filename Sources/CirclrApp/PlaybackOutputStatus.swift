@@ -18,7 +18,8 @@ extension AppStore {
         }
     }
     var outputCanCancel:Bool {
-        outputStatus.request == .waiting && (outputStatus.transport.phase == .starting || outputStatus.phase == .connecting)
+        if auditionStatus.pending {return auditionPresentation.canCancel}
+        return outputStatus.request == .waiting && (outputStatus.transport.phase == .starting || outputStatus.phase == .connecting)
     }
     private var outputPreparationStage:String? {
         guard let stage=outputStatus.trace?.events.last?.stage else{return nil}
@@ -41,7 +42,8 @@ extension AppStore {
         let state=event.phase == .completed ? "완료":"진입"
         return " 마지막 확인: \(title) \(state)(시작 후 \(String(format:"%.1f",event.elapsedSeconds))초)."
     }
-    var outputLabel:String? {
+    var outputLabel:String? {auditionPresentation.preferredLabel(over:outputStatusLabel)}
+    private var outputStatusLabel:String? {
         switch outputStatus.transport.phase {
         case .playing: return outputStatus.actualOutputDeviceName.map{"출력 · "+$0} ?? "재생 중"
         case .starting:return "\(outputPreparationStage ?? "재생 준비") \(outputStatus.elapsedSeconds)초"
@@ -54,7 +56,8 @@ extension AppStore {
         if outputStatus.phase == .idle,outputStatus.attempts>0,[.timedOut,.cancelled].contains(outputStatus.request) {return "다시 재생 가능"}
         return auditionLabel
     }
-    var outputDetail:String {
+    var outputDetail:String {auditionPresentation.preferredDetail(over:outputStatusDetail)}
+    private var outputStatusDetail:String {
         switch outputStatus.transport.phase {
         case .playing:return outputDeviceConfirmation
         case .starting:return "\(outputPreparationStage ?? "재생 준비") 중 · \(outputStatus.elapsedSeconds)초. Space로 취소할 수 있습니다."

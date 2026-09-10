@@ -1,5 +1,12 @@
 # 변경 이력
 
+## 제한된 검증 완료 — 0.20.0 build115 미리 듣기 단계 진단
+
+- optional session trace64개·첫 interruption 보존·stale guard, sourceLoad/AU/engineCreation/mixerAcquisition/routing/engineStart/note/cleanup 계측. legacy factory/status decode 보존, 두 인자 factory는 generic backendPreparation.
+- 기존108pt readout·12pt label에서 pending audition 우선 표시와 경과/취소 footer 적용. progress log는 초마다 누적하지 않음.
+- mocked lifecycle17개·실제 diagnostics/presentation106개 검사 및 production JSON/readout dark offscreen native15개 PNG 검증. Release78.21초·UUID `3D03E2CB-5571-3713-AC7C-9B3884F21829`, source review blocker0·시각15장 통과. preparing17초/stopping123초 fixture이며 원본 PID86114 유지.
+- 전체 앱/HAL·물리 재생 검증은 아니며 initializer 실패의 Swift unwind/deinit 내부는 미계측. in-process 중단·격리·HAL 해결을 주장하지 않음. [계약](docs/131-audition-stage-diagnostics.md).
+
 ## 검증 완료 — 0.20.0 build114 짧은 파형 손잡이
 
 - build113 final split 화면의 32초 파일·0.5초 구간에서 라벨 충돌과 linear x 거리14px 미만 trim 판정이 구간 조작을 가로채는 문제 확인.

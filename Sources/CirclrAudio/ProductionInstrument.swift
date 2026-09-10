@@ -88,23 +88,30 @@ public enum ProductionInstrument {
 
 /// A small voice pool keeps rapid one-shots from cutting each other off.
 public final class LiveSampler {
-    private let audio=AVAudioEngine()
+    private let audio:AVAudioEngine
     private var players:[AVAudioPlayerNode]=[]
     private var cursor=0
     private let sample:SampleInstrument
     private var sources:[ID:PCM]=[:]
     private var held:[Int:[AVAudioPlayerNode]]=[:]
-    public init(settings:SampleInstrument,project:Project,root:URL?,isCurrent:@Sendable()->Bool = {true}) throws {
+    public init(settings:SampleInstrument,project:Project,root:URL?,isCurrent:@Sendable()->Bool = {true},report:AuditionDiagnosticReporter?=nil) throws {
         sample=settings
+        report?(.engineCreation,.entered);audio=AVAudioEngine();report?(.engineCreation,.completed)
+        report?(.sourceLoad,.entered)
         for id in Set((settings.zones ?? []).map(\.assetID)+[settings.assetID]) {
             guard isCurrent() else{throw CancellationError()}
             guard let asset=project.assets.first(where:{$0.id==id}) else {throw CirclrError("샘플 원본을 찾을 수 없습니다")}
             sources[id]=try PCM.read(ProjectStore.assetURL(asset,root:root))
         }
+        report?(.sourceLoad,.completed)
         let format=AVAudioFormat(standardFormatWithSampleRate:PCM.rate,channels:2)!
-        for _ in 0..<32 {guard isCurrent() else{throw CancellationError()};let p=AVAudioPlayerNode();audio.attach(p);audio.connect(p,to:audio.mainMixerNode,format:format);players.append(p)}
         guard isCurrent() else{throw CancellationError()}
-        try audio.start()
+        report?(.mixerAcquisition,.entered);let mixer=audio.mainMixerNode;report?(.mixerAcquisition,.completed)
+        report?(.routing,.entered)
+        for _ in 0..<32 {guard isCurrent() else{throw CancellationError()};let p=AVAudioPlayerNode();audio.attach(p);audio.connect(p,to:mixer,format:format);players.append(p)}
+        report?(.routing,.completed)
+        guard isCurrent() else{throw CancellationError()}
+        report?(.engineStart,.entered);try audio.start();report?(.engineStart,.completed)
         if !isCurrent(){audio.stop();throw CancellationError()}
     }
     public func note(_ pitch:Int,velocity:Int,on:Bool,isCurrent:@Sendable()->Bool = {true}) throws {
@@ -131,9 +138,10 @@ public final class LiveSampler {
 /// Synth note preview and MIDI monitoring use the same oscillator/envelope as offline bounce.
 public final class LiveSynth {
     private let synth:SynthEngine
-    private let audio=AVAudioEngine()
-    public init(patch:SynthPatch,isCurrent:@Sendable()->Bool = {true}) throws {
-        synth=try SynthEngine(patch);let engine=synth
+    private let audio:AVAudioEngine
+    public init(patch:SynthPatch,isCurrent:@Sendable()->Bool = {true},report:AuditionDiagnosticReporter?=nil) throws {
+        report?(.engineCreation,.entered);audio=AVAudioEngine();report?(.engineCreation,.completed)
+        report?(.sourceLoad,.entered);synth=try SynthEngine(patch);let engine=synth;report?(.sourceLoad,.completed)
         let format=AVAudioFormat(standardFormatWithSampleRate:PCM.rate,channels:2)!
         let source=AVAudioSourceNode(format:format) { _,_,frames,buffers in
             let list=UnsafeMutableAudioBufferListPointer(buffers)
@@ -141,9 +149,11 @@ public final class LiveSynth {
             l.initialize(repeating:0,count:Int(frames));r.initialize(repeating:0,count:Int(frames));engine.render(left:l,right:r,frames:frames);return 0
         }
         guard isCurrent() else{throw CancellationError()}
-        audio.attach(source);audio.connect(source,to:audio.mainMixerNode,format:format)
+        report?(.mixerAcquisition,.entered);let mixer=audio.mainMixerNode;report?(.mixerAcquisition,.completed)
+        report?(.routing,.entered);audio.attach(source);audio.connect(source,to:mixer,format:format);report?(.routing,.completed)
         guard isCurrent() else{throw CancellationError()}
-        try audio.start();if !isCurrent(){audio.stop();throw CancellationError()}
+        report?(.engineStart,.entered);try audio.start();report?(.engineStart,.completed)
+        if !isCurrent(){audio.stop();throw CancellationError()}
     }
     public func note(_ pitch:Int,velocity:Int,on:Bool){synth.note(pitch,velocity:velocity,on:on)}
     public func stop(){audio.stop()}

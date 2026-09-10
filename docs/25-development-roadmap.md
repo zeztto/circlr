@@ -1,12 +1,16 @@
 # 써클러 개발 방향과 실행 계획
 
-갱신: 2026-09-10. 계획 시작 기준: 0.11 native 앱, 0.12 음악 에이전트 키트 소스. 기존 출고 표기는 0.19.0이며 실행 중 사용자 앱의 별도 관측 버전은0.14다. 최신 검증 완료는 0.20.0 build114다. 목표는 송폼 중심의 전문 음악 제작을 먼저 완성하고, 이를 아티스트의 작품·세계관 관리로 확장하는 것이다.
+갱신: 2026-09-10. 계획 시작 기준: 0.11 native 앱, 0.12 음악 에이전트 키트 소스. 기존 출고 표기는 0.19.0이며 실행 중 사용자 앱의 별도 관측 버전은0.14다. 최신 build115는 mocked lifecycle·presentation·offscreen widget·Release 범위의 제한된 검증을 완료했다. 목표는 송폼 중심의 전문 음악 제작을 먼저 완성하고, 이를 아티스트의 작품·세계관 관리로 확장하는 것이다.
+
+## 제한된 검증 완료 — build115 미리 듣기 단계 진단
+
+optional session trace64개·첫 interruption 보존·stale guard와 실제 준비 단계를 연결했고 기존108pt readout/12pt label에서 pending audition을 우선 표시한다. mocked lifecycle17개·actual diagnostics/presentation106개 검사와 공유 production widget의 dark offscreen15개 PNG를 검증했다. Release78.21초·source review blocker0·시각15장도 통과했다. preparing17초/stopping123초 fixture로 범위를 한정하며 원본 PID86114를 유지했다. 전체 앱/HAL 실행·factory 격리나 timeout 중단 해결은 아니며 실패 initializer의 Swift unwind/deinit 내부는 미계측이다. [계약](131-audition-stage-diagnostics.md).
 
 ## 최신 완료 — build114 짧은 파형 손잡이
 
 32초 파일의0.5초 구간에서 라벨 충돌과 linear trim hit가 cursor 조작을 가로채는 문제를 개선했다. 짧은 구간의 세로 분리 손잡이·공통 geometry·라벨 연결선으로 직접 cursor/trim을 지원하며 자동 fit과 orbital 변경은 추가하지 않는다. final2 Release41.14초·geometry782개 검사·source v3 review blocker0을 통과했다. native20개 JSON·자산2개/noIO·restored/reopened32를 확보했고 JPG10장·AX 시각과20개 strict checker·5개 gesture·음악/자산 보존·restored/reopened/disk 동일성도 통과했다. wide native는 F/0 표시, wide hit는 harness, orbital은 source 검토에 한정한다. drag 중 resize 취소는 source guard 검토 범위다. [계약](130-audio-waveform-handles.md).
 
-별도 오디오 후속 감사는 `AuditionTransport`의 in-process AU 생성부터 mixer/start까지 단계가 구분되지 않고 timeout이 factory를 중단하지 못하는 경계를 확인했다. bounded trace로 진단 단계를 분리할 필요가 있으며 HAL 해결로 표현하지 않는다.
+build114 당시 오디오 후속 감사는 `AuditionTransport`의 in-process AU 생성부터 mixer/start까지 단계가 구분되지 않고 timeout이 factory를 중단하지 못하는 경계를 확인했다. 단계 구분은 build115의 bounded trace로 구현했다. 실행 중 factory 중단과 실제 HAL 해결은 여전히 후속 과제다.
 
 ## 최신 완료 — build113 오디오 템포 구간·편곡 입력
 
