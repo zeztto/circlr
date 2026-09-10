@@ -58,6 +58,9 @@ extension AppStore {
                     self.selectedClipID=clip
                     if case .section(let a,let u,_,_,_,_)=request.destination {
                         self.hierarchySettingsOpen=false
+                        // Explicit import focus opens the new audio, even when the
+                        // previous source was being edited in automation mode.
+                        self.automationOpen=false
                         self.focusHierarchy(clips.count==1 ? .music(arrangementID:a,useID:u,nodeID:"audio:\(clip)"):.section(arrangementID:a,useID:u),detail:clips.count==1)
                     }
                 }

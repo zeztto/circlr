@@ -1,5 +1,11 @@
 # 변경 이력
 
+## 검증 완료 — 0.20.0 build124 오디오·오토메이션 전환
+
+- ⌘5에서 이름 확정 후 연결 화면을 정리하고, 같은 선택에서 완료된 섹션 오디오 import는 이전 automation 모드를 닫아 새 파형을 표시한다.
+- Release42.16초·native 연결→오토메이션·단일 WAV→파형·Undo·빈 이름 거절을 확인했다. revision28 저장/재열기·manifest 일치를 확인했으며 production 서명·UUID와 독립 데이터 감사도 통과했다.
+- 실제 입출력·다른 선택 중 async 완료·취소/실패·다중 파일·pattern import는 이번 native 범위가 아니다. [검증 기록](docs/143-audio-automation-flow.md).
+
 ## 검증 완료 — 0.20.0 build123 원본 복원 후 출력 복귀
 
 - 원본 복원 성공 후 같은 arrangement/use에 저장된 outputNodeID로 이동한다. 렌더 당시 identity를 전달하고 정확한 candidate 적용 뒤에만 탐색하여 보관 오디오에 남던 문제를 개선했다.

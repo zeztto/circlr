@@ -22,9 +22,10 @@ extension AppStore {
     var automationEditorHasFocus:Bool {NSApp.keyWindow?.firstResponder is AutomationPlotView}
     var automationVisible:Bool {automationOpen && selectedMusic?.supportsAutomation==true && !hierarchySettingsOpen && embeddedPlugin==nil}
     func showAutomation() {
+        guard nameEditing.resolve() else{return}
         if selectedMusic?.supportsAutomation==false {openTrackComponent(1)}
         guard selectedMusic?.supportsAutomation==true,let address=hierarchySelection else{return}
-        hierarchySettingsOpen=false;embeddedPlugin=nil;automationOpen=true;focusHierarchy(address,detail:true)
+        connectionsOpen=false;hierarchySettingsOpen=false;embeddedPlugin=nil;automationOpen=true;focusHierarchy(address,detail:true)
     }
     func setAutomation(_ points:[AutomationPoint]?=nil,enabled:Bool?=nil) {
         guard let node=selectedMusic,let use=selectedUse else{return}
