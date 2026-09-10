@@ -1,6 +1,10 @@
 # 써클러 개발 방향과 실행 계획
 
-갱신: 2026-09-10. 계획 시작 기준: 0.11 native 앱, 0.12 음악 에이전트 키트 소스. 기존 출고 표기는 0.19.0이며 실행 중 사용자 앱의 별도 관측 버전은0.14다. 개발 검증 후보는 0.20.0 build 106이다. 목표는 송폼 중심의 전문 음악 제작을 먼저 완성하고, 이를 아티스트의 작품·세계관 관리로 확장하는 것이다.
+갱신: 2026-09-10. 계획 시작 기준: 0.11 native 앱, 0.12 음악 에이전트 키트 소스. 기존 출고 표기는 0.19.0이며 실행 중 사용자 앱의 별도 관측 버전은0.14다. 개발 검증 후보는 0.20.0 build 107이다. 목표는 송폼 중심의 전문 음악 제작을 먼저 완성하고, 이를 아티스트의 작품·세계관 관리로 확장하는 것이다.
+
+## 현재 검증 완료 — build107 테이크 요약·offline 악기 격리
+
+테이크 요약·현재 내용 비교와 offline 악기 worker를 구현했다. 최종 Release40.16초·관련 테스트27개/9.151초·패키지4개 PCM89100 frames/maxError0를 확인했다. UI의 실제 선택/재선택·Undo·strict r22 재열기는 통과했고 checker8개 상태·자산2개·테이크5개·strict r22 재열기도 통과했다. 첫 후보의 후속 선택 no-op 원인은 캐시로 추정할 뿐 확정하지 않는다. 키보드 메뉴 선택·원본 편집/name commit/stale intent/record busy의 native와 물리 출력은 미검증이다. [테이크](122-take-summary.md) · [악기](123-au-instrument-worker.md).
 
 ## 현재 검증 완료 — build106 바운스 안내
 
@@ -14,7 +18,7 @@ adaptive 배치·도구 flow·수치 입력 버튼/Tab/reveal로 compact plot을
 
 폭 전환의 control identity와 target 선택 행 inner/outer reveal을 유지한다. 최종 Release40.00초와 실제 target/search/filter 왕복·caret·목록 이동·키보드 재연결/취소를 확인했다. QA11개 상태·음악r36/자산2개·source hash·strict 재열기/disk와 시각 검토를 통과했다. physical0·사용자 앱 유지. 실제 케이블 적용·그룹 관리·IME 조합·숨은 jump focus 폭 전환은 미검증이며 compact 선택 행 reveal은 상단 port actions와 동시 노출이 아니다. [계약](119-connection-focus-continuity.md).
 
-다음 UI 조사 우선순위는 `AutomationEditor.swift:95`의 고정폭 합615px가 compact591px를 넘는지 실제 재현하는 것이다. `TrackBounceStatus`의 assessment 메시지가 else-if tail notice를 가리는 경우와 header take 이름만 표시하는 범위도 소스 감사 후보로 남긴다. 아직 native 확인 결과는 없다. DAW 안정성 후속은 `AudioUnitHost.renderNotes`의 앱 내 instantiate/render가 남은 offline AU instrument 격리이며 build96 effect 격리 완료와 구분한다.
+이전 Automation compact 후보는 build105, 경로 메시지에 가려지는 tail 안내는 build106에서 실제 재현·수정했다. 현재는 위 build107의 테이크 요약과 offline AU instrument 격리를 진행하며 build96 effect 격리 완료와 구분한다. 전체 DAW·실시간·물리 출력 완료는 아니다.
 
 ## 현재 검증 완료 — build103 오디오 compact 배치
 
@@ -154,7 +158,7 @@ build81에서 종류별 색상과 사용자 지정·복원을 구현하고 검�
 
 이펙트→오토메이션→바운스 산출물을 해시·PCM으로 재검증하고, build81에서 저장 프로젝트 전체 복원을 확인했다. 궤도 화면에서도 음악 데이터가 유지된다. [통합 근거와 검증 경계](../qa/automation-flow-review.md). 다음은 실제 장치 출력 재점검과 같은 곡의 편곡 대안이다.
 
-## 현행 실행 순서 — build106 기준
+## 현행 실행 순서 — build107 기준
 
 build80에서 바운스 대상명과 연결 사전 검사를 통합하고 실제 UI 바운스·복원·MCP 즉시 거절을 확인했다. [QA](../qa/bounce-target-review.md). 이후 같은 곡에서 이펙트와 오토메이션을 적용한 바운스·저장/재열기는 위 통합 흐름 QA에서 확인했다. 개별 기능 검증을 한 곡 제작 완료로 계산하지 않는다.
 

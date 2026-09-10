@@ -6,7 +6,9 @@ macOS용 앨범·송폼 궤도 편집기. **앨범 → 곡·악장 → 섹션 �
 
 연결 UI는 [서클 둘레 8방향 IN/OUT과 다중 입출력](docs/22-eight-direction-ports.md)으로 확장 중이다. 포트의 신호 의미와 연결점 배치를 분리한다. 아래 일반 사용법은 배포된 0.19 앱 기준이며 새 포트 기능은 독립 개발 브랜치에서 검증한다.
 
-현재 **`codex/daw-integration`의 0.20.0 build 106**에 녹음 lifecycle과 8방향·다중 bus·그룹 포트를 통합했다. 같은 캔버스의 연결 편집·녹음 상태·스텝·오토메이션이 공존하며, 녹음 시작·정리 중 음악 편집과 Undo의 경쟁을 차단한다. build 23의 실제 편집·바운스·Undo·저장/재열기·닫기 최소화 및 출력별 모션 검증은 [통합 QA](qa/daw-integration-review.md)에 기록했다.
+현재 **`codex/daw-integration`의 0.20.0 build 107**에 녹음 lifecycle과 8방향·다중 bus·그룹 포트를 통합했다. 같은 캔버스의 연결 편집·녹음 상태·스텝·오토메이션이 공존하며, 녹음 시작·정리 중 음악 편집과 Undo의 경쟁을 차단한다. build 23의 실제 편집·바운스·Undo·저장/재열기·닫기 최소화 및 출력별 모션 검증은 [통합 QA](qa/daw-integration-review.md)에 기록했다.
+
+**build107은 테이크 내용 요약과 offline AU instrument 격리를 추가했다.** 최종 Release40.16초·관련 테스트27개와 패키지 악기4개 PCM 비교를 통과했다. 실제 테이크 선택/재선택·Undo·r22 strict 재열기를 확인했으며 UI checker8개 상태·자산2개·테이크5개·strict r22 재열기도 통과했다. 내용 일치는 active 체크가 아니며 키보드 메뉴 선택·실제 물리 출력은 미검증이다. CLI 개발 시 악기 helper도 함께 빌드해야 한다. [테이크](docs/122-take-summary.md) · [악기](docs/123-au-instrument-worker.md).
 
 **build106은 바운스 경로와 여운 안내를 각각 표시한다.** Release38.64초와 실제 두 경고·여운 설정/취소·자동 추정 복귀를 확인했다. QA6개 상태·음악r22/자산2개·strict 재열기·시각 검토를 통과했다. 실제 바운스·물리 I/O·경로 복구 실행은 이번에 검증하지 않았다. [계약](docs/121-bounce-notice-visibility.md).
 

@@ -1,5 +1,12 @@
 # 변경 이력
 
+## 개발 중 — 0.20.0 build107 테이크 요약·AU instrument worker
+
+- 테이크 이름·노트/클립 수·현재 내용 일치, exact target·legacy 첫 matching·nonempty payload 비교. active 체크와 구분.
+- 첫73.20초 후보의 후속 선택 no-op 뒤 menu full identity·고유 AX ID를 갱신한 최종 Release40.16초 확인. 실제 선택/재선택·Undo·strict r22 저장 재열기, UI checker8개 상태·자산2개·테이크5개·strict r22 재열기 통과. 첫 문제의 캐시 원인은 추정.
+- 관련 테스트27개·9.151초(FIFO 포함), 패키지 soundBank/audioUnit×clock/host override4개 PCM89100 frames·maxError0·strict 서명 통과. CLI는 helper 함께 빌드 필요.
+- 키보드 메뉴 선택·popup 이미지 미확보, 원본 편집/name commit/stale intent/record busy는 source 확인 범위. 물리 I/O 성공 아님. [테이크](docs/122-take-summary.md) · [악기](docs/123-au-instrument-worker.md).
+
 ## 개발 중 — 0.20.0 build106 바운스 안내
 
 - baseline105 경로 밖+manual0의 여운 경고 숨김 재현. 경로/여운 독립 표시와 실제 표시 문자열만 dedup 적용.

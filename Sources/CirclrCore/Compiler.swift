@@ -42,6 +42,28 @@ public struct MusicClock: Equatable {
     public let barContinuationBeat: Double
     public let meters: [Meter]
     public let tempos: [TempoChange]
+    /// Reconstitutes an exact clock, including inherited partial first/last bars.
+    public init(barStarts: [Double], barContinuationBeat: Double, meters: [Meter], tempos: [TempoChange]) throws {
+        guard (1...4096).contains(meters.count), barStarts.count == meters.count + 1,
+              barStarts.first == 0, barStarts.allSatisfy({ $0.isFinite && $0 >= 0 }),
+              zip(barStarts, barStarts.dropFirst()).allSatisfy({ $0 < $1 }),
+              barContinuationBeat.isFinite, let end = barStarts.last,
+              barContinuationBeat >= end, let lastStart = barStarts.dropLast().last,
+              let lastMeter = meters.last, barContinuationBeat <= lastStart + lastMeter.quarters + 1e-8,
+              !tempos.isEmpty, tempos.count <= 100_000, tempos.first?.beat == 0,
+              tempos.allSatisfy({ $0.beat.isFinite && $0.beat >= 0 && $0.beat < end && $0.bpm.isFinite && (1...999).contains($0.bpm) }),
+              zip(tempos, tempos.dropFirst()).allSatisfy({ $0.beat < $1.beat }) else {
+            throw CirclrError("악기 렌더의 시간 지도를 확인하세요")
+        }
+        for (index, meter) in meters.enumerated() {
+            try ContextResolver.validate(meter)
+            guard barStarts[index+1] - barStarts[index] <= meter.quarters + 1e-8 else {
+                throw CirclrError("악기 렌더의 마디 길이를 확인하세요")
+            }
+        }
+        self.barStarts = barStarts; self.barContinuationBeat = barContinuationBeat
+        self.meters = meters; self.tempos = tempos
+    }
     public var beats: Double { barStarts.last ?? 0 }
     public var seconds: Double { seconds(at: beats) }
     public init(bars: Int, context: MusicContext, meterChanges: [MeterChange] = [], tempoChanges: [TempoChange] = []) throws {

@@ -40,7 +40,7 @@ public enum ProductionInstrument {
             guard let asset=project.assets.first(where:{$0.id==sample.assetID}) else {throw CirclrError("샘플 악기의 원본을 선택하세요")}
             return try sampler(notes,source:PCM.read(ProjectStore.assetURL(asset,root:root)),settings:sample,clock:clock,tail:tail)
         }
-        return try await AudioUnitHost.renderNotes(notes,instrument:instrument,clock:clock,tail:tail,hostContext:hostContext)
+        return try await AUInstrumentWorkerProcess().render(notes:notes,instrument:instrument,clock:clock,tail:tail,hostContext:hostContext)
     }
     public static func synth(_ notes:[Note],patch:SynthPatch,clock:MusicClock,tail:Double) throws -> PCM {
         let engine=try SynthEngine(patch),frames=try frameCount(clock:clock,tail:tail)

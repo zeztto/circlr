@@ -35,7 +35,7 @@ def main():
         assert current['id'] == str(uuid.uuid5(uuid.NAMESPACE_URL, 'circlr-integration-qa/' + NAME)).upper()
     assert not APP.exists(), 'Preserve previous QA app'
     assert args.candidate or not FIXTURE.exists(), 'Preserve previous QA project'
-    for worker in ['circlr-output-worker', 'circlr-au-effect-worker']:
+    for worker in ['circlr-output-worker', 'circlr-au-effect-worker', 'circlr-au-instrument-worker']:
         assert (ROOT / '.build/integration-release/release' / worker).is_file(), 'Build ' + worker + ' before packaging'
     raw = (SOURCE / 'manifest.json').read_bytes()
     project = json.loads(raw)
@@ -54,9 +54,12 @@ def main():
     shutil.copy2(ROOT / '.build/integration-release/release/circlr', APP / 'Contents/MacOS/circlr')
     shutil.copy2(ROOT / '.build/integration-release/release/circlr-output-worker', APP / 'Contents/MacOS/circlr-output-worker')
     shutil.copy2(ROOT / '.build/integration-release/release/circlr-au-effect-worker', APP / 'Contents/MacOS/circlr-au-effect-worker')
+    shutil.copy2(ROOT / '.build/integration-release/release/circlr-au-instrument-worker', APP / 'Contents/MacOS/circlr-au-instrument-worker')
     subprocess.run(['codesign', '--force', '--sign', '-', str(APP / 'Contents/MacOS/circlr-output-worker')], check=True)
     subprocess.run(['codesign', '--force', '--sign', '-', str(APP / 'Contents/MacOS/circlr-au-effect-worker')], check=True)
+    subprocess.run(['codesign', '--force', '--sign', '-', str(APP / 'Contents/MacOS/circlr-au-instrument-worker')], check=True)
     subprocess.run(['codesign', '--verify', '--strict', str(APP / 'Contents/MacOS/circlr-au-effect-worker')], check=True)
+    subprocess.run(['codesign', '--verify', '--strict', str(APP / 'Contents/MacOS/circlr-au-instrument-worker')], check=True)
     (APP / 'Contents/Info.plist').write_bytes(plistlib.dumps(info))
     resources = APP / 'Contents/Resources'
     resources.mkdir()

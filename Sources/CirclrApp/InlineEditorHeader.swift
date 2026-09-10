@@ -22,8 +22,22 @@ struct InlineEditorHeader:View {
         }
     }
     var takes:[RecordedTake] {
-        guard let use=store.selectedUse,let track=store.selectedTrackID,store.selectedMusic != nil else{return []}
-        return (store.project.takes ?? []).filter{$0.useID==use.id && $0.lane.trackID==track && ($0.targetLaneID==nil || $0.targetLaneID==store.selectedLaneID)}
+        (store.project.takes ?? []).filter{summary($0) != nil}
+    }
+    func summary(_ take:RecordedTake)->RecordedTakeSummary? {
+        guard let use=store.selectedUse,let laneID=store.selectedLaneID else{return nil}
+        return RecordedTakeSummary.make(take,arrangementID:store.project.activeArrangementID,useID:use.id,laneID:laneID,in:store.project)
+    }
+    func takeTitle(_ take:RecordedTake)->String {
+        guard let value=summary(take) else{return take.name}
+        return "\(take.name) · 노트 \(value.noteCount)개 · 클립 \(value.clipCount)개" + (value.matchesCurrentContent ? " · 현재 내용과 일치":"")
+    }
+    func activate(_ take:RecordedTake,identity:NumberEditIdentity) {
+        guard store.numberEditIdentity==identity,!store.trackBounceRecoveryLocked,
+              store.midiImportDraft==nil,store.nameEditing.resolve() else{return}
+        var current=store.numberEditIdentity;current.revision=identity.revision
+        guard current==identity,let live=store.project.takes?.first(where:{$0.id==take.id}),summary(live) != nil else{return}
+        store.activateTake(live)
     }
     var body:some View {
         InlineEditorHeaderLayout {
@@ -46,8 +60,14 @@ struct InlineEditorHeader:View {
             }.disabled(store.midiImportDraft != nil)
             HStack(spacing:8) {
             if !takes.isEmpty {
-                Menu("테이크") {ForEach(takes){take in Button(take.name){store.activateTake(take)}}}
-                    .help("이 트랙의 녹음 테이크 선택").disabled(store.midiImportDraft != nil)
+                let identity=store.numberEditIdentity
+                Menu("테이크 \(takes.count)개") {ForEach(takes){take in
+                    Button(takeTitle(take)){activate(take,identity:identity)}
+                        .accessibilityIdentifier("recorded-take-"+take.id)
+                }}
+                    .id(TakeMenuIdentity(value:identity))
+                    .help("이번 사용의 녹음 내용을 바꿉니다 · 공유 원본은 유지 · 내용 일치는 저장된 노트·클립 기준입니다")
+                    .disabled(store.midiImportDraft != nil || store.trackBounceRecoveryLocked)
             }
             if store.selectedUse != nil {AudioRecordButton(store:store)}
             Button {store.hierarchySettingsOpen=false;store.hierarchyParent()} label:{Image(systemName:"arrow.up.left.and.arrow.down.right")}
@@ -105,5 +125,16 @@ private struct InlineEditorHeaderLayout:SwiftUI.Layout {
                           proposal:ProposedViewSize(width:value.actions.width,height:firstHeight))
         let modesOrigin=value.wrapped ? CGPoint(x:bounds.minX,y:bounds.minY+firstHeight+gap):CGPoint(x:bounds.minX+value.name.width+gap,y:bounds.minY)
         subviews[1].place(at:modesOrigin,anchor:.topLeading,proposal:ProposedViewSize(value.modes))
+    }
+}
+
+/// Refresh cached native menu actions whenever their guarded editing context changes.
+private struct TakeMenuIdentity:Hashable {
+    let value:NumberEditIdentity
+    static func == (lhs:Self,rhs:Self)->Bool {lhs.value==rhs.value}
+    func hash(into hasher:inout Hasher) {
+        hasher.combine(value.projectID)
+        hasher.combine(value.generation)
+        hasher.combine(value.revision)
     }
 }
