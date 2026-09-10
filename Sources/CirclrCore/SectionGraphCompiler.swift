@@ -26,6 +26,7 @@ public enum SectionGraphCompiler {
         var plan = SectionSignalPlan(graph: graph, orderedNodes: ordered, contexts: [:], midi: [:], audio: [:])
         plan.connections = graph.edges.map(MusicBusConnection.init)
         for node in ordered {
+            try AutomationCompiler.validate(node,project:project)
             let resolved = try ContextResolver.inheriting(global: project.global, parent: context, settings: node.settings)
             plan.contexts[node.id] = resolved
             guard node.startBeat.isFinite, node.startBeat >= 0, node.gain.isFinite, (0...4).contains(node.gain),

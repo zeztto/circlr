@@ -27,7 +27,7 @@ public enum SectionInsertion {
         guard arrangement.uses.filter({$0.id==afterUseID}).count==1,
               let source=arrangement.uses.first(where:{$0.id==afterUseID}),
               project.sections.filter({$0.id==source.sectionID}).count==1 else{return fail(.missingSection)}
-        guard (1...2).contains(project.schemaVersion) else{return fail(.invalidStructure)}
+        guard (1...3).contains(project.schemaVersion) else{return fail(.invalidStructure)}
         let ids=Set(arrangement.uses.map(\.id))
         guard ids.count==arrangement.uses.count,let start=arrangement.startID,ids.contains(start),
               Set(arrangement.edges.map(\.id)).count==arrangement.edges.count,
@@ -73,7 +73,7 @@ public enum SectionInsertion {
         var section=Section(name:name,bars:bars)
         section.lanes=project.tracks.map{Lane(trackID:$0.id)}
         section.graph=SectionGraphMigration.graph(lanes:section.lanes,tracks:project.tracks,effects:[])
-        candidate.schemaVersion=2
+        candidate.schemaVersion=max(2,candidate.schemaVersion)
         candidate.sections.append(section)
         var use=SectionUse(sectionID:section.id,name:name)
         use.isEnd=assessment.successorID == nil

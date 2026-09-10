@@ -59,7 +59,7 @@ public enum SectionGraphRenderer {
                     let notes = plan.connections.filter { $0.to.nodeID == node.id && $0.signal == .midi }.flatMap { plan.midi[$0.from.nodeID] ?? [] }
                     let overrideHost = node.settings.tempo.source != .inherit || node.settings.meter.source != .inherit
                     local = try await ProductionInstrument.render(notes, instrument: track.instrument, project: project, root: root, clock: clock, tail: tail,
-                                                               hostContext: overrideHost ? plan.contexts[node.id] : nil)
+                                                               hostContext: overrideHost ? plan.contexts[node.id] : nil,automation:plan.automation[node.id] ?? [])
                 case .audio, .rhythmAudio:
                     for clip in plan.audio[node.id] ?? [] {
                         try await mixClip(clip, node: node, context: plan.contexts[node.id], project: project, root: root, clock: clock, into: &local)

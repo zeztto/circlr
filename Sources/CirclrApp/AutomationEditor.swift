@@ -7,6 +7,14 @@ extension AppStore {
         guard editOriginal,let id=selectedMusic?.id,let use=selectedUse else{return selectedMusic}
         return project.sections.first{$0.id==use.sectionID}?.graph?.nodes.first{$0.id==id}
     }
+    var availableAutomationParameters:[AutomationParameter] {
+        guard let node=automationNode else{return [.gain,.pan]}
+        return AutomationParameter.allCases.filter{$0.supports(node:node,in:project)}
+    }
+    var automationFallback:Double {
+        guard let node=automationNode else{return automationParameter.neutral}
+        return automationParameter.fallback(node:node,in:project)
+    }
     var currentAutomation:AutomationLane? {automationNode?.automation?.first{$0.parameter==automationParameter}}
     var automationContext:MusicContext {
         guard let node=automationNode,let use=selectedUse,let (_,parent,_)=context(for:use) else{return currentContext}
@@ -44,7 +52,7 @@ extension AppStore {
         let choices=[desired,automationBeats/2,automationBeats]+Array(stride(from:0.0,through:automationBeats,by:step).prefix(4097))
         // Choose the first free musical grid position without moving existing points.
         guard let free=choices.first(where:{q in q>=0 && q<=automationBeats && !points.contains{abs($0.beat-q)<1e-9}}) else {status="표시 구간에 빈 오토메이션 위치가 없습니다";return}
-        editAutomationPoint(AutomationPoint(beat:free,value:currentAutomation?.value(at:free) ?? automationParameter.neutral))
+        editAutomationPoint(AutomationPoint(beat:free,value:currentAutomation?.value(at:free) ?? automationFallback))
     }
     func chooseAutomationPoint(_ delta:Int) {
         guard let points=currentAutomation?.points,!points.isEmpty else{return}
@@ -71,12 +79,28 @@ struct AutomationEditor:View {
     @State private var focusTarget=AutomationFocusTarget()
     @State private var gainFields=NumberFieldFocus(["오토메이션 위치 박","오토메이션 볼륨 dB"],revealOnFocus:true)
     @State private var panFields=NumberFieldFocus(["오토메이션 위치 박","오토메이션 팬 %"],revealOnFocus:true)
-    private var fieldFocus:NumberFieldFocus {store.automationParameter == .gain ? gainFields:panFields}
+    @State private var cutoffFields=NumberFieldFocus(["오토메이션 위치 박","오토메이션 필터 cutoff Hz"],revealOnFocus:true)
+    private var fieldFocus:NumberFieldFocus {
+        switch store.automationParameter {case .gain:return gainFields;case .pan:return panFields;case .synthCutoff:return cutoffFields}
+    }
+    private var valueTitle:String {
+        switch store.automationParameter {case .gain:return "오토메이션 볼륨 dB";case .pan:return "오토메이션 팬 %";case .synthCutoff:return "오토메이션 필터 cutoff Hz"}
+    }
+    private var valuePresentation:NumberEditPresentation {
+        switch store.automationParameter {case .gain:return .gainDecibels;case .pan:return .panPercent;case .synthCutoff:return .number}
+    }
+    private var valueUnit:String {
+        switch store.automationParameter {case .gain:return "dB";case .pan:return "%";case .synthCutoff:return "Hz"}
+    }
     var lane:AutomationLane? {store.currentAutomation}
     var hidden:Int {lane?.points.filter{$0.beat>store.automationDisplayedBeats}.count ?? 0}
     var available:Bool {store.automationNode != nil}
     var body:some View {
         Group {if store.project.usesOrbits {orbital}else{linear}}
+            .onChange(of:store.availableAutomationParameters){_,parameters in
+                // An instrument can change kind without changing its circle address.
+                if !parameters.contains(store.automationParameter) {store.automationParameter = .gain}
+            }
             .onChange(of:store.automationParameter){_,_ in focusTarget.focus()}
             .onChange(of:store.editOriginal){_,_ in focusTarget.focus()}
             .environment(\.numberEditing,NumberEditingContext(snapshot:store.numberEditIdentity,current:{store.numberEditIdentity},focusCanvas:{focusTarget.focus()},fieldFocus:fieldFocus))
@@ -127,8 +151,13 @@ struct AutomationEditor:View {
     }
     var parameterControls:some View {
         MIDIWorkspaceToolbarLayout {
-            Picker("오토메이션 대상",selection:$store.automationParameter){ForEach(AutomationParameter.allCases,id:\.self){Text($0.label).tag($0)}}
-                .pickerStyle(.segmented).labelsHidden().frame(width:112)
+            if store.availableAutomationParameters.contains(.synthCutoff) {
+                Picker("오토메이션 대상",selection:$store.automationParameter){ForEach(store.availableAutomationParameters,id:\.self){Text($0.label).tag($0)}}
+                    .pickerStyle(.radioGroup).labelsHidden().fixedSize()
+            } else {
+                Picker("오토메이션 대상",selection:$store.automationParameter){ForEach(store.availableAutomationParameters,id:\.self){Text($0.label).tag($0)}}
+                    .pickerStyle(.segmented).labelsHidden().frame(width:112)
+            }
             HStack(spacing:10) {
             Toggle("적용",isOn:Binding(get:{lane?.enabled ?? false},set:{store.setAutomation(enabled:$0)})).disabled(lane==nil).fixedSize()
             Text("\(lane?.points.count ?? 0)개 점").foregroundStyle(StudioTheme.secondary).fixedSize()
@@ -178,9 +207,8 @@ struct AutomationEditor:View {
     func valueControl(_ point:AutomationPoint)->some View {
         HStack(spacing:10) {
             Text(store.automationParameter.label).foregroundStyle(StudioTheme.secondary)
-            CommittedNumberField(title:store.automationParameter == .gain ? "오토메이션 볼륨 dB":"오토메이션 팬 %",value:pointValue(point,\.value),range:store.automationParameter.range,width:84,
-                presentation:store.automationParameter == .gain ? .gainDecibels:.panPercent)
-            Text(store.automationParameter == .gain ? "dB":"%").foregroundStyle(StudioTheme.secondary)
+            CommittedNumberField(title:valueTitle,value:pointValue(point,\.value),range:store.automationParameter.range,width:84,presentation:valuePresentation)
+            Text(valueUnit).foregroundStyle(StudioTheme.secondary)
         }
     }
     func shapeControl(_ point:AutomationPoint)->some View {
@@ -191,11 +219,17 @@ struct AutomationEditor:View {
                 guard store.numberEditIdentity==identity,var current=store.selectedAutomationPoint,current.id==point.id else{return}
                 current.shape=v;store.editAutomationPoint(current)
             })){Text("선형").tag(AutomationShape.linear);Text("유지").tag(AutomationShape.hold)}.pickerStyle(.segmented).labelsHidden().frame(width:112)
-                .help("선형은 저장된 신호 배율 또는 팬 값을 연결합니다. 유지는 다음 점까지 값을 유지합니다.")
+                .help("선형은 저장된 배율·팬·Hz 값을 연결합니다. cutoff의 표시 축만 로그이며 보간은 Hz 선형입니다. 유지는 다음 점까지 값을 유지합니다.")
         }
     }
     var emptyHint:some View {Text(available ? "빈 곳 클릭 또는 점 추가 · Return":"이번 사용에 추가된 서클입니다. 공유 원본 편집을 끄고 조절하세요.").foregroundStyle(StudioTheme.secondary)}
-    var valueHint:Text {Text(store.automationParameter == .gain ? "0 dB 원래 레벨 · −∞ 무음":"−100 왼쪽 · 0 중앙 · +100 오른쪽")}
+    var valueHint:Text {
+        switch store.automationParameter {
+        case .gain:return Text("0 dB 원래 레벨 · −∞ 무음")
+        case .pan:return Text("−100 왼쪽 · 0 중앙 · +100 오른쪽")
+        case .synthCutoff:return Text("40–20,000 Hz · 로그 눈금 · Hz 선형 보간\n곡선이 없거나 꺼지면 신스 설정값 사용 · ↑↓ 100 Hz · ⌥ 1 Hz · ⇧ 1,000 Hz")
+        }
+    }
     var scopeText:some View {
         let scope=store.editOriginal ? "공유 원본":"이번 사용"
         let timing=store.automationNode?.lengthBeats.map{String(format:"%.2f박 · %d회 반복",$0,store.automationNode?.repeatCount ?? 1)} ?? "서클 시작부터 연속 진행"
@@ -274,8 +308,8 @@ struct AutomationPlot:NSViewRepresentable {
         if let preview,let i=points.firstIndex(where:{$0.id==preview.id}){points[i]=preview}
         return points.sorted{$0.beat<$1.beat}
     }
-    func normalized(_ v:Double)->Double {store.automationParameter == .gain ? sqrt(max(0,min(4,v))/4):max(0,min(1,(v+1)/2))}
-    func value(_ n:Double)->Double {store.automationParameter == .gain ? 4*n*n:2*n-1}
+    func normalized(_ v:Double)->Double {AutomationDisplay.normalized(v,parameter:store.automationParameter)}
+    func value(_ n:Double)->Double {AutomationDisplay.value(atNormalized:n,parameter:store.automationParameter)}
     func position(_ p:AutomationPoint)->NSPoint {
         position(beat:p.beat,value:p.value)
     }
@@ -291,14 +325,20 @@ struct AutomationPlot:NSViewRepresentable {
     override func draw(_ dirtyRect:NSRect) {
         let parameter=store.automationParameter,points=points,lane=AutomationLane(parameter:parameter,points:points)
         var occupied:[NSRect]=[]
-        let levels:[Double]=parameter == .gain ? [0,1,4]:[-1,0,1]
+        let levels:[Double]
+        switch parameter {case .gain:levels=[0,1,4];case .pan:levels=[-1,0,1];case .synthCutoff:levels=[40,400,4000,20000]}
         for (index,v) in levels.enumerated() {
             let n=normalized(v),path=NSBezierPath()
             if orbital {path.append(OrbitDrawing.arc(center,radius:radius*(0.3+0.7*n),from:0,to:1))}
             else {path.move(to:NSPoint(x:rect.minX,y:rect.maxY-n*rect.height));path.line(to:NSPoint(x:rect.maxX,y:rect.maxY-n*rect.height))}
             StudioTheme.lineNS.setStroke();path.lineWidth=1;path.stroke()
-            let label=parameter == .gain ? GainScale.text(v):(v<0 ? "L":v>0 ? "R":"C")
-            let text=label+(orbital && parameter == .gain ? " dB":""),at=orbital ? NSPoint(x:48,y:rect.minY+Double(index)*20):NSPoint(x:18,y:rect.maxY-n*rect.height)
+            let label:String
+            switch parameter {
+            case .gain:label=GainScale.text(v)
+            case .pan:label=v<0 ? "L":v>0 ? "R":"C"
+            case .synthCutoff:label=v>=1000 ? String(format:"%.0fk",v/1000):String(format:"%.0f",v)
+            }
+            let text=label+(orbital && parameter == .gain ? " dB":parameter == .synthCutoff ? " Hz":""),at=orbital ? NSPoint(x:48,y:rect.minY+Double(index)*20):NSPoint(x:parameter == .synthCutoff ? 23:18,y:rect.maxY-n*rect.height)
             occupied.append(labelRect(text,at:at,size:11))
             OrbitDrawing.text(text,at:at,size:11,color:StudioTheme.secondaryNS)
         }
@@ -308,9 +348,16 @@ struct AutomationPlot:NSViewRepresentable {
         }
         let barLabels=drawBarRuler(avoiding:occupied)
         let curve=NSBezierPath()
-        for i in 0...720 {
-            let beat=orbital ? beat(Double(i)/720):Double(i)/720*displayBeats,p=position(beat:beat,value:lane.value(at:beat))
-            if i==0 {curve.move(to:p)}else{curve.line(to:p)}
+        // Evaluate in stored units before mapping to the display axis. In particular,
+        // Hz-linear cutoff sweeps are curved on the logarithmic frequency axis.
+        let samples=(0...720).map {orbital ? beat(Double($0)/720):Double($0)/720*displayBeats}
+        let sampleBeats=Set(samples+points.filter{$0.beat>=0 && $0.beat<=displayBeats}.map(\.beat)).sorted()
+        var holdEnds:[Double:Double]=[:]
+        for (left,right) in zip(points,points.dropFirst()) where left.shape == .hold {holdEnds[right.beat]=left.value}
+        for (index,beat) in sampleBeats.enumerated() {
+            if index>0,let held=holdEnds[beat] {curve.line(to:position(beat:beat,value:held))}
+            let p=position(beat:beat,value:points.isEmpty ? store.automationFallback:lane.value(at:beat))
+            if index==0 {curve.move(to:p)}else{curve.line(to:p)}
         }
         (store.currentAutomation?.enabled == false ? StudioTheme.secondaryNS:StudioTheme.accentNS).setStroke();curve.lineWidth=2;curve.stroke()
         let visiblePoints=points.filter{$0.beat<=displayBeats}

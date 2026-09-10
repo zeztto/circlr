@@ -39,7 +39,7 @@ LAYOUT_REVISION = {"expectedLayoutRevision": {"type": "integer", "minimum": 0, "
 PORT_PAIR = {**LAYOUT_REVISION, "first": PORT_ENDPOINT, "second": PORT_ENDPOINT, "firstOctant": OCTANT, "secondOctant": OCTANT}
 PLACED_CONNECTION = schema({"id": CONNECTION_ID, "placement": schema({"from": OCTANT, "to": OCTANT}, ["from", "to"])}, ["id", "placement"])
 NOTE = schema({"id": STRING, "beat": {"type": "number", "minimum": 0}, "length": {"type": "number", "exclusiveMinimum": 0}, "pitch": {"type": "integer", "minimum": 0, "maximum": 127}, "velocity": {"type": "integer", "minimum": 1, "maximum": 127}}, ["beat", "length", "pitch", "velocity"])
-AUTOMATION_POINT = schema({"id": STRING, "beat": {"type": "number", "minimum": 0, "maximum": 1048576}, "value": {"type": "number", "minimum": -1, "maximum": 4}, "shape": {"type": "string", "enum": ["linear", "hold"]}}, ["beat", "value"])
+AUTOMATION_POINT = schema({"id": STRING, "beat": {"type": "number", "minimum": 0, "maximum": 1048576}, "value": {"type": "number", "minimum": -1, "maximum": 20000}, "shape": {"type": "string", "enum": ["linear", "hold"]}}, ["beat", "value"])
 OPERATION = schema({
     "kind": {"type": "string", "enum": ["set_global", "rename_project", "set_instrument", "set_track", "add_section", "set_section", "connect_sections", "add_midi", "set_notes", "generate_midi", "set_node", "set_effect", "add_effect", "connect", "reorder_section", "set_clip", "set_step", "edit_notes", "edit_audio", "set_automation"]},
     "patternID": {"type": "string", "description": "Only valid for edit_shared_audio; explicit shared rhythm pattern ID, affecting every use. Do not combine with arrangementID/compositionID/nodeID/useID/laneID."},
@@ -53,7 +53,7 @@ OPERATION = schema({
     "enabled": {"type": "boolean", "description": "Enable a step or bypass/read an existing automation curve, according to kind."},
     "noteIDs": {"type": "array", "items": STRING, "minItems": 1, "maxItems": 100000},
     "edit": {"type": "string", "enum": ["transpose", "move", "duplicate", "quantize", "velocity", "length_delta", "velocity_delta", "delete", "split", "fade"]},
-    "parameter": {"type": "string", "enum": ["gain", "pan"]},
+    "parameter": {"type": "string", "enum": ["gain", "pan", "synthCutoff"], "description": "gain 0–4, pan -1–1, synthCutoff 40–20000 Hz. Cutoff requires a built-in synth instrument node and runtime.capabilities.synthCutoffAutomation=1."},
     "automationPoints": {"type": "array", "items": AUTOMATION_POINT, "maxItems": 4096, "description": "Replace this node parameter curve. Empty clears it. Omitted with enabled changes only bypass."},
     "sourceOffset": {"type": "number", "exclusiveMinimum": 0, "description": "Split offset in source seconds from the selected clip start."},
     "fadeIn": {"type": "number", "minimum": 0}, "fadeOut": {"type": "number", "minimum": 0},
@@ -77,12 +77,21 @@ OPERATION = schema({
 ARRANGEMENT_OPERATIONS = ["duplicate_arrangement", "rename_arrangement"]
 OPERATION["properties"]["compositionID"] = {"type": "string", "description": "Explicit owning composition ID; required for arrangement duplication, rename and selection."}
 OPERATION["oneOf"] = [
-    {"type": "object", "properties": {"kind": {"enum": list(OPERATION["properties"]["kind"]["enum"])}}},
+    {"type": "object", "properties": {"kind": {"enum": [kind for kind in OPERATION["properties"]["kind"]["enum"] if kind != "set_automation"]}}},
     {"type": "object", "properties": {"kind": {"enum": ARRANGEMENT_OPERATIONS}},
      "required": ["compositionID", "arrangementID", "name"]},
     {"type": "object", "properties": {"kind": {"enum": ["select_arrangement"]}},
      "required": ["compositionID", "arrangementID"]},
 ]
+# Encode parameter ranges in the advertised schema as well as IPC validation.
+AUTOMATION_RANGES = {"gain": (0, 4), "pan": (-1, 1), "synthCutoff": (40, 20000)}
+for parameter, (minimum, maximum) in AUTOMATION_RANGES.items():
+    point = {**AUTOMATION_POINT, "properties": {**AUTOMATION_POINT["properties"],
+             "value": {"type": "number", "minimum": minimum, "maximum": maximum}}}
+    OPERATION["oneOf"].append({"type": "object", "properties": {
+        "kind": {"enum": ["set_automation"]}, "parameter": {"enum": [parameter]},
+        "automationPoints": {"type": "array", "items": point, "maxItems": 4096}},
+        "required": ["parameter"]})
 OPERATION["properties"]["at"] = schema({"x": {"type": "number", "exclusiveMinimum": -10000000, "exclusiveMaximum": 10000000}, "y": {"type": "number", "exclusiveMinimum": -10000000, "exclusiveMaximum": 10000000}}, ["x", "y"])
 OPERATION["oneOf"].append({"type": "object", "properties": {"kind": {"enum": ["insert_section"]}}, "required": ["arrangementID", "useID", "name", "bars", "at"]})
 OPERATION["oneOf"].append({"type": "object", "properties": {"kind": {"enum": ["edit_shared_audio"]},
@@ -121,7 +130,7 @@ TOOLS = [
     tool("reconnect_ports", "reconnect_ports", "Replace one existing cable using its complete logical connectionID and two explicit endpoints. Preserves edge ID and gain; rejects cross-graph moves, cycles and duplicates atomically. Composition sequence cables cannot be reconnected.", {**PORT_PAIR, "connectionID": CONNECTION_ID}, (*PORT_PAIR, "connectionID"), True),
     tool("disconnect_ports", "disconnect_ports", "Disconnect the exact logical cable. One Undo; other section uses stay unchanged. Composition sequence cables cannot be disconnected.", {**LAYOUT_REVISION, "connectionID": CONNECTION_ID}, ("expectedLayoutRevision", "connectionID"), True),
     tool("move_ports", "move_ports", "Atomically place 1–128 distinct existing cables in eight directions. One layout Undo; changes layoutRevision only, preserving music and audio. Unchanged placements are a no-op.", {**LAYOUT_REVISION, "moves": {"type": "array", "items": PLACED_CONNECTION, "minItems": 1, "maxItems": 128}}, ("expectedLayoutRevision", "moves"), True),
-    tool("apply", "apply", "Atomically apply 1–128 edits as one Undo action. edit_shared_audio requires patternID, trackID, clipID and edit (split/duplicate/fade/delete), affecting all uses of the shared rhythm pattern; offsets and fades match edit_audio. set_automation original defaults to false (this use); true edits shared section source while retaining use overrides. set_notes/generate_midi replace notes unless append=true. duplicate_arrangement/rename_arrangement require explicit compositionID, arrangementID and a name of 1–120 characters after trimming; duplicate shares section sources/assets while preserving playback choices and the editing canvas. select_arrangement requires compositionID and arrangementID and deliberately changes playback choice and the visible editing branch. Stable IDs are required; stale revisions fail without changes.", {"operations": {"type": "array", "items": OPERATION, "minItems": 1, "maxItems": 128}}, ("operations",), True),
+    tool("apply", "apply", "Atomically apply 1–128 edits as one Undo action. set_automation uses gain 0–4, pan -1–1, or synthCutoff 40–20000 Hz on built-in synth instrument nodes only. Cutoff batches require a fresh matching snapshot with runtime.capabilities.synthCutoffAutomation=1; unsupported apps receive no mutation. Final target and revision validation remain app-side. edit_shared_audio requires patternID, trackID, clipID and edit (split/duplicate/fade/delete), affecting all uses of the shared rhythm pattern; offsets and fades match edit_audio. set_automation original defaults to false (this use); true edits shared section source while retaining use overrides. set_notes/generate_midi replace notes unless append=true. duplicate_arrangement/rename_arrangement require explicit compositionID, arrangementID and a name of 1–120 characters after trimming; duplicate shares section sources/assets while preserving playback choices and the editing canvas. select_arrangement requires compositionID and arrangementID and deliberately changes playback choice and the visible editing branch. Stable IDs are required; stale revisions fail without changes.", {"operations": {"type": "array", "items": OPERATION, "minItems": 1, "maxItems": 128}}, ("operations",), True),
     tool("bounce", "bounce", "Start an asynchronous section track bounce including its internal effects and sidechain. Originals remain restorable; audio replaces output inputs. Read job until terminal state.", {**SCOPE, "trackID": STRING, "tailSeconds": TAIL_SECONDS}, ("useID", "trackID"), True),
     tool("restore_bounce", "restore_bounce", "Restore a bounced circle's original inputs; keep rendered audio as a disconnected archive.", {**SCOPE, "nodeID": STRING}, ("useID", "nodeID"), True),
     tool("export", "export", "Start asynchronous master WAV export, 48 kHz stereo 24-bit. Requires a NEW absolute .wav path. No file overwrite. Read job for completion and resolved tail/end-window measurements.", {"path": STRING, "tailSeconds": TAIL_SECONDS}, ("path",), True),
@@ -204,6 +213,8 @@ def rpc(path, request):
 def validate_operation_scopes(operations):
     for index, operation in enumerate(operations):
         kind = operation["kind"]
+        if operation.get("parameter") == "synthCutoff" and kind != "set_automation":
+            raise ValueError(f"operations[{index}].parameter: synthCutoff requires set_automation")
         if "original" in operation and kind != "set_automation":
             raise ValueError(f"operations[{index}].original: supported only by set_automation")
         if "patternID" in operation and kind != "edit_shared_audio":
@@ -228,6 +239,19 @@ def call_tool(path, name, arguments, read_only=False):
         if key in arguments:
             request[key] = arguments[key]
     try:
+        if entry["method"] == "apply" and any(op.get("parameter") == "synthCutoff" for op in arguments["operations"]):
+            # This read does not weaken the final app-side revision/atomicity guard.
+            probe = rpc(path, {"id": str(uuid.uuid4()), "method": "snapshot", "arguments": {}})
+            state = probe.get("result") if isinstance(probe, dict) and probe.get("ok") is True else None
+            if not isinstance(state, dict):
+                raise ValueError("Cannot verify synthCutoffAutomation capability; read snapshot again")
+            runtime = state.get("runtime", {})
+            capabilities = runtime.get("capabilities", {}) if isinstance(runtime, dict) else {}
+            capability = capabilities.get("synthCutoffAutomation") if isinstance(capabilities, dict) else None
+            if type(capability) is not int or capability != 1:
+                raise ValueError("This app does not support synthCutoffAutomation=1; update the app before cutoff edits")
+            if state.get("projectID") != request["projectID"] or type(state.get("revision")) is not int or state.get("revision") != request["expectedRevision"]:
+                raise ValueError("stale_revision: snapshot differs from projectID/expectedRevision")
         result = rpc(path, request)
     except (OSError, ValueError) as error:
         result = {"ok": False, "requestID": request["id"], "error": str(error), "socket": path}

@@ -273,6 +273,10 @@ import CirclrAudio
         do {
             var candidate = project; try action(&candidate)
             if candidate == project { return }
+            // Instrument replacement must not strand automation on an unsupported target.
+            if candidate.tracks.map({ $0.instrument.kind }) != project.tracks.map({ $0.instrument.kind }) {
+                try ProjectStore.validateStructure(candidate)
+            }
             undoStack.append((name,project,portLayoutOnly,circleColorsOnly)); if undoStack.count > 80 { undoStack.removeFirst() }; redoStack = []
             if musical { candidate.musicRevision += 1 }
             project = candidate; dirty = true; undoCount = undoStack.count; redoCount = 0

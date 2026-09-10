@@ -27,6 +27,7 @@ public struct StudioWorkspace:Codable,Equatable {
     public func restored(at address:CircleAddress,in project:Project)->Self {
         guard let scene=try? StudioNavigation.scene(revealing:address,in:project),let node=scene.node(address) else{return .init()}
         var next=self
+        if let music=node.music,!next.automationParameter.supports(node:music,in:project) {next.automationParameter = .gain}
         if let id=transitionID {
             if case .section(let ai,let ui)=address,
                project.arrangements.first(where:{$0.id==ai})?.edges.contains(where:{$0.id==id && $0.from==ui})==true {} else {next.transitionID=nil}

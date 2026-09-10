@@ -8,3 +8,6 @@ void circlr_synth_destroy(CirclrSynth *synth);
 // One producer; render is the sole consumer. No allocation or mutex in render.
 void circlr_synth_note(CirclrSynth *synth, int pitch, int velocity, int on);
 void circlr_synth_render(CirclrSynth *synth, float *left, float *right, uint32_t frames);
+// Render-consumer only. cutoffHz contains one base-Hz value per frame; NULL uses patch cutoff.
+// Values outside finite 40...20000 fall back to patch cutoff. Voice state is retained.
+void circlr_synth_render_cutoff(CirclrSynth *synth, float *left, float *right, const double *cutoffHz, uint32_t frames);

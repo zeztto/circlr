@@ -145,6 +145,7 @@ public enum SectionGraphEditing {
             let patch = SectionGraphEdits.difference(original: base, edited: graph)
             candidate.arrangements[ai].uses[ui].graphEdits = patch.isEmpty ? nil : patch
         }
+        try AutomationCompiler.validateTargets(in:candidate)
         // Validate every use affected by a shared edit before committing the transaction.
         for arrangement in candidate.arrangements {
             for use in arrangement.uses where use.sectionID == candidate.sections[si].id {

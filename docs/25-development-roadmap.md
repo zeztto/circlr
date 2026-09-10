@@ -1,6 +1,8 @@
 # 써클러 개발 방향과 실행 계획
 
-build128 compact 후보에서 작은 편집 공간의 오디오 수치4개·완전한 스텝6행과 입력/Undo를 확인했다. 최종 Release 44.07초이며 재열기·production 서명/UUID·독립 13개 compact capture 감사도 통과했다. [화면 검증](147-editor-space.md). 다음 실질 엔진 범위는 [내장 신스 cutoff automation](148-synth-cutoff-automation-plan.md)의 저장→GUI/MCP→렌더→복원이다. 계획을 구현 완료로 계산하지 않는다.
+build129에서 내장 신스 cutoff의 Core/DSP·GUI/MCP·schema를 연결하고 기계검증·Release 77.59초·실제 Hz 편집/오류 거절을 확인했다. GUI/schema의 독립 감사·production 서명/UUID도 통과했으며 native 바운스·원본 복원·재열기 r79도 확인했다. PCM 최대 1LSB·원본 복원 byte-exact를 독립 감사했으며 최종 종합 UI 데이터 감사도 통과했다. [구현 검증](149-synth-cutoff-automation-validation.md). 실제 청취·물리 오디오·전체 제작 목표는 남아 있다.
+
+build128 compact 후보에서 작은 편집 공간의 오디오 수치4개·완전한 스텝6행과 입력/Undo를 확인했다. 최종 Release 44.07초이며 재열기·production 서명/UUID·독립 13개 compact capture 감사도 통과했다. [화면 검증](147-editor-space.md). 당시 다음 범위로 정한 [내장 신스 cutoff automation](148-synth-cutoff-automation-plan.md)은 위 build129에서 구현·검증했다. 최종 native 결과는 구현 검증 문서를 따른다.
 
 build127에서 GUI/MCP 편곡별 작업 복귀·문서 reset·무효 주소 fallback을 구현했다. Release44.90초와 실제 왕복·최종 15개 capture 감사·r62 재열기/disk 일치·production 서명/UUID를 통과했다. 한글 도구 입력은 TextEdit에서도 동일하게 축소되어 앱 고유 원인으로 단정하지 않는다. [검증 기록](146-input-delivery-and-arrangement-return.md). 실제 IME·물리 오디오·전체 제작 목표는 남아 있다.
 

@@ -28,6 +28,13 @@ extension AppStore {
         return validatedEditorViewport(value)
     }
     func switchAutomationViewport() {
+        // Changing targets cannot carry an instrument-only parameter into another kind of circle.
+        // The parameter observer re-enters once with gain and saves the outgoing viewport normally.
+        if automationParameter != .gain,
+           automationNode.map({automationParameter.supports(node:$0,in:project)}) != true {
+            automationParameter = .gain
+            return
+        }
         if automationWorkspaceProjectID==project.id,automationWorkspaceGeneration==mediaImportGeneration,let key=automationWorkspaceKey {
             automationViewStates[key]=automationViewport.validated
         }

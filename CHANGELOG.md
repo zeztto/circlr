@@ -1,5 +1,11 @@
 # 변경 이력
 
+## 검증 완료 — 0.20.0 build129 신스 cutoff 오토메이션
+
+- 내장 신스 instrument의 절대 Hz 곡선을 voice 상태를 보존한 sample별 DSP에 전달한다. Hz 선형/log 표시·schema3·지원 타깃·GUI/MCP 범위를 연결했다.
+- Core/Audio 479개와 추가 부모 tempo 1개, MCP 7/27개·kit 9개·C DSP 비교·Release 77.59초를 통과했다. 실제 GUI Hz 편집·잘못된 값 거절도 확인했다.
+- native 편집·schema Undo/Redo·미지원 악기 반려·바운스/복원·재열기·독립 데이터 감사와 패키지 서명/UUID를 확인했다. 바운스 전후 최대 1LSB, 복원 WAV는 byte-exact다. 실제 청취·물리 오디오는 별도 검증 범위다. [기록](docs/149-synth-cutoff-automation-validation.md).
+
 ## 검증 완료 — 0.20.0 build128 편집 공간 가시성
 
 - 오디오 핵심 수치 4개를 처음부터 표시하고 스텝 도구 배치를 줄여 같은 창의 완전한 음정 행을 4개에서 6개로 늘렸다. 초기 후보의 2행 미달을 보완한 compact 결과다.

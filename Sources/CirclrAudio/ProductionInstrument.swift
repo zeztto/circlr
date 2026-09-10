@@ -19,12 +19,19 @@ public final class SynthEngine {
     deinit { circlr_synth_destroy(handle) }
     public func note(_ pitch: Int, velocity: Int, on: Bool) { circlr_synth_note(handle,Int32(pitch),Int32(velocity),on ? 1:0) }
     public func render(left: UnsafeMutablePointer<Float>, right: UnsafeMutablePointer<Float>, frames: UInt32) {circlr_synth_render(handle,left,right,frames)}
+    /// The render owner supplies one base cutoff per sample without changing the patch or voices.
+    public func render(left:UnsafeMutablePointer<Float>,right:UnsafeMutablePointer<Float>,cutoffHz:UnsafePointer<Double>,frames:UInt32) {
+        circlr_synth_render_cutoff(handle,left,right,cutoffHz,frames)
+    }
 }
 
 public enum ProductionInstrument {
-    public static func render(_ notes:[Note], instrument:Instrument, project:Project, root:URL?, clock:MusicClock, tail:Double, hostContext:MusicContext? = nil) async throws -> PCM {
+    public static func render(_ notes:[Note], instrument:Instrument, project:Project, root:URL?, clock:MusicClock, tail:Double, hostContext:MusicContext? = nil,automation:[AutomationPlan] = []) async throws -> PCM {
         _ = try frameCount(clock:clock,tail:tail)
-        if instrument.kind == .synthesizer {return try synth(notes,patch:instrument.synth ?? SynthPatch(),clock:clock,tail:tail)}
+        guard instrument.kind == .synthesizer || !automation.contains(where:{$0.parameter == .synthCutoff}) else {
+            throw CirclrError("필터 cutoff 오토메이션은 내장 신스에만 적용할 수 있습니다")
+        }
+        if instrument.kind == .synthesizer {return try synth(notes,patch:instrument.synth ?? SynthPatch(),clock:clock,tail:tail,automation:automation)}
         if instrument.kind == .sampler {
             guard let sample=instrument.sample else {throw CirclrError("샘플 악기의 원본을 선택하세요")}
             if let zones=sample.zones,!zones.isEmpty {
@@ -42,7 +49,7 @@ public enum ProductionInstrument {
         }
         return try await AUInstrumentWorkerProcess().render(notes:notes,instrument:instrument,clock:clock,tail:tail,hostContext:hostContext)
     }
-    public static func synth(_ notes:[Note],patch:SynthPatch,clock:MusicClock,tail:Double) throws -> PCM {
+    public static func synth(_ notes:[Note],patch:SynthPatch,clock:MusicClock,tail:Double,automation:[AutomationPlan] = []) throws -> PCM {
         let engine=try SynthEngine(patch),frames=try frameCount(clock:clock,tail:tail)
         struct Event {var frame:Int;var note:Note;var on:Bool}
         var events:[Event]=[]
@@ -52,12 +59,23 @@ public enum ProductionInstrument {
             events.append(Event(frame:first,note:note,on:true));events.append(Event(frame:max(first+1,last),note:note,on:false))
         }
         events.sort{$0.frame == $1.frame ? (!$0.on && $1.on):$0.frame<$1.frame}
+        var cutoff=try SynthCutoffCursor(automation)
+        var cutoffSamples=[Double](repeating:patch.cutoff,count:1024)
         var result=PCM(frames:frames),cursor=0,index=0
         while cursor<frames {
             try Task.checkCancellation()
             while index<events.count && events[index].frame<=cursor {let e=events[index];engine.note(e.note.pitch,velocity:e.note.velocity,on:e.on);index+=1}
             let next=index<events.count ? events[index].frame:frames,count=min(1024,frames-cursor,max(1,next-cursor))
+            if cutoff.active {
+                for i in 0..<count {cutoffSamples[i]=cutoff.value(at:Double(cursor+i)/PCM.rate)}
+                cutoffSamples.withUnsafeBufferPointer { values in
+                    result.left.withUnsafeMutableBufferPointer { l in result.right.withUnsafeMutableBufferPointer { r in
+                        engine.render(left:l.baseAddress!+cursor,right:r.baseAddress!+cursor,cutoffHz:values.baseAddress!,frames:UInt32(count))
+                    } }
+                }
+            } else {
             result.left.withUnsafeMutableBufferPointer { l in result.right.withUnsafeMutableBufferPointer { r in engine.render(left:l.baseAddress!+cursor,right:r.baseAddress!+cursor,frames:UInt32(count)) } }
+            }
             cursor+=count
         }
         return result
