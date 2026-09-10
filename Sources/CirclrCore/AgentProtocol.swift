@@ -54,6 +54,8 @@ public struct AgentOperation:Codable {
     public var name:String?
     public var notes:[Note]?
     public var pattern:MIDIPattern?
+    public var patternID:ID?
+    public var original:Bool?
     public var append:Bool?
     public var instrument:Instrument?
     public var synthVoice:SynthVoice?
@@ -103,6 +105,11 @@ public enum AgentProjectEditing {
         var p=input
         var explicitSelection:ID?
         for op in operations {
+            guard op.original==nil || op.kind=="set_automation" else{throw CirclrError("original은 set_automation에만 지정할 수 있습니다")}
+            guard op.patternID==nil || op.kind=="edit_shared_audio" else{throw CirclrError("patternID는 edit_shared_audio에만 지정할 수 있습니다")}
+            if op.kind=="edit_shared_audio" {
+                guard op.arrangementID==nil,op.useID==nil,op.nodeID==nil,op.laneID==nil,op.compositionID==nil else{throw CirclrError("공유 오디오에는 patternID·trackID·clipID만 대상으로 지정하세요")}
+            }
             p.activeArrangementID=input.activeArrangementID
             if let ai=op.arrangementID {guard p.arrangements.contains(where:{$0.id==ai}) else {throw CirclrError("편곡 ID를 찾을 수 없습니다")};p.activeArrangementID=ai}
             switch op.kind {
@@ -158,9 +165,20 @@ public enum AgentProjectEditing {
                 default:throw CirclrError("edit: split/duplicate/fade/delete를 선택하세요")
                 }
                 _=try AudioEditing.apply(change,nodeID:nodeID,useID:id,in:&p)
+            case "edit_shared_audio":
+                guard let pattern=op.patternID,let track=op.trackID,let clip=op.clipID else{throw CirclrError("patternID·trackID·clipID가 필요합니다")}
+                let change:AudioEditing.Change
+                switch op.edit {
+                case "split":guard let offset=op.sourceOffset else{throw CirclrError("원본 초 단위 sourceOffset이 필요합니다")};change = .split(sourceOffset:offset)
+                case "duplicate":change = .duplicate(beatOffset:op.beatOffset)
+                case "fade":guard let input=op.fadeIn,let output=op.fadeOut else{throw CirclrError("원본 초 단위 fadeIn과 fadeOut이 필요합니다")};change = .fade(input:input,output:output)
+                case "delete":change = .delete
+                default:throw CirclrError("edit: split/duplicate/fade/delete를 선택하세요")
+                }
+                _=try SharedRhythmAudioEditing.apply(change,patternID:pattern,trackID:track,clipID:clip,in:&p)
             case "set_automation":
                 guard let id=op.useID,let node=op.nodeID,let parameter=op.parameter else{throw CirclrError("useID·nodeID·parameter가 필요합니다")}
-                try AutomationEditing.set(parameter:parameter,points:op.automationPoints,enabled:op.enabled,nodeID:node,useID:id,in:&p)
+                try AutomationEditing.set(parameter:parameter,points:op.automationPoints,enabled:op.enabled,nodeID:node,useID:id,original:op.original ?? false,in:&p)
             case "set_clip":
                 guard let id=op.useID,let use=p.active.uses.first(where:{$0.id==id}),let section=p.sections.first(where:{$0.id==use.sectionID}),
                       let laneID=op.laneID,var lane=try ArrangementCompiler.effectiveLanes(section:section,use:use).first(where:{$0.id==laneID}),

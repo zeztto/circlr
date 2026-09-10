@@ -66,6 +66,8 @@ MIDI CC/페달/피치 벤드·tempo map은 노트 import와 다른 이벤트·�
 
 ### 5. 백그라운드 제작 에이전트와 앱 내 계정 대화
 
+build125에서 GUI/MCP 범위 차이 중 공유 오디오4종 편집과 automation original을 연결했다. 실제 명령/Undo·A/B 값 표시와 Core/MCP/Release를 확인했으며 저장/재열기·production 서명/UUID·독립14개 snapshot 감사도 통과했다. [계약과 검증](144-agent-shared-audio-scope.md). 공유 trim/replace·계정 대화·실제 오디오는 이 결과에 포함하지 않는다.
+
 **다음 행동:** 기존 MCP와 실제 activity 로그를 사용해 2번의 한 곡 작업을 수행하면서 명령 누락·반복 조회·대상 모호함·STOP 이후 늦은 적용을 점검한다. 전문 역할은 제안/검증을 병렬화하되 음악 변경은 revision을 확인하는 single writer가 통합한다. UI 자동화를 연결 도구가 이미 처리하는 작업의 기본 경로로 삼지 않는다.
 
 앱 내 사용자의 Codex 계정 대화는 별도 구현 단계다. [계정 콘솔 계획](20-codex-account-console-plan.md)을 출발점으로 구현 시점의 OpenAI 공식 문서·지원되는 App Server 계약을 재확인한 뒤 로그인/로그아웃, 세션 복원, 모델/권한, 스트리밍, STOP·프로젝트 전환, 오류 복구를 실제 adapter에 연결한다. 이 문서는 최신 API 지원 여부를 새로 검증한 문서가 아니다. auth 파일 복사나 비공식 OAuth를 통합 방식으로 사용하지 않는다.

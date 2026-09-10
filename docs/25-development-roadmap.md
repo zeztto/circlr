@@ -1,5 +1,7 @@
 # 써클러 개발 방향과 실행 계획
 
+build125에서 MCP 공유 오디오4종 편집과 automation 원본/변형 범위를 연결했다. Core30개·MCP27개·Release73.17초와 native 명령/UI를 확인했으며 저장/재열기·production 서명/UUID·독립14개 snapshot 감사도 통과했다. [검증 기록](144-agent-shared-audio-scope.md). 이후 편곡 대안의 연속 작업과 남은 실제 오디오 검증을 이어간다.
+
 build124에서 연결→오토메이션과 import→새 파형의 화면 전환을 개선했다. Release42.16초·native 두 동선/Undo/이름 오류를 확인했으며 저장/재열기까지 확인했다. production 서명·UUID와 독립 데이터 감사도 통과했다. [검증 기록](143-audio-automation-flow.md). 다음은 오토메이션 편집과 편곡 대안의 연속 흐름이다.
 
 build123에서 원본 복원 후 저장된 출력 서클로 복귀하도록 개선했다. Release44.82초·정상 복귀/Undo/이름 오류/출력 연결 충돌/재열기와 독립8개 상태 데이터 감사를 통과했다. [검증 기록](142-bounce-restore-navigation.md). 다음은 오디오 가져오기·오토메이션·편곡 대안의 연속 흐름이며 실제 입출력·전체 제작 목표는 남아 있다.

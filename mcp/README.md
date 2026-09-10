@@ -49,6 +49,12 @@ build 62부터 `circlr_sounds`로 실제 음색을 조회한다. 먼저 snapshot
 
 창을 숨기고 작업하려면 `circlr_focus`에 `minimized: true`, 다시 표시하려면 `minimized: false`를 보낸다. 이 경우에는 창 상태만 바뀐다. `snapshot.runtime.windows`로 실제 최소화 상태를 확인할 수 있다.
 
+## build125 공유 오디오·원본 범위 계약
+
+Core/MCP 검사와 native 명령/UI 확인을 마쳤으며 저장/재열기·production 서명/UUID·독립14개 snapshot 감사도 통과했다. 지원 앱에서 `circlr_snapshot.patterns`의 실제 patternID·소유 trackID·clipID를 읽어 `circlr_apply`의 `edit_shared_audio`로 전달한다. `edit`는 split/duplicate/fade/delete이며 sourceOffset·fadeIn·fadeOut은 원본 초, 선택적 beatOffset은 로컬4분음표 박이다. 공유 패턴의 모든 consumer에 영향을 준다. 공유 명령에 arrangementID/compositionID/useID/laneID/nodeID를 섞거나 다른 명령에 patternID를 보내면 거절한다. trim/replace 지원을 뜻하지 않는다.
+
+`set_automation`의 선택적 boolean original은 생략/false이면 해당 use 변형, true이면 공유 원본을 편집하며 기존 use override를 유지한다. original을 다른 명령에 사용하면 거절한다. MCP는 명시적 null을 거절하지만 직접 Swift optional decoding에서는 null이 nil이므로 동일한 null 거절을 주장하지 않는다. projectID·expectedRevision·Undo batch 계약은 동일하다. [주소·단위·예제·검증 범위](../docs/144-agent-shared-audio-scope.md)를 확인한다.
+
 ## 현재 API 경계
 
 0.11의 `circlr_focus`는 `{"follow": true}`로 재생 팔로우를 켜거나 재개하고 `{"follow": false}`로 끈다. 다른 focus 대상이나 minimized와 함께 보내면 거부한다. `snapshot.playback`은 playing, seconds, follow(`off`/`following`/`suspended`), currentSection, focusedSection, caption, stale, animated, camera와 node/edge/phase readout을 제공한다. `seconds`는 실제 재생 시간이고, `displaySeconds`와 신호 값은 마지막 표시 프레임 기준이다. 최소화 중에는 표시 값과 frameCount가 멈추지만 재생 시간은 계속 진행한다. 카메라를 직접 focus하면 재생 팔로우가 일시 중지되며 음악은 바뀌지 않는다.

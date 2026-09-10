@@ -1,5 +1,11 @@
 # 변경 이력
 
+## 검증 완료 — 0.20.0 build125 공유 오디오·오토메이션 원본 범위
+
+- edit_shared_audio의 pattern/track/clip 주소와 split/duplicate/fade/delete, set_automation의 original 범위를 연결하고 혼합 주소를 거절한다.
+- Core30개·MCP27개·Release73.17초, 실제 MCP 편집/Undo·실패 batch/stale 거절·A/B automation 값 표시를 확인했다. 저장/재열기·production 서명/UUID·독립14개 snapshot 감사도 통과했다.
+- 공유 오디오 trim/replace·실제 입출력은 포함하지 않는다. [기록](docs/144-agent-shared-audio-scope.md).
+
 ## 검증 완료 — 0.20.0 build124 오디오·오토메이션 전환
 
 - ⌘5에서 이름 확정 후 연결 화면을 정리하고, 같은 선택에서 완료된 섹션 오디오 import는 이전 automation 모드를 닫아 새 파형을 표시한다.

@@ -42,6 +42,8 @@ NOTE = schema({"id": STRING, "beat": {"type": "number", "minimum": 0}, "length":
 AUTOMATION_POINT = schema({"id": STRING, "beat": {"type": "number", "minimum": 0, "maximum": 1048576}, "value": {"type": "number", "minimum": -1, "maximum": 4}, "shape": {"type": "string", "enum": ["linear", "hold"]}}, ["beat", "value"])
 OPERATION = schema({
     "kind": {"type": "string", "enum": ["set_global", "rename_project", "set_instrument", "set_track", "add_section", "set_section", "connect_sections", "add_midi", "set_notes", "generate_midi", "set_node", "set_effect", "add_effect", "connect", "reorder_section", "set_clip", "set_step", "edit_notes", "edit_audio", "set_automation"]},
+    "patternID": {"type": "string", "description": "Only valid for edit_shared_audio; explicit shared rhythm pattern ID, affecting every use. Do not combine with arrangementID/compositionID/nodeID/useID/laneID."},
+    "original": {"type": "boolean", "description": "set_automation only: omitted/false edits this section use; true edits the shared section source while retaining existing use overrides."},
     **SCOPE, "clipID": STRING, "sourceStart": {"type": "number", "minimum": 0}, "duration": {"type": "number", "exclusiveMinimum": 0}, "laneID": STRING, "nodeID": STRING, "trackID": STRING, "name": STRING,
     "stepIndex": {"type": "integer", "minimum": 0, "description": "Zero-based step in the MIDI circle, not within the visible page."},
     "subdivisions": {"type": "integer", "enum": [1, 2, 3, 4, 6, 8], "description": "Steps per quarter note; default 4. Does not quantize existing notes."},
@@ -83,8 +85,11 @@ OPERATION["oneOf"] = [
 ]
 OPERATION["properties"]["at"] = schema({"x": {"type": "number", "exclusiveMinimum": -10000000, "exclusiveMaximum": 10000000}, "y": {"type": "number", "exclusiveMinimum": -10000000, "exclusiveMaximum": 10000000}}, ["x", "y"])
 OPERATION["oneOf"].append({"type": "object", "properties": {"kind": {"enum": ["insert_section"]}}, "required": ["arrangementID", "useID", "name", "bars", "at"]})
-OPERATION["properties"]["kind"]["enum"].extend(ARRANGEMENT_OPERATIONS + ["select_arrangement", "insert_section"])
-OPERATION["description"] = "insert_section requires arrangementID, useID (insert after), name (1–120 trimmed characters), bars (1–4096), and at {x,y}; it atomically inserts a new section into a linear path, preserving editing selection. Branches, loops and non-default transitions fail without changes. duplicate_arrangement and rename_arrangement require explicit compositionID, arrangementID and name (1–120 characters after trimming whitespace). Duplicate shares section sources and assets, preserving every owner's playback choice and the editing canvas. Rename changes only the arrangement name. select_arrangement requires compositionID and arrangementID (no name needed); it deliberately changes the owner's playback choice and visible editing branch."
+OPERATION["oneOf"].append({"type": "object", "properties": {"kind": {"enum": ["edit_shared_audio"]},
+    "edit": {"type": "string", "enum": ["split", "duplicate", "fade", "delete"]}},
+    "required": ["patternID", "trackID", "clipID", "edit"]})
+OPERATION["properties"]["kind"]["enum"].extend(ARRANGEMENT_OPERATIONS + ["select_arrangement", "insert_section", "edit_shared_audio"])
+OPERATION["description"] = "edit_shared_audio requires patternID, trackID, clipID and edit (split/duplicate/fade/delete). patternID is rejected on other kinds; arrangementID/compositionID/nodeID/useID/laneID are rejected on edit_shared_audio. original is rejected on kinds other than set_automation. It edits the shared rhythm pattern across its uses; split uses sourceOffset seconds, duplicate uses beatOffset, fade uses fadeIn/fadeOut seconds, as in edit_audio. set_automation accepts original: omitted/false edits this use, true edits the shared section source and retains existing use overrides. insert_section requires arrangementID, useID (insert after), name (1–120 trimmed characters), bars (1–4096), and at {x,y}; it atomically inserts a new section into a linear path, preserving editing selection. Branches, loops and non-default transitions fail without changes. duplicate_arrangement and rename_arrangement require explicit compositionID, arrangementID and name (1–120 characters after trimming whitespace). Duplicate shares section sources and assets, preserving every owner's playback choice and the editing canvas. Rename changes only the arrangement name. select_arrangement requires compositionID and arrangementID (no name needed); it deliberately changes the owner's playback choice and visible editing branch."
 
 
 def tool(name, method, description, properties=None, required=(), write=False):
@@ -116,7 +121,7 @@ TOOLS = [
     tool("reconnect_ports", "reconnect_ports", "Replace one existing cable using its complete logical connectionID and two explicit endpoints. Preserves edge ID and gain; rejects cross-graph moves, cycles and duplicates atomically. Composition sequence cables cannot be reconnected.", {**PORT_PAIR, "connectionID": CONNECTION_ID}, (*PORT_PAIR, "connectionID"), True),
     tool("disconnect_ports", "disconnect_ports", "Disconnect the exact logical cable. One Undo; other section uses stay unchanged. Composition sequence cables cannot be disconnected.", {**LAYOUT_REVISION, "connectionID": CONNECTION_ID}, ("expectedLayoutRevision", "connectionID"), True),
     tool("move_ports", "move_ports", "Atomically place 1–128 distinct existing cables in eight directions. One layout Undo; changes layoutRevision only, preserving music and audio. Unchanged placements are a no-op.", {**LAYOUT_REVISION, "moves": {"type": "array", "items": PLACED_CONNECTION, "minItems": 1, "maxItems": 128}}, ("expectedLayoutRevision", "moves"), True),
-    tool("apply", "apply", "Atomically apply 1–128 edits as one Undo action. set_notes/generate_midi replace notes unless append=true. duplicate_arrangement/rename_arrangement require explicit compositionID, arrangementID and a name of 1–120 characters after trimming; duplicate shares section sources/assets while preserving playback choices and the editing canvas. select_arrangement requires compositionID and arrangementID and deliberately changes playback choice and the visible editing branch. Stable IDs are required; stale revisions fail without changes.", {"operations": {"type": "array", "items": OPERATION, "minItems": 1, "maxItems": 128}}, ("operations",), True),
+    tool("apply", "apply", "Atomically apply 1–128 edits as one Undo action. edit_shared_audio requires patternID, trackID, clipID and edit (split/duplicate/fade/delete), affecting all uses of the shared rhythm pattern; offsets and fades match edit_audio. set_automation original defaults to false (this use); true edits shared section source while retaining use overrides. set_notes/generate_midi replace notes unless append=true. duplicate_arrangement/rename_arrangement require explicit compositionID, arrangementID and a name of 1–120 characters after trimming; duplicate shares section sources/assets while preserving playback choices and the editing canvas. select_arrangement requires compositionID and arrangementID and deliberately changes playback choice and the visible editing branch. Stable IDs are required; stale revisions fail without changes.", {"operations": {"type": "array", "items": OPERATION, "minItems": 1, "maxItems": 128}}, ("operations",), True),
     tool("bounce", "bounce", "Start an asynchronous section track bounce including its internal effects and sidechain. Originals remain restorable; audio replaces output inputs. Read job until terminal state.", {**SCOPE, "trackID": STRING, "tailSeconds": TAIL_SECONDS}, ("useID", "trackID"), True),
     tool("restore_bounce", "restore_bounce", "Restore a bounced circle's original inputs; keep rendered audio as a disconnected archive.", {**SCOPE, "nodeID": STRING}, ("useID", "nodeID"), True),
     tool("export", "export", "Start asynchronous master WAV export, 48 kHz stereo 24-bit. Requires a NEW absolute .wav path. No file overwrite. Read job for completion and resolved tail/end-window measurements.", {"path": STRING, "tailSeconds": TAIL_SECONDS}, ("path",), True),
@@ -196,6 +201,19 @@ def rpc(path, request):
     raise ValueError("Reply exceeds 8 MiB")
 
 
+def validate_operation_scopes(operations):
+    for index, operation in enumerate(operations):
+        kind = operation["kind"]
+        if "original" in operation and kind != "set_automation":
+            raise ValueError(f"operations[{index}].original: supported only by set_automation")
+        if "patternID" in operation and kind != "edit_shared_audio":
+            raise ValueError(f"operations[{index}].patternID: supported only by edit_shared_audio")
+        if kind == "edit_shared_audio":
+            ambiguous = {"arrangementID", "compositionID", "nodeID", "useID", "laneID"}.intersection(operation)
+            if ambiguous:
+                raise ValueError(f"operations[{index}]: shared audio cannot include {', '.join(sorted(ambiguous))}")
+
+
 def call_tool(path, name, arguments, read_only=False):
     entry = BY_NAME.get(name)
     if entry is None:
@@ -203,6 +221,8 @@ def call_tool(path, name, arguments, read_only=False):
     if read_only and entry["method"] not in READ_METHODS:
         raise ValueError("This circlr session is read-only; submit an edit proposal to the coordinator.")
     validate(arguments, entry["inputSchema"])
+    if entry["method"] == "apply":
+        validate_operation_scopes(arguments["operations"])
     request = {"id": str(uuid.uuid4()), "method": entry["method"], "arguments": {k: v for k, v in arguments.items() if k not in REVISION}}
     for key in REVISION:
         if key in arguments:

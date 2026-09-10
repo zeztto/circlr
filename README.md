@@ -6,7 +6,9 @@ macOS용 앨범·송폼 궤도 편집기. **앨범 → 곡·악장 → 섹션 �
 
 연결 UI는 [서클 둘레 8방향 IN/OUT과 다중 입출력](docs/22-eight-direction-ports.md)으로 확장 중이다. 포트의 신호 의미와 연결점 배치를 분리한다. 아래 일반 사용법은 배포된 0.19 앱 기준이며 새 포트 기능은 독립 개발 브랜치에서 검증한다.
 
-현재 **`codex/daw-integration`의 0.20.0 build 124**에 녹음 lifecycle과 8방향·다중 bus·그룹 포트를 통합했다. 같은 캔버스의 연결 편집·녹음 상태·스텝·오토메이션이 공존하며, 녹음 시작·정리 중 음악 편집과 Undo의 경쟁을 차단한다. build 23의 실제 편집·바운스·Undo·저장/재열기·닫기 최소화 및 출력별 모션 검증은 [통합 QA](qa/daw-integration-review.md)에 기록했다.
+현재 **`codex/daw-integration`의 0.20.0 build 125**에 녹음 lifecycle과 8방향·다중 bus·그룹 포트를 통합했다. 같은 캔버스의 연결 편집·녹음 상태·스텝·오토메이션이 공존하며, 녹음 시작·정리 중 음악 편집과 Undo의 경쟁을 차단한다. build 23의 실제 편집·바운스·Undo·저장/재열기·닫기 최소화 및 출력별 모션 검증은 [통합 QA](qa/daw-integration-review.md)에 기록했다.
+
+**build125는 MCP에서 공유 오디오와 오토메이션의 원본/변형 범위를 명시한다.** 공유 clip의 분할·복제·fade·삭제와 각 Undo, A 원본/B override의 실제 UI 값을 확인했다. Core30개·MCP27개·Release73.17초를 통과했으며 저장/재열기·production 서명/UUID·독립14개 snapshot 감사도 통과했다. [계약과 검증](docs/144-agent-shared-audio-scope.md).
 
 **build124는 연결 화면에서 오토메이션으로, 파일 가져오기 뒤 새 파형으로 바로 전환한다.** 실제 ⌘5 전환·단일 WAV 가져오기·Undo·빈 이름 거절과 Release42.16초를 확인했다. 저장/재열기까지 확인했으며 production 서명·UUID와 독립 데이터 감사도 통과했다. 다음은 오토메이션·편곡 대안의 연속 작업이다. [검증 기록](docs/143-audio-automation-flow.md).
 

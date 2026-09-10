@@ -13,6 +13,66 @@ SPEC.loader.exec_module(server)
 
 
 class MCPTests(unittest.TestCase):
+    def test_shared_audio_edit_variants_forward_explicit_shared_target(self):
+        variants = [('split', {'sourceOffset': 0.5}), ('duplicate', {'beatOffset': 4}),
+                    ('fade', {'fadeIn': 0.1, 'fadeOut': 0.2}), ('delete', {})]
+        operations = [{'kind': 'edit_shared_audio', 'patternID': 'pattern', 'trackID': 'track',
+                       'clipID': 'clip', 'edit': edit, **extra} for edit, extra in variants]
+        args = {'projectID': 'p', 'expectedRevision': 8, 'operations': operations}
+        with patch.object(server, 'rpc', return_value={'ok': True}) as ipc:
+            self.assertFalse(server.call_tool('/qa.sock', 'circlr_apply', args)['isError'])
+            ipc.assert_called_once()
+            request = ipc.call_args.args[1]
+            self.assertEqual(request['method'], 'apply')
+            self.assertEqual(request['expectedRevision'], 8)
+            self.assertEqual(request['arguments']['operations'], operations)
+
+    def test_shared_audio_invalid_batch_never_reaches_ipc(self):
+        operation = {'kind': 'edit_shared_audio', 'patternID': 'pattern', 'trackID': 'track',
+                     'clipID': 'clip', 'edit': 'split', 'sourceOffset': 0.5}
+        invalids = [{k: v for k, v in operation.items() if k != key}
+                    for key in ('patternID', 'trackID', 'clipID', 'edit')]
+        invalids += [{**operation, key: value} for key, value in
+                     [('patternID', 4), ('edit', 'transpose'), ('sourceOffset', 0),
+                      ('sourceOffset', True), ('fadeIn', -1), ('fadeOut', float('nan')),
+                      ('beatOffset', 131073), ('command', 'ignored')]]
+        for invalid in invalids:
+            with self.subTest(invalid=invalid), patch.object(server, 'rpc') as ipc:
+                with self.assertRaises(ValueError):
+                    server.call_tool('/unused.sock', 'circlr_apply',
+                                     {'projectID': 'p', 'expectedRevision': 8, 'operations': [operation, invalid]})
+                ipc.assert_not_called()
+
+    def test_apply_rejects_ignored_or_ambiguous_scope_fields_before_ipc(self):
+        shared = {'kind': 'edit_shared_audio', 'patternID': 'pattern', 'trackID': 'track',
+                  'clipID': 'clip', 'edit': 'delete'}
+        invalids = [{**shared, key: 'other'} for key in ('arrangementID', 'compositionID', 'nodeID', 'useID', 'laneID')]
+        invalids += [{**shared, 'original': False},
+                     {'kind': 'edit_audio', 'patternID': 'pattern', 'edit': 'delete'},
+                     {'kind': 'set_track', 'original': False},
+                     {'kind': 'set_automation', 'patternID': 'pattern'}]
+        for operation in invalids:
+            with self.subTest(operation=operation), patch.object(server, 'rpc') as ipc:
+                with self.assertRaises(ValueError):
+                    server.call_tool('/unused.sock', 'circlr_apply',
+                                     {'projectID': 'p', 'expectedRevision': 8, 'operations': [shared, operation]})
+                ipc.assert_not_called()
+
+    def test_automation_original_scope_is_optional_boolean_and_not_injected(self):
+        operation = {'kind': 'set_automation', 'useID': 'use', 'nodeID': 'node',
+                     'parameter': 'gain', 'automationPoints': [{'beat': 0, 'value': 1}]}
+        for extra in ({}, {'original': False}, {'original': True}):
+            with self.subTest(extra=extra), patch.object(server, 'rpc', return_value={'ok': True}) as ipc:
+                server.call_tool('/qa.sock', 'circlr_apply',
+                                 {'projectID': 'p', 'expectedRevision': 8, 'operations': [{**operation, **extra}]})
+                self.assertEqual(ipc.call_args.args[1]['arguments']['operations'], [{**operation, **extra}])
+        for value in (0, 1, 'true', None):
+            with self.subTest(value=value), patch.object(server, 'rpc') as ipc:
+                with self.assertRaises(ValueError):
+                    server.call_tool('/unused.sock', 'circlr_apply',
+                                     {'projectID': 'p', 'expectedRevision': 8, 'operations': [{**operation, 'original': value}]})
+                ipc.assert_not_called()
+
     def test_insert_section_requires_explicit_valid_target_and_point(self):
         operation = {'kind': 'insert_section', 'arrangementID': 'arr', 'useID': 'after', 'name': '새 섹션', 'bars': 4, 'at': {'x': 500, 'y': 0}}
         base = {'projectID': 'p', 'expectedRevision': 1, 'operations': [operation]}
