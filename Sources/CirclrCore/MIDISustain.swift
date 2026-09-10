@@ -18,7 +18,7 @@ public struct MIDISustainEvent: Codable, Equatable, Sendable {
     }
 }
 
-/// Standalone source data only; Project storage, import, editing UI and rendering are not connected.
+/// Raw source data stored by Lane and RhythmPattern. SMF parsing, pedal DSP and editing UI are separate integrations.
 /// Equal-beat events retain their original order, including pedal-up/down transitions.
 public struct MIDISustainSequence: Codable, Equatable, Sendable {
     public var channel: Int

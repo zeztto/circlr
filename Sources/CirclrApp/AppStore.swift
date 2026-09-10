@@ -256,7 +256,7 @@ import CirclrAudio
     func lane(for trackID:ID)->Lane? {
         if let id = editPatternID, let pattern = project.patterns.first(where:{$0.id == id}) {
             var lane = Lane(trackID:pattern.trackID)
-            lane.id = pattern.id; lane.notes = pattern.notes; lane.audio = pattern.audio; lane.pitchBend = pattern.pitchBend
+            lane.id = pattern.id; lane.notes = pattern.notes; lane.audio = pattern.audio; lane.pitchBend = pattern.pitchBend; lane.sustain = pattern.sustain
             return lane
         }
         guard let use = selectedUse,let section = project.sections.first(where:{$0.id == use.sectionID}) else { return nil }
@@ -458,8 +458,9 @@ import CirclrAudio
         if let id = editPatternID {
             mutate("리듬 패턴 편집") { p in
                 guard let i=p.patterns.firstIndex(where:{$0.id == id}) else{return}
-                p.patterns[i].notes = lane.notes; p.patterns[i].audio = lane.audio; p.patterns[i].pitchBend = lane.pitchBend
+                p.patterns[i].notes = lane.notes; p.patterns[i].audio = lane.audio; p.patterns[i].pitchBend = lane.pitchBend; p.patterns[i].sustain = lane.sustain
                 try MIDIPitchBendStorage.promote(in:&p)
+                try MIDISustainStorage.promote(in:&p)
             }
             return
         }

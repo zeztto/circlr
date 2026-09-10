@@ -13,6 +13,35 @@ extension ProductionInstrument {
 }
 
 enum MIDIPitchBendRenderer {
+    static func hasPitchExpression(_ stream:MIDIPerformanceStream)->Bool {
+        stream.hasPitchBendExpression || stream.initialPitchBend.rawValue != 8192 ||
+        stream.initialPitchBend.range != MIDIPitchBendRange() || !stream.pitchBendStates.isEmpty
+    }
+    /// Until pedal DSP exists, valid all-off packets are effect-free; any down
+    /// transition must fail rather than silently shorten held notes.
+    static func validateSustain(_ streams:[MIDIPerformanceStream])throws {
+        var budget=0,ids=Set<ID>()
+        for stream in streams {
+            try Task.checkCancellation()
+            guard stream.notes.count<=500000,stream.pitchBendStates.count<=1_000_000,
+                  stream.sustainStates.count<=1_000_000 else {throw CirclrError("서스테인(Sustain) 연주 이벤트 수를 확인하세요")}
+            let cost=stream.notes.count*2+stream.pitchBendStates.count+stream.sustainStates.count+1
+            guard cost<=1_000_000-budget else {throw CirclrError("서스테인(Sustain)·피치 벤드 연주 이벤트가 너무 많습니다")}
+            budget+=cost
+            guard !stream.id.isEmpty,!stream.sourceNodeID.isEmpty,ids.insert(stream.id).inserted,
+                  (0...15).contains(stream.sourceChannel),stream.startSeconds.isFinite,stream.endSeconds.isFinite,
+                  stream.startSeconds>=0,stream.endSeconds>stream.startSeconds,
+                  (0...127).contains(stream.initialSustain.rawValue) else {throw CirclrError("서스테인(Sustain) 연주 초기값·시간을 확인하세요")}
+            var previous=stream.startSeconds,down=stream.initialSustain.isDown
+            for (index,event) in stream.sustainStates.enumerated() {
+                if index%256==0 {try Task.checkCancellation()}
+                guard event.seconds.isFinite,event.seconds>=previous,event.seconds<stream.endSeconds,
+                      (0...127).contains(event.state.rawValue) else {throw CirclrError("서스테인(Sustain) 연주 값·시간순서·범위를 확인하세요")}
+                previous=event.seconds;down = down || event.state.isDown
+            }
+            if down {throw CirclrError("서스테인(Sustain)(CC64) 오디오 렌더는 아직 지원하지 않습니다. 페달 표현을 제거한 뒤 렌더하세요")}
+        }
+    }
     private struct NoteKey:Hashable {
         let id:ID; let beat:Double; let length:Double; let pitch:Int; let velocity:Int
         init(_ note:Note) {id=note.id;beat=note.beat;length=note.length;pitch=note.pitch;velocity=note.velocity}
@@ -31,6 +60,7 @@ enum MIDIPitchBendRenderer {
             throw CirclrError("신스 연주 event 수·렌더 block 크기를 확인하세요")
         }
         guard patch.engineVersion>=2 || !automation.contains(where:{$0.parameter == .synthResonance}) else {throw CirclrError("Resonance 오토메이션은 내장 신스 engine 2·3에서만 지원합니다")}
+        try validateSustain(performances)
         let frames=try ProductionInstrument.frameCount(clock:clock,tail:tail)
         var budget=notes.count*2, available:[NoteKey:Int]=[:]
         for note in notes {
@@ -53,6 +83,8 @@ enum MIDIPitchBendRenderer {
             }
             guard stream.pitchBendStates.count<=1_000_000-budget-1 else {throw CirclrError("피치 벤드 연주 event가 너무 많습니다")}
             budget+=1+stream.pitchBendStates.count
+            guard stream.sustainStates.count<=1_000_000-budget else {throw CirclrError("서스테인(Sustain)·피치 벤드 연주 이벤트가 너무 많습니다")}
+            budget+=stream.sustainStates.count
             try validateState(stream.initialPitchBend)
             allCenter = allCenter && stream.initialPitchBend.semitones == 0
             var previous=stream.startSeconds

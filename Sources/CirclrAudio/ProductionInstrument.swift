@@ -42,7 +42,8 @@ public enum ProductionInstrument {
         guard instrument.kind == .synthesizer || !automation.contains(where:{$0.parameter == .synthCutoff || $0.parameter == .synthResonance}) else {
             throw CirclrError("필터 cutoff·resonance 오토메이션은 내장 신스에만 적용할 수 있습니다")
         }
-        guard performances.isEmpty || instrument.kind == .synthesizer else { throw CirclrError("피치 벤드 연주는 내장 신스에서만 렌더할 수 있습니다") }
+        try MIDIPitchBendRenderer.validateSustain(performances)
+        guard !performances.contains(where:MIDIPitchBendRenderer.hasPitchExpression) || instrument.kind == .synthesizer else { throw CirclrError("피치 벤드 연주는 내장 신스에서만 렌더할 수 있습니다") }
         if instrument.kind == .synthesizer {
             if !performances.isEmpty { return try synth(notes,patch:instrument.synth ?? SynthPatch(),clock:clock,tail:tail,automation:automation,performances:performances) }
             return try synth(notes,patch:instrument.synth ?? SynthPatch(),clock:clock,tail:tail,automation:automation)

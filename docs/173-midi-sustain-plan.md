@@ -1,6 +1,6 @@
 # MIDI 서스테인 페달의 저장·연주·편집 계약
 
-기준: build149 커밋 `67f9643` 이후의 소스 조사. 이번 단계는 독립 Core 상태 타입과 검증을 추가한다. 프로젝트 저장·SMF 가져오기·DSP·GUI/MCP 연결은 아래 후속 단계이며, 앱에서 페달을 사용할 수 있다는 의미가 아니다. 설치 앱과 build 번호는 유지한다.
+기준: build149 커밋 `67f9643` 이후의 소스 조사. 최초 단계는 독립 Core 상태 타입과 검증이다. 이후 프로젝트 저장·컴파일·출력 거절 경계는 [검증174](174-midi-sustain-storage.md)에서 연결했다. SMF parser·DSP·GUI/MCP는 아래 후속 단계이며, 앱에서 페달 연주·편집이 가능하다는 의미가 아니다. 설치 앱과 build 번호는 유지한다.
 
 ## 해결할 문제와 근거
 
@@ -14,7 +14,7 @@
 - sequence는 Codable·Equatable·Sendable이며 channel 0…15, initialValue 기본 0, raw 0…127, finite beat 0…131072, 최대 100000개 이벤트를 허용한다. 내림차순은 거절하고 같은 beat의 배열 순서는 보존한다.
 - `validate()`는 전체 시퀀스를 검증한다. `state(atBeat:)`도 조회 뒤쪽의 잘못된 이벤트를 숨기지 않는다. 반환은 조회 시점까지의 최종 hold 상태이며 입력을 변경하지 않는다. O(event count) 편의 API이므로 sample별 렌더에 호출하지 않는다.
 - 최종 상태 조회와 원본 이벤트 처리는 다르다. 같은 시점의 127→0→127에는 이미 건반을 놓은 음의 release가 포함될 수 있으므로 renderer가 마지막 값 하나로 합치면 안 된다.
-- 독립 타입만 추가하는 현재 단계는 `Project`, schema, 앱 UI, MIDI 파일, 기존 PCM 경로를 바꾸지 않는다. nil과 명시적인 초기 off 시퀀스의 구분은 후속 optional 저장 연결에서 유지한다.
+- 독립 타입만 추가한 최초 단계는 `Project`, schema, 앱 UI, MIDI 파일, 기존 PCM 경로를 바꾸지 않는다. nil과 명시적인 초기 off 시퀀스의 구분은 후속 optional 저장 연결에서 유지한다.
 
 ## 후속 단계와 파일 담당
 

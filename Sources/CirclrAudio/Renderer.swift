@@ -146,21 +146,21 @@ public enum ArrangementRenderer {
             if let graph=occurrence.signalPlan {
                 try SectionGraphRenderer.validatePitchBendSupport(graph,project:project,outputTracks:audibleTracks)
             } else {
-                for lane in occurrence.lanes where audibleTracks.contains(lane.trackID) && lane.pitchBend != nil {
-                    if lane.notes.contains(where:{$0.beat<occurrence.clock.beats}) {throw SectionGraphRenderer.unsupportedPitchBend()}
+                for lane in occurrence.lanes where audibleTracks.contains(lane.trackID) && (lane.pitchBend != nil || lane.sustain != nil) {
+                    if lane.notes.contains(where:{$0.beat<occurrence.clock.beats}) {throw CirclrError("이 연주 경로는 MIDI 피치 벤드·서스테인 표현을 지원하지 않습니다")}
                 }
                 if let id=occurrence.context.rhythm.patternID,let pattern=project.patterns.first(where:{$0.id==id}),
-                   audibleTracks.contains(pattern.trackID),pattern.pitchBend != nil,
+                   audibleTracks.contains(pattern.trackID),(pattern.pitchBend != nil || pattern.sustain != nil),
                    pattern.notes.contains(where:{$0.beat<min(pattern.length,occurrence.clock.beats)}) {
-                    throw SectionGraphRenderer.unsupportedPitchBend()
+                    throw CirclrError("이 연주 경로는 MIDI 피치 벤드·서스테인 표현을 지원하지 않습니다")
                 }
             }
         }
         for transition in plan.transitions where transition.duration>0 {
             if let id=transition.transition.patternID,let pattern=project.patterns.first(where:{$0.id==id}),
-               audibleTracks.contains(pattern.trackID),pattern.pitchBend != nil,
+               audibleTracks.contains(pattern.trackID),(pattern.pitchBend != nil || pattern.sustain != nil),
                pattern.notes.contains(where:{$0.beat<min(pattern.length,transition.duration*transition.context.tempo/60)}) {
-                throw SectionGraphRenderer.unsupportedPitchBend()
+                throw CirclrError("이 연주 경로는 MIDI 피치 벤드·서스테인 표현을 지원하지 않습니다")
             }
         }
     }

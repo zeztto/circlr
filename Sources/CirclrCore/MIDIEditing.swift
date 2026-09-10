@@ -55,7 +55,8 @@ public struct MIDIImportPart {
     public var notes:[Note]
     public var drums:Bool
     public var pitchBend:MIDIPitchBendSequence?
-    public init(name:String,notes:[Note],drums:Bool=false,pitchBend:MIDIPitchBendSequence?=nil){self.name=name;self.notes=notes;self.drums=drums;self.pitchBend=pitchBend}
+    public var sustain:MIDISustainSequence?
+    public init(name:String,notes:[Note],drums:Bool=false,pitchBend:MIDIPitchBendSequence?=nil,sustain:MIDISustainSequence?=nil){self.name=name;self.notes=notes;self.drums=drums;self.pitchBend=pitchBend;self.sustain=sustain}
 }
 public enum MIDIImportEditing {
     /// Adds independent MIDI circles to one use in a single transaction, preserving all existing lanes.
@@ -79,6 +80,10 @@ public enum MIDIImportEditing {
             if var expression=part.pitchBend {
                 for index in expression.events.indices {expression.events[index].beat+=atBeat}
                 try expression.validate();lane.pitchBend=expression
+            }
+            if var expression=part.sustain {
+                for index in expression.events.indices {expression.events[index].beat+=atBeat}
+                try expression.validate();lane.sustain=expression
             }
             try ProjectEditing.setLane(lane,for:useID,original:false,in:&p);ids.append(lane.id)
             if let position,!p.usesOrbits,let definition=p.sections.first(where:{$0.id==section.id}),

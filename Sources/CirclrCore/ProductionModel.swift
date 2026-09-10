@@ -114,6 +114,7 @@ public enum MIDIGenerator {
 public enum MIDIFile {
     /// Preserves source expression with independent melodic MIDI channels.
     public static func encode(sources:[(String,Lane)],tempo:Double,meter:Meter,tempoChanges:[TempoChange]=[])throws->Data {
+        guard !sources.contains(where:{$0.1.sustain != nil}) else {throw CirclrError("서스테인 MIDI 파일 저장은 아직 지원하지 않습니다. 페달 표현을 보존할 수 없습니다")}
         if tempoChanges.isEmpty && !sources.contains(where:{$0.1.pitchBend != nil}) {
             return try encode(lanes:sources.map{($0.0,$0.1.notes)},tempo:tempo,meter:meter)
         }

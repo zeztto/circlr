@@ -11,7 +11,7 @@ public struct SectionSignalPlan {
     public var connections: [MusicBusConnection] = []
     public var automation:[ID:[AutomationPlan]] = [:]
     public var eventCount: Int {
-        midiPerformances.values.reduce(0) { $0 + $1.reduce(0) { $0 + 1 + $1.pitchBendStates.count } } +
+        midiPerformances.values.reduce(0) { $0 + $1.reduce(0) { $0 + 1 + $1.pitchBendStates.count + $1.sustainStates.count } } +
         automation.values.reduce(0){$0+$1.reduce(0){$0+$1.spans.count}} + midi.values.reduce(0) { $0 + $1.count } +
         orderedNodes.reduce(0) { $0 + (audio[$1.id]?.count ?? 0) * $1.repeatCount }
     }
@@ -46,8 +46,8 @@ public enum SectionGraphCompiler {
             case .midi(let laneID):
                 guard let lane = lanes.first(where: { $0.id == laneID }) else { throw CirclrError("\(node.name)의 MIDI 연주 원본을 찾을 수 없습니다") }
                 plan.midi[node.id] = try scheduledNotes(lane.notes, node: node, context: resolved, parentClock: clock)
-                if let bend = lane.pitchBend {
-                    plan.midiPerformances[node.id] = try performanceStreams(notes: lane.notes, sequence: bend, grid: resolved.beatGrid, node: node, context: resolved, parentClock: clock)
+                if lane.pitchBend != nil || lane.sustain != nil {
+                    plan.midiPerformances[node.id] = try performanceStreams(notes: lane.notes, sequence: lane.pitchBend, sustain: lane.sustain, grid: resolved.beatGrid, node: node, context: resolved, parentClock: clock)
                 }
             case .audio(let laneID, let clipID):
                 guard let clip = lanes.first(where: { $0.id == laneID })?.audio.first(where: { $0.id == clipID }) else { throw CirclrError("\(node.name)의 오디오 clip을 찾을 수 없습니다") }
@@ -67,8 +67,8 @@ public enum SectionGraphCompiler {
                 let expanded = try expandedPatternNotesOnly(pattern, length: clock.beats, grid: resolved.beatGrid)
                 if case .rhythmMIDI = node.content {
                     plan.midi[node.id] = try scheduledNotes(expanded.notes, node: node, context: resolved, parentClock: clock)
-                    if let bend = pattern.pitchBend {
-                        plan.midiPerformances[node.id] = try performanceStreams(notes: pattern.notes, sequence: bend, patternLength: pattern.length, grid: resolved.beatGrid, node: node, context: resolved, parentClock: clock)
+                    if pattern.pitchBend != nil || pattern.sustain != nil {
+                        plan.midiPerformances[node.id] = try performanceStreams(notes: pattern.notes, sequence: pattern.pitchBend, sustain: pattern.sustain, patternLength: pattern.length, grid: resolved.beatGrid, node: node, context: resolved, parentClock: clock)
                     }
                 } else { plan.audio[node.id] = expanded.audio }
             }
@@ -105,7 +105,7 @@ public enum SectionGraphCompiler {
     }
 
     public static func expandedPattern(_ pattern: RhythmPattern, length: Double, grid: BeatGrid) throws -> Lane {
-        guard pattern.pitchBend == nil else { throw CirclrError("피치 벤드 패턴은 독립 MIDI 연주 stream으로 준비해야 합니다") }
+        guard pattern.pitchBend == nil,pattern.sustain == nil else { throw CirclrError("피치 벤드·sustain 패턴은 독립 MIDI 연주 stream으로 준비해야 합니다") }
         return try expandedPatternNotesOnly(pattern, length: length, grid: grid)
     }
 

@@ -16,6 +16,7 @@ public enum SectionGraphRenderer {
                               observeOutput: ((MusicBusEndpoint, PCM) -> Void)? = nil) async throws -> [ID: PCM] {
         try validatePitchBendSupport(plan,project:project,applyOutputGain:applyOutputGain,outputTracks:audibleTrackIDs)
         let expressionTargets=audibleExpressionInstruments(plan,project:project,applyOutputGain:applyOutputGain,outputTracks:audibleTrackIDs)
+        let expressionSources=audiblePerformanceSources(plan,project:project,applyOutputGain:applyOutputGain,outputTracks:audibleTrackIDs)
         let frames = try RenderTailPlanner.frameCount(bodySeconds: clock.seconds, tailSeconds: tail)
         guard Double(frames) * 8 * Double(workingBufferCount(plan)) < 1_073_741_824 else {
             throw CirclrError("섹션 내부 오디오가 준비 가능한 메모리 범위를 넘습니다")
@@ -68,9 +69,10 @@ public enum SectionGraphRenderer {
                     guard let track = project.tracks.first(where: { $0.id == trackID }) else { throw CirclrError("서클의 악기를 찾을 수 없습니다") }
                     let midiInputs=plan.connections.filter { $0.to.nodeID == node.id && $0.signal == .midi }
                     let notes=midiInputs.flatMap { plan.midi[$0.from.nodeID] ?? [] }
-                    let performances=midiInputs.flatMap { plan.midiPerformances[$0.from.nodeID] ?? [] }
+                    let storedPerformances=midiInputs.flatMap { plan.midiPerformances[$0.from.nodeID] ?? [] }
+                    let performances=midiInputs.filter{expressionSources.contains($0.from.nodeID)}.flatMap { plan.midiPerformances[$0.from.nodeID] ?? [] }
                     let overrideHost = node.settings.tempo.source != .inherit || node.settings.meter.source != .inherit
-                    if performances.isEmpty || track.instrument.kind == .synthesizer || expressionTargets.contains(node.id) {
+                    if storedPerformances.isEmpty || expressionTargets.contains(node.id) {
                     local = try await ProductionInstrument.render(notes, instrument: track.instrument, project: project, root: root, clock: clock, tail: tail,
                                                                hostContext: overrideHost ? plan.contexts[node.id] : nil,automation:plan.automation[node.id] ?? [],performances:performances)
                     }
@@ -121,13 +123,16 @@ public enum SectionGraphRenderer {
     static func validatePitchBendSupport(_ plan:SectionSignalPlan,project:Project,applyOutputGain:Bool=true,
                                          outputTracks:Set<ID>?=nil)throws {
         let needed=audibleExpressionInstruments(plan,project:project,applyOutputGain:applyOutputGain,outputTracks:outputTracks)
+        let sources=audiblePerformanceSources(plan,project:project,applyOutputGain:applyOutputGain,outputTracks:outputTracks)
+        try MIDIPitchBendRenderer.validateSustain(sources.flatMap{plan.midiPerformances[$0] ?? []})
         for node in plan.orderedNodes where needed.contains(node.id) {
-            if case .instrument(let trackID)=node.content,
+            let packets=plan.connections.filter{$0.signal == .midi && $0.to.nodeID==node.id && sources.contains($0.from.nodeID)}.flatMap{plan.midiPerformances[$0.from.nodeID] ?? []}
+            if packets.contains(where:MIDIPitchBendRenderer.hasPitchExpression),case .instrument(let trackID)=node.content,
                project.tracks.first(where:{$0.id==trackID})?.instrument.kind != .synthesizer {throw unsupportedPitchBend()}
         }
     }
-    private static func audibleExpressionInstruments(_ plan:SectionSignalPlan,project:Project,applyOutputGain:Bool,
-                                                     outputTracks:Set<ID>?)->Set<ID> {
+    private static func audiblePerformanceSources(_ plan:SectionSignalPlan,project:Project,applyOutputGain:Bool,
+                                                   outputTracks:Set<ID>?,sourceIDs:Bool=true)->Set<ID> {
         var audiblePlan=plan,tracks=project.tracks
         // This renderer returns pre-track PCM. Track mute/gain belong to its arrangement caller.
         for i in tracks.indices {tracks[i].muted=false;tracks[i].gain=1}
@@ -143,11 +148,11 @@ public enum SectionGraphRenderer {
         let instruments=Set(plan.orderedNodes.compactMap{node -> ID? in
             if case .instrument=node.content {return node.id};return nil
         })
-        var result=Set<ID>()
-        for edge in paths.connections.values where edge.signal == .midi && instruments.contains(edge.to.nodeID) {
-            if !(plan.midiPerformances[edge.from.nodeID] ?? []).isEmpty {result.insert(edge.to.nodeID)}
-        }
-        return result
+        return Set(paths.connections.values.filter{$0.signal == .midi && instruments.contains($0.to.nodeID) && !(plan.midiPerformances[$0.from.nodeID] ?? []).isEmpty}.map{sourceIDs ? $0.from.nodeID:$0.to.nodeID})
+    }
+    private static func audibleExpressionInstruments(_ plan:SectionSignalPlan,project:Project,applyOutputGain:Bool,
+                                                     outputTracks:Set<ID>?)->Set<ID> {
+        audiblePerformanceSources(plan,project:project,applyOutputGain:applyOutputGain,outputTracks:outputTracks,sourceIDs:false)
     }
     static func unsupportedPitchBend()->CirclrError {
         CirclrError("이 악기 또는 연주 경로는 피치 벤드 오디오 렌더를 아직 지원하지 않습니다.")

@@ -66,7 +66,7 @@ build131은 [MIDI tempo import 계획](151-midi-tempo-import-plan.md)의 기본 
 
 MIDI CC/페달/피치 벤드·tempo map은 노트 import와 다른 이벤트·시간 계약이 필요하다. 기존 파일을 여는 것만으로 재해석하지 않으며 가져오기 전 적용 범위를 설명한다. 오디오 crossfade·comping·time warp, 실시간 automation write/touch/latch, punch/loop 녹음은 원본/테이크·공통 clock·취소 수명에 의존하므로 독립 체크박스로 쌓지 않는다. [기본 DAW 계획](31-daw-basics-plan.md)의 남은 조건을 유지한다.
 
-build149 이후 [서스테인 계약173](173-midi-sustain-plan.md)을 수립하고 독립 `MIDISustainSequence`의 raw CC64·순서·조회 검증을 구현했다. 신규 6개와 기존 bend 8개, 총 14개 테스트가 통과했다. 다음은 optional 저장/schema7·공유 복사·단일 source/occurrence stream·미지원 출력 거절을 함께 연결하는 단계다. 아직 프로젝트 저장이나 앱의 페달 연주·편집을 지원하는 것은 아니다.
+build149 이후 [서스테인 계약173](173-midi-sustain-plan.md)의 독립 타입에 이어 optional 저장/schema7·공유 복사·단일 source/occurrence stream·미지원 출력 거절을 연결했다. [저장 검증174](174-midi-sustain-storage.md)에서 전체 Core+선별 Audio 618개·실패0개와 실제 패키지 저장/재열기를 확인했다. 다음은 owned voice의 pedal key-off 보류·해제 DSP와 반복 종료 경계다. 실제 페달 연주·SMF parser·GUI/MCP 편집은 아직 지원하지 않는다.
 
 **완료 증거:** GUI/MCP 동등 편집·atomic stale 거절·Undo/저장 호환, 변박·반복·공유 원본의 시간 검증, 렌더된 PCM에서 의도한 파라미터 변화, native 편집 동선과 경계 오류 안내. 실시간 기능은 1번의 clock·실제 소리 검증까지 통과해야 완료다.
 

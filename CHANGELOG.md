@@ -1,10 +1,16 @@
 # 변경 이력
 
+## 개발 중 — build149 이후 MIDI 서스테인 저장·컴파일
+
+- optional sustain과 schema7, 공유 패턴·테이크 복사, typed import의 offset·길이·이벤트 예산을 연결했다. 반복별 bend/sustain은 하나의 source stream으로 준비한다.
+- 활성 페달의 미지원 렌더와 원본 raw를 버릴 MIDI 저장을 거절한다. all-off PCM·기존 pitch 경계와 비기여 route 보관을 유지한다.
+- 전체 Core+선별 Audio 618개·실패0개, 실제 패키지 저장/재열기와 독립 소스 리뷰를 확인했다. 페달 DSP·SMF parser·GUI/MCP는 후속 범위다. [검증 기록](docs/174-midi-sustain-storage.md).
+
 ## 개발 중 — build149 이후 MIDI 서스테인 Core 기초
 
 - 독립 CC64 sequence·raw 상태·순서 보존·전체 입력 검증과 상태 조회를 추가했다. 같은 beat의 pedal-up/down 이벤트를 합치지 않는다.
 - 신규 Sustain 6개와 기존 PitchBend 8개 검사, 총 14개·실패 0개 및 독립 소스 리뷰를 확인했다. 앱 build·프로젝트 schema는 유지한다.
-- 저장·컴파일·DSP·SMF·GUI/MCP 연결은 [후속 계획](docs/173-midi-sustain-plan.md)이다. 앱의 페달 지원·native 화면·실제 연주를 검증한 단계는 아니다.
+- 당시 저장·컴파일·DSP·SMF·GUI/MCP 연결은 [후속 계획](docs/173-midi-sustain-plan.md)이었다. 저장·컴파일의 후속 구현은 위 최신 기록에 구분했다. 앱의 페달 지원·native 화면·실제 연주를 검증한 단계는 아니다.
 
 ## 검증 완료 — build149 오토메이션 안내와 compact 편집
 

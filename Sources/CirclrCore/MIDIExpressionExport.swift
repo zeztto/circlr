@@ -5,6 +5,7 @@ import Foundation
 enum MIDIExpressionExport {
     private struct Event {let tick:Int;let priority:Int;let order:Int;let bytes:[UInt8]}
     static func encode(sources:[(String,Lane)],tempo:Double,meter:Meter,tempoChanges:[TempoChange])throws->Data {
+        guard !sources.contains(where:{$0.1.sustain != nil}) else {throw CirclrError("서스테인 MIDI 파일 저장은 아직 지원하지 않습니다. 페달 표현을 보존할 수 없습니다")}
         let expressive=sources.contains{$0.1.pitchBend != nil}
         guard sources.count<256,(!expressive || sources.count<=15),
               [1,2,4,8,16,32].contains(meter.denominator),(1...32).contains(meter.numerator),tempoChanges.count<4096 else {
