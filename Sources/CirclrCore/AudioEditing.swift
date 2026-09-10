@@ -52,6 +52,33 @@ public struct AudioClipTiming {
     public func time(_ beat:Double)->Double {ownTempo ? clock.seconds(at:node.startBeat)+beat*60/context.tempo:clock.seconds(at:node.startBeat+beat)}
     public func beat(at time:Double)->Double {ownTempo ? (time-clock.seconds(at:node.startBeat))*context.tempo/60:clock.beat(atSeconds:time)-node.startBeat}
     public func rate(_ clip:AudioClip)->Double {clip.followsTempo ? (ownTempo ? context.tempo:clock.bpm(at:node.startBeat+clip.beat))/clip.sourceBPM:1}
+    /// The renderer uses one stretch rate for every repetition. Only audible,
+    /// half-open source spans must share that rate; tempo changes in silence do not matter.
+    public func validateTempoFollowing(_ clip:AudioClip,renderEndSeconds:Double?=nil)throws {
+        guard clip.followsTempo,!ownTempo,clock.tempos.count>1 else{return}
+        let speed=rate(clip),baseBPM=clock.bpm(at:node.startBeat+clip.beat)
+        guard speed.isFinite,speed>0,clip.duration.isFinite,clip.duration>0,
+              (1...256).contains(node.repeatCount) else{throw CirclrError("오디오 템포와 반복 구간을 확인하세요")}
+        let renderedEnd=renderEndSeconds ?? clock.seconds
+        guard renderedEnd.isFinite,renderedEnd>=0 else{throw CirclrError("오디오 재생 구간을 확인하세요")}
+        let epsilon=1e-9 // Numerical boundary tolerance, far below one 48 kHz frame.
+        let changes=clock.tempos.map{(seconds:clock.seconds(at:$0.beat),bpm:$0.bpm)}
+        for iteration in 0..<node.repeatCount {
+            if let length=node.lengthBeats,clip.beat>=length {break}
+            let start=position(clip,iteration:iteration)
+            guard start.isFinite else{throw CirclrError("오디오 재생 구간을 확인하세요")}
+            if start>=clock.seconds {break}
+            let limit:Double
+            if let length=node.lengthBeats {limit=min(clock.seconds,time(Double(iteration+1)*length))}
+            else {limit=clip.preservesTail == true ? renderedEnd:clock.seconds}
+            let end=min(limit,start+clip.duration/speed)
+            if end<=start {continue}
+            let bpm=changes.last(where:{$0.seconds<=start+epsilon})?.bpm ?? baseBPM
+            guard bpm==baseBPM,!changes.contains(where:{$0.seconds>start+epsilon && $0.seconds<end-epsilon && $0.bpm != baseBPM}) else {
+                throw CirclrError("오디오 재생 구간이나 반복 사이의 템포가 바뀝니다. 개별 서클 템포를 지정하세요")
+            }
+        }
+    }
     /// Shared preflight for UI and mutation; source duration, repeats and explicit loop length agree.
     public func duplicateBeat(_ clip:AudioClip,offset:Double?=nil)throws->Double {
         let speed=rate(clip)
@@ -107,7 +134,7 @@ public enum AudioEditing {
             if shared {clip.id=newID();lane.audio.append(clip);graph.nodes[index].content = .audio(laneID:laneID,clipID:clip.id)}else{lane.audio[ci]=clip}
         case .split(let offset):
             guard offset.isFinite,offset>0,offset<clip.duration else{throw CirclrError("분할 위치를 선택 구간 안에 지정하세요")}
-            guard !clip.followsTempo || timing.ownTempo || clock.tempos.count==1 else{throw CirclrError("변화하는 tempo map의 오디오는 개별 서클 tempo를 지정하세요")}
+            try timing.validateTempoFollowing(clip)
             let seconds=(offset/rate*48000).rounded()/48000,cut=seconds*rate
             guard cut>0,cut<clip.duration,timing.time(clip.beat)+seconds<clock.seconds,
                   node.lengthBeats.map({timing.time(clip.beat)+seconds<timing.time($0)}) ?? true else{throw CirclrError("분할 위치가 서클의 재생 구간 밖입니다")}

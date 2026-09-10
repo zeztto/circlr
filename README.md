@@ -6,7 +6,9 @@ macOS용 앨범·송폼 궤도 편집기. **앨범 → 곡·악장 → 섹션 �
 
 연결 UI는 [서클 둘레 8방향 IN/OUT과 다중 입출력](docs/22-eight-direction-ports.md)으로 확장 중이다. 포트의 신호 의미와 연결점 배치를 분리한다. 아래 일반 사용법은 배포된 0.19 앱 기준이며 새 포트 기능은 독립 개발 브랜치에서 검증한다.
 
-현재 **`codex/daw-integration`의 0.20.0 build 112**에 녹음 lifecycle과 8방향·다중 bus·그룹 포트를 통합했다. 같은 캔버스의 연결 편집·녹음 상태·스텝·오토메이션이 공존하며, 녹음 시작·정리 중 음악 편집과 Undo의 경쟁을 차단한다. build 23의 실제 편집·바운스·Undo·저장/재열기·닫기 최소화 및 출력별 모션 검증은 [통합 QA](qa/daw-integration-review.md)에 기록했다.
+현재 **`codex/daw-integration`의 0.20.0 build 113**에 녹음 lifecycle과 8방향·다중 bus·그룹 포트를 통합했다. 같은 캔버스의 연결 편집·녹음 상태·스텝·오토메이션이 공존하며, 녹음 시작·정리 중 음악 편집과 Undo의 경쟁을 차단한다. build 23의 실제 편집·바운스·Undo·저장/재열기·닫기 최소화 및 출력별 모션 검증은 [통합 QA](qa/daw-integration-review.md)에 기록했다.
+
+**build113은 실제 오디오 클립 구간의 BPM 검사와 빠른 편곡 입력을 개선했다.** 일정 구간의 Core split·legacy/graph render를 허용하고 실제 변화 교차·반복 시작 BPM 불일치는 거절한다. 선택 트랙은 필요한 endpoint만 렌더한다. Release 73.53초·관련 테스트 16개(tempo 13개 포함)·오디오 checker 9개 capture와 실제 28초 stereo 48 kHz WAV를 확인했다. 빠른 편곡 입력 9개 capture와 strict 재열기·disk 대조도 통과했다. JPG 10장·AX 시각 검토는 짧은 파형 라벨 간격과 reset 상세 스크롤의 경미한 개선점을 남겼다. 실제 B 복제 commit·IME는 미검증이며 물리 출력 attempt는 0이다. [계약](docs/129-audio-tempo-regions-and-arrangement-input.md).
 
 **build112는 현재 편곡 복제 후 정확한 클립·오토메이션을 계속 편집하도록 연결했다.** ⇧⌘E로 복제 대상에 복귀하고 이번 사용 scope와 오토메이션 point를 유지한다. Release83.26초·Core13개·checker24개 snapshot·source review·시각7장 검토를 통과했다. 복제본 음악·원본 보존·audio/automation 복귀·Undo/재열기·noIO를 확인했다. 빠른 복제 직후 rename/다음 clone 단축키의 검색 입력·포커스와 clipboard timeout은 후속 과제로 남긴다. stale는 disabled no-op 검증이며 MIDI continuation UI는 native 미검증이며 Core에서는 주소 mapping을 확인했다. nonempty 그룹/색상 native도 미검증이다. 물리 출력은 stub으로 차단했고 QA 종료 후 사용자 PID86114만 유지했다. [계약](docs/128-arrangement-continuation.md).
 

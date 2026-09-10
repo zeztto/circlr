@@ -22,6 +22,94 @@ final class AudioClipEditingTests:XCTestCase {
         XCTAssertEqual(a.count,b.count)
         return max(zip(a.left,b.left).map{abs($0-$1)}.max() ?? 0,zip(a.right,b.right).map{abs($0-$1)}.max() ?? 0)
     }
+    func testTempoFollowingConstantRegionRendersAndSplitPreservesPCM() async throws {
+        let root=FileManager.default.temporaryDirectory.appendingPathComponent("circlr-tempo-region-"+newID())
+        defer { try? FileManager.default.removeItem(at:root) }
+        var p=try fixture(root)
+        p.global.tempo=120
+        p.sections[0].tempoChanges=[TempoChange(beat:6,bpm:140)]
+        p.sections[0].lanes[0].audio[0].followsTempo=true
+        p.sections[0].lanes[0].audio[0].sourceBPM=120
+        let node=try XCTUnwrap(p.sections[0].graph?.nodes.first { if case .audio=$0.content {return true}; return false })
+        let before=try await render(p)
+        XCTAssertGreaterThan(before.left.map {abs($0)}.max() ?? 0,0.01)
+        _=try AudioEditing.apply(.split(sourceOffset:0.427),nodeID:node.id,useID:p.active.uses[0].id,in:&p)
+        let after=try await render(p)
+        XCTAssertLessThanOrEqual(difference(before,after),0.0000002)
+    }
+    func testRepeatedConstantSpansAcrossSilentTempoGapPreserveSplitPCM() async throws {
+        let root=FileManager.default.temporaryDirectory.appendingPathComponent("circlr-tempo-repeat-"+newID())
+        defer { try? FileManager.default.removeItem(at:root) }
+        var p=try fixture(root);p.global.tempo=120
+        p.sections[0].tempoChanges=[TempoChange(beat:1.75,bpm:140),TempoChange(beat:2.5,bpm:120)]
+        p.sections[0].lanes[0].audio[0].followsTempo=true
+        p.sections[0].lanes[0].audio[0].sourceBPM=120
+        p.sections[0].lanes[0].audio[0].beat=0.25
+        p.sections[0].lanes[0].audio[0].duration=0.4
+        let ni=try XCTUnwrap(p.sections[0].graph?.nodes.firstIndex {if case .audio=$0.content{return true};return false})
+        p.sections[0].graph!.nodes[ni].startBeat=0.5
+        p.sections[0].graph!.nodes[ni].lengthBeats=2
+        p.sections[0].graph!.nodes[ni].repeatCount=2
+        let node=p.sections[0].graph!.nodes[ni].id,use=p.active.uses[0].id
+        let before=try await render(p)
+        let right=try XCTUnwrap(AudioEditing.apply(.split(sourceOffset:0.2),nodeID:node,useID:use,in:&p))
+        _=try AudioEditing.apply(.split(sourceOffset:0.1),nodeID:right,useID:use,in:&p)
+        let after=try await render(p)
+        XCTAssertLessThanOrEqual(difference(before,after),0.0000002)
+    }
+    func testCrossingTempoStillRejectsRenderAndSplitWithoutMutation() async throws {
+        let root=FileManager.default.temporaryDirectory.appendingPathComponent("circlr-tempo-crossing-"+newID())
+        defer { try? FileManager.default.removeItem(at:root) }
+        var p=try fixture(root);p.global.tempo=120
+        p.sections[0].tempoChanges=[TempoChange(beat:1,bpm:140)]
+        p.sections[0].lanes[0].audio[0].followsTempo=true
+        p.sections[0].lanes[0].audio[0].sourceBPM=120
+        let node=try XCTUnwrap(p.sections[0].graph?.nodes.first {if case .audio=$0.content{return true};return false})
+        let before=p
+        XCTAssertThrowsError(try AudioEditing.apply(.split(sourceOffset:0.2),nodeID:node.id,useID:p.active.uses[0].id,in:&p))
+        XCTAssertEqual(p,before)
+        do {_=try await render(p);XCTFail("교차 템포를 고정 rate로 렌더하면 안 됩니다")}
+        catch {XCTAssertTrue(error is CirclrError)}
+        p.sections[0].graph=nil
+        do {_=try await render(p);XCTFail("legacy 교차 템포도 거절해야 합니다")}
+        catch {XCTAssertTrue(error is CirclrError)}
+    }
+    func testSelectedOutputIgnoresUnrelatedCrossingClip() async throws {
+        let root=FileManager.default.temporaryDirectory.appendingPathComponent("circlr-output-selection-"+newID())
+        defer {try? FileManager.default.removeItem(at:root)}
+        var p=try fixture(root);p.global.tempo=120
+        p.sections[0].tempoChanges=[TempoChange(beat:6,bpm:140)]
+        p.sections[0].lanes[0].audio[0].followsTempo=true;p.sections[0].lanes[0].audio[0].sourceBPM=120
+        let otherTrack=p.addTrack(name:"교차 템포")
+        var crossing=p.sections[0].lanes[0].audio[0];crossing.id=newID();crossing.beat=5.5
+        var otherLane=Lane(trackID:otherTrack);otherLane.audio=[crossing]
+        p.sections[0].lanes.append(otherLane);p.sections[0].graph=nil
+        p=try SectionGraphMigration.migrate(p)
+        let use=p.active.uses[0]
+        let (section,context,clock)=try ArrangementCompiler.context(project:p,use:use)
+        let plan=try XCTUnwrap(SectionGraphCompiler.compile(project:p,section:section,use:use,context:context,clock:clock))
+        let target=try BounceEditing.target(trackID:p.tracks[0].id,useID:use.id,in:p)
+        let selected=try plan.selectingOutput(target.outputNodeID)
+        let tail=try RenderTailPlanner.section(selected,project:p,clock:clock,trackID:p.tracks[0].id,requestedSeconds:0)
+        let outputs=try await SectionGraphRenderer.render(selected,project:p,root:nil,clock:clock,tail:tail.effectiveSeconds,applyOutputGain:false)
+        XCTAssertGreaterThan(outputs[p.tracks[0].id]?.left.map{abs($0)}.max() ?? 0,0.01)
+        XCTAssertNil(outputs[p.tracks[1].id])
+        let other=try BounceEditing.target(trackID:p.tracks[1].id,useID:use.id,in:p)
+        for rejected in [plan,try plan.selectingOutput(other.outputNodeID)] {
+            do {_=try await SectionGraphRenderer.render(rejected,project:p,root:nil,clock:clock,tail:0);XCTFail("교차 템포 출력은 계속 거절해야 합니다")}
+            catch {XCTAssertTrue(error is CirclrError)}
+        }
+    }
+    func testLegacyTempoFollowingConstantRegionRenders() async throws {
+        let root=FileManager.default.temporaryDirectory.appendingPathComponent("circlr-tempo-legacy-"+newID())
+        defer { try? FileManager.default.removeItem(at:root) }
+        var p=try fixture(root);p.sections[0].graph=nil;p.global.tempo=120
+        p.sections[0].tempoChanges=[TempoChange(beat:6,bpm:140)]
+        p.sections[0].lanes[0].audio[0].followsTempo=true
+        p.sections[0].lanes[0].audio[0].sourceBPM=120
+        let pcm=try await render(p)
+        XCTAssertGreaterThan(pcm.left.map {abs($0)}.max() ?? 0,0.01)
+    }
     func testInvalidRateAndFrameRangeFailBeforeReadingSource()throws {
         let url=URL(fileURLWithPath:"/nonexistent/circlr-audio-qa.wav")
         var clip=AudioClip(assetID:"qa",duration:1)

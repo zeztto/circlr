@@ -1,5 +1,12 @@
 # 변경 이력
 
+## 검증 완료 — 0.20.0 build113 오디오 템포 구간·편곡 입력
+
+- 실제 clip span의 일정 BPM을 허용하는 Core 공통 split와 legacy/graph render, 선택 출력의 endpoint 의존성 및 tail/render 공통 plan 적용. 실제 변화 교차·반복 시작 BPM 불일치는 거절.
+- tempo RED 2 failures와 선택 출력 RED 1 failure 후 관련 테스트 16개(tempo 13개 포함)/6.848초 통과. 중간 compile 오류 해소, 초기 fixture trap 제외. Release 73.53초·UUID `BAE18DB5-1AF7-3F53-824C-72C7356122CC`.
+- 오디오 checker 9개 capture·r14→18: 실제 split/bounce/Undo·crossing alert/실패·정확한 재열기·원본 자산 2개 SHA 보존. 실제 WAV 28초·stereo·48 kHz·nonzero 확인.
+- 편곡 9개 capture·r17→20의 cold clone/계속 편집/rename·#2 원본 B 표시 후 취소·검색 복원/Undo/재열기 수행. 실제 B commit 없음, reset은 AX만. checker·strict persistence 통과. JPG 10장·AX 시각 검토는 짧은 파형 라벨 간격·reset 상세 스크롤의 경미한 개선점을 남김. 출력 attempt0·사용자 앱 유지. [계약](docs/129-audio-tempo-regions-and-arrangement-input.md).
+
 ## 검증 완료 — 0.20.0 build112 편곡 복제 후 편집 유지
 
 - 현재 편곡의 정확한 audio 클립·MIDI 서클/노트 대상 continuation·⇧⌘E·workspaceOriginal=false·automation point 복원 구현. rhythm과 다른 candidate는 대상에서 제외. graph=nil·유효하지 않은 색상 주소는 원본에 보존하고 clone에는 복사하지 않음.

@@ -4,12 +4,13 @@ import CirclrCore
 
 struct ArrangementPickerRequest:Identifiable {
     let id=UUID()
+    let input:ArrangementInputCoordinator
     let identity:NumberEditIdentity
-    let compositionID:ID
+    let compositionID:CirclrCore.ID
     let destination:String
-    let currentID:ID?
+    let currentID:CirclrCore.ID?
     let choices:[ArrangementChoice]
-    let routes:[ID:ArrangementRouteSummary]
+    let routes:[CirclrCore.ID:ArrangementRouteSummary]
     var continuationSource:ArrangementContinuationSource?=nil
     var continuation:ArrangementContinuation?=nil
 }
@@ -24,7 +25,9 @@ extension AppStore {
         do {
             let choices=try ArrangementSelection.catalog(project,compositionID:owner.id)
             soundPickerRequest=nil;libraryOpen=false;navigationOpen=false;commandPalette=nil;keyboardHelp=false
-            arrangementPickerRequest=ArrangementPickerRequest(identity:numberEditIdentity,compositionID:owner.id,destination:owner.kind.label+" · "+owner.name,currentID:owner.selectedArrangementID,choices:choices,routes:arrangementRouteSummaries(choices),continuationSource:captureArrangementContinuation(currentID:owner.selectedArrangementID))
+            arrangementPickerRequest?.input.stop()
+            arrangementPickerRequest=ArrangementPickerRequest(input:ArrangementInputCoordinator(),identity:numberEditIdentity,compositionID:owner.id,destination:owner.kind.label+" · "+owner.name,currentID:owner.selectedArrangementID,choices:choices,routes:arrangementRouteSummaries(choices),continuationSource:captureArrangementContinuation(currentID:owner.selectedArrangementID))
+            if let request=arrangementPickerRequest {request.input.bind(store:self,request:request)}
         }catch{fail(error)}
     }
     private func arrangementRouteSummaries(_ choices:[ArrangementChoice])->[ID:ArrangementRouteSummary] {
@@ -39,7 +42,7 @@ extension AppStore {
     func arrangementPickerCurrent(_ request:ArrangementPickerRequest)->Bool {
         arrangementPickerRequest?.id==request.id && request.identity==numberEditIdentity && arrangementPickerOwner?.id==request.compositionID && !preparing && !midiRecording && !audioRecordingBusy && !audioRecordPending && mediaImportTask==nil
     }
-    func closeArrangementPicker(){arrangementPickerRequest=nil;focusCanvas?()}
+    func closeArrangementPicker(){arrangementPickerRequest?.input.stop();arrangementPickerRequest=nil;focusCanvas?()}
     func editArrangementName(_ name:String,duplicate:Bool,sourceID source:ID,request:ArrangementPickerRequest)throws {
         guard arrangementPickerCurrent(request),
               request.choices.contains(where:{$0.id==source}),
@@ -64,8 +67,9 @@ extension AppStore {
         }
         guard let owner=project.album?.composition(request.compositionID) else{throw CirclrError("대상 곡을 찾을 수 없습니다")}
         let choices=try ArrangementSelection.catalog(project,compositionID:owner.id)
-        arrangementPickerRequest=ArrangementPickerRequest(identity:numberEditIdentity,compositionID:owner.id,destination:owner.kind.label+" · "+owner.name,currentID:owner.selectedArrangementID,choices:choices,routes:arrangementRouteSummaries(choices),
+        arrangementPickerRequest=ArrangementPickerRequest(input:request.input,identity:numberEditIdentity,compositionID:owner.id,destination:owner.kind.label+" · "+owner.name,currentID:owner.selectedArrangementID,choices:choices,routes:arrangementRouteSummaries(choices),
             continuationSource:duplicate ? nil:request.continuationSource,continuation:continuation)
+        if let refreshed=arrangementPickerRequest {refreshed.input.bind(store:self,request:refreshed)}
     }
     func applyArrangement(_ id:ID,request:ArrangementPickerRequest)throws {
         guard arrangementPickerCurrent(request),request.choices.contains(where:{$0.id==id}) else{throw CirclrError("대상이나 음악이 바뀌었거나 다른 작업 중입니다. 닫은 뒤 다시 열어주세요.")}
@@ -96,17 +100,12 @@ struct ArrangementPickerButton:View {
 struct ArrangementPickerView:View {
     @ObservedObject var store:AppStore
     let request:ArrangementPickerRequest
-    @State private var query=""
-    @State private var highlighted:ID?
-    @State private var searchFocus=UUID()
-    @State private var notice=""
-    private struct NameOperation {
-        let duplicate:Bool
-        let sourceID:ID
-        let sourceTitle:String
-    }
-    @State private var naming:NameOperation?
-    @State private var draft=""
+    @ObservedObject private var input:ArrangementInputCoordinator
+    init(store:AppStore,request:ArrangementPickerRequest){self.store=store;self.request=request;self.input=request.input}
+    private var query:String {input.query}
+    private var highlighted:ID? {input.highlighted}
+    private var notice:String {input.notice}
+    private var naming:ArrangementInputCoordinator.NameOperation? {input.naming}
     private var currentChoice:ArrangementChoice? {request.choices.first{$0.id==request.currentID}}
     private var rows:[ArrangementChoice] {ArrangementSelection.search(request.choices,query:query)}
     private var active:ID? {rows.contains{$0.id==highlighted} ? highlighted:rows.first?.id}
@@ -116,17 +115,19 @@ struct ArrangementPickerView:View {
             HStack {Text("편곡안 찾기").font(.system(size:18,weight:.semibold));Spacer();Button(naming == nil ? "닫기 · Esc":"이름 입력 취소 · Esc"){cancel()}.foregroundStyle(StudioTheme.secondary)}.padding(18)
             Text(request.destination+" · 앨범 재생에 사용할 편곡안").font(.system(size:12)).foregroundStyle(StudioTheme.secondary)
                 .lineLimit(2).fixedSize(horizontal:false,vertical:true).help(request.destination).padding(.horizontal,18).padding(.bottom,14)
-            if naming == nil {
             HStack(spacing:10) {
-                Image(systemName:"magnifyingglass").foregroundStyle(StudioTheme.secondary)
-                CommandSearchField(text:Binding(get:{query},set:{query=$0;highlighted=nil}),onMove:move,onSubmit:applySelected,onCancel:cancel,placeholder:"편곡안 이름 또는 #번호 검색").id(searchFocus)
+                Image(systemName:naming == nil ? "magnifyingglass":"pencil").foregroundStyle(StudioTheme.secondary)
+                ArrangementInputField(input:input,requestID:request.id).frame(height:28)
+                if naming != nil {
+                    Button("적용"){input.commitName()}.disabled(!current)
+                    Button("취소"){input.cancel()}
+                }
             }.padding(.horizontal,18).padding(.bottom,14)
-            }
             HStack(alignment:.top,spacing:10) {
                 Text("현재 · "+(request.choices.first{$0.id==request.currentID}?.title ?? "선택 없음")).lineLimit(2).fixedSize(horizontal:false,vertical:true)
                     .help(request.choices.first{$0.id==request.currentID}?.title ?? "선택 없음")
                 Spacer(minLength:8)
-                Button("현재 편곡 찾기"){query="";highlighted=request.currentID;searchFocus=UUID()}.disabled(naming != nil)
+                Button("현재 편곡 찾기"){input.findCurrent()}.disabled(naming != nil)
                 Text("\(rows.count)개 결과").monospacedDigit().fixedSize()
             }.font(.system(size:12)).foregroundStyle(StudioTheme.secondary).padding(.horizontal,18).padding(.bottom,14)
             if let operation=naming {
@@ -134,22 +135,14 @@ struct ArrangementPickerView:View {
                 VStack(alignment:.leading,spacing:8) {
                     Text((duplicate ? "복제 원본 · ":"이름 변경 대상 · ")+operation.sourceTitle)
                         .font(.system(size:12)).lineLimit(2).help(operation.sourceTitle)
-                    HStack(spacing:10) {
-                        ArrangementNameField(text:$draft,onSubmit:commitName,onCancel:cancel)
-                            .frame(height:28).accessibilityLabel(duplicate ? "새 편곡안 이름":"현재 편곡안 이름")
-                        Button("적용"){commitName()}.disabled(!current)
-                        Button("취소"){cancel()}
-                    }
                     if duplicate {Text("섹션 원본은 공유 · 이번 사용 편집은 별도").font(.system(size:12)).foregroundStyle(StudioTheme.secondary)}
                 }.padding(.horizontal,18).padding(.bottom,14)
             }else{
                 HStack(spacing:10) {
                     Button("현재 이름 변경 · ⇧⌘N"){beginName(duplicate:false,sourceID:request.currentID)}
-                        .keyboardShortcut("n",modifiers:[.command,.shift])
                         .help("현재 편곡안 이름 변경 · ⇧⌘N")
                         .disabled(!current || currentChoice==nil)
                     Button("강조한 편곡 복제 · ⇧⌘D"){beginName(duplicate:true,sourceID:active)}
-                        .keyboardShortcut("d",modifiers:[.command,.shift])
                         .help("강조한 편곡을 이름 정해 복제 · ⇧⌘D · 섹션 원본은 공유 · 이번 사용 편집은 별도")
                         .disabled(!current || active==nil)
                 }.padding(.horizontal,18).padding(.bottom,14)
@@ -157,8 +150,8 @@ struct ArrangementPickerView:View {
             if naming == nil,let continuation=request.continuation {
                 HStack(spacing:10) {
                     Button("복제한 \(continuation.kind) 계속 편집 · ⇧⌘E") {
-                        do {try store.continueArrangementEditing(request)}catch{notice=error.localizedDescription}
-                    }.keyboardShortcut("e",modifiers:[.command,.shift]).disabled(!current)
+                        input.continueEditing()
+                    }.disabled(!current)
                         .help(continuation.name+" · 복제한 이번 사용 편집으로 이어집니다")
                     Text("복제한 이번 사용 · "+continuation.name).font(.system(size:12)).foregroundStyle(StudioTheme.secondary)
                         .lineLimit(1).help(continuation.name)
@@ -178,11 +171,9 @@ struct ArrangementPickerView:View {
             Text(naming == nil ? "↑↓ 선택 · Return 편곡 적용 · Esc 취소 · 같은 편곡은 현재 작업과 이력 유지\n⇧⌘N 현재 이름 변경 · ⇧⌘D 강조한 편곡 복제":"Return 이름 적용 · Esc 이름 입력 취소 · 입력 중에는 편곡 전환이 잠깁니다")
                 .font(.system(size:12)).foregroundStyle(StudioTheme.secondary).padding(18)
         }.frame(width:850,height:560).background(StudioTheme.surface,in:RoundedRectangle(cornerRadius:10))
-            .overlay(RoundedRectangle(cornerRadius:10).strokeBorder(StudioTheme.line)).onAppear{highlighted=request.currentID}
-            .onChange(of:request.id){_,_ in highlighted=request.currentID}
+            .overlay(RoundedRectangle(cornerRadius:10).strokeBorder(StudioTheme.line))
             .onExitCommand{cancel()}
     }
-    private func move(_ delta:Int) {guard naming == nil,!rows.isEmpty else{return};let i=rows.firstIndex{$0.id==active} ?? 0;highlighted=rows[max(0,min(rows.count-1,i+delta))].id}
     private func row(_ choice:ArrangementChoice)->some View {
         let selected=choice.id==request.currentID
         let label=([choice.title,choice.detail]+routeLines(choice)+(selected ? ["재생 편곡"]:[])).joined(separator:" · ")
@@ -223,55 +214,7 @@ struct ArrangementPickerView:View {
         if !route.excluded.isEmpty {lines.append("경로 제외 · "+route.excluded.map(stepText).joined(separator:" · "))}
         return lines
     }
-    private func beginName(duplicate:Bool,sourceID:ID?) {
-        guard naming==nil,current,let sourceID,
-              let choice=request.choices.first(where:{$0.id==sourceID}),
-              duplicate || sourceID==request.currentID else{return}
-        if duplicate {highlighted=sourceID}
-        notice="";draft=duplicate ? "":choice.name
-        naming=NameOperation(duplicate:duplicate,sourceID:sourceID,sourceTitle:choice.title)
-    }
-    private func cancel() {
-        if naming != nil {naming=nil;draft="";notice="";searchFocus=UUID()}
-        else {store.closeArrangementPicker()}
-    }
-    private func commitName() {
-        guard let operation=naming else{return}
-        do {
-            try store.editArrangementName(draft,duplicate:operation.duplicate,sourceID:operation.sourceID,request:request)
-            naming=nil;draft="";query="";notice="";searchFocus=UUID()
-        }catch{notice=error.localizedDescription}
-    }
-    private func applySelected(){if let active{apply(active)}}
-    private func apply(_ id:ID) {guard naming == nil,rows.contains(where:{$0.id==id}) else{return};do{try store.applyArrangement(id,request:request)}catch{notice=error.localizedDescription}}
-}
-
-private struct ArrangementNameField:NSViewRepresentable {
-    @Binding var text:String
-    let onSubmit:()->Void
-    let onCancel:()->Void
-    func makeCoordinator()->Coordinator {Coordinator(self)}
-    func makeNSView(context:Context)->NSTextField {
-        let field=NSTextField();field.placeholderString="편곡안 이름";field.font = .systemFont(ofSize:14)
-        field.delegate=context.coordinator
-        DispatchQueue.main.async{field.window?.makeFirstResponder(field)}
-        return field
-    }
-    func updateNSView(_ field:NSTextField,context:Context) {
-        context.coordinator.parent=self
-        if field.stringValue != text {field.stringValue=text}
-    }
-    final class Coordinator:NSObject,NSTextFieldDelegate {
-        var parent:ArrangementNameField
-        init(_ parent:ArrangementNameField){self.parent=parent}
-        func controlTextDidChange(_ notification:Notification) {
-            if let field=notification.object as? NSTextField {parent.text=field.stringValue}
-        }
-        func control(_ control:NSControl,textView:NSTextView,doCommandBy selector:Selector)->Bool {
-            if textView.hasMarkedText(){return false}
-            if selector==#selector(NSResponder.insertNewline(_:)){parent.onSubmit();return true}
-            if selector==#selector(NSResponder.cancelOperation(_:)){parent.onCancel();return true}
-            return false
-        }
-    }
+    private func beginName(duplicate:Bool,sourceID:ID?){input.beginName(duplicate:duplicate,sourceID:sourceID)}
+    private func cancel(){input.cancel()}
+    private func apply(_ id:ID){input.apply(id)}
 }

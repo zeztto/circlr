@@ -211,11 +211,12 @@ extension AppStore {
         }
         if isBounce {
             guard let use,let trackID=args.trackID else {throw CirclrError("바운스에는 useID와 trackID가 필요합니다")}
-            _=try BounceEditing.target(trackID:trackID,useID:use.id,arrangementID:arrangementID,in:snapshot)
+            let target=try BounceEditing.target(trackID:trackID,useID:use.id,arrangementID:arrangementID,in:snapshot)
             let (section,context,clock)=try ArrangementCompiler.context(project:snapshot,use:use,arrangementID:arrangementID)
             guard let plan=try SectionGraphCompiler.compile(project:snapshot,section:section,use:use,context:context,clock:clock) else {throw CirclrError("음악 그래프가 없습니다")}
-            tail=try RenderTailPlanner.section(plan,project:snapshot,clock:clock,trackID:trackID,requestedSeconds:args.tailSeconds)
-            sectionRender=(plan,clock);albumRender=nil
+            let selectedPlan=try plan.selectingOutput(target.outputNodeID)
+            tail=try RenderTailPlanner.section(selectedPlan,project:snapshot,clock:clock,trackID:trackID,requestedSeconds:args.tailSeconds)
+            sectionRender=(selectedPlan,clock);albumRender=nil
         }else{
             let plan=try AlbumCompiler.executionPlan(snapshot)
             tail=try RenderTailPlanner.arrangement(project:snapshot,plan:plan,requestedSeconds:args.tailSeconds,includeStems:false)

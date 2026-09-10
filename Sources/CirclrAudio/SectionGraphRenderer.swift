@@ -143,7 +143,6 @@ public enum SectionGraphRenderer {
         }
         let start = time(clip.beat)
         guard start < clock.seconds else { return }
-        if clip.followsTempo && !ownTempo && clock.tempos.count > 1 { throw CirclrError("Tempo map이 변하는 오디오는 구간을 나누거나 서클 tempo를 지정하세요") }
         let bpm = ownTempo ? tempo : clock.bpm(at: clip.beat + node.startBeat)
         let rate = clip.followsTempo ? bpm / clip.sourceBPM : 1
         guard rate.isFinite, rate > 0 else { throw CirclrError("오디오 tempo 추종 비율을 확인하세요") }
@@ -151,6 +150,7 @@ public enum SectionGraphRenderer {
         guard period.isFinite, period > 0 else { throw CirclrError("오디오 서클의 길이를 확인하세요") }
         let url = try ProjectStore.assetURL(asset, root: root)
         let timing=AudioClipTiming(node:node,context:context ?? project.global,clock:clock)
+        try timing.validateTempoFollowing(clip,renderEndSeconds:output.duration)
         for iteration in 0..<node.repeatCount {
             try Task.checkCancellation()
             let position: Double, end: Double
