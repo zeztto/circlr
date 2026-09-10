@@ -1,5 +1,10 @@
 # 변경 이력
 
+## 검증 완료 — build138 섹션 설정 왕복
+
+- 원래 child 노드·모드·viewport 복귀와 앨범 대상 label·설정 단축키를 연결했다. 정상 설정 변경과 invalid/stale·삭제 경계를 구분하고 길이 축소·pitch source 변경에 맞춰 복귀한다.
+- Core 21개·Release 50.20초, native MIDI/오디오/오토메이션 왕복·오류·Undo·r166 재시작을 확인했다. 실제 hardware·VoiceOver·IME·다른 document 중복 ID 실행은 미검증이다. [기록](docs/160-section-settings-return.md).
+
 ## 검증 완료 — build137 섹션 길이 출처와 복귀
 
 - 원본/이번 use 길이를 구분하고 1…4096 범위와 원본 길이 복귀를 연결했다. 잘못된 축소·stale 대상은 음악을 바꾸지 않고 거절한다.

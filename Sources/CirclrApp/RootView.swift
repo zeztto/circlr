@@ -108,8 +108,8 @@ struct RootView: View {
             Button{store.showNavigation()}label:{HStack(spacing:6){Image(systemName:"arrow.left.arrow.right");if !compact{Text("작업 이동")}}}.help("섹션·트랙·음색·이펙트로 바로 이동 · ⌘J").accessibilityLabel("작업 이동")
             Button{store.showCommands()}label:{Image(systemName:"command")}.help("명령 검색 · ⇧⌘P")
             Button{store.focusHierarchy(.album,detail:true);store.hierarchySettingsOpen=true}label:{
-                HStack(spacing:compact ? 7:12){Text("\(store.project.global.tempo.formatted())").font(.system(size:18,weight:.medium,design:.rounded)).monospacedDigit();Text("BPM").font(.system(size:9)).foregroundStyle(StudioTheme.secondary);Text(store.project.global.meter.label);Text(store.project.global.scale.label).foregroundStyle(StudioTheme.secondary)}
-            }.fixedSize(horizontal:true,vertical:false).help("앨범의 글로벌 음악 설정")
+                HStack(spacing:compact ? 7:12){Text("앨범").font(.system(size:11)).foregroundStyle(StudioTheme.secondary);Text("\(store.project.global.tempo.formatted())").font(.system(size:18,weight:.medium,design:.rounded)).monospacedDigit();Text("BPM").font(.system(size:9)).foregroundStyle(StudioTheme.secondary);Text(store.project.global.meter.label);Text(store.project.global.scale.label).foregroundStyle(StudioTheme.secondary)}
+            }.fixedSize(horizontal:true,vertical:false).help("앨범의 글로벌 음악 설정").accessibilityLabel("앨범 글로벌 음악 설정").accessibilityValue("\(store.project.global.tempo.formatted()) BPM · \(store.project.global.meter.label) · \(store.project.global.scale.label)")
             Menu {
                 Text(creationTitle)
                 switch creationContainer {

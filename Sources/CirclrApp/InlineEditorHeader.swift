@@ -41,6 +41,17 @@ struct InlineEditorHeader:View {
                 }
             }.disabled(store.midiImportDraft != nil)
             HStack(spacing:8) {
+            if let saved=store.sectionSettingsReturn,store.hierarchySelection==saved.sectionAddress {
+                Button("편집 복귀"){store.returnFromSectionSettings()}
+                    .disabled(!store.canReturnFromSectionSettings)
+                    .help(store.canReturnFromSectionSettings ? saved.title+" 편집으로 돌아가기 · ⌥⌘,":"작업을 마친 뒤 복귀하세요. 원래 편집 대상이 삭제된 경우에는 복귀할 수 없습니다")
+                    .accessibilityLabel("원래 편집으로 돌아가기 · "+(store.sectionSettingsReturn?.title ?? "서클"))
+            } else if store.selectedMusic != nil,store.selectedUse != nil {
+                Button("섹션 설정"){store.openCurrentSectionSettings()}
+                    .disabled(!store.canOpenCurrentSectionSettings)
+                    .help("현재 섹션 · "+(store.selectedUse?.name ?? "섹션")+" · 길이·템포·박자 설정 · ⌥⌘,")
+                    .accessibilityLabel("현재 섹션 설정 · "+(store.selectedUse?.name ?? "섹션"))
+            }
             if !store.recordedTakeChoices.isEmpty {
                 Button("테이크 \(store.recordedTakeChoices.count)개"){store.showRecordedTakes()}
                     .help("녹음 테이크 검색 · ⌥⌘T · 이번 사용에 적용하며 공유 원본은 유지합니다")

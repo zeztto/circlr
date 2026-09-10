@@ -6,7 +6,9 @@ macOS용 앨범·송폼 궤도 편집기. **앨범 → 곡·악장 → 섹션 �
 
 연결 UI는 [서클 둘레 8방향 IN/OUT과 다중 입출력](docs/22-eight-direction-ports.md)으로 확장 중이다. 포트의 신호 의미와 연결점 배치를 분리한다. 아래 일반 사용법은 배포된 0.19 앱 기준이며 새 포트 기능은 독립 개발 브랜치에서 검증한다.
 
-현재 **`codex/daw-integration`의 0.20.0 build 137**에 녹음 lifecycle과 8방향·다중 bus·그룹 포트를 통합했다. 같은 캔버스의 연결 편집·녹음 상태·스텝·오토메이션이 공존하며, 녹음 시작·정리 중 음악 편집과 Undo의 경쟁을 차단한다. build 23의 실제 편집·바운스·Undo·저장/재열기·닫기 최소화 및 출력별 모션 검증은 [통합 QA](qa/daw-integration-review.md)에 기록했다.
+현재 **`codex/daw-integration`의 0.20.0 build 138**에 녹음 lifecycle과 8방향·다중 bus·그룹 포트를 통합했다. 같은 캔버스의 연결 편집·녹음 상태·스텝·오토메이션이 공존하며, 녹음 시작·정리 중 음악 편집과 Undo의 경쟁을 차단한다. build 23의 실제 편집·바운스·Undo·저장/재열기·닫기 최소화 및 출력별 모션 검증은 [통합 QA](qa/daw-integration-review.md)에 기록했다.
+
+**build138은 섹션 설정을 다녀온 뒤 원래 MIDI·오디오·오토메이션 위치로 돌아온다.** 앨범 설정 대상을 명시하고 설정 왕복 단축키를 연결했다. 정상 변경·오류 차단·삭제/외부 변경·길이 축소와 저장/재시작을 확인했으며 Core 21개와 Release 50.20초를 통과했다. [검증 기록](docs/160-section-settings-return.md).
 
 build137은 섹션 길이의 원본/이번 사용 구분과 원본 길이 복귀를 연결했다. GUI/MCP 설정·해제·오류·Undo·재시작과 Core 7개·Python 17/28개를 확인했으며 4자리 숫자 폭을 보완한 최종 Release 48.47초·4096/4097 경계·r156 재시작까지 확인했다. [검증 기록](docs/159-section-length-source.md).
 

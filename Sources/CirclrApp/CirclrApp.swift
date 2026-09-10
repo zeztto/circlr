@@ -24,6 +24,11 @@ import OSLog
                 Button("녹음 테이크 찾기…"){store.showRecordedTakes()}.keyboardShortcut("t",modifiers:[.command,.option]).disabled(store.recordedTakeChoices.isEmpty || store.trackBounceRecoveryLocked || store.midiImportDraft != nil)
                 Button("작업 이동…"){store.showNavigation()}.keyboardShortcut("j")
                 Button("편곡안 찾기…"){store.showArrangementPicker()}.keyboardShortcut("j",modifiers:[.command,.option]).disabled(store.arrangementPickerOwner==nil)
+                Button(store.canReturnFromSectionSettings ? "원래 편집으로 돌아가기":"현재 섹션 설정") {
+                    if store.canReturnFromSectionSettings {store.returnFromSectionSettings()}
+                    else {store.openCurrentSectionSettings()}
+                }.keyboardShortcut(",",modifiers:[.command,.option])
+                    .disabled(!store.canOpenCurrentSectionSettings && !store.canReturnFromSectionSettings)
                 Button("이 트랙의 MIDI·오디오"){store.openTrackComponent(0)}.keyboardShortcut("1").disabled(store.currentStudioTrack==nil)
                 Button("이 트랙의 음색"){store.openTrackComponent(1)}.keyboardShortcut("2").disabled(store.currentStudioTrack==nil)
                 Button("오디오 녹음 시작 / 정지"){store.startAudioRecording()}.keyboardShortcut("r",modifiers:[.command,.option]).disabled(store.audioRecordingLocked || (!store.audioRecordingAvailable && !store.audioRecordingBusy))

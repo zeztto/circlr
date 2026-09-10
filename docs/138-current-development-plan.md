@@ -1,6 +1,6 @@
 # 현행 개발 계획
 
-기준: 2026-09-10, integration-worktree의 build120 소스(`b06c4a9`)에서 시작해 build127의 소스·검증 기록을 기준으로 build137 검증 결과까지 반영했다. 이 문서는 다음 실행과 완료 판단을 위한 계획이며 [누적 로드맵](25-development-roadmap.md)의 과거 검증 결과를 새로 수행한 검사로 바꾸지 않는다. 전체 DAW·음악 품질·접근성은 아직 완료되지 않았다.
+기준: 2026-09-10, integration-worktree의 build120 소스(`b06c4a9`)에서 시작해 build127의 소스·검증 기록을 기준으로 build138 검증 결과까지 반영했다. 이 문서는 다음 실행과 완료 판단을 위한 계획이며 [누적 로드맵](25-development-roadmap.md)의 과거 검증 결과를 새로 수행한 검사로 바꾸지 않는다. 전체 DAW·음악 품질·접근성은 아직 완료되지 않았다.
 
 ## 제품의 완료 방향
 
@@ -13,7 +13,7 @@
 | 영역 | 현재 확인 가능한 구현·기록 | 아직 증명하지 못한 것 |
 |---|---|---|
 | 악기 미리 듣기 | 기본 `AuditionTransport`가 `WorkerAuditionBackend`를 사용하며 service에서 native backend 생성. build118 mock lifecycle·Release 패키징 기록 | 실제 synth/sampler/AU의 소리·latency·note-off·장치 복구. 프로세스 격리는 HAL 정상화 증거가 아님 |
-| 편집 접근 | build137 섹션 길이 출처·복귀와 4자리 가시성, 4096/4097 경계·r156 재시작 검증 완료.  build116 공유 리듬 오디오, build117 오디오 수치 접근, build119 신스 포커스 노출, build120 콘솔 설정 복원. build136 네 MIDI 모드의 직접 파일 작업·수치 확정·취소 복귀·작은 창 배치 및 Core 13개 검증 | 한 곡 전체의 연속 사용성, 모든 폼·최소 높이·VoiceOver·IME 조합 |
+| 편집 접근 | build138 섹션 설정↔원래 child 편집 복귀·앨범 대상 표시, 정상 변경/오류·삭제/길이 축소·r166 재시작 검증([기록](160-section-settings-return.md)).  build137 섹션 길이 출처·복귀와 4자리 가시성, 4096/4097 경계·r156 재시작 검증 완료.  build116 공유 리듬 오디오, build117 오디오 수치 접근, build119 신스 포커스 노출, build120 콘솔 설정 복원. build136 네 MIDI 모드의 직접 파일 작업·수치 확정·취소 복귀·작은 창 배치 및 Core 13개 검증 | 한 곡 전체의 연속 사용성, 모든 폼·최소 높이·VoiceOver·IME 조합 |
 | 전자음악 편집 | 스텝·노트 편집·비파괴 오디오 편집·gain/pan automation. build129 내장 신스 cutoff의 GUI/MCP·PCM·바운스/복원, build131 MIDI tempo map의 이번 use 적용·해제·오프라인 출력·저장/재열기 검증. build133–135 내장 신스 pitch bend 렌더·SMF 가져오기·GUI/MCP 편집·내보내기 왕복 검증 | CC/페달, pitch bend의 모든 backend 지원, cutoff 외 신스 파라미터·plugin 자동화, 실시간 write/touch/latch, comping/time warp. 실제 연주·청취는 별도 |
 | 입출력·영상 | 출력 helper, 녹음 상태·파일 처리, `CanvasMovieWriter`의 H.264/AAC·PCM timestamp 경로 | 정상 장치에서의 녹음→편집→재생, 실제 출력과 영상 동기·최소화/복원 |
 | AI·아티스트 | 로컬 socket/MCP, revision 검증·실제 작업 로그, 전문 음악 역할 kit | 앱 내 Codex 계정 대화, 통합 아티스트·멀티미디어 catalog |
