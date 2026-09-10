@@ -26,6 +26,7 @@ final class OutputWorkerProcess: @unchecked Sendable {
     private var actualDevice: OutputDeviceDescriptor?
     private var terminationObserved = false
     private var eventsDrained = false
+    private var readerControl: MediaPreviewCancellation?
     // Internal scheduling hooks allow deterministic pipe/termination race tests.
     private let beforeEventDelivery: (@Sendable ([OutputWorkerPacket]) -> Void)?
     private let onTerminationObserved: (@Sendable () -> Void)?
@@ -116,6 +117,7 @@ final class OutputWorkerProcess: @unchecked Sendable {
     private func launch(_ id: UUID, control: MediaPreviewCancellation, pcm: PCM, first: Int, selection: OutputDeviceSelection) {
         session = id; sequence = 0; stage = .boot; frames = pcm.count - first; helperTraceEvents = 0
         terminationObserved = false; eventsDrained = false
+        readerControl = MediaPreviewCancellation()
         outputSelection = selection; deviceSelectionSupported = false; actualDevice = nil
         do {
             guard !control.isCancelled else { throw CancellationError() }
@@ -182,6 +184,7 @@ final class OutputWorkerProcess: @unchecked Sendable {
     }
 
     private func read(_ handle: FileHandle, session id: UUID, decode: Bool) {
+        guard let readerControl else { try? handle.close(); return }
         let slots = DispatchSemaphore(value: 8)
         DispatchQueue(label: decode ? "circlr.output-events" : "circlr.output-stderr").async {
             defer {
@@ -190,15 +193,35 @@ final class OutputWorkerProcess: @unchecked Sendable {
             }
             var buffer = [UInt8](repeating: 0, count: 4096), wire = OutputWorkerWire(session: id)
             do {
+                let fd = handle.fileDescriptor
+                let flags = fcntl(fd, F_GETFL)
+                guard flags >= 0, fcntl(fd, F_SETFL, flags | O_NONBLOCK) == 0 else { throw OutputWorkerWireError.closed }
                 while true {
-                    let count = buffer.withUnsafeMutableBytes { Darwin.read(handle.fileDescriptor, $0.baseAddress, $0.count) }
-                    if count < 0 { if errno == EINTR { continue }; throw OutputWorkerWireError.closed }
+                    // Capture this launch's token: a later launch must never revive an old reader.
+                    // Only finalize cancels it, leaving the normal EOF/tail-drain window intact.
+                    guard !readerControl.isCancelled else { return }
+                    let count = buffer.withUnsafeMutableBytes { Darwin.read(fd, $0.baseAddress, $0.count) }
+                    if count < 0 {
+                        if errno == EINTR { continue }
+                        if errno == EAGAIN || errno == EWOULDBLOCK {
+                            var descriptor = pollfd(fd: fd, events: Int16(POLLIN), revents: 0)
+                            let ready = Darwin.poll(&descriptor, 1, 50)
+                            if ready < 0 && errno != EINTR { throw OutputWorkerWireError.closed }
+                            continue
+                        }
+                        throw OutputWorkerWireError.closed
+                    }
                     if count == 0 { break }
                     // Drain diagnostics without retaining arbitrary child output.
                     guard decode else { continue }
                     let packets = try wire.receive(Data(buffer.prefix(count)))
                     self.beforeEventDelivery?(packets)
-                    guard slots.wait(timeout: .now() + 2) == .success else { throw OutputWorkerWireError.oversizedChunk }
+                    let deliveryDeadline = ProcessInfo.processInfo.systemUptime + 2
+                    while slots.wait(timeout: .now() + .milliseconds(50)) != .success {
+                        guard !readerControl.isCancelled else { return }
+                        guard ProcessInfo.processInfo.systemUptime < deliveryDeadline else { throw OutputWorkerWireError.oversizedChunk }
+                    }
+                    guard !readerControl.isCancelled else { slots.signal(); return }
                     self.queue.async {
                         defer { slots.signal() }
                         for packet in packets { self.receive(packet.payload, session: id) }
@@ -212,7 +235,9 @@ final class OutputWorkerProcess: @unchecked Sendable {
                     }
                 }
             } catch {
-                if decode { self.queue.async { self.fail(id, message: "출력 응답이 올바르지 않습니다. 다시 재생하세요.") } }
+                if !readerControl.isCancelled {
+                    self.queue.async { self.fail(id, message: "출력 응답이 올바르지 않습니다. 다시 재생하세요.") }
+                }
             }
         }
     }
@@ -324,6 +349,9 @@ final class OutputWorkerProcess: @unchecked Sendable {
     }
     private func finalize(_ id: UUID) {
         guard session == id else { return }
+        // Readers own and close their descriptors. Nonblocking polling lets both
+        // release even when an unrelated descendant keeps a pipe writer alive.
+        readerControl?.cancel(); readerControl = nil
         try? input?.close(); input = nil; child = nil
         if let directory {
             do { try FileManager.default.removeItem(at: directory) }

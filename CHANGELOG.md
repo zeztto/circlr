@@ -1,10 +1,17 @@
 # 변경 이력
 
+## 소스·회귀 검증 완료 — 출력 reader 정리
+
+- build109 Release 이후 별도 소스 수정이다. helper가 종료해도 자손 프로세스가 stdout/stderr pipe를 상속하면 reader가 host를 계속 보유하는 회귀를 재현했다.
+- `.build/output-reader-baseline-3s.log`: 1 test, 2 failures, 8.587초. stdout·stderr 각각의 host 해제 assertion이 실패했다.
+- 수정 후 `.build/output-reader-fixed-tests.log`의 전체 OutputWorkerProcessTests16개, 0 failures, 20.149초 및 최종 source review(blocker0) 통과. `.build/output-reader-release.log`의 앱 raw executable Release 빌드도48.26초·exit0으로 완료했다. 재패키징·GUI/UI 재검증은 수행하지 않았으며 기존 사용자 앱을 유지한다.
+
 ## 검증 완료 — 0.20.0 build109 앱별 출력 장치·공유 리듬 표시
 
 - catalog helper·요청별 선택·capability·실제 장치 guard·장치 변경 감시 구현. 명시 장치는 자동 대체하지 않고 시스템 기본 출력 setter를 호출하지 않음. 네 helper 필수 패키징.
 - 초기 Esc 실패를 native controls로, Picker 선택 후 상태 갱신 누락을 ObservedObject로 수정. 최종 Release40.31초·UUID `3FED7CA1-03C1-3701-9E28-4BF59247A1CA`·mock/fixture38개16.992초 통과.
 - UI-only mock 출력9개 상태에서 ⌘,·초기 focus·Space/↑↓/Return A→B·Tab·Esc·명령 진입·설정 복원·누락 유지·실패 재시도·취소739ms 확인. 음악r14 유지. 공유 리듬6개 상태의 r16→17→18·동일 패턴 B 공유·Undo·일반 MIDI 배너 없음·strict 재열기 확인.
+- 후속 실제 catalog 조회: QA 응답을 주입하지 않은 production helper로 exit0·0.514초·장치4개·기본 장치 포함·schemaValid·childReaped 확인. UID 원문은 기록하지 않았으며 재생/readback/hotplug 검증은 아님.
 - checker 출력9/리듬6·시각 출력9장/리듬3장·최종 source review·각 QA packager strict 서명 검증 통과. 조회5초는 deadline이며 reap 총 시간은 플랫폼 종료에 의존. 실제 장치 readback/hotplug/물리 재생은 미검증, HAL stall 해결 아님. 사용자 앱 PID86114 유지·QA/helper 잔류 없음. [구현·검증](docs/125-output-device-implementation.md).
 
 ## 검증 완료 — 0.20.0 build108 테이크 검색

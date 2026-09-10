@@ -24,6 +24,18 @@
 - 패키징은 `circlr-output-worker`, `circlr-au-effect-worker`, `circlr-au-instrument-worker`, `circlr-output-device-catalog` 네 helper를 필수로 요구하고 각각 복사·서명·검증한다. catalog 누락 시 staging 이전 실패와 각 QA packager의 strict 서명 검증 통과를 확인했다. UI-only mock 후보의 catalog는 테스트 응답을 사용하므로 실제 장치 열거 성공 증거로 계산하지 않는다.
 - 실제 두 장치 readback·재생 중 hotplug·실제 started/clock·물리 재생은 수행하지 않았다. 사용자 실행 앱 PID86114만 유지하며 QA 앱/helper 잔류 없음이 관측됐다. 알려진 HAL 초기화 정지 해결을 주장하지 않는다.
 
+## build109 Release 이후 출력 reader 수명 수정
+
+별도 회귀 테스트 `testExitedHelperReleasesReadersDespiteInheritedDescendantPipes`를 기존 구현에 실행한 `.build/output-reader-baseline-3s.log`에서 1 test·2 failures·8.587초를 확인했다. helper 종료 후 자손 프로세스가 stdout 또는 stderr pipe를 계속 열어 둔 두 경우 모두 reader가 `OutputWorkerProcess`를 보유하여 host 해제 assertion이 실패했다.
+
+수정 계약은 소유 helper의 종료 관측 후 bounded drain 기회를 주되 자손의 EOF를 무한히 기다리지 않고 두 reader를 종료하는 것이다. 이미 수집한 trace·세션 격리·기존 종료 회수는 유지하고, 자손 프로세스를 종료하여 reader 해제를 대신하지 않는다. 늦은 reader 종료나 callback이 새 session의 자원을 변경해서는 안 된다. 수정 후 `.build/output-reader-fixed-tests.log`에서 전체 `OutputWorkerProcessTests` 16개, 0 failures, 20.149초를 확인했고 최종 source review도 blocker0으로 통과했다. `.build/output-reader-release.log`의 앱 raw executable Release 빌드는48.26초·exit0으로 완료했다. 재패키징·GUI/UI 재검증은 수행하지 않았고 사용자 앱은 교체하지 않았다. 이 소스 수정의 검증을 위 build109 기존 Release·UI 증거와 합산하지 않는다.
+
+## 후속 실제 catalog 조회
+
+`qa/generated/native-catalog/result.json`에서 QA catalog 응답 주입 없이 production `circlr-output-device-catalog`를 실행한 결과를 확인했다. helper SHA256은 `df68b632f98e73723eb4bccc5f06b2dc12577737d845c8b2a025baeff1c660bf`다. 0.514초에 exit0으로 종료했고 출력 장치4개, 기본 장치 포함, schemaValid와 childReaped를 확인했다. 문서와 결과에는 UID 원문을 포함하지 않는다.
+
+이는 실제 장치 목록 조회의 증거이며 출력 장치 적용/readback, hotplug, started/clock 또는 물리 재생 성공을 검증한 결과가 아니다. `physicalPlaybackAttempted=false`를 유지한다. 기존 build109 Release·UI-only mock 검증과 별도인 후속 조회이며 새 release 검증을 주장하지 않는다.
+
 ## 후속 검증 계약
 
 장치 접근 adapter mock, 잘못된 wire·구형 helper·누락된 실제 장치 응답, timeout·취소·프로세스 종료, 패키지 필수 helper와 서명을 검증한다. UI는 키보드 진입·선택, 조회 실패·재시도, 저장한 장치 누락, 설정 변경 시 프로젝트 불변을 확인한다. 테스트용 fixture와 실제 장치 증거를 구분한다.

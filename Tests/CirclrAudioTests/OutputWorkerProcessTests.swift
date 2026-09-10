@@ -1,4 +1,5 @@
 import XCTest
+import Darwin
 @testable import CirclrAudio
 import CirclrCore
 
@@ -42,6 +43,16 @@ for line in sys.stdin:
    while True:time.sleep(1)
   if mode=='late':time.sleep(.3)
   if mode=='disconnect':sys.exit(2)
+  if mode.startswith('inherited-'):
+   pid=os.fork()
+   if pid==0:
+    os.close(0)
+    unused=2 if mode=='inherited-stdout' else 1
+    null=os.open('/dev/null',os.O_WRONLY);os.dup2(null,unused);os.close(null)
+    time.sleep(20)
+    os._exit(0)
+   with open(sys.argv[0]+'.descendant','w') as marker:marker.write(str(pid))
+   os._exit(2)
   if mode.startswith('trace') or mode=='device-trace':
    stages=['engineCreation']+(['outputNodeAcquisition','deviceSelection'] if mode=='device-trace' else [])+['mixerAcquisition','routing','scheduling','engineStart','playerPlay']
    for stage in stages:
@@ -72,6 +83,35 @@ for line in sys.stdin:
     }
     private func temporary(_ id: UUID) -> URL {
         FileManager.default.temporaryDirectory.appendingPathComponent("circlr-output-" + id.uuidString)
+    }
+    func testExitedHelperReleasesReadersDespiteInheritedDescendantPipes() async throws {
+        for mode in ["inherited-stdout", "inherited-stderr"] {
+            let executable = try fixture(mode)
+            let marker = URL(fileURLWithPath: executable.path + ".descendant")
+            scripts.append(marker)
+            var descendant: pid_t = 0
+            defer { if descendant > 0 { _ = Darwin.kill(descendant, SIGKILL) } }
+            var host: OutputWorkerProcess? = OutputWorkerProcess(executable: executable)
+            weak var releasedHost = host
+            do {
+                try await host!.play(PCM(frames: 480), from: 0, timeout: 5)
+                XCTFail("Exited fixture unexpectedly started")
+            } catch {}
+            descendant = try XCTUnwrap(pid_t(String(contentsOf: marker, encoding: .utf8)))
+            XCTAssertGreaterThan(descendant, 1)
+            XCTAssertEqual(Darwin.kill(descendant, 0), 0, "Descendant must still hold its pipe")
+            try await wait { host!.status.phase == .idle }
+            let attempt = try XCTUnwrap(host!.status.attemptID)
+            XCTAssertFalse(FileManager.default.fileExists(atPath: temporary(attempt).path))
+            XCTAssertFalse(host!.status.transport.didStart)
+            host = nil
+            let deadline = ProcessInfo.processInfo.systemUptime + 3
+            while releasedHost != nil && ProcessInfo.processInfo.systemUptime < deadline {
+                try await Task.sleep(for: .milliseconds(10))
+            }
+            XCTAssertEqual(Darwin.kill(descendant, 0), 0, "Reader release must not depend on descendant EOF")
+            XCTAssertNil(releasedHost, "\(mode): exited helper reader retained host")
+        }
     }
     func testExplicitSelectionRequiresCapabilityAndMatchingActualDevice() async throws {
         for mode in ["ready", "device-missing", "device-mismatch", "device-ready"] {
