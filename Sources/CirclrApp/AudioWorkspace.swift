@@ -204,6 +204,7 @@ struct AudioWorkspaceView:View {
                 Button("삭제"){act{store.applyAudioEdit(.delete,label:"오디오 삭제")}}
                     }.fixedSize(horizontal:true,vertical:false)
                 }
+            AudioWaveformFieldsLayout(availableHeight:geometry.size.height) {
             OrbitAudioEditor(store:store,clip:liveClip,asset:asset,viewport:$viewport,focusTarget:focusTarget)
                 .frame(maxWidth:.infinity)
                 .frame(height:geometry.size.height < 320 ? 112:(store.project.usesOrbits ? 160:140))
@@ -221,6 +222,7 @@ struct AudioWorkspaceView:View {
                     field("페이드 아웃",unit:"ms",value:fadeBinding(input:false),range:0...max(0,(liveClip.duration-fadeIn)*1000))
                         .help("원본 시간 기준 페이드 · 이전 페이드도 유지")
                     field("원본",unit:"BPM",value:binding(\.sourceBPM),range:1...999)
+            }
             }
                 if store.isSharedRhythmAudio {
                     if let issue=store.audioSplitIssue {Text("분할: "+issue).font(.system(size:11)).foregroundStyle(StudioTheme.secondary).fixedSize(horizontal:false,vertical:true)}
@@ -319,6 +321,29 @@ private struct AudioWorkspaceFieldLayout:SwiftUI.Layout {
             if index>0 && column==0 {y+=layout.heights[row-1]+verticalGap}
             subviews[index].place(at:.init(x:bounds.minX+CGFloat(column)*(layout.cell+horizontalGap),y:y),anchor:.topLeading,
                                  proposal:.init(width:layout.cell,height:layout.heights[row]))
+        }
+    }
+}
+
+private struct AudioWaveformFieldsLayout:SwiftUI.Layout {
+    let availableHeight:CGFloat
+    private func sideBySide(_ width:CGFloat)->Bool {availableHeight<240 && width>=600 && width<800}
+    private func sizes(width:CGFloat,subviews:Subviews)->[CGSize] {
+        let childWidth=sideBySide(width) ? (width-16)/2:width
+        return subviews.map{$0.sizeThatFits(.init(width:childWidth,height:nil))}
+    }
+    func sizeThatFits(proposal:ProposedViewSize,subviews:Subviews,cache:inout ())->CGSize {
+        let width=proposal.width ?? 600,measured=sizes(width:width,subviews:subviews)
+        let height=sideBySide(width) ? (measured.map(\.height).max() ?? 0):measured.reduce(CGFloat.zero){$0+$1.height}+CGFloat(max(0,measured.count-1))*10
+        return .init(width:width,height:height)
+    }
+    func placeSubviews(in bounds:CGRect,proposal:ProposedViewSize,subviews:Subviews,cache:inout ()) {
+        let horizontal=sideBySide(bounds.width),measured=sizes(width:bounds.width,subviews:subviews)
+        var x=bounds.minX,y=bounds.minY
+        for index in subviews.indices {
+            let size=measured[index]
+            subviews[index].place(at:.init(x:x,y:y),anchor:.topLeading,proposal:.init(width:size.width,height:size.height))
+            if horizontal {x+=size.width+16}else{y+=size.height+10}
         }
     }
 }

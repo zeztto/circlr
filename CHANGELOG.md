@@ -1,5 +1,11 @@
 # 변경 이력
 
+## 검증 완료 — build146 낮은 오디오 화면 배치
+
+- 낮은 높이·600 이상 800 미만 폭에서 같은 subtree의 파형과 수치를 나란히 배치하고 다른 조건은 기존 stack을 유지한다.
+- Release 48.74초·source/package 감사, native 일반/공유 최초 4수치·파형·action과 Tab·invalid 보호·편집/Undo를 확인했다. data 감사는 PASS_DATA_ONLY, 최종 UI 감사는 PASS_WITH_SCOPE_LIMITS다.
+- binding·음악 계약은 유지했으며 전체 suite·모든 폭·Shift-Tab/drag/resize-draft·물리 I/O는 미실행이다. [기록](docs/168-audio-compact-layout.md).
+
 ## 검증 완료 — build145 트랙 경로 배치
 
 - 약 680px 폭의 긴 트랙명·역할 7개를 트랙 행과 줄바꿈 역할 영역으로 나누고 넓은 화면은 한 행을 유지한다.

@@ -6,9 +6,11 @@ macOS용 앨범·송폼 궤도 편집기. **앨범 → 곡·악장 → 섹션 �
 
 연결 UI는 [서클 둘레 8방향 IN/OUT과 다중 입출력](docs/22-eight-direction-ports.md)으로 확장 중이다. 포트의 신호 의미와 연결점 배치를 분리한다. 아래 일반 사용법은 배포된 0.19 앱 기준이며 새 포트 기능은 독립 개발 브랜치에서 검증한다.
 
-현재 **`codex/daw-integration`의 0.20.0 build 145**에 녹음 lifecycle과 8방향·다중 bus·그룹 포트를 통합했다. 같은 캔버스의 연결 편집·녹음 상태·스텝·오토메이션이 공존하며, 녹음 시작·정리 중 음악 편집과 Undo의 경쟁을 차단한다. build 23의 실제 편집·바운스·Undo·저장/재열기·닫기 최소화 및 출력별 모션 검증은 [통합 QA](qa/daw-integration-review.md)에 기록했다.
+현재 **`codex/daw-integration`의 0.20.0 build 146**에 녹음 lifecycle과 8방향·다중 bus·그룹 포트를 통합했다. 같은 캔버스의 연결 편집·녹음 상태·스텝·오토메이션이 공존하며, 녹음 시작·정리 중 음악 편집과 Undo의 경쟁을 차단한다. build 23의 실제 편집·바운스·Undo·저장/재열기·닫기 최소화 및 출력별 모션 검증은 [통합 QA](qa/daw-integration-review.md)에 기록했다.
 
-**build145는 좁은 화면의 트랙 이름과 역할 버튼을 읽기 쉽게 나눈다.** 넓을 때 한 행, 좁을 때 트랙과 역할을 분리하며 역할 이동·chooser·공유 오디오와 MIDI 복귀를 확인했다. Release 48.43초와 소스·패키지 감사를 통과했다. compact 오디오의 첫 수치 가시성은 남은 한계다. [검증 기록](docs/167-track-route-density.md).
+**build146은 낮은 오디오 화면에서 파형과 수치를 나란히 보여준다.** 일반·공유 오디오의 첫 수치 4개·파형·작업 버튼과 Tab·오류 차단·편집/Undo를 확인했다. Release 48.74초와 source·package 감사를 통과했으며 전체 폭·물리 I/O는 별도 검증 범위다. [검증 기록](docs/168-audio-compact-layout.md).
+
+**build145는 좁은 화면의 트랙 이름과 역할 버튼을 읽기 쉽게 나눈다.** 넓을 때 한 행, 좁을 때 트랙과 역할을 분리하며 역할 이동·chooser·공유 오디오와 MIDI 복귀를 확인했다. Release 48.43초와 소스·패키지 감사를 통과했다. 당시 남은 compact 오디오의 첫 수치 가시성은 위 build146에서 대상 조건에 맞춰 후속 개선했다. [검증 기록](docs/167-track-route-density.md).
 
 **build144는 공유 오디오의 중복 안내를 합쳐 첫 수치 4개를 바로 보여준다.** picker·공유 경고·작업 버튼·파형을 함께 확인하고 Tab·clip 전환·Undo/Redo·저장/재열기를 검증했다. Release 46.26초와 package 감사를 통과했다. 첫 Tab의 자동 스크롤 등 남은 한계는 [검증 기록](docs/166-shared-audio-editor-density.md)에 구분했다.
 
