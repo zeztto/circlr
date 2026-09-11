@@ -12,11 +12,11 @@ In circlr, a circle is a timeline. Build a song from sections, place MIDI, audio
 
 *Actual 0.50.1 build169 app showing the bundled f0r h3r project. [Capture details](docs/images/README.md).*
 
-> **0.50.1 · build169 — publication pending.** Radial, horizontal and vertical automatic layout. Native UI checks covered 2560×1355 landscape and 700×1000 portrait windows. [Verification record](docs/releases/0.50.1-qa.md).
+> **0.50.1 · build169.** Radial, horizontal and vertical automatic layout. Native UI checks covered 2560×1355 landscape and 700×1000 portrait windows. [Verification record](docs/releases/0.50.1-qa.md).
 
 ## What you can work with
 
-- **Song form:** nested album, song and section circles; reusable sections, repetitions and arrangement variations.
+- **Song form:** connected album, song and section timelines; reusable sections, repetitions and arrangement variations.
 - **A connected canvas:** free placement, automatic layout, grids, groups, custom colors and connections around eight directions with explicit IN/OUT.
 - **MIDI and audio:** orbital note editing, a drum/synth step editor, pitch bend and sustain editing, waveform trim, split and fades.
 - **Sound and motion:** instrument/effect routing, automation, bounce and source restoration; playback-follow and signal visualization controls.
@@ -30,7 +30,7 @@ These are implemented development features, not a guarantee of compatibility wit
 
 ## Getting started
 
-**0.50.1 build169** is the current candidate; publication under `v0.50.1` is pending. Download available Apple Silicon packages from [GitHub Releases](https://github.com/zeztto/circlr/releases), or build from `main` for source development.
+Download **0.50.1 build169** for Apple Silicon from [GitHub Releases](https://github.com/zeztto/circlr/releases/tag/v0.50.1), or build from `main` for source development.
 
 The downloaded app is ad-hoc signed and not notarized by Apple. If macOS blocks its first launch, verify the download, then use **System Settings → Privacy & Security → Open Anyway**. [macOS installation and first launch](docs/install-macos.md#english).
 

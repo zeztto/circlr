@@ -12,7 +12,7 @@
 
 *동봉 f0r h3r 프로젝트를 연 실제 0.50.1 build169 앱입니다. [촬영 정보](docs/images/README.md).*
 
-> **0.50.1 · build169 — 게시 대기.** 방사형·가로·세로 자동 정렬을 제공합니다. 실제2560×1355 가로 창과700×1000 세로 창을 확인했습니다. [검증 기록](docs/releases/0.50.1-qa.md).
+> **0.50.1 · build169.** 방사형·가로·세로 자동 정렬을 제공합니다. 실제2560×1355 가로 창과700×1000 세로 창을 확인했습니다. [검증 기록](docs/releases/0.50.1-qa.md).
 
 ## 할 수 있는 작업
 
@@ -30,7 +30,7 @@
 
 ## 시작하기
 
-현재 후보는 **0.50.1 build169**이며 `v0.50.1` 게시를 준비 중입니다. 내려받을 수 있는 Apple Silicon 패키지는 [GitHub Releases](https://github.com/zeztto/circlr/releases)에서 확인하세요. 소스는 `main`에서 빌드할 수 있습니다.
+**0.50.1 build169** Apple Silicon 패키지를 [GitHub Releases](https://github.com/zeztto/circlr/releases/tag/v0.50.1)에서 내려받으세요. 소스는 `main`에서 빌드할 수 있습니다.
 
 다운로드한 앱은 ad-hoc 서명이며 Apple 공증을 받지 않았습니다. 첫 실행이 차단되면 다운로드를 확인한 뒤 **시스템 설정 → 개인정보 보호 및 보안 → 그래도 열기**를 사용하세요. [macOS 설치·첫 실행 안내](docs/install-macos.md#한국어).
 
