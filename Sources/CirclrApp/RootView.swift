@@ -229,10 +229,10 @@ struct TransportControls:View {
     var body:some View {
         HStack(spacing:12) {
             Button {store.play()} label:{Image(systemName:meter.playing || store.preparing || store.auditionStatus.pending || store.moviePreparing || store.midiRecording || store.audioRecording || store.audioRecordingBusy ? "stop.fill":"play.fill").font(.system(size:13)).foregroundStyle(StudioTheme.accent).frame(width:24,height:26)}
-                .background(StudioTheme.raised,in:Circle()).help(store.auditionStatus.pending ? store.auditionDetail:store.agentJob?.kind=="bounce" && store.agentJob?.state=="running" ? "바운스 취소 · Space":"재생 / 정지 · Space")
-                .accessibilityLabel(store.agentJob?.kind=="bounce" && store.agentJob?.state=="running" ? "바운스 취소":store.auditionStatus.pending ? (store.auditionPresentation.canCancel ? "미리 듣기 취소":"미리 듣기 정리 중"):store.preparing || store.moviePreparing ? "재생 준비 취소":store.midiRecording || store.audioRecordingBusy ? "녹음 정지":meter.playing ? "재생 정지":"재생")
-            TransportStatusReadout(time:time,label:store.outputLabel,detail:store.outputDetail,
-                footer:store.auditionStatus.pending ? store.auditionPresentation.footer:store.outputCanCancel ? "Space로 취소":nil,
+                .background(StudioTheme.raised,in:Circle()).help(store.mediaImportTask != nil ? "파일 가져오기 취소 · Space":store.auditionStatus.pending ? store.auditionDetail:store.agentJob?.kind=="bounce" && store.agentJob?.state=="running" ? "바운스 취소 · Space":"재생 / 정지 · Space")
+                .accessibilityLabel(store.mediaImportTask != nil ? "파일 가져오기 취소":store.agentJob?.kind=="bounce" && store.agentJob?.state=="running" ? "바운스 취소":store.auditionStatus.pending ? (store.auditionPresentation.canCancel ? "미리 듣기 취소":"미리 듣기 정리 중"):store.preparing || store.moviePreparing ? "재생 준비 취소":store.midiRecording || store.audioRecordingBusy ? "녹음 정지":meter.playing ? "재생 정지":"재생")
+            TransportStatusReadout(time:time,label:store.mediaImportTask != nil ? "파일 가져오는 중":store.outputLabel,detail:store.mediaImportTask != nil ? store.status:store.outputDetail,
+                footer:store.mediaImportTask != nil ? "Space로 취소":store.auditionStatus.pending ? store.auditionPresentation.footer:store.outputCanCancel ? "Space로 취소":nil,
                 textColor:StudioTheme.text,secondaryColor:StudioTheme.secondary)
             Button { store.playbackFollow = store.playbackFollow.toggled() } label: {
                 Label(store.playbackFollow == .suspended ? "팔로우 재개" : "재생 팔로우", systemImage: store.playbackFollow == .following ? "scope" : "location.slash")

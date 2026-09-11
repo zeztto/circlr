@@ -39,31 +39,68 @@ extension AppStore {
         guard panel.runModal() == .OK,let url=panel.url else{return}
         _=previewMIDIImport(url,projectID:projectID,revision:revision,generation:generation,arrangementID:arrangementID,useID:use.id,beat:beat)
     }
-    @discardableResult func previewMIDIImport(_ url:URL,projectID:ID,revision:Int,generation:Int,arrangementID:ID,useID:ID,beat:Double=0,position:Point?=nil)->Bool {
+    @discardableResult func previewMIDIImport(_ url:URL,projectID:ID,revision:Int,generation:Int,arrangementID:ID,useID:ID,beat:Double=0,position:Point?=nil,retaining access:[LibraryAccess]=[])->Bool {
         guard canStartMediaImport,project.id==projectID,project.musicRevision==revision,mediaImportGeneration==generation,
               project.arrangements.first(where:{$0.id==arrangementID})?.uses.contains(where:{$0.id==useID}) == true else {status="대상이 변경됐습니다. 파일을 다시 선택하세요";return false}
-        let scoped=url.startAccessingSecurityScopedResource();defer{if scoped{url.stopAccessingSecurityScopedResource()}}
         do {
             guard let use=project.arrangements.first(where:{$0.id==arrangementID})?.uses.first(where:{$0.id==useID}) else {throw CirclrError("대상 섹션을 찾을 수 없습니다")}
             let clock=try ArrangementCompiler.context(project:project,use:use,arrangementID:arrangementID).2
             guard beat.isFinite,beat>=0,beat<clock.beats else {throw CirclrError("MIDI 시작 위치는 현재 섹션 안으로 지정하세요")}
             guard url.isFileURL else{throw CirclrError("로컬 MIDI 파일을 선택하세요")}
-            let values=try url.resourceValues(forKeys:[.fileSizeKey,.isRegularFileKey])
-            guard values.isRegularFile==true,let size=values.fileSize,size>0,size<=16_777_216 else {throw CirclrError("16 MiB 이하의 MIDI 파일을 선택하세요")}
-            let handle=try FileHandle(forReadingFrom:url);defer{try? handle.close()}
-            let document=try MIDIImport.read(handle.read(upToCount:16_777_217) ?? Data())
-            // Capturing consumes pending canvas navigation, so recheck the document afterward.
-            // Parsing failures and a cancelled file panel never move the current editor.
-            let viewport=captureHierarchyViewport?()
-            let returnWorkspace=hierarchySelection.map { address in
-                MIDIImportReturnWorkspace(address:address,workspace:viewport?.workspace ?? capturedStudioWorkspace,midiStepMode:midiStepMode,viewport:viewport,stepCursor:captureStepCursor?())
+            let selection=hierarchySelection,activeArrangementID=project.activeArrangementID
+            library.stopPreview()
+            mediaImportGeneration+=1;let importGeneration=mediaImportGeneration
+            preparing=true;progress=0;status="MIDI 접근·읽기 중 · \(url.lastPathComponent) · 정지로 취소"
+            let worker=Task.detached(priority:.userInitiated) {
+                defer{withExtendedLifetime(access){}}
+                try Task.checkCancellation()
+                let scoped=url.startAccessingSecurityScopedResource()
+                defer{if scoped{url.stopAccessingSecurityScopedResource()}}
+                let values=try url.resourceValues(forKeys:[.fileSizeKey,.isRegularFileKey])
+                guard values.isRegularFile==true,let size=values.fileSize,size>0,size<=16_777_216 else {throw CirclrError("16 MiB 이하의 MIDI 파일을 선택하세요")}
+                try Task.checkCancellation()
+                let handle=try FileHandle(forReadingFrom:url);defer{try? handle.close()}
+                let bytes=try handle.read(upToCount:16_777_217) ?? Data()
+                // File access can block in the OS. Cancellation discards its late result;
+                // it cannot forcibly interrupt a synchronous FileHandle read.
+                try Task.checkCancellation()
+                let document=try MIDIImport.read(bytes)
+                try Task.checkCancellation()
+                return document
             }
-            guard canStartMediaImport,project.id==projectID,project.musicRevision==revision,mediaImportGeneration==generation,
-                  project.arrangements.first(where:{$0.id==arrangementID})?.uses.contains(where:{$0.id==useID})==true else {throw CirclrError("대상이 변경됐습니다. 파일을 다시 선택하세요")}
-            pendingMIDIImportStepCursor=nil
-            hierarchySettingsOpen=false
-            focusHierarchy(.section(arrangementID:arrangementID,useID:useID),detail:true)
-            midiImportDraft=MIDIImportDraft(fileName:url.lastPathComponent,document:document,projectID:projectID,revision:revision,arrangementID:arrangementID,useID:useID,generation:generation,beat:beat,sectionBeats:clock.beats,position:position,returnWorkspace:returnWorkspace)
+            mediaImportTask=Task { [weak self] in
+                do {
+                    let document=try await withTaskCancellationHandler {try await worker.value} onCancel:{worker.cancel()}
+                    guard let self,self.mediaImportGeneration==importGeneration,!Task.isCancelled else{return}
+                    defer{self.mediaImportTask=nil;self.preparing=false}
+                    self.preparing=false
+                    guard self.canStartMediaImport,self.project.id==projectID,self.project.musicRevision==revision,
+                          self.project.activeArrangementID==activeArrangementID,self.hierarchySelection==selection,
+                          self.project.arrangements.first(where:{$0.id==arrangementID})?.uses.contains(where:{$0.id==useID})==true else {
+                        self.status="대상이 변경됐습니다. 파일을 다시 선택하세요";return
+                    }
+                    // Capture only after a successful read. Cancelling or a failed read
+                    // leaves the editor in place and never consumes pending navigation.
+                    let viewport=self.captureHierarchyViewport?()
+                    let returnWorkspace=self.hierarchySelection.map { address in
+                        MIDIImportReturnWorkspace(address:address,workspace:viewport?.workspace ?? self.capturedStudioWorkspace,midiStepMode:self.midiStepMode,viewport:viewport,stepCursor:self.captureStepCursor?())
+                    }
+                    guard self.canStartMediaImport,self.project.id==projectID,self.project.musicRevision==revision,self.mediaImportGeneration==importGeneration,
+                          self.project.activeArrangementID==activeArrangementID,self.hierarchySelection==selection,
+                          self.project.arrangements.first(where:{$0.id==arrangementID})?.uses.contains(where:{$0.id==useID})==true else {
+                        self.status="대상이 변경됐습니다. 파일을 다시 선택하세요";return
+                    }
+                    self.pendingMIDIImportStepCursor=nil
+                    self.hierarchySettingsOpen=false
+                    self.focusHierarchy(.section(arrangementID:arrangementID,useID:useID),detail:true)
+                    self.midiImportDraft=MIDIImportDraft(fileName:url.lastPathComponent,document:document,projectID:projectID,revision:revision,arrangementID:arrangementID,useID:useID,generation:importGeneration,beat:beat,sectionBeats:clock.beats,position:position,returnWorkspace:returnWorkspace)
+                    self.progress=1;self.status="MIDI 읽기 완료 · 가져올 트랙을 선택하세요"
+                } catch {
+                    guard let self,self.mediaImportGeneration==importGeneration,!Task.isCancelled else{return}
+                    self.mediaImportTask=nil;self.preparing=false
+                    self.status="MIDI 가져오기 실패: \(error.localizedDescription)"
+                }
+            }
             return true
         }catch{status="MIDI 가져오기 실패: \(error.localizedDescription)";return false}
     }

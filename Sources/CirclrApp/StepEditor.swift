@@ -70,6 +70,7 @@ struct StepEditor<Inspector:View>:View {
     let inspectorGap:CGFloat
     @ViewBuilder let inspector:()->Inspector
     @State private var rowRequest:StepRowRequest?
+    @State private var fields=NumberFieldFocus(["드럼 행 MIDI 음높이","스텝 페이지"],revealOnFocus:true)
     var grid:StepGrid? {try? StepGrid(subdivisions:state.subdivisions,beats:store.editorBeats)}
     var selected:Note? {store.currentLane?.notes.first{$0.id==store.selectedNoteID}}
     var pitches:[Int] {
@@ -114,12 +115,13 @@ struct StepEditor<Inspector:View>:View {
                     }
                 }
             }
+            .environment(\.numberEditing,NumberEditingContext(snapshot:store.numberEditIdentity,current:{store.numberEditIdentity},focusCanvas:{focusTarget.focus()},fieldFocus:fields,names:store.nameEditing))
             HStack(alignment:.top,spacing:inspectorGap) {
                 if let grid {
                 VStack(spacing:0) {
                     StepColumnHeader(store:store,meter:store.meter,grid:grid,page:min(state.page,grid.pageCount-1))
                     ScrollView(.vertical) {
-                        StepGridCanvas(store:store,grid:grid,page:min(state.page,grid.pageCount-1),pitches:pitches,focusTarget:focusTarget,rowRequest:rowRequest)
+                        StepGridCanvas(store:store,grid:grid,page:min(state.page,grid.pageCount-1),pitches:pitches,focusTarget:focusTarget,rowRequest:rowRequest,fields:fields)
                             .frame(height:CGFloat(max(1,pitches.count)*28))
                             .rememberEditorScroll($scroll)
                     }
@@ -175,6 +177,7 @@ struct StepGridCanvas:NSViewRepresentable {
     let pitches:[Int]
     let focusTarget:MIDIEditorFocus
     let rowRequest:StepRowRequest?
+    let fields:NumberFieldFocus
     @Environment(\.isEnabled) private var enabled
     func makeNSView(context:Context)->StepGridView {
         let view=StepGridView(store:store,grid:grid,page:page,pitches:pitches)
@@ -188,6 +191,7 @@ struct StepGridCanvas:NSViewRepresentable {
         focusTarget.view=view;return view
     }
     func updateNSView(_ view:StepGridView,context:Context) {
+        view.fields=fields
         let note=store.currentLane?.notes.first{$0.id==store.selectedNoteID}
         let selectionChanged=view.lastSelection != note
         let changed=view.grid != grid || view.page != page || view.pitches != pitches || selectionChanged
@@ -242,6 +246,7 @@ struct StepGridCanvas:NSViewRepresentable {
     var lastSelection:Note?
     var lastRowRequestID:UUID?
     var allowsEditing=true
+    var fields:NumberFieldFocus?
     var meterSubscription:AnyCancellable?
     var accessibilityKey=""
     var accessibilityIdentity:NumberEditIdentity?
@@ -340,7 +345,13 @@ struct StepGridCanvas:NSViewRepresentable {
     override func keyDown(with event:NSEvent) {
         guard allowsEditing else{super.keyDown(with:event);return}
         if store.handleMIDIBatchKey(event){needsDisplay=true;return}
-        guard !event.modifierFlags.contains(.command),!event.modifierFlags.contains(.control),!pitches.isEmpty else{super.keyDown(with:event);return}
+        guard !event.modifierFlags.contains(.command),!event.modifierFlags.contains(.control) else{super.keyDown(with:event);return}
+        if event.keyCode==48 {
+            // Stay in the step workspace even when no note or drum row is selected.
+            // Native window-wide key-view order can otherwise jump to the console.
+            _=fields?.enter(last:event.modifierFlags.contains(.shift),in:window);return
+        }
+        guard !pitches.isEmpty else{super.keyDown(with:event);return}
         switch event.keyCode {
         case 123:choose(row:row,column:max(0,column-1))
         case 124:choose(row:row,column:min(columns-1,column+1))
@@ -350,8 +361,6 @@ struct StepGridCanvas:NSViewRepresentable {
         case 119:choose(row:pitches.count-1,column:column)
         case 116:choose(row:max(0,row-max(1,visibleRows.count-1)),column:column)
         case 121:choose(row:min(pitches.count-1,row+max(1,visibleRows.count-1)),column:column)
-        case 48:
-            if event.modifierFlags.contains(.shift) {window?.selectPreviousKeyView(self)} else {window?.selectNextKeyView(self)}
         case 36,76:store.editStep(grid:grid,index:page*16+column,pitch:pitches[row]);needsDisplay=true
         case 51,117:
             if store.selectedMIDIIDs.count>1 {store.removeNote()}else{store.editStep(grid:grid,index:page*16+column,pitch:pitches[row],enabled:false)};needsDisplay=true

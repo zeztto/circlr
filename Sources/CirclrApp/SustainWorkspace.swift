@@ -14,6 +14,11 @@ struct SustainWorkspace:View {
         return store.editOriginal ? "공유 원본":"이번 사용"
     }
     var body:some View {
+        GeometryReader { geometry in
+        // A tall console can leave less room than the plot and controls' minimum
+        // height. Keep the complete form scrollable instead of clipping its last
+        // row; NumberFieldFocus can then reveal the active field and error badge.
+        ScrollView(.vertical) {
         VStack(alignment:.leading,spacing:8) {
             MIDIWorkspaceToolbarLayout(gap:8) {MIDIWorkspaceFileActions(store:store)}
             MIDIWorkspaceToolbarLayout(gap:8) {
@@ -29,8 +34,9 @@ struct SustainWorkspace:View {
                 .fixedSize(horizontal:false,vertical:true)
                 .help("CC64 raw 0–127을 보존합니다. 64 이상은 눌림, 63 이하는 해제입니다. 같은 위치의 이벤트는 원본 순서대로 실행합니다. [ ] 선택 · Tab 수치")
             SustainPlot(store:store,focus:focus,fields:fields).frame(minHeight:72,maxHeight:.infinity)
-            ScrollView(.horizontal) {
-                HStack(spacing:12) {
+            // Keep one scroll ancestor so native focus reveal reaches the vertical
+            // viewport. Reflow these same controls without replacing their drafts.
+            MIDIWorkspaceToolbarLayout(gap:12) {
                     if let event=store.selectedSustainEvent {
                         eventField("페달 위치 박",event:event,value:event.beat,range:0...131072,presentation:.beatPosition){$0.beat=$1}
                         eventField("페달 raw",event:event,value:Double(event.rawValue),range:0...127,integer:true){$0.rawValue=Int($1)}
@@ -38,8 +44,9 @@ struct SustainWorkspace:View {
                         initialField("페달 초기 채널",value:Double((sequence?.channel ?? store.currentLane?.pitchBend?.channel ?? 0)+1),range:1...16){$0.channel=Int($1)-1}
                         initialField("페달 초기 raw",value:Double(sequence?.initialValue ?? 0),range:0...127){$0.initialValue=Int($1)}
                     }
-                }.padding(.vertical,1)
-            }.fixedSize(horizontal:false,vertical:true)
+            }.padding(.vertical,6)
+        }.frame(minHeight:max(0,geometry.size.height),alignment:.topLeading)
+        }
         }.environment(\.numberEditing,NumberEditingContext(snapshot:store.numberEditIdentity,current:{store.numberEditIdentity},focusCanvas:{focus.focus()},fieldFocus:fields,names:store.nameEditing))
     }
     private func act(_ action:()->Void) {

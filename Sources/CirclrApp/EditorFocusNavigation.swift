@@ -130,11 +130,26 @@ struct EditorFocusNavigationAttachment:NSViewRepresentable {
         weak var store:AppStore?
         var scheduled:UUID?
         var keyWindowObserver:NSObjectProtocol?
-        deinit {if let keyWindowObserver {NotificationCenter.default.removeObserver(keyWindowObserver)}}
+        var keyMonitor:Any?
+        deinit {
+            if let keyWindowObserver {NotificationCenter.default.removeObserver(keyWindowObserver)}
+            if let keyMonitor {NSEvent.removeMonitor(keyMonitor)}
+        }
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
             if let keyWindowObserver {NotificationCenter.default.removeObserver(keyWindowObserver);self.keyWindowObserver=nil}
+            if let keyMonitor {NSEvent.removeMonitor(keyMonitor);self.keyMonitor=nil}
             if let window {
+                // A key can arrive before the async mount callback. Complete the
+                // existing request at the dispatch boundary so that this very key
+                // reaches the new editor, with the same identity and draft guards.
+                // Never queue or replay input after another mode/window takes over.
+                keyMonitor=NSEvent.addLocalMonitorForEvents(matching:.keyDown) { [weak self] event in
+                    guard let self,event.window===self.window,self.window?.isKeyWindow==true,
+                          let store=self.store,store.editorFocusRequest != nil else{return event}
+                    self.consumePendingFocus(store:store,finalAttempt:false)
+                    return event
+                }
                 keyWindowObserver=NotificationCenter.default.addObserver(forName:NSWindow.didBecomeKeyNotification,object:window,queue:.main) { [weak self] _ in
                     MainActor.assumeIsolated {self?.schedule(retryExisting:true)}
                 }
@@ -145,16 +160,20 @@ struct EditorFocusNavigationAttachment:NSViewRepresentable {
             guard let id=store?.editorFocusRequest?.id,retryExisting || scheduled != id else{return}
             scheduled=id
             DispatchQueue.main.async { [weak self] in
-                guard let self,let store=self.store,store.editorFocusRequest?.id==id,let window=self.window else{return}
-                var parent=self.superview
-                while let view=parent {
-                    if let host=view as? NSHostingView<InlineCircleEditor> {
-                        host.layoutSubtreeIfNeeded()
-                        guard host.window===window else{return}
-                        store.consumeEditorNavigationFocus(in:host,finalAttempt:true);return
-                    }
-                    parent=view.superview
+                guard let self,let store=self.store,store.editorFocusRequest?.id==id,self.window != nil else{return}
+                self.consumePendingFocus(store:store,finalAttempt:true)
+            }
+        }
+        private func consumePendingFocus(store:AppStore,finalAttempt:Bool) {
+            guard let id=store.editorFocusRequest?.id,let window else{return}
+            var parent=self.superview
+            while let view=parent {
+                if let host=view as? NSHostingView<InlineCircleEditor> {
+                    host.layoutSubtreeIfNeeded()
+                    guard host.window===window,store.editorFocusRequest?.id==id else{return}
+                    store.consumeEditorNavigationFocus(in:host,finalAttempt:finalAttempt);return
                 }
+                parent=view.superview
             }
         }
     }

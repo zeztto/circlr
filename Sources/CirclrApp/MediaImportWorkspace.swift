@@ -29,11 +29,14 @@ extension AppStore {
         guard canStartMediaImport,request.projectID==project.id,request.revision==project.musicRevision,request.generation==mediaImportGeneration else {status="대상이 변경됐거나 다른 작업 중입니다. 파일을 다시 가져오세요";return}
         library.stopPreview()
         mediaImportGeneration+=1;let generation=mediaImportGeneration
-        let scoped=urls.filter{$0.startAccessingSecurityScopedResource()}
         let root=productionMediaRoot.deletingLastPathComponent().appendingPathComponent("Imports")
-        preparing=true;progress=0;status="오디오 \(urls.count)개 복사·검증 중 · 정지로 취소"
+        preparing=true;progress=0;status="오디오 \(urls.count)개 접근·복사·검증 중 · 정지로 취소"
         let worker=Task.detached(priority:.userInitiated) {
-            try AudioFileImport.stage(urls,under:root){[weak self] value in
+            try Task.checkCancellation()
+            let scoped=urls.filter{$0.startAccessingSecurityScopedResource()}
+            defer{scoped.forEach{$0.stopAccessingSecurityScopedResource()};withExtendedLifetime(access){}}
+            try Task.checkCancellation()
+            return try AudioFileImport.stage(urls,under:root){[weak self] value in
                 Task { @MainActor in
                     guard let self,self.mediaImportGeneration==generation,self.mediaImportTask != nil else{return}
                     self.progress=value
@@ -42,7 +45,6 @@ extension AppStore {
         }
         mediaImportWorker=worker
         mediaImportTask=Task { [weak self] in
-            defer{scoped.forEach{$0.stopAccessingSecurityScopedResource()};withExtendedLifetime(access){}}
             do {
                 let staged=try await worker.value
                 var retained=false;defer{if !retained{staged.discard()}}

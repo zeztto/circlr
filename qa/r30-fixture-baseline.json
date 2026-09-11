@@ -1,0 +1,50 @@
+{
+  "arrangementID": "R30-arrangement",
+  "assetChannels": 2,
+  "assetFrames": 192000,
+  "assetID": "R30-asset",
+  "assetSHA256": "269e81783fe346377a519df0aec19da84c026f2fadd5a282a40379f9c603aed0",
+  "assetSampleRate": 48000,
+  "manifestSHA256": "934d0acedbcfc647748325ed8eab8e0de582193a74e732a71646a0aa4b55f508",
+  "originalDrumNoteCount": 8,
+  "projectID": "R30-project",
+  "schemaVersion": 2,
+  "sectionDurationSeconds": 4,
+  "sectionIDs": [
+    "R30-section-Intro",
+    "R30-section-Verse",
+    "R30-section-Chorus"
+  ],
+  "sectionStartSeconds": [
+    0,
+    4,
+    8
+  ],
+  "sharedNoteCount": 8,
+  "sharedPatternID": "R30-shared-drums",
+  "sharedSourceIDs": [
+    "R30-Verse-drums-source",
+    "R30-Chorus-drums-source"
+  ],
+  "songDurationSeconds": 12,
+  "sourceSynthPitches": [
+    48,
+    51,
+    55,
+    58
+  ],
+  "synthNoteCountPerSection": 4,
+  "tempo": 120,
+  "totalBeats": 24,
+  "useIDs": [
+    "R30-use-Intro",
+    "R30-use-Verse",
+    "R30-use-Chorus"
+  ],
+  "verseUseSynthPitches": [
+    60,
+    51,
+    55,
+    58
+  ]
+}
