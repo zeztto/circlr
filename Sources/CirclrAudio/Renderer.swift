@@ -7,6 +7,7 @@ public struct PreparedAudio {
     public var mix: PCM
     public var stems: [ID: PCM]
     public var tailSeconds: Double
+    public var tailPlan: TailPlan? = nil
     public var visualization: PlaybackAnalysis? = nil
     public var peak: Float { mix.peak }
 }
@@ -14,21 +15,20 @@ public enum ArrangementRenderer {
     /// Bound whole-song preparation to at most a quarter of RAM, capped at 2 GiB.
     /// 15-track club arrangements need more than the previous fixed 1 GiB allowance.
     static var preparationByteLimit:Double {min(2_147_483_648,Double(ProcessInfo.processInfo.physicalMemory)/4)}
-    public static func render(project: Project, root: URL?, plan: ExecutionPlan, tailSeconds: Double = 2, includeStems: Bool = true, includeVisualization: Bool = false, progress: @escaping (String, Double) -> Void = { _,_ in }) async throws -> PreparedAudio {
+    public static func render(project: Project, root: URL?, plan: ExecutionPlan, tailSeconds: Double? = nil, includeStems: Bool = true, includeVisualization: Bool = false, progress: @escaping (String, Double) -> Void = { _,_ in }) async throws -> PreparedAudio {
         guard plan.duration > 0 else { throw CirclrError("먼저 섹션을 만들고 시작 서클을 지정하세요") }
-        guard tailSeconds.isFinite, (0...30).contains(tailSeconds) else { throw CirclrError("잔향 길이를 확인하세요") }
-        let frames = Int(ceil((plan.duration + tailSeconds)*PCM.rate))
-        let estimate = Double(frames) * 8 * Double(project.tracks.count * (includeStems ? 2 : 1) + project.signal.nodes.filter { $0.kind != .source }.count + 5)
-        var graphEstimate = 0.0
-        for occurrence in plan.occurrences {
-            guard let graph = occurrence.signalPlan else { continue }
-            let localFrames = (occurrence.duration + tailSeconds) * PCM.rate
-            let bytes = localFrames * 8.0 * Double(SectionGraphRenderer.workingBufferCount(graph))
-            graphEstimate = max(graphEstimate, bytes)
-        }
-        guard estimate + graphEstimate < preparationByteLimit else { throw CirclrError("준비 오디오가 메모리 작업 한도를 넘습니다. 구간을 나누어 내보내세요") }
+        try validatePitchBendSupport(project:project,plan:plan)
+        let tailPlan = try RenderTailPlanner.arrangement(project:project,plan:plan,requestedSeconds:tailSeconds,
+                                                        includeStems:includeStems,includeVisualization:includeVisualization)
+        let tailSeconds = tailPlan.effectiveSeconds
+        let frames = try RenderTailPlanner.frameCount(bodySeconds:plan.duration,tailSeconds:tailSeconds)
         var tracks = Dictionary(uniqueKeysWithValues: project.tracks.map { ($0.id,PCM(frames: frames)) })
         var visualization = PlaybackAnalysis()
+        let connected=PlaybackAnalysis.connectedSignals(project.signal)
+        let connectedTracks=Set(project.signal.nodes.compactMap{node -> ID? in
+            node.kind == .source && connected.contains(node.id) ? node.trackID:nil
+        })
+        let masterTracks=Set(project.tracks.filter{!$0.muted && $0.gain>0 && connectedTracks.contains($0.id)}.map(\.id))
         for (index, occurrence) in plan.occurrences.enumerated() {
             try Task.checkCancellation()
             progress("\(occurrence.use.name) · \(occurrence.iteration+1)/\(occurrence.use.repeatCount)회 준비",0.78*Double(index)/Double(max(1,plan.occurrences.count)))
@@ -37,15 +37,24 @@ public enum ArrangementRenderer {
             var sectionAudio = includeVisualization ? PCM(frames: Int(ceil((occurrence.duration+tailSeconds)*PCM.rate))) : PCM(frames: 0)
             let graphAudio: [ID: PCM]?
             if let signal = occurrence.signalPlan {
-                let audible = includeVisualization && occurrence.use.gain > 0 ? PlaybackAnalysis.audibleNodes(signal, tracks: project.tracks) : []
+                let audible = includeVisualization && occurrence.use.gain > 0 ? PlaybackAnalysis.audiblePaths(signal, tracks: project.tracks) : PlaybackSignalPaths()
                 if includeVisualization {
-                    for (id, notes) in signal.midi where audible.contains(id) {
-                        visual.nodes[id] = PlaybackEnvelope(notes: notes, clock: occurrence.clock)
+                    visual.connections = audible.connections
+                    for (id, notes) in signal.midi {
+                        let endpoint = MusicBusEndpoint(nodeID: id, portID: CirclePort.midiOutput)
+                        if audible.outputs.contains(endpoint) {
+                            visual.observe(endpoint, envelope: PlaybackEnvelope(notes: notes, clock: occurrence.clock))
+                        }
                     }
                 }
+                let outputNodes = Set(signal.orderedNodes.filter { if case .output = $0.content { return true }; return false }.map(\.id))
                 graphAudio = try await SectionGraphRenderer.render(signal, project: project, root: root, clock: occurrence.clock, tail: tailSeconds,
+                    audibleTrackIDs:occurrence.use.gain>0 ? masterTracks:[],
                     observe: includeVisualization ? { id, pcm in
-                        if audible.contains(id) { visual.nodes[id] = PlaybackEnvelope(pcm) }
+                        if outputNodes.contains(id), audible.nodes.contains(id) { visual.nodes[id] = PlaybackEnvelope(pcm) }
+                    } : nil,
+                    observeOutput: includeVisualization ? { endpoint, pcm in
+                        if audible.outputs.contains(endpoint) { visual.observe(endpoint, envelope: PlaybackEnvelope(pcm)) }
                     } : nil)
             } else { graphAudio = nil }
             if graphAudio == nil, let patternID = occurrence.context.rhythm.patternID, let pattern = project.patterns.first(where: { $0.id == patternID }) {
@@ -63,7 +72,7 @@ public enum ArrangementRenderer {
                     if notes.isEmpty && clips.isEmpty { continue }
                     local = try await ProductionInstrument.render(notes, instrument: track.instrument, project: project, root: root, clock: occurrence.clock, tail: tailSeconds)
                     for clip in clips {
-                        let audio = try loadClip(clip, project: project, root: root, clock: occurrence.clock)
+                        let audio = try loadClip(clip, project: project, root: root, clock: occurrence.clock, tailSeconds: tailSeconds)
                         local.mix(audio,at:Int((occurrence.clock.seconds(at:clip.beat)*PCM.rate).rounded()),gain:clip.gain)
                     }
                 }
@@ -123,7 +132,55 @@ public enum ArrangementRenderer {
         }
         guard mix.left.allSatisfy(\.isFinite),mix.right.allSatisfy(\.isFinite) else { throw CirclrError("유효하지 않은 오디오 출력입니다") }
         progress("재생 준비 완료",1)
-        return PreparedAudio(plan:plan,mix:mix,stems:stems,tailSeconds:tailSeconds,visualization:includeVisualization ? visualization : nil)
+        return PreparedAudio(plan:plan,mix:mix,stems:stems,tailSeconds:tailSeconds,tailPlan:tailPlan,visualization:includeVisualization ? visualization : nil)
+    }
+    /// Check the entire requested arrangement before any instrument/effect helper can run.
+    /// Unused storage, muted tracks and disconnected master paths are not render failures.
+    static func validatePitchBendSupport(project:Project,plan:ExecutionPlan)throws {
+        let connected=PlaybackAnalysis.connectedSignals(project.signal)
+        let connectedTracks=Set(project.signal.nodes.compactMap{node -> ID? in
+            node.kind == .source && connected.contains(node.id) ? node.trackID:nil
+        })
+        let audibleTracks=Set(project.tracks.filter{!$0.muted && $0.gain>0 && connectedTracks.contains($0.id)}.map(\.id))
+        for occurrence in plan.occurrences where occurrence.use.gain>0 {
+            if let graph=occurrence.signalPlan {
+                try SectionGraphRenderer.validatePitchBendSupport(graph,project:project,outputTracks:audibleTracks)
+            } else {
+                for lane in occurrence.lanes where audibleTracks.contains(lane.trackID) && (lane.pitchBend != nil || lane.sustain != nil) {
+                    if lane.notes.contains(where:{$0.beat<occurrence.clock.beats}) {throw CirclrError("이 연주 경로는 MIDI 피치 벤드·서스테인 표현을 지원하지 않습니다")}
+                }
+                if let id=occurrence.context.rhythm.patternID,let pattern=project.patterns.first(where:{$0.id==id}),
+                   audibleTracks.contains(pattern.trackID),(pattern.pitchBend != nil || pattern.sustain != nil),
+                   pattern.notes.contains(where:{$0.beat<min(pattern.length,occurrence.clock.beats)}) {
+                    throw CirclrError("이 연주 경로는 MIDI 피치 벤드·서스테인 표현을 지원하지 않습니다")
+                }
+            }
+        }
+        for transition in plan.transitions where transition.duration>0 {
+            if let id=transition.transition.patternID,let pattern=project.patterns.first(where:{$0.id==id}),
+               audibleTracks.contains(pattern.trackID),(pattern.pitchBend != nil || pattern.sustain != nil),
+               pattern.notes.contains(where:{$0.beat<min(pattern.length,transition.duration*transition.context.tempo/60)}) {
+                throw CirclrError("이 연주 경로는 MIDI 피치 벤드·서스테인 표현을 지원하지 않습니다")
+            }
+        }
+    }
+
+    /// Shared by render and preflight, before jobs or PCM allocations begin.
+    static func preparationFrames(project: Project, plan: ExecutionPlan, tailSeconds: Double,
+                                  includeStems: Bool, includeVisualization: Bool) throws -> Int {
+        let frames = try RenderTailPlanner.frameCount(bodySeconds: plan.duration, tailSeconds: tailSeconds)
+        let estimate = Double(frames) * 8 * Double(project.tracks.count * (includeStems ? 2 : 1) + project.signal.nodes.filter { $0.kind != .source }.count + 5)
+        var graphEstimate = 0.0
+        for occurrence in plan.occurrences {
+            let localFrames = try RenderTailPlanner.frameCount(bodySeconds: occurrence.duration, tailSeconds: tailSeconds)
+            guard let graph = occurrence.signalPlan else { continue }
+            let bytes = Double(localFrames) * 8 * Double(SectionGraphRenderer.workingBufferCount(graph))
+            guard bytes < 1_073_741_824 else { throw CirclrError("섹션 내부 오디오가 준비 가능한 메모리 범위를 넘습니다") }
+            graphEstimate = max(graphEstimate, bytes)
+        }
+        let visualEstimate = includeVisualization ? PlaybackAnalysis.estimatedBytes(plan: plan, signal: project.signal, tail: tailSeconds) : 0
+        guard estimate + graphEstimate + visualEstimate < preparationByteLimit else { throw CirclrError("준비 오디오가 메모리 작업 한도를 넘습니다. 구간을 나누어 내보내세요") }
+        return frames
     }
     public static func expandPattern(_ pattern: RhythmPattern, length: Double, grid: BeatGrid) -> Lane {
         var lane = Lane(trackID:pattern.trackID), offset = 0.0
@@ -136,27 +193,26 @@ public enum ArrangementRenderer {
                 note.beat = offset + swung
                 if note.beat < length { note.length = min(note.length,length-note.beat); lane.notes.append(note) }
             }
-            for var clip in pattern.audio { clip.id = newID(); clip.beat += offset; if clip.beat < length { lane.audio.append(clip) } }
+            for var clip in pattern.audio { clip.id = newID(); clip.beat += offset; if clip.renderWindow != nil { clip.renderWindow?.cycleBeat += offset }; if clip.beat < length { lane.audio.append(clip) } }
             offset += pattern.length
         }
         return lane
     }
-    static func loadClip(_ clip: AudioClip, project: Project, root: URL?, clock: MusicClock) throws -> PCM {
+    static func loadClip(_ clip: AudioClip, project: Project, root: URL?, clock: MusicClock, tailSeconds: Double = 0) throws -> PCM {
         guard let asset = project.assets.first(where: { $0.id == clip.assetID }) else { throw CirclrError("오디오 원본을 찾을 수 없습니다") }
         let url = try ProjectStore.assetURL(asset,root:root)
         guard FileManager.default.fileExists(atPath:url.path) else { throw CirclrError("\(asset.name)을 다시 연결하세요") }
-        let remaining = max(0,clock.seconds-clock.seconds(at:clip.beat))
+        let remaining = max(0,clock.seconds+(clip.preservesTail == true ? tailSeconds:0)-clock.seconds(at:clip.beat))
         if remaining == 0 { return PCM(frames:0) }
-        if clip.followsTempo {
-            guard clock.tempos.count == 1 else { throw CirclrError("Tempo map이 변하는 오디오 clip은 구간을 나누어 tempo 추종을 적용하세요") }
-        }
+        let node=MusicCircle(name:"",content:.audio(laneID:"",clipID:clip.id))
+        try AudioClipTiming(node:node,context:project.global,clock:clock).validateTempoFollowing(
+            clip,renderEndSeconds:clock.seconds+(clip.preservesTail == true ? tailSeconds:0))
         return try ClipAudioRenderer.read(clip,url:url,rate:clip.followsTempo ? clock.bpm(at:clip.beat)/clip.sourceBPM:1,remaining:remaining,legacyTail:false)
     }
     static func apply(_ input: PCM, effect: Effect, sidechain: PCM? = nil) async throws -> PCM {
         if effect.kind == .audioUnit {
             guard let plugin = effect.plugin else { throw CirclrError("Effect Audio Unit을 선택하세요") }
-            let unit = try await AudioUnitHost.instantiate(plugin)
-            return try AudioUnitHost.process(input,unit:unit)
+            return try await AUEffectWorkerProcess().process(input: input, plugin: plugin)
         }
         return try NativeDSP.process(input,effect:effect,sidechain:sidechain)
     }

@@ -58,7 +58,8 @@ final class AudioTests:XCTestCase {
     }
     @MainActor func testPlaybackConstructionDoesNotAcquireOutput() {
         let playback = Playback()
-        XCTAssertTrue(playback.engine.attachedNodes.isEmpty)
+        XCTAssertEqual(playback.outputStatus.phase,.idle)
+        XCTAssertEqual(playback.outputStatus.transport.phase,.idle)
         XCTAssertFalse(playback.playing)
         playback.stop()
         XCTAssertEqual(playback.seconds,0)
@@ -87,7 +88,7 @@ final class AudioTests:XCTestCase {
         XCTAssertThrowsError(try AudioExport.save(result,to:output,stemNames:[:]))
         let header=try Data(contentsOf:output.appendingPathComponent("stereo-export.wav"));XCTAssertEqual(String(data:header.prefix(4),encoding:.ascii),"RIFF");XCTAssertEqual(String(data:header[8..<12],encoding:.ascii),"WAVE")
         let exported=try PCM.read(output.appendingPathComponent("stereo-export.wav"));XCTAssertEqual(exported.rms,result.mix.rms,accuracy:0.00001)
-        let playback=Playback();try await playback.play(result);XCTAssertTrue(playback.engine.isRunning);try await Task.sleep(nanoseconds:350_000_000);XCTAssertGreaterThan(playback.seconds,0.1);playback.stop();XCTAssertFalse(playback.engine.isRunning)
+        let playback=Playback();try await playback.play(result);XCTAssertTrue(playback.playing);try await Task.sleep(nanoseconds:350_000_000);XCTAssertGreaterThan(playback.seconds,0.1);playback.stop();XCTAssertFalse(playback.playing)
         let report="Actual native engine test\nBody: \(plan.duration) s\nWAV: \(result.mix.duration) s\nPeak: \(result.peak)\nRMS: \(result.mix.rms)\nStems: \(result.stems.count)\nPlayback clock advanced: true\n"
         try report.write(to:output.appendingPathComponent("audio-report.txt"),atomically:true,encoding:.utf8)
     }

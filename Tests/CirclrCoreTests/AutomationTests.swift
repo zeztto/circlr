@@ -76,6 +76,32 @@ final class AutomationTests:XCTestCase {
         var bad=op;bad.automationPoints=[AutomationPoint(beat:0,value:5)];r.arguments?.operations=[op,bad];XCTAssertThrowsError(try AgentProjectEditing.apply(r,to:p))
         r.expectedRevision = -1;r.arguments?.operations=[op];XCTAssertThrowsError(try AgentProjectEditing.apply(r,to:p))
     }
+    func testMCPExplicitOriginalAndDefaultVariantScopesPreserveOtherOverride()throws {
+        var p=try fixture();let use=p.active.uses[0].id,node=p.sections[0].graph!.nodes.first{$0.supportsAutomation}!.id
+        _=try ProjectEditing.reuse(use,in:&p,at:Point())
+        let other=p.active.uses[1].id
+        try AutomationEditing.set(parameter:.gain,points:[.init(beat:0,value:0.7)],nodeID:node,useID:other,in:&p)
+        let otherOverride=p.active.uses[1].graphEdits
+        for scope:Bool? in [nil,false,true] {
+            var op=AgentOperation("set_automation");op.useID=use;op.nodeID=node;op.original=scope
+            op.parameter = .gain;op.automationPoints=[.init(beat:0,value:0.3)]
+            let decoded=try JSONDecoder().decode(AgentOperation.self,from:JSONEncoder().encode(op))
+            XCTAssertEqual(decoded.original,scope)
+            var r=AgentRequest(method:"apply");r.projectID=p.id;r.expectedRevision=p.musicRevision;r.arguments=AgentArguments();r.arguments?.operations=[decoded]
+            let result=try AgentProjectEditing.apply(r,to:p)
+            var direct=p
+            try AutomationEditing.set(parameter:.gain,points:op.automationPoints,nodeID:node,useID:use,original:scope ?? false,in:&direct)
+            XCTAssertEqual(result,direct);XCTAssertEqual(result.active.uses[1].graphEdits,otherOverride)
+            if scope==true {
+                XCTAssertNotEqual(result.sections[0],p.sections[0]);XCTAssertNil(result.active.uses[0].graphEdits)
+            }else{
+                XCTAssertEqual(result.sections[0],p.sections[0]);XCTAssertNotNil(result.active.uses[0].graphEdits)
+            }
+            let otherGraph=try XCTUnwrap(SectionGraphEditing.effective(section:result.sections[0],use:result.active.uses[1]))
+            XCTAssertEqual(otherGraph.nodes.first{$0.id==node}?.automation?.first?.points.first?.value,0.7)
+            XCTAssertEqual(try JSONDecoder().decode(Project.self,from:JSONEncoder().encode(result)),result)
+        }
+    }
     func testAudioDuplicateShiftsCurveAndRejectsNegativePointTimeAtomically()throws {
         var p=try fixture();let asset=Asset(name:"원본",path:"source.wav",duration:1,sampleRate:48000);p.assets=[asset]
         let clip=AudioClip(assetID:asset.id,duration:1,beat:2);var lane=p.sections[0].lanes[0];lane.audio=[clip]

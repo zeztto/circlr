@@ -19,6 +19,13 @@ struct AgentJob:Codable {
     var message:String
     var path:String?
     var nodeID:ID?
+    var tail:TailPlan?
+    var renderedSeconds:Double?
+    var endWindowSeconds:Double?
+    var endWindowPeak:Double?
+    var endWindowRMS:Double?
+    var midiImport:AgentMIDIImportResult?
+    var endWindowHasSignal:Bool?
 }
 extension AppStore {
     func recordActivity(_ source:String,_ message:String) {
@@ -36,17 +43,18 @@ extension AppStore {
             recordActivity("연결","로컬 MCP 연결 준비 · 휠로 확대·축소 · Ctrl `로 콘솔 접기")
         }catch{recordActivity("연결",error.localizedDescription)}
     }
-    func json<T:Encodable>(_ value:T)->Any {((try? JSONSerialization.jsonObject(with:JSONEncoder().encode(value))) ?? NSNull())}
+    func json<T:Encodable>(_ value:T)->Any {((try? JSONSerialization.jsonObject(with:JSONEncoder().encode(value),options:[.fragmentsAllowed])) ?? NSNull())}
     func agentState()->[String:Any] {
-        ["projectID":project.id,"revision":project.musicRevision,"name":project.name,"dirty":dirty,"path":projectURL?.path ?? "","global":json(project.global),
+        ["projectID":project.id,"revision":project.musicRevision,"layoutRevision":project.portLayout?.revision ?? 0,"name":project.name,"dirty":dirty,"path":projectURL?.path ?? "","global":json(project.global),
          "tracks":json(project.tracks),"assets":json(project.assets),"album":json(project.album),"patterns":json(project.patterns),"activeArrangementID":project.activeArrangementID,
          "arrangements":project.arrangements.map{["id":$0.id,"name":$0.name,"uses":$0.uses.map{["id":$0.id,"sectionID":$0.sectionID,"name":$0.name]}]},
          "selection":json(hierarchySelection),"selectedNoteIDs":json(selectedMIDIIDs.sorted()),
-         "automationEditor":["visible":automationVisible,"parameter":automationParameter.rawValue,"selectedPointID":json(selectedAutomationPointID),"displayBeats":automationBeats],
-         "recording":["midi":midiRecording,"audio":audioRecording,"permissionPending":audioRecordPending],"job":json(agentJob),"sequence":activitySequence,
-         "playback":capturePlaybackVisualization?() ?? ["playing":playback.playing,"seconds":playback.seconds],
+         "automationEditor":["visible":automationVisible,"parameter":automationParameter.rawValue,"selectedPointID":json(selectedAutomationPointID),"displayBeats":automationDisplayedBeats,"supportedParameters":automationDescriptors],
+         "recording":["midi":midiRecording,"audio":audioRecording,"permissionPending":audioRecordPending && audioCapturePhase != .starting,"format":json(audioInputFormat),"phase":audioRecordPending && !recorder.busy ? "authorizing":audioCapturePhase.rawValue,"busy":audioRecordingBusy,"seconds":audioInputSeconds,"peak":audioInputLevel,"message":audioCaptureMessage,"recoveryPath":audioRecoveryURL?.path ?? ""],"job":json(agentJob),"sequence":activitySequence,
+         "playback":capturePlaybackVisualization?() ?? ["playing":playback.playing,"seconds":playback.seconds],"output":json(playback.outputStatus),"audition":json(auditionOutput.status),
          "view":["zoom":hierarchyZoom,"layout":project.usesOrbits ? "orbit":"freeform","consoleOpen":consoleOpen,"consoleBounds":[consoleBounds.minX,consoleBounds.minY,consoleBounds.width,consoleBounds.height]],
-         "runtime":["version":Bundle.main.object(forInfoDictionaryKey:"CFBundleShortVersionString") as? String ?? "development","bundleID":Bundle.main.bundleIdentifier ?? "","windows":NSApplication.shared.windows.filter{$0.identifier?.rawValue=="main"}.map{["visible":$0.isVisible,"minimized":$0.isMiniaturized]}]]
+         "library":["open":libraryOpen,"folders":library.folders.count,"files":library.entries.count,"selectedFiles":library.chosenIDs.count,"scanning":library.scanning,"searching":library.searching,"previewPreparing":library.previewPreparing,"previewPlaying":library.previewing,"previewPending":library.previewPending,"previewSeconds":library.previewSeconds],
+         "runtime":["version":Bundle.main.object(forInfoDictionaryKey:"CFBundleShortVersionString") as? String ?? "development","build":Bundle.main.object(forInfoDictionaryKey:"CFBundleVersion") as? String ?? "development","capabilities":["soundCatalog":1,"synthCutoffAutomation":1,"synthResonanceAutomation":1,"midiTempoImport":1,"midiPitchBendImport":1,"midiSustainImport":1,"midiSustainEditing":1,"midiPitchBendEditing":1,"sectionLengthEditing":1],"bundleID":Bundle.main.bundleIdentifier ?? "","windows":NSApplication.shared.windows.filter{$0.identifier?.rawValue=="main"}.map{["visible":$0.isVisible,"minimized":$0.isMiniaturized]}]]
     }
     func receiveAgent(_ data:Data,source:String)->[String:Any] {
         do {
@@ -58,8 +66,8 @@ extension AppStore {
             }
             let result: [String:Any]
             do {result=["ok":true,"requestID":request.id,"result":try executeAgent(request,source:source)]}
-            catch {recordActivity(source,"실패 · \(request.method) · \(error.localizedDescription)");result=["ok":false,"requestID":request.id,"error":error.localizedDescription,"projectID":project.id,"revision":project.musicRevision]}
-            if !["snapshot","inspect","events","job"].contains(request.method) {
+            catch {recordActivity(source,"실패 · \(request.method) · \(error.localizedDescription)");result=["ok":false,"requestID":request.id,"error":error.localizedDescription,"projectID":project.id,"revision":project.musicRevision,"layoutRevision":project.portLayout?.revision ?? 0]}
+            if !["snapshot","inspect","ports","sounds","events","job"].contains(request.method) {
                 agentReplies[request.id]=(fingerprint,result);agentReplyOrder.append(request.id)
                 if agentReplyOrder.count>256 {agentReplies.removeValue(forKey:agentReplyOrder.removeFirst())}
             }
@@ -70,6 +78,13 @@ extension AppStore {
         let args=request.arguments ?? AgentArguments()
         switch request.method {
         case "snapshot":return agentState()
+        case "sounds":
+            guard let catalog=agentSoundCatalog,let result=json(try catalog.page(args)) as? [String:Any] else{throw CirclrError("음색 목록을 준비하지 못했습니다. 앱을 다시 열어주세요")}
+            return result
+        case "ports":
+            guard let node=args.node else {throw CirclrError("조회할 node 주소가 필요합니다")}
+            guard let result=json(try AgentPortEditing.snapshot(at:node,in:project)) as? [String:Any] else {throw CirclrError("포트 응답을 인코딩할 수 없습니다")}
+            return result
         case "inspect":
             guard let id=args.useID,let arrangement=project.arrangements.first(where:{$0.id==(args.arrangementID ?? project.activeArrangementID)}),let use=arrangement.uses.first(where:{$0.id==id}),let section=project.sections.first(where:{$0.id==use.sectionID}) else {throw CirclrError("arrangementID와 useID를 확인하세요")}
             let (_,context,clock)=try ArrangementCompiler.context(project:project,use:use,arrangementID:arrangement.id)
@@ -82,6 +97,9 @@ extension AppStore {
         case "stop":stop();return ["state":"stopped"]
         case "play":guard !preparing else {throw CirclrError("현재 렌더 작업을 정지한 뒤 재생하세요")};if !playback.playing{play()};recordActivity(source,"재생 요청");return ["state":"preparing_or_playing"]
         case "focus":
+            if args.node != nil, args.useID != nil || args.nodeID != nil || args.compositionID != nil || args.arrangementID != nil || args.follow != nil || args.minimized != nil {
+                throw CirclrError("node 주소는 다른 focus 대상 없이 사용하세요")
+            }
             if let follow=args.follow {
                 guard args.minimized == nil,args.useID == nil,args.nodeID == nil,args.compositionID == nil else {throw CirclrError("follow는 다른 focus 대상 없이 사용하세요")}
                 playbackFollow=follow ? .following:.off;return agentState()
@@ -92,27 +110,66 @@ extension AppStore {
                 return agentState()
             }
             let address:CircleAddress
-            if let use=args.useID {address=args.nodeID.map{.music(arrangementID:args.arrangementID ?? project.activeArrangementID,useID:use,nodeID:$0)} ?? .section(arrangementID:args.arrangementID ?? project.activeArrangementID,useID:use)}else if let id=args.compositionID {address = .composition(id)}else{address = .album}
-            guard hierarchyScene?.node(address) != nil else {throw CirclrError("서클을 찾을 수 없습니다")}
+            if let node=args.node {address=node}else if let use=args.useID {address=args.nodeID.map{.music(arrangementID:args.arrangementID ?? project.activeArrangementID,useID:use,nodeID:$0)} ?? .section(arrangementID:args.arrangementID ?? project.activeArrangementID,useID:use)}else if let id=args.compositionID {address = .composition(id)}else{address = .album}
+            _ = try StudioNavigation.scene(revealing:address,in:project)
             hierarchySettingsOpen=false;focusHierarchy(address,detail:args.detail ?? false);return ["selection":json(address)]
         default:break
         }
         try AgentProjectEditing.check(request,project:project)
-        guard !midiRecording,!audioRecording else {throw CirclrError("녹음 중에는 에이전트 편집을 적용하지 않습니다")}
+        guard !midiRecording,!audioRecordingBusy else {throw CirclrError("녹음 대기·진행·파일 마무리 중에는 에이전트 편집을 적용하지 않습니다")}
         recordActivity(source,"실행 · \(request.method)")
         switch request.method {
+        case "connect_ports","reconnect_ports","disconnect_ports","move_ports","set_group_port","remove_group_port":
+            let edit=try AgentPortEditing.apply(request,to:project),changed=edit.project != project
+            let layoutOnly=["move_ports","set_group_port","remove_group_port"].contains(request.method)
+            mutate(layoutOnly ? "에이전트 연결 위치 이동":"에이전트 포트 편집",musical:!layoutOnly,portLayoutOnly:layoutOnly){$0=edit.project}
+            if changed && !layoutOnly {cancelAudition();normalizeHierarchySelection()}
+            var result=agentState();result["changed"]=changed;result["connectionID"]=json(edit.connectionID);result["portID"]=json(edit.portID)
+            return result
+
+        case "record":
+            guard audioRecordingAvailable,!audioRecordingBusy,!preparing else{throw CirclrError("녹음할 서클·트랙과 장치 정리 상태를 확인하세요")}
+            startAudioRecording();return agentState()
         case "apply":
+            let explicitArrangement=args.operations?.last(where:{$0.kind=="select_arrangement"})
+            if explicitArrangement != nil {
+                guard nameEditing.resolve() else{throw CirclrError("이름 편집을 적용한 뒤 편곡안을 선택하세요")}
+                try AgentProjectEditing.check(request,project:project)
+            }
+            var leaving=explicitArrangement == nil ? nil:capturedArrangementWorkspace()
+            let previousChoice=explicitArrangement.flatMap{$0.compositionID}.flatMap{project.album?.composition($0)?.selectedArrangementID}
+            let previousActive=project.activeArrangementID
             let candidate=try AgentProjectEditing.apply(request,to:project)
+            // This pre-mutation snapshot is cached after project reconciliation;
+            // reconcile it too so restore cannot reintroduce a stale event index.
+            if let memory=leaving {
+                var workspace=memory.workspace
+                let key=EditorWorkspaceKey(node:memory.address,original:workspace.original)
+                workspace.pitchBend=workspace.pitchBend?.reconciled(from:pitchBendSource(at:key,in:project),to:pitchBendSource(at:key,in:candidate))
+                workspace.sustain=workspace.sustain?.reconciled(from:sustainSource(at:key,in:project),to:sustainSource(at:key,in:candidate))
+                leaving=ArrangementWorkspaceMemory(projectID:memory.projectID,arrangementID:memory.arrangementID,
+                    compositionID:memory.compositionID,address:memory.address,workspace:workspace,
+                    midiStepMode:memory.midiStepMode,capturedAt:memory.capturedAt)
+            }
             mutate("에이전트 편집 · \(args.operations?.count ?? 0)개"){$0=candidate}
-            cancelAudition();normalizeHierarchySelection();return agentState()
-        case "undo":guard undoCount>0 else {throw CirclrError("취소할 편집이 없습니다")};undo();return agentState()
+            cancelAudition()
+            if let compositionID=explicitArrangement?.compositionID,let arrangementID=explicitArrangement?.arrangementID {
+                if previousChoice != arrangementID || previousActive != arrangementID {
+                    restoreArrangementWorkspace(arrangementID,compositionID:compositionID,leaving:leaving)
+                }else{normalizeHierarchySelection()}
+            }else{normalizeHierarchySelection()}
+            return agentState()
+        case "undo":
+            if let expected=args.expectedLayoutRevision {try AgentPortEditing.checkLayout(expected,project:project)}
+            guard undoCount>0 else {throw CirclrError("취소할 편집이 없습니다")};undo();return agentState()
         case "save":
             guard let path=args.path ?? projectURL?.path,path.hasSuffix(".circlr") else {throw CirclrError("저장할 .circlr 절대 경로가 필요합니다")}
             let url=try agentPath(path)
             if FileManager.default.fileExists(atPath:url.path),try ProjectStore.load(url).project.id != project.id {throw CirclrError("다른 프로젝트를 덮어쓸 수 없습니다")}
-            captureViewport();project=try ProjectStore.save(project,to:url,mediaRoot:mediaRoot);projectURL=url;mediaRoot=url;dirty=false;clearSavedRecovery();status="에이전트 저장 완료";return agentState()
+            captureViewport();project=try ProjectStore.saveSession(project,to:url,mediaRoot:mediaRoot);projectURL=url;mediaRoot=url;dirty=false;clearSavedRecovery();status="에이전트 저장 완료";return agentState()
         case "open":
             return try beginAgentOpen(request,source:source)
+        case "import_midi":return try beginAgentMIDIImport(request,source:source)
         case "bounce","export":return try beginAgentRender(request,source:source)
         case "restore_bounce":
             guard let use=args.useID,let node=args.nodeID else {throw CirclrError("useID와 nodeID가 필요합니다")}
@@ -164,33 +221,72 @@ extension AppStore {
         let file:URL?
         if isBounce{file=nil}else{guard let path=args.path,path.hasSuffix(".wav") else {throw CirclrError(".wav 절대 경로가 필요합니다")};file=try agentPath(path);guard !FileManager.default.fileExists(atPath:file!.path) else {throw CirclrError("기존 파일을 보존하려면 새 WAV 이름을 사용하세요")}}
         let use=project.arrangements.first{$0.id==arrangementID}?.uses.first{$0.id==args.useID}
-        if isBounce {guard use != nil,args.trackID != nil else {throw CirclrError("바운스에는 useID와 trackID가 필요합니다")}}
+        // Resolve once before allocating a job, then render and persist that exact policy.
+        // In particular, an omitted MCP value never reads the UI session preference.
+        let tail:TailPlan
+        let sectionRender:(plan:SectionSignalPlan,clock:MusicClock)?
+        let albumRender:ExecutionPlan?
+        if let seconds=args.tailSeconds {
+            guard seconds.isFinite,(0...RenderTailPlanner.maximumTailSeconds).contains(seconds) else {
+                throw CirclrError("tailSeconds는 0–120초의 유한한 숫자여야 합니다")
+            }
+        }
+        if isBounce {
+            guard let use,let trackID=args.trackID else {throw CirclrError("바운스에는 useID와 trackID가 필요합니다")}
+            let target=try BounceEditing.target(trackID:trackID,useID:use.id,arrangementID:arrangementID,in:snapshot)
+            let (section,context,clock)=try ArrangementCompiler.context(project:snapshot,use:use,arrangementID:arrangementID)
+            guard let plan=try SectionGraphCompiler.compile(project:snapshot,section:section,use:use,context:context,clock:clock) else {throw CirclrError("음악 그래프가 없습니다")}
+            let selectedPlan=try plan.selectingOutput(target.outputNodeID)
+            tail=try RenderTailPlanner.section(selectedPlan,project:snapshot,clock:clock,trackID:trackID,requestedSeconds:args.tailSeconds)
+            sectionRender=(selectedPlan,clock);albumRender=nil
+        }else{
+            let plan=try AlbumCompiler.executionPlan(snapshot)
+            tail=try RenderTailPlanner.arrangement(project:snapshot,plan:plan,requestedSeconds:args.tailSeconds,includeStems:false)
+            sectionRender=nil;albumRender=plan
+        }
         productionGeneration+=1;let generation=productionGeneration,jobID=newID()
-        agentJob=AgentJob(id:jobID,kind:request.method,state:"running",message:isBounce ? "이펙트 포함 바운스":"앨범 WAV 렌더")
+        let renderTitle=(isBounce ? "이펙트 포함 바운스":"앨범 WAV 렌더")+String(format:" · 여운 %.2f초",tail.effectiveSeconds)
+        agentJob=AgentJob(id:jobID,kind:request.method,state:"running",message:([renderTitle]+tail.notices).joined(separator:" · "),tail:tail)
         preparing=true;progress=0;status=agentJob!.message
         productionTask=Task { [weak self] in
-            guard let self else{return}
+            guard let self,self.productionGeneration==generation,!Task.isCancelled else{return}
             do {
-                var body=0.0
+                let body=sectionRender?.clock.seconds ?? 0
                 let worker:Task<PCM,Error>
-                if isBounce,let use,let trackID=args.trackID {
-                    let (section,context,clock)=try ArrangementCompiler.context(project:snapshot,use:use,arrangementID:arrangementID);body=clock.seconds
-                    guard let plan=try SectionGraphCompiler.compile(project:snapshot,section:section,use:use,context:context,clock:clock) else {throw CirclrError("음악 그래프가 없습니다")}
-                    worker=Task.detached(priority:.userInitiated){let buffers=try await SectionGraphRenderer.render(plan,project:snapshot,root:root,clock:clock,tail:2,applyOutputGain:false);guard let pcm=buffers[trackID] else {throw CirclrError("트랙 출력을 찾을 수 없습니다")};return pcm}
-                }else{
-                    let plan=try AlbumCompiler.executionPlan(snapshot)
-                    worker=Task.detached(priority:.userInitiated){try await ArrangementRenderer.render(project:snapshot,root:root,plan:plan,includeStems:false){message,value in DispatchQueue.main.async{[weak self] in guard let self,self.productionGeneration==generation else{return};self.progress=value;self.agentJob?.progress=value;self.agentJob?.message=message;self.status=message}}.mix}
+                if let sectionRender,let trackID=args.trackID {
+                    worker=Task.detached(priority:.userInitiated){let buffers=try await SectionGraphRenderer.render(sectionRender.plan,project:snapshot,root:root,clock:sectionRender.clock,tail:tail.effectiveSeconds,applyOutputGain:false);guard let pcm=buffers[trackID] else {throw CirclrError("트랙 출력을 찾을 수 없습니다")};return pcm}
+                }else if let plan=albumRender {
+                    worker=Task.detached(priority:.userInitiated){try await ArrangementRenderer.render(project:snapshot,root:root,plan:plan,tailSeconds:tail.effectiveSeconds,includeStems:false){message,value in DispatchQueue.main.async{[weak self] in guard let self,self.productionGeneration==generation else{return};self.progress=value;self.agentJob?.progress=value;self.agentJob?.message=message;self.status=message}}.mix}
+                }else{throw CirclrError("렌더 계획이 없습니다")}
+                self.productionWorker=worker
+                let pcm=try await withTaskCancellationHandler {
+                    try await worker.value
+                } onCancel: {
+                    worker.cancel()
                 }
-                self.productionWorker=worker;let pcm=try await worker.value
                 guard !Task.isCancelled,self.productionGeneration==generation else{return}
                 try AgentProjectEditing.check(request,project:self.project)
                 guard pcm.peak<=1 else {throw CirclrError("출력이 0 dBFS를 넘습니다. Gain을 낮추세요")}
+                let endFrames=min(pcm.count,Int(PCM.rate*0.1))
+                var endPeak=0.0,endSquares=0.0
+                if endFrames>0 {
+                    for i in (pcm.count-endFrames)..<pcm.count {
+                        let left=Double(pcm.left[i]),right=Double(pcm.right[i])
+                        guard left.isFinite,right.isFinite else {throw CirclrError("렌더 끝부분에 유효하지 않은 오디오 값이 있습니다")}
+                        endPeak=max(endPeak,abs(left),abs(right));endSquares+=left*left+right*right
+                    }
+                    self.agentJob?.endWindowSeconds=Double(endFrames)/PCM.rate
+                    self.agentJob?.endWindowPeak=endPeak
+                    self.agentJob?.endWindowRMS=sqrt(endSquares/Double(endFrames*2))
+                    self.agentJob?.endWindowHasSignal=endPeak>0.0001
+                }
+                self.agentJob?.renderedSeconds=pcm.duration
                 if isBounce,let use,let trackID=args.trackID {
                     let url=self.productionMediaRoot.appendingPathComponent(newID()+".wav");try pcm.writeWAV(url)
                     do {
                         let name=(snapshot.tracks.first{$0.id==trackID}?.name ?? "트랙")+" 바운스"
                         var candidate=self.project;candidate.activeArrangementID=arrangementID
-                        let id=try BounceEditing.apply(asset:Asset(name:name,path:url.path,duration:pcm.duration,sampleRate:PCM.rate),trackID:trackID,useID:use.id,bodySeconds:body,tailSeconds:2,in:&candidate)
+                        let id=try BounceEditing.apply(asset:Asset(name:name,path:url.path,duration:pcm.duration,sampleRate:PCM.rate),trackID:trackID,useID:use.id,bodySeconds:body,tailSeconds:tail.effectiveSeconds,in:&candidate)
                         candidate.activeArrangementID=self.project.activeArrangementID
                         self.mutate("\(source) 오디오 바운스"){$0=candidate};self.agentJob?.nodeID=id
                         if source=="콘솔" || source=="사용자" {self.focusHierarchy(.music(arrangementID:arrangementID,useID:use.id,nodeID:id),detail:true)}
@@ -202,10 +298,10 @@ extension AppStore {
                     do {try pcm.writeWAV(stage);try FileManager.default.moveItem(at:stage,to:file)}catch{try? FileManager.default.removeItem(at:stage);throw error}
                     self.agentJob?.path=file.path
                 }
-                self.preparing=false;self.progress=1;self.agentJob?.state="completed";self.agentJob?.progress=1;self.agentJob?.message="완료"
+                self.preparing=false;self.progress=1;self.agentJob?.state="completed";self.agentJob?.progress=1;self.agentJob?.message=self.agentJob?.endWindowHasSignal == true ? "완료 · 마지막 0.1초에 신호가 남아 있습니다. 여운 길이를 확인하세요":"완료"
                 self.status="\(request.method) 완료";self.recordActivity(source,"완료 · \(request.method) · \(jobID)")
             }catch{guard self.productionGeneration==generation else{return};self.preparing=false;self.agentJob?.state=error is CancellationError ? "cancelled":"failed";self.agentJob?.message=error.localizedDescription;self.status=error.localizedDescription;self.recordActivity(source,"실패 · \(request.method) · \(error.localizedDescription)")}
         }
-        return ["jobID":jobID,"state":"running"]
+        return ["jobID":jobID,"state":"running","tail":json(tail)]
     }
 }

@@ -7,8 +7,11 @@ public struct SectionSignalPlan {
     /// Event positions are expressed on the parent section's clock after local timing is resolved.
     public var midi: [ID: [Note]]
     public var audio: [ID: [AudioClip]]
+    public var midiPerformances: [ID: [MIDIPerformanceStream]] = [:]
+    public var connections: [MusicBusConnection] = []
     public var automation:[ID:[AutomationPlan]] = [:]
     public var eventCount: Int {
+        midiPerformances.values.reduce(0) { $0 + $1.reduce(0) { $0 + 1 + $1.pitchBendStates.count + $1.sustainStates.count } } +
         automation.values.reduce(0){$0+$1.reduce(0){$0+$1.spans.count}} + midi.values.reduce(0) { $0 + $1.count } +
         orderedNodes.reduce(0) { $0 + (audio[$1.id]?.count ?? 0) * $1.repeatCount }
     }
@@ -23,7 +26,9 @@ public enum SectionGraphCompiler {
         let lanes = try ArrangementCompiler.effectiveLanes(section: section, use: use)
         try ArrangementCompiler.validateLanes(lanes, project: project)
         var plan = SectionSignalPlan(graph: graph, orderedNodes: ordered, contexts: [:], midi: [:], audio: [:])
+        plan.connections = graph.edges.map(MusicBusConnection.init)
         for node in ordered {
+            try AutomationCompiler.validate(node,project:project)
             let resolved = try ContextResolver.inheriting(global: project.global, parent: context, settings: node.settings)
             plan.contexts[node.id] = resolved
             guard node.startBeat.isFinite, node.startBeat >= 0, node.gain.isFinite, (0...4).contains(node.gain),
@@ -31,7 +36,7 @@ public enum SectionGraphCompiler {
             else { throw CirclrError("\(node.name): 시작·길이·반복·gain을 확인하세요") }
             if node.content.output == .midi, node.gain != 1 { throw CirclrError("MIDI의 세기는 note velocity로 편집하세요") }
             switch node.content {
-            case .instrument, .effect, .mix, .output:
+            case .instrument, .effect, .mix, .router, .output:
                 guard node.startBeat == 0, node.lengthBeats == nil, node.repeatCount == 1 else { throw CirclrError("처리 서클에는 연주 시작·길이·반복을 지정하지 않습니다") }
             default: break
             }
@@ -41,6 +46,9 @@ public enum SectionGraphCompiler {
             case .midi(let laneID):
                 guard let lane = lanes.first(where: { $0.id == laneID }) else { throw CirclrError("\(node.name)의 MIDI 연주 원본을 찾을 수 없습니다") }
                 plan.midi[node.id] = try scheduledNotes(lane.notes, node: node, context: resolved, parentClock: clock)
+                if lane.pitchBend != nil || lane.sustain != nil {
+                    plan.midiPerformances[node.id] = try performanceStreams(notes: lane.notes, sequence: lane.pitchBend, sustain: lane.sustain, grid: resolved.beatGrid, node: node, context: resolved, parentClock: clock)
+                }
             case .audio(let laneID, let clipID):
                 guard let clip = lanes.first(where: { $0.id == laneID })?.audio.first(where: { $0.id == clipID }) else { throw CirclrError("\(node.name)의 오디오 clip을 찾을 수 없습니다") }
                 plan.audio[node.id] = [clip]
@@ -49,15 +57,19 @@ public enum SectionGraphCompiler {
             case .effect(let effect):
                 guard effect.amount.isFinite, effect.secondary.isFinite else { throw CirclrError("이펙트 parameter를 확인하세요") }
             case .mix: break
+            case .router(let router): try router.validate()
             case .rhythmMIDI(let trackID), .rhythmAudio(let trackID):
                 guard project.tracks.contains(where: { $0.id == trackID }) else { throw CirclrError("리듬 패턴의 트랙을 찾을 수 없습니다") }
                 guard let patternID = resolved.rhythm.patternID else { continue }
                 guard let pattern = project.patterns.first(where: { $0.id == patternID }) else { throw CirclrError("리듬 패턴을 찾을 수 없습니다") }
                 try ArrangementCompiler.validatePattern(pattern, project: project)
                 guard pattern.trackID == trackID else { continue }
-                let expanded = try expandedPattern(pattern, length: clock.beats, grid: resolved.beatGrid)
+                let expanded = try expandedPatternNotesOnly(pattern, length: clock.beats, grid: resolved.beatGrid)
                 if case .rhythmMIDI = node.content {
                     plan.midi[node.id] = try scheduledNotes(expanded.notes, node: node, context: resolved, parentClock: clock)
+                    if pattern.pitchBend != nil || pattern.sustain != nil {
+                        plan.midiPerformances[node.id] = try performanceStreams(notes: pattern.notes, sequence: pattern.pitchBend, sustain: pattern.sustain, patternLength: pattern.length, grid: resolved.beatGrid, node: node, context: resolved, parentClock: clock)
+                    }
                 } else { plan.audio[node.id] = expanded.audio }
             }
             guard plan.eventCount <= 1_000_000 else { throw CirclrError("섹션 내부의 재생 event가 너무 많습니다") }
@@ -93,6 +105,11 @@ public enum SectionGraphCompiler {
     }
 
     public static func expandedPattern(_ pattern: RhythmPattern, length: Double, grid: BeatGrid) throws -> Lane {
+        guard pattern.pitchBend == nil,pattern.sustain == nil else { throw CirclrError("피치 벤드·sustain 패턴은 독립 MIDI 연주 stream으로 준비해야 합니다") }
+        return try expandedPatternNotesOnly(pattern, length: length, grid: grid)
+    }
+
+    private static func expandedPatternNotesOnly(_ pattern: RhythmPattern, length: Double, grid: BeatGrid) throws -> Lane {
         guard pattern.length.isFinite, pattern.length > 0, length.isFinite, length > 0 else { throw CirclrError("리듬 패턴의 길이를 확인하세요") }
         let repeats = ceil(length / pattern.length)
         guard repeats * Double(pattern.notes.count + pattern.audio.count) <= 1_000_000 else { throw CirclrError("리듬 패턴의 event가 너무 많습니다") }
@@ -105,7 +122,7 @@ public enum SectionGraphCompiler {
                 note.beat += offset + (stepIndex % 2 == 1 ? grid.swing * step : 0)
                 if note.beat < length { note.length = min(note.length, length - note.beat); lane.notes.append(note) }
             }
-            for var clip in pattern.audio { clip.beat += offset; if clip.beat < length { lane.audio.append(clip) } }
+            for var clip in pattern.audio { clip.beat += offset; if clip.renderWindow != nil { clip.renderWindow?.cycleBeat += offset }; if clip.beat < length { lane.audio.append(clip) } }
             offset += pattern.length
         }
         return lane

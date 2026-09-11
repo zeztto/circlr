@@ -13,6 +13,7 @@ public enum ProjectEditing {
         let i = project.activeIndex
         guard let ui = project.arrangements[i].uses.firstIndex(where: { $0.id == id }) else { throw CirclrError("분리할 서클을 선택하세요") }
         let use = project.arrangements[i].uses[ui]
+        guard use.tempoOverride==nil else{throw CirclrError("이번 사용 템포 맵을 먼저 해제한 뒤 원본에서 분리하세요")}
         let (section, context, _) = try ArrangementCompiler.context(project: project, use: use)
         var new = section; new.id = newID(); new.name = use.name
         new.bars = use.barsOverride ?? section.bars
@@ -94,6 +95,8 @@ public enum ProjectEditing {
         let previousClips = Set(previousLane?.audio.map(\.id) ?? [])
         var candidate = project
         try setLaneData(lane, for: useID, original: original, in: &candidate)
+        try MIDIPitchBendStorage.promote(in:&candidate)
+        try MIDISustainStorage.promote(in:&candidate)
         guard let use = candidate.active.uses.first(where: { $0.id == useID }),
               let section = candidate.sections.first(where: { $0.id == use.sectionID }) else { throw CirclrError("섹션이 없습니다") }
         if var graph = original ? section.graph : try SectionGraphEditing.effective(section: section, use: use) {
@@ -102,27 +105,20 @@ public enum ProjectEditing {
                 if case .audio(let laneID, let clipID) = node.content, laneID == lane.id, !validClips.contains(clipID) { return node.id }; return nil
             })
             SectionGraphEditing.remove(removed, from: &graph)
-            let defaults = SectionGraphMigration.graph(lanes: [lane], tracks: candidate.tracks.filter { $0.id == lane.trackID }, effects: [])
             let existing = Set(graph.nodes.map(\.id))
-            let hasNewSource = previousLane == nil || lane.audio.contains { !previousClips.contains($0.id) }
+            let includeMIDI = !lane.notes.isEmpty || (previousLane == nil && lane.audio.isEmpty)
+            let newMIDI = !lane.notes.isEmpty && previousLane?.notes.isEmpty != false && !existing.contains("midi:\(lane.id)")
+            let defaults = SectionGraphMigration.graph(lanes: [lane], tracks: candidate.tracks.filter { $0.id == lane.trackID }, effects: [],includeMIDI:includeMIDI)
+            let hasNewSource = previousLane == nil || newMIDI || lane.audio.contains { !previousClips.contains($0.id) }
             let added = Set(defaults.nodes.filter { node in
                 guard !existing.contains(node.id), hasNewSource else { return false }
                 switch node.content {
-                case .midi: return previousLane == nil
+                case .midi: return previousLane == nil || newMIDI
                 case .audio(_, let clip): return !previousClips.contains(clip)
                 default: return true
                 }
             }.map(\.id))
-            graph.nodes += defaults.nodes.filter { added.contains($0.id) }
-            // Only new sources acquire default routes. User-disconnected existing routes stay disconnected.
-            for edge in defaults.edges where added.contains(edge.from) {
-                if !graph.edges.contains(where: { $0.id == edge.id }) { graph.edges.append(edge) }
-            }
-            for id in added.sorted() {
-                var point = defaults.layout.positions[id] ?? Point()
-                while graph.layout.positions.contains(where: { !added.contains($0.key) && hypot($0.value.x-point.x,$0.value.y-point.y) < 180 }) { point.y += 200 }
-                graph.layout.positions[id] = point
-            }
+            SourceCircleEditing.merge(defaults,adding:added,into:&graph)
             try SectionGraphEditing.set(graph, useID: useID, original: original, in: &candidate)
         }
         project = candidate
@@ -166,7 +162,7 @@ public extension ProjectEditing {
         let target=take.targetLaneID.flatMap{id in lanes.first{$0.id==id}} ?? (take.targetLaneID == nil ? lanes.first{$0.trackID==take.lane.trackID}:nil)
         if take.targetLaneID != nil,target == nil { throw CirclrError("녹음 대상 서클이 삭제되었습니다") }
         var lane=target ?? take.lane
-        if !take.lane.notes.isEmpty { lane.notes=take.lane.notes }
+        if !take.lane.notes.isEmpty { lane.notes=take.lane.notes;lane.pitchBend=take.lane.pitchBend;lane.sustain=take.lane.sustain }
         if !take.lane.audio.isEmpty { lane.audio=take.lane.audio }
         var candidate=project;let active=candidate.activeArrangementID;candidate.activeArrangementID=candidate.arrangements[ai].id
         try setLane(lane,for:take.useID,original:false,in:&candidate)

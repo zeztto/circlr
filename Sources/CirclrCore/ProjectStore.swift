@@ -22,8 +22,11 @@ public enum ProjectStore {
         let attrs = try FileManager.default.attributesOfItem(atPath: manifest.path)
         guard (attrs[.size] as? NSNumber)?.intValue ?? 0 < 50_000_000 else { throw CirclrError("프로젝트 manifest가 너무 큽니다") }
         let data = try Data(contentsOf: manifest)
+        struct Header:Decodable {let schemaVersion:Int}
+        let header=try JSONDecoder().decode(Header.self,from:data)
+        guard (1...7).contains(header.schemaVersion) else {throw CirclrError("더 새로운 프로젝트 형식입니다. 원본을 덮어쓰지 마세요")}
         let project = try JSONDecoder().decode(Project.self, from: data)
-        guard (1...2).contains(project.schemaVersion) else { throw CirclrError("더 새로운 프로젝트 형식입니다. 원본을 덮어쓰지 마세요") }
+        guard (1...7).contains(project.schemaVersion) else { throw CirclrError("더 새로운 프로젝트 형식입니다. 원본을 덮어쓰지 마세요") }
         guard !project.arrangements.isEmpty, project.arrangements.contains(where: { $0.id == project.activeArrangementID }) else { throw CirclrError("유효한 편곡안이 없습니다") }
         try validateStructure(project)
         for asset in project.assets {
@@ -33,6 +36,11 @@ public enum ProjectStore {
         return LoadedProject(project: project, root: url)
     }
     public static func validateStructure(_ p:Project) throws {
+        guard (1...7).contains(p.schemaVersion) else {throw CirclrError("지원하지 않는 프로젝트 형식입니다")}
+        try AutomationCompiler.validateTargets(in:p)
+        try MIDIPitchBendStorage.validate(in:p)
+        try MIDISustainStorage.validate(in:p)
+        try p.portLayout?.validate()
         func unique(_ ids:[ID]) throws { guard ids.allSatisfy({!$0.isEmpty}),Set(ids).count==ids.count else { throw CirclrError("프로젝트에 비어 있거나 중복된 ID가 있습니다") } }
         func layout(_ l:Layout) throws { guard l.zoom.isFinite,(0.25...2.5).contains(l.zoom),l.spacing.isFinite,(12...256).contains(l.spacing),l.pan.x.isFinite,l.pan.y.isFinite,l.positions.values.allSatisfy({$0.x.isFinite && $0.y.isFinite && abs($0.x)<1e7 && abs($0.y)<1e7}) else { throw CirclrError("Canvas 좌표를 확인하세요") };try unique(l.groups.map(\.id)) }
         try ContextResolver.validate(p.global)
@@ -43,6 +51,8 @@ public enum ProjectStore {
         }
         try unique(p.tracks.map(\.id));try unique(p.sections.map(\.id));try unique(p.patterns.map(\.id));try unique(p.assets.map(\.id));try unique(p.arrangements.map(\.id));try unique(p.signal.nodes.map(\.id));try unique(p.signal.edges.map(\.id));try layout(p.signal.layout)
         for track in p.tracks {
+            if let bankLSB=track.instrument.bankLSB,!(0...127).contains(bankLSB) {throw CirclrError("Sound Bank 변형 번호는 0–127이어야 합니다")}
+            if track.instrument.kind == .soundBank,!(0...127).contains(track.instrument.program) {throw CirclrError("Sound Bank 음색 번호를 확인하세요")}
             if track.instrument.kind == .synthesizer {try (track.instrument.synth ?? SynthPatch()).validate()}
             if track.instrument.kind == .sampler {
                 guard let sample=track.instrument.sample,(0...127).contains(sample.rootPitch),p.assets.contains(where:{$0.id==sample.assetID}) else {throw CirclrError("샘플 악기의 원본·기준음을 확인하세요")}
@@ -55,6 +65,7 @@ public enum ProjectStore {
             if let graph = section.graph {
                 guard p.schemaVersion >= 2 else { throw CirclrError("음악 그래프는 version 2 프로젝트로 저장해야 합니다") }
                 _ = try SectionGraphValidator.sorted(graph)
+                for node in graph.nodes {try AutomationCompiler.validate(node,project:p)}
             }
         }
         for a in p.arrangements {
@@ -62,6 +73,7 @@ public enum ProjectStore {
             for u in a.uses {
                 let (section, context, clock) = try ArrangementCompiler.context(project:p,use:u,arrangementID:a.id)
                 _ = try SectionGraphCompiler.compile(project:p,section:section,use:u,context:context,clock:clock)
+                if u.tempoOverride != nil {try UseTempoOverrideEditing.validateAudio(in:p,useID:u.id,arrangementID:a.id)}
             }
         }
         for pattern in p.patterns {try ArrangementCompiler.validatePattern(pattern,project:p)}

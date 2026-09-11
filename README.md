@@ -1,102 +1,69 @@
-# 써클러(circlr)
+# circlr
 
-macOS용 앨범·송폼 궤도 편집기. **앨범 → 곡·악장 → 섹션 → MIDI·오디오·악기·이펙터**를 하나의 자유로운 캔버스에서 다룬다.
+**An orbital music workspace for songwriters and arrangers on macOS.**
 
-최종 목표는 **아티스트 프로필을 선택하고 작품·세계관·자료·창작 이력을 함께 관리하는 도구**다. 음악 제작 기능을 바탕으로 텍스트·이미지·영상까지 연결하는 [아티스트 창작 세계 설계](docs/21-artist-universe.md)를 정리했다. 프로필과 통합 생성물 관리는 향후 범위다.
+English · [한국어](README.ko.md)
 
-연결 UI의 다음 설계는 [서클 둘레 8방향 IN/OUT과 다중 입출력](docs/22-eight-direction-ports.md)이다. 포트의 신호 의미와 연결점 배치를 분리한다. 현재 앱의 좌우 포트 방식은 아래 사용법에 해당하며 8방향 조작은 아직 구현 전이다.
+[Getting started](#getting-started) · [Documentation](docs/README.md) · [Roadmap](docs/releases/roadmap.md) · [Releases](https://github.com/zeztto/circlr/releases)
 
-현재 로컬 앱은 **0.19.0**이다. [써클러 앱](dist/써클러.app)을 열어 사용한다. 기존 실행 중인 앱은 저장하고 **⌘Q로 종료한 뒤 다시 열어야** 새 버전이 실행된다. 이전 앱은 `dist/archive/`에 보관한다. [0.19 검증·제한](qa/0.19-review.md) · [향후 상세 개발 계획](docs/25-development-roadmap.md).
+In circlr, a circle is a timeline. Build a song from sections, place MIDI, audio, instruments and effects inside them, and connect their inputs and outputs. Move between the whole arrangement and detailed editing on one zoomable canvas.
 
-빈 공간 우클릭과 **A**로 서클을 만들고, **⇧⌘P**로 명령과 서클을 검색한다. **⌘/**에서 단축키를 확인한다. **⇧⌘R**은 음악과 캔버스의 MP4 녹화다. [키보드·영상·엔진 2 사용법](docs/26-canvas-keyboard-and-recording.md).
+![A section's circular timelines and MIDI, instrument, effect and audio connections in circlr](docs/images/circlr-orbit-build157.jpg)
 
-**작업 이동 / ⌘J**에서 섹션·트랙을 검색해 MIDI·오디오·음색·이펙트·출력으로 바로 들어간다. 편집기 상단의 트랙 경로와 **⌘1 / ⌘2 / ⌘3**은 같은 트랙의 연주 / 음색 / 이펙트를 전환한다. 작은 서클의 이름도 클릭·더블클릭할 수 있다. 신스는 두 열로 배치하며 편집 영역은 상단 조작과 콘솔을 피한다. [탐색·가독성 설계](docs/30-ui-navigation-plan.md).
+*Actual development app, 0.30.0 build157, using an authored QA project. The screenshot shows editing; it does not demonstrate audio playback. [Capture details](docs/images/README.md).*
 
-**⌘4 / MIDI 편집의 스텝**으로 드럼·신스를 16칸 페이지에 입력한다. 드럼은 실제 노트·sample mapping의 행을, 신스는 음정 행을 사용한다. 방향키로 선택하고 Return으로 켜기·끄기, Delete로 삭제, ⌥ 클릭으로 기존 노트를 선택한다. Tab으로 시작·길이·세기 필드에 이동한다. 페이지 복제·비우기와 1/4–1/32·셋잇단 분할을 지원하며, 분할을 바꿔도 기존 노트는 유지된다. 음색 편집과 재열기 뒤에도 스텝 모드를 유지한다. [기본 DAW 확장 계획](docs/31-daw-basics-plan.md).
+> **Development preview.** 0.30.0 is in progress, not a completed release. Physical audio output, Korean IME input and parts of the integration checklist remain unverified. See [current QA](docs/releases/0.30.0-qa.md) before evaluating it for production work.
 
-**⌥⌘I / MIDI 파일 가져오기**는 format 0/1의 노트 연주를 같은 캔버스에서 확인하고 새 MIDI 서클에 넣는다. 트랙을 선택하고 필요한 이번 섹션의 길이만 늘릴 수 있다. 파일 템포·박자·CC·페달·피치 벤드는 적용하지 않고 현재 섹션의 음악 설정을 사용한다.
+## What you can work with
 
-노트는 **⇧클릭**으로 선택을 더하고, 편집기에 키보드 포커스가 있을 때 **⌘A**로 전체 선택한다. **Q**는 박자 맞춤, **⌘D**는 선택 구간 바로 뒤 복제다. 선택 노트 아래의 명령으로 분할·강도·음정/시간 이동·삭제를 바로 조작한다. 궤도·피아노 롤의 방향키는 다중 선택도 함께 이동한다. 스텝의 방향키는 셀을 이동하며, 이조는 **이동** 메뉴를 사용한다. 각 작업은 한 번의 Undo로 복원한다.
+- **Song form:** nested album, song and section circles; reusable sections, repetitions and arrangement variations.
+- **A connected canvas:** free placement, grids, groups, custom colors and connections around eight directions with explicit IN/OUT.
+- **MIDI and audio:** orbital note editing, a drum/synth step editor, pitch bend and sustain editing, waveform trim, split and fades.
+- **Sound and motion:** instrument/effect routing, automation, bounce and source restoration; playback-follow and signal visualization controls.
+- **Local agents:** an MCP interface for inspecting and editing projects, generating MIDI, rendering and saving, with activity visible in the console.
 
-오디오는 파형 클릭 또는 **분할 위치 초 → 분할 / ⌘T**, **복제 / ⌘D**로 편집한다. 페이드 인·아웃과 음소거·삭제를 같은 캔버스에서 조작한다. 분할 전후 원본과 소리를 보존하며, 바운스 원본 복원은 관련 조각 전체를 함께 처리한다. 텍스트 입력 중에는 음악을 분할·복제하지 않는다. [오디오 편집의 시간 의미와 사용법](docs/32-audio-editing.md).
+![MIDI notes drawn as arcs and edited within the same canvas](docs/images/circlr-midi-build157.jpg)
 
-**오토메이션 / ⌘5**로 선택 서클의 볼륨·팬 곡선을 연다. 궤도는 각도=시간·반경=값, 자유 배치는 가로=시간·세로=값이다. 점을 클릭·드래그하거나 숫자로 입력하고 선형/유지 구간과 적용 여부를 바꾼다. Return은 점 추가, 대괄호는 점 선택, 방향키는 시간·값 이동, Delete는 점 삭제다. MIDI에서는 같은 트랙의 악기 오토메이션으로 이동한다. [오토메이션 사용법과 시간 계약](docs/33-automation-plan.md).
+These are implemented development features, not a guarantee of compatibility with every audio device or plug-in. Artist profiles and a combined text, image and video workspace are the [longer-term direction](docs/21-artist-universe.md).
 
-민트색 이중 궤도와 위성 서클로 구성한 앱 아이콘을 적용했다. macOS 26용 Icon Composer 리소스와 이전 macOS용 ICNS를 함께 포함한다. [아이콘 원본·생성 기록·빌드 방법](Resources/Brand/README.md) · [0.10.1 아이콘 검증](qa/0.10.1-icon-review.md).
+## Getting started
 
-## 재생 비주얼라이저와 팔로우
+Download the current **[0.30.0-preview.1](https://github.com/zeztto/circlr/releases/tag/v0.30.0-preview.1)** for Apple Silicon. This is build158 for evaluation with incomplete QA, not the completed 0.30.0 milestone. Repository access is required while the project remains private. Build from `main` to use the integrated development source.
 
-재생하면 서클의 외곽과 궤도 잔상이 신호 세기에 반응하고, 연결선의 작은 빛이 OUT에서 IN으로 흐른다. 실제 재생 sample time과 준비된 오디오 envelope, MIDI 노트의 velocity를 사용한다. 연결선의 이동 속도는 방향을 보여주는 시각 표현이며 플러그인 처리 지연을 측정한 값은 아니다.
-
-상단 **재생 팔로우**는 기본으로 켜져 있다. 현재 섹션과 마디를 표시하고 다음 섹션으로 넘어갈 때 화면이 부드럽게 따라간다. 콘솔을 접거나 펼쳐도 남은 작업 영역에 맞춘다. **휠·드래그·선택·편집을 시작하면 팔로우가 일시 중지**되며, **팔로우 재개**를 누르면 현재 섹션으로 돌아온다. 팔로우는 음악과 편집 선택을 바꾸지 않는다.
-
-일반 재생에서 최소화하면 음악은 계속 재생하고 화면 애니메이션 작업은 멈춘다. 영상 녹화 중에는 캡처를 유지하는 경로를 사용한다. 정지하면 신호 표시가 사라진다. 재생 중 음악을 수정하면 이전 그래프의 표시를 중단하고 다시 재생해야 반영된다는 안내를 띄운다. macOS의 동작 줄이기를 따르는 경로도 구현했다. [시간·신호·카메라 계약](docs/23-playback-visualizer.md).
-
-## 에이전트와 음악 제작
-
-`$circlr-studio` 전용 스킬과 프로듀서·편곡자·연주자·비트메이커·탑라이너·사운드 디자이너·믹싱·마스터링 에이전트를 설치했다. 메인 세션이 편집을 통합하며 전문 역할은 읽기 전용 MCP로 분석·제안한다. [사용법과 역할 계약](docs/24-music-agent-kit.md). 0.19 앱 번들의 `Contents/Resources/Codex`에도 설치 가능한 키트가 들어 있다.
-
-로컬 stdio MCP와 현재 사용자 전용 Unix socket을 통해 실행 중인 앱의 프로젝트를 읽고 편집한다. **화면을 클릭하지 않고, 창을 최소화한 상태에서도** MIDI 생성·악기/이펙트 편집·바운스·WAV export·저장이 가능하다. [연결 설정과 도구](mcp/README.md) · [명령 아키텍처](docs/17-agent-interface.md).
-
-하단의 접이식 콘솔은 실제 실행 로그와 작업 상태를 보여준다. Ctrl+`로 펼치고 접는다. `help`, `state`, `play`, `stop`, `save`, `undo`를 입력할 수 있다. MIDI 서클을 선택하고 `midi arpeggio`, 트랙을 선택하고 `synth pluck`, `bounce`를 실행할 수도 있다. 외부 AI 에이전트를 연결하는 구조이며 앱 자체에 LLM 계정이나 모델을 자동 설치하지 않는다.
-
-향후 사용자의 ChatGPT/Codex 계정으로 앱 안에서 대화하며 편집하는 [Codex 콘솔 구현 계획](docs/20-codex-account-console-plan.md)을 마련했다. 공식 App Server와 기존 MCP를 연결하며 로그인·작업 중단·대화 복원·앱 단독 배포의 완료 조건을 정의한다. 현재 0.19.0에는 외부 MCP 연결이 구현되어 있고, 앱 안의 계정 대화는 계획 단계다.
-
-내장 synth 10종(EP·오르간·브라스·스트링 포함), 음정별 sample mapping, MIDI 패턴 생성·파일 저장과 이펙트 포함 오디오 바운스를 추가했다. 바운스는 원본 MIDI·악기·이펙트를 보존하고 출력 입력을 오디오로 교체한다. 생성된 오디오 서클의 **원본 복원** 또는 Undo로 돌아갈 수 있다.
-
-[f0r h3r v4 프로젝트·MIDI·WAV와 튜토리얼](music/f0r-h3r/v4/README.md)은 120 BPM, 96마디·15트랙의 3분 14초 클럽 편곡이다. 정박 킥·2/4박 스네어·엇박 하이햇과 16마디 intro/outro를 사용하며, 배포 미디어는 CC0 FreePats bank다. [신스 엔진 3과 기본 음색 10종](docs/29-synth-engine3.md)은 파형 기음 상쇄를 줄이고 ensemble·velocity 배음과 새 악기를 추가한다. 기존 엔진 1/2와 v1–v3는 보존한다. [Splice 정책·공식 AU 연동 조사](docs/27-splice-licensing-and-integration.md).
-
-## 새 캔버스 사용
-
-1. 처음에는 빈 곡 하나를 담은 앨범으로 시작한다. **서클 추가 → 곡 서클**로 앨범에 곡을 더한다. 선택한 곡에서 **악장 서클**을 추가하면 기존 섹션을 첫 악장으로 묶고 새 악장을 만든다.
-2. 곡·악장을 선택하고 **섹션 서클 / ⌘K**로 섹션을 만든다. 섹션 안에는 실제 MIDI 데이터와 연결된 MIDI·악기·믹스·출력 서클이 있다. 추가 MIDI는 **MIDI 서클**, 오디오는 **오디오 가져오기 / ⌘I**로 넣는다.
-3. **휠 위로 확대, 아래로 축소**한다. 두 번 클릭하면 선택 서클에 맞춰 확대한다. 음악 서클이 충분히 커지면 **같은 캔버스 안에** 편집기가 나타난다. 별도 MIDI·오디오 편집 창을 만들지 않는다.
-4. MIDI 원호의 빈 곳에 노트를 입력하고 각도로 시간, 반경으로 음높이, 끝 점으로 길이를 조절한다. 오디오 파형의 양 끝을 드래그해 원본 구간을 자르고 시작 박·볼륨·템포 추종을 편집한다. 이펙터 서클은 실제 처리 경로에 삽입되며 확대해서 파라미터를 편집한다.
-5. 오른쪽 포트를 같은 그룹의 호환되는 서클에 끌어 연결한다. MIDI는 악기 입력, 오디오는 믹스·효과·출력에 연결한다. 곡·악장끼리 연결하면 같은 부모 안에서 재생 순서를 바꾼다. 궤도의 흰색 시간 손잡이는 소스 시작 또는 형제 순서를 바꾼다. 공간 이동은 자유 배치 모드에서 사용한다.
-6. 상단 경로 또는 **Esc**로 상위 서클에 돌아온다. **F**는 앨범 전체, **H / 가운데 버튼**은 화면 이동, **V**는 선택 도구다. 일반 휠은 편집기 위에서도 캔버스를 확대한다. **⇧ 휠**은 편집기 안에서 스크롤하거나 캔버스를 이동한다.
-7. 상단 BPM 또는 선택 서클의 설정 버튼에서 템포·박자·스케일·박 분할/강세·리듬 패턴을 설정한다. 각 항목은 부모 상속·앨범 글로벌·개별을 구분한다. 음악 설정은 적용 버튼으로 반영한다. 공유 원본과 이번 사용의 변형은 별도로 보존한다.
-8. Shift 클릭 또는 우클릭의 선택 추가로 여러 서클을 고른다. **⌘G**는 원형 그룹, 그리드 메뉴는 정렬·동일 간격·접기/펼치기다. 그룹 이동은 내부 배치와 음악 연결을 함께 유지한다.
-9. **앨범 사운드** 안에서 전역 이펙터·버스·마스터를 편집한다. 섹션 우클릭 또는 설정에서 연결 해제·재생 경로·전환을 편집한다.
-10. **재생**과 **WAV 내보내기 / ⌘E**는 앨범의 모든 곡·악장을 순서대로 처리한다. 선택 섹션 듣기는 해당 섹션만 처리한다. `.circlr` 저장은 앨범 구조·노트·연결·미디어와 마지막 확대 위치를 함께 보관한다.
-
-빨간 닫기 버튼과 **⌘W**는 최소화, **⌘Q**는 종료하는 동작을 유지한다. 닫기 후 앱 실행 유지와 ⌘Q 종료를 검증했다.
-
-## 구조와 저장
-
-- `CirclrCore`: Album/Composition 소유권, 섹션 원본·변형, typed music graph, 계층별 음악 설정과 절대 시간 실행 계획.
-- `CirclrAudio`: 실제 MIDI 악기 렌더링, 오디오 구간·반복·tempo 추종, 노드별 DSP/Audio Unit 처리, 앨범 playback 및 WAV/stem export.
-- `CirclrApp`: AppKit 자유 캔버스와 확대 카메라, 서클 안 SwiftUI/AppKit 편집기, 하나의 문서 상태와 undo.
-- `CirclrRealtime`: 녹음 ring buffer와 내장 synth의 native MIDI queue·voice render. `mcp`: Python stdio adapter. `Tools/CirclrStudioTool`: 같은 Core/Audio로 곡을 만들고 렌더하는 CLI.
-- 기존 version 1 곡은 메모리에서 version 2 앨범으로 확장한다. 파일을 바꾸려면 새 위치에 저장한다. 원본 미디어·원본/변형·편곡안과 기존 효과 순서를 유지한다.
-
-[새 계층 아키텍처](docs/15-hierarchy-canvas-architecture.md)에 포함·시간·신호·편집의 경계를 기록했다. 전체 설계와 구현 계획은 [기본 아키텍처](docs/04-architecture.md) 및 [앨범 구현 계획](docs/14-album-circle-implementation.md)을 참조한다.
-
-## 검증과 실행 경계
-
-macOS 14 이상 / Swift·AppKit·SwiftUI·AVAudioEngine·CoreMIDI 기반이다. 현재 native 실행 환경은 Apple Silicon Mac이다.
-
-앱 패키징에는 Xcode 26 이상과 `actool`, `iconutil`, `sips`가 필요하다. `build-app.sh`는 저장된 PNG에서 아이콘을 재생성하고 배포 전용 `.build/app-release` 경로에서 앱을 빌드한다. 이미지 생성 서비스 접속은 빌드에 필요하지 않다.
+**Requirements:** macOS 14+, Xcode 26+ selected as the active developer directory, and Python 3. Native validation currently covers Apple Silicon. The interface is currently in Korean; this README is available in both languages.
 
 ```sh
+git clone --branch main https://github.com/zeztto/circlr.git
+cd circlr
 ./scripts/build-app.sh
-./scripts/swift-local.sh test
-python3 -m unittest discover -s mcp -p 'test_*.py'
+open 'dist/써클러.app'
 ```
 
-0.19의 오프라인 Swift **148개**, Python **22개**가 통과했다. 궤도·선형 점 편집, native gain/pan/hold WAV, bypass·Undo·저장 복원은 [0.19 QA](qa/0.19-review.md)에 기록했다. 실제 마이크·Scarlett 재생, plugin parameter 자동화는 후속 범위다.
+The build packages the app, its five audio helpers and the agent kit together. Local packages use ad-hoc signing and are not notarized. Keep a separate copy of important projects when trying development builds.
 
-0.18의 오프라인 Swift **138개**, Python **21개**가 통과했다. Native 분할 전후 PCM 동일, 페이드 감쇠, 복제·연속 키보드·텍스트 입력 보호·Undo·저장 복원을 [0.18 QA](qa/0.18-review.md)에 기록했다. 실제 마이크·Scarlett 재생 검증은 남아 있다.
+## First session
 
-0.17의 오프라인 Swift **129개**, Python **20개**가 통과했다. 실제 MIDI 가져오기·일괄 편집·Undo·재열기·MCP·바운스는 [0.17 QA](qa/0.17-review.md)에 기록했다. 녹음 권한 대기 취소와 늦은 응답의 시작 차단은 Core 테스트로 검사했으며 실제 마이크 녹음 검증과 구분한다.
+1. Right-click empty canvas space to create a circle. Add sections to plan the song, then add MIDI, audio, instruments and effects inside them.
+2. Zoom with the wheel over empty canvas space; double-click a circle to enter its detail. Connect ports to define signal flow.
+3. Edit notes or steps, import audio/MIDI, and use the toolbar to switch to automation or sound settings.
+4. Save the `.circlr` project with **⌘S**. Use **Bounce** to turn a track path into audio and **Restore original** to return to its source.
 
-0.16의 오프라인 Swift **119개**, Python **19개**가 통과했다. 실제 앱의 신스·드럼 스텝 입력, 키보드, 페이지 복제, 분할 전환, Undo·저장 복원, MCP·WAV·바운스 결과는 [0.16 QA](qa/0.16-review.md)에 기록했다. 이전 검색·탐색 검증은 [0.15 QA](qa/0.15-review.md)에 있다.
+| Shortcut | Action |
+|---|---|
+| ⇧⌘P | Search commands and shortcuts |
+| ⌘J | Jump to a section, track, instrument or effect |
+| Tab / ⇧Tab | Move through editor controls |
+| Ctrl + ` | Show or hide the console |
+| ⌘W / ⌘Q | Minimize the window / quit the app |
 
-0.13의 오프라인 Swift **102개**, Python **17개** 테스트를 통과했다. 실제 QA 앱에서 우클릭 생성·명령 검색·두 배치 방식의 MIDI 단축키·오디오 trim·닫기 최소화와 f0r h3r v2 바운스/export를 확인했다. 앱 export는 제작 WAV와 정확히 일치하며 바운스 전후 차이는 24-bit PCM 최대 1단계다. 최종 Scarlett 출력 연결은 시간 초과로 실제 재생·캔버스 MP4 검증이 남았다. 코덱 테스트 통과와 실제 녹화 성공을 구분한다. [0.13 검증·장치 제한](qa/0.13-review.md).
+## Developers and agents
 
-0.11에서는 실제 재생 위치·신호, 자동 팔로우·수동 탐색 후 재개, 최소화·복원, 재생 중 편집 충돌과 정지를 검증했다. 시각화 사용 전후 PCM은 테스트 fixture에서 정확히 일치했다. [0.11 검증과 화면 증거](qa/0.11-review.md).
+Start with [the documentation map](docs/README.md). Contributors should read [CONTRIBUTING.md](CONTRIBUTING.md); coding agents should also read [AGENTS.md](AGENTS.md). For music work, see [MCP setup](mcp/README.md) and the [studio agent kit](docs/24-music-agent-kit.md).
 
-0.10의 native 앱에서 MCP handshake와 14개 도구, 최소화 상태의 프로젝트 열기·MIDI 편집·Undo·바운스·WAV export·저장, 중복 요청·오래된 revision·잘못된 batch·취소·작업 중 문서 변경을 검증했다. 당시 101.31초 전체 곡의 바운스 전후 차이는 24-bit PCM 최대 1단계였다. [실제 MCP 증거](qa/generated/0.10-final/0.9-mcp-native.json) · [PCM 비교](qa/generated/0.10-final/bounce-audio-comparison.json). 기존 계층 캔버스의 native 검증은 [0.8 기록](qa/hierarchy-native-review.md)에 있다.
+The Swift package separates the project model (`CirclrCore`), audio processing (`CirclrAudio`, `CirclrRealtime`) and macOS interface (`CirclrApp`). GUI and MCP edits use the same document model. See [architecture](docs/15-hierarchy-canvas-architecture.md) and [verification](docs/releases/README.md).
 
-현재 오디오는 준비된 PCM을 재생하는 방식이다. 연속 실시간 그래프 엔진, plugin crash 격리/PDC, 모든 외부 장치·플러그인 호환성을 검증한 제품이라는 의미는 아니다. WAV는 48 kHz stereo / 24-bit, 기본 잔향 2초다. 기존 0.7.1 배포본 사용 방법은 [이전 안내](README-0.7.1.md)에 보관했다.
+## Status, releases and license
 
-기본 캔버스는 **12시부터 시계 방향으로 진행하는 궤도 타임라인**이다. 앨범·곡·악장·섹션의 실제 실행 시간과 반복·전환을 사용하며, 같은 캔버스의 원호형 MIDI 편집과 원형 파형 trim을 지원한다. 기존 자유 배치 좌표는 보존되며 그리드 메뉴에서 모드를 바꾼다. [시간 의미와 조작법](docs/19-orbit-timeline.md)을 참고한다. 최초 파일 접근의 macOS 권한은 사용자가 허용해야 한다. 일반 `.mcp.json` 예시를 작성한 것만으로 이미 실행 중인 에이전트의 도구 목록이 자동 등록되지는 않는다.
+Each completed version will have a Git tag and a GitHub Release with Korean/English notes, a verified app package and checksums. Development build numbers and documentation edits do not create releases. [Changelog](CHANGELOG.md) · [Release procedure](docs/releases/README.md).
+
+circlr is being prepared for a future open-source release. **An open-source license has not been selected or added yet.** Public availability and reuse permissions should not be assumed. Third-party samples and private music projects are not included in this repository.

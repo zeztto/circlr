@@ -22,6 +22,8 @@ development-lead → planner/UI-UX → native Swift utility(Core/Audio) → nati
 
 ## UI 계약
 
+0.20 build 34는 아래 초기 UI를 [오토메이션 작업 공간](48-automation-workspace.md)으로 개선했다. gain 입력은 dB, pan 입력은 %이며 저장·DSP·보간은 위의 원래 값이다. Return/Esc 후 방향키로 곡선을 계속 편집하고 같은 화면에서 원본/이번 사용과 전체 점 범위를 전환한다. [현재 검증 범위](../qa/automation-workspace-review.md).
+
 단일 다크 캔버스를 유지한다. 현재 편집 내용과 automation을 직접 전환하며 새 창·dock·중첩 설정 메뉴를 추가하지 않는다. 궤도에서는 각도=시간, 반경=값이며 자유 배치에서는 가로=시간·세로=값이다. 좌표와 실제 값의 매핑을 표시한다. 작은 창에서도 파형/곡선과 핵심 명령이 콘솔에 가리지 않도록 배치한다.
 
 빈 곳 클릭/점 추가로 입력, 점 드래그는 한 번의 Undo로 확정, 방향키는 시간·값 편집, 점 선택은 키보드로 이동, Delete로 삭제한다. 값·박·연결 방식은 숫자 필드/명시 컨트롤에서도 접근한다. 읽기/쓰기 중 stale revision 또는 선택 변경은 이전 drag 결과를 버린다. 비활성 곡선과 무곡선은 다른 상태이며 비활성은 points를 보존한다.

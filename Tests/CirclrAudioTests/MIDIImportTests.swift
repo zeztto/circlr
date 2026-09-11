@@ -21,11 +21,15 @@ final class MIDIImportTests:XCTestCase {
         var truncated=try MIDIFile.encode(lanes:[("keys",[Note(beat:0,length:1,pitch:60)])],tempo:120,meter:Meter());truncated.removeLast(12)
         XCTAssertThrowsError(try MIDIImport.read(truncated))
     }
-    func testFormatZeroSplitsChannelsAndReportsPerformanceControllers()throws {
+    func testFormatZeroSplitsChannelsAndPreservesSustainController()throws {
         let body:[UInt8]=[0,0x99,36,111,0,0x90,60,100,0,0xB0,64,127,0x83,0x60,0x89,36,0,0,0x80,60,0,0,0xFF,0x2F,0]
         let data=Data(Array("MThd".utf8)+[0,0,0,6,0,0,0,1,1,0xE0]+Array("MTrk".utf8)+[0,0,0,UInt8(body.count)]+body)
         let imported=try MIDIImport.read(data)
-        XCTAssertEqual(imported.tracks.map(\.channel),[0,9]);XCTAssertEqual(imported.tracks.map{$0.notes[0].pitch},[60,36]);XCTAssertEqual(imported.ignoredPerformanceEvents,1)
+        XCTAssertEqual(imported.tracks.map(\.channel),[0,9]);XCTAssertEqual(imported.tracks.map{$0.notes[0].pitch},[60,36]);XCTAssertEqual(imported.ignoredPerformanceEvents,0)
+        let sustain=try XCTUnwrap(imported.tracks[0].sustain)
+        XCTAssertEqual(sustain.channel,0);XCTAssertEqual(sustain.initialValue,0)
+        XCTAssertEqual(sustain.events,[MIDISustainEvent(beat:0,rawValue:127)])
+        XCTAssertNil(imported.tracks[1].sustain)
         XCTAssertEqual(imported.tracks[0].notes[0].length,1,accuracy:1e-5)
     }
 

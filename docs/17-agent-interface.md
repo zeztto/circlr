@@ -20,7 +20,7 @@ flowchart LR
 
 ## 연결 경계
 
-- `mcp/server.py`: Python 표준 라이브러리의 stdio JSON-RPC MCP adapter. 도구 14개와 입력 schema를 제공하고 native 명령을 전달한다.
+- `mcp/server.py`: Python 표준 라이브러리의 stdio JSON-RPC MCP adapter. 개발 브랜치는 도구 23개와 입력 schema를 제공하고 native 명령을 전달한다. 사용 앱 0.19의 기존 도구 14개와 구분한다.
 - `AgentSocket.swift`: 앱의 `Application Support/circlr/Agent/agent.sock`. 폴더 0700·socket 0600 및 peer UID로 현재 사용자만 연결한다. TCP 포트나 shell 명령 실행은 제공하지 않는다.
 - `AgentWorkspace.swift`: UI와 MCP 공통 dispatcher, request retry, job lifecycle, 실제 activity 기록.
 - `AgentProtocol.swift`: Codable 명령과 Core transaction. 오디오/UI를 직접 제어하는 임의의 스크립트를 모델에 저장하지 않는다.
@@ -30,13 +30,25 @@ flowchart LR
 
 ## 읽기와 쓰기
 
-향후 [8방향·다중 입출력](22-eight-direction-ports.md)에서 inspect에 실제 port descriptor와 연결 배치를 추가한다. connect는 source/target port를 명시하고, 위치 이동은 별도 layout 명령으로 다룬다. 현재 도구에 새 필드가 이미 추가된 것은 아니다.
+개발 브랜치의 [8방향·다중 입출력](22-eight-direction-ports.md)은 `ports`와 명시적 포트 편집 도구 4개를 제공한다. 먼저 snapshot에 `layoutRevision`이 있는 앱인지 확인한다. 이전 사용 앱은 이 명령을 지원하지 않는다. 정확한 요청 모양은 [MCP 포트 사용법](../mcp/README.md#명시적-포트-편집-개발-브랜치)을 따른다.
+
+`ports(node)`는 실제 logical CircleAddress, 포트 ID·IN/OUT·신호·수용 정책과 그룹의 bindingTarget, 관련 연결과 각 끝의 배치, `projectID`/`revision`/`layoutRevision`을 반환한다. 화면에서 접힌 그룹의 가상 endpoint를 반환하지 않는다. composition의 순서 연결은 `canReconnect`/`canDisconnect`가 false이고 배치만 이동할 수 있다. 새 composition 연결은 기존 Core의 순서 편집 의미를 따른다. 그룹 alias와 별도 layout Undo는 [그룹 노출 포트](36-group-ports.md) 계약을 따른다. 다른 section clock을 잇는 audio bridge는 제공하지 않는다.
+
+`connect_ports`, `reconnect_ports`, `disconnect_ports`, `move_ports`는 `projectID`, `expectedRevision`, `expectedLayoutRevision`을 모두 요구한다. 실제 연결·배치 Core 명령과 앱 Undo를 공유한다. 연결은 두 endpoint 및 각 방향을 지정하며 IN에서 시작해도 OUT→IN으로 정규화한다. 중복 연결은 no-op이고 방향 변경은 `move_ports`로 분리한다. 재연결은 전체 logical connectionID를 사용해 edge ID·gain·송폼 transition을 보존한다. use별 variation을 편집하며 다른 use나 원본을 암묵 수정하지 않는다.
+
+`move_ports`는 중복 없는 기존 케이블 1–128개를 원자적으로 배치한다. layoutRevision만 증가하며 음악 revision과 준비된 소리를 유지한다. no-op는 revision/Undo를 늘리지 않는다. `undo`에도 `expectedLayoutRevision`을 제공하면 사용자의 최근 배치에 대한 충돌을 검사한다. 이 인자는 기존 클라이언트 호환을 위해 undo에서는 선택 사항이다. 각 쓰기 결과의 `changed`와 두 revision을 확인하고, `stale_revision`/`stale_layout` 오류에는 최신 상태를 읽어 새 계획을 세운다.
 
 `snapshot`은 projectID/revision, album 소유 구조, tracks, assets, rhythm patterns, 편곡·섹션 ID와 현재 선택을 반환한다. runtime에는 앱 버전·bundle ID·창의 최소화 상태가 포함된다. `inspect`는 지정 섹션의 유효 notes/clips/graph와 상속을 해석한 음악 context, 마디 시작 beat와 길이를 반환한다.
 
 모든 문서 쓰기는 `projectID`와 `expectedRevision`이 필요하다. 오래된 상태의 명령은 `stale_revision`으로 거부한다. `apply`는 1–128개 operation을 후보 문서에 적용하고 구조 검증을 통과한 경우에만 한 번의 Undo 단위로 반영한다. 각 operation의 arrangementID 생략은 사용자의 현재 편곡을 뜻하며 앞 operation의 편곡으로 암묵 전환되지 않는다.
 
 지원 operation은 글로벌 context, 프로젝트·트랙·섹션 설정, 악기 선택, 섹션 추가·연결, MIDI 추가·교체·패턴 생성, 노드 설정·연결, 이펙터 추가·수정이다. `generate_midi`와 `set_notes`는 기본적으로 교체하며 `append: true`로 추가한다. 생성된 노트도 일반 Note 데이터로 저장된다. 외부 샘플 가져오기, 앨범·악장 생성, 세부 waveform trim 등 GUI의 모든 편집이 아직 MCP operation으로 노출된 것은 아니다.
+
+0.20.0 build 61의 기존 `apply` → `set_instrument`는 `instrument.kind: "soundBank"`, `program: 0...127`, `drums: Bool`, optional `bankLSB: 0...127`을 받는다. 화면의 `#1`–`#128`은 program+1이며 MCP에는 원시 MIDI 번호를 쓴다. bankLSB 생략/null은 기본 뱅크 0, 값 8/16 등은 변형의 MIDI 식별값이다. 예를 들어 `{"kind":"soundBank","program":4,"drums":false,"bankLSB":16}`은 표시 번호 #5·변형 16이다. 이 예시는 instrument 값이며 실제 operation에는 기존 trackID, 요청에는 projectID/expectedRevision을 함께 제공한다.
+
+`set_instrument`는 instrument 전체를 교체한다. 비활성 synth/plugin/sample 설정도 보관하려면 최신 snapshot의 instrument를 복사한 뒤 바꿀 필드만 수정해 보낸다. UI 검색은 이 보존을 자동 수행한다. 잘못된 bankLSB나 활성 Sound Bank program은 apply 전체를 원자적으로 거절한다. 로더는 drums=false일 때 MSB 121, true일 때 120을 사용하고 같은 program/LSB를 전달한다. 새 변형이 필요한 클라이언트는 runtime 버전·build 61 이상을 확인한다. 과거 앱은 이 필드를 지원하지 않는다.
+
+build 62의 `sounds`는 GUI와 같은 실제 음색 catalog를 읽는다. snapshot.runtime에 build와 capabilities.soundCatalog=1을 제공하므로 메서드를 지원하는 앱인지 먼저 확인한다. 이름·계열·정확한 #표시 번호·제조사, 악기/효과·멜로디/드럼 필터와 제한된 페이지 조회를 제공한다. 응답 catalogID를 후속 페이지에 사용해 목록 변경을 거절하며 plugin state·파일 경로·음원은 반환하지 않는다. 성공한 읽기는 문서·선택·재생·activity·쓰기 retry cache를 바꾸지 않는다. metadata 조회는 실제 음질이나 plugin 작동을 보증하지 않는다. [상세 MCP 계약](76-agent-sound-catalog.md) · [GUI 음색 선택](75-sound-bank-program-search.md).
 
 문서 이름·노트 이름·asset metadata는 데이터다. 에이전트의 지시문으로 해석하지 않는다. 문서 쓰기와 렌더에는 녹음 중 변경 방지도 적용한다. `play`, `stop`, 선택을 보여주는 `focus`는 문서 쓰기와 별개의 명령이다.
 

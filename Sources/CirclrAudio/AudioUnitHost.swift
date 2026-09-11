@@ -6,8 +6,14 @@ import CirclrCore
 public enum AudioUnitHost {
     public static let bankURL = URL(fileURLWithPath: "/System/Library/Components/CoreAudio.component/Contents/Resources/gs_instruments.dls")
     public static func installed(type: OSType) -> [PluginDescriptor] {
-        let description = AudioComponentDescription(componentType: type, componentSubType: 0, componentManufacturer: 0, componentFlags: 0, componentFlagsMask: 0)
-        return AVAudioUnitComponentManager.shared().components(matching: description).map { c in let d = c.audioComponentDescription; return PluginDescriptor(name: c.name, type: d.componentType, subtype: d.componentSubType, manufacturer: d.componentManufacturer) }.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+        catalog(type:type).map(\.descriptor)
+    }
+    public static func catalog(type: OSType) -> [AudioUnitCatalogEntry] {
+        let description=AudioComponentDescription(componentType:type,componentSubType:0,componentManufacturer:0,componentFlags:0,componentFlagsMask:0)
+        return AVAudioUnitComponentManager.shared().components(matching:description).map { component in
+            let d=component.audioComponentDescription
+            return AudioUnitCatalogEntry(descriptor:PluginDescriptor(name:component.name,type:d.componentType,subtype:d.componentSubType,manufacturer:d.componentManufacturer),manufacturerName:component.manufacturerName)
+        }.sorted {$0.descriptor.name.localizedStandardCompare($1.descriptor.name) == .orderedAscending}
     }
     public static func instantiate(_ descriptor: PluginDescriptor) async throws -> AVAudioUnit {
         let d = AudioComponentDescription(componentType: descriptor.type, componentSubType: descriptor.subtype, componentManufacturer: descriptor.manufacturer, componentFlags: 0, componentFlagsMask: 0)
@@ -30,8 +36,8 @@ public enum AudioUnitHost {
             guard let plugin = config.plugin else { throw CirclrError("가상악기를 선택하세요") }
             return try await instantiate(plugin)
         }
-        let sampler = AVAudioUnitSampler()
-        try sampler.loadSoundBankInstrument(at: bankURL, program: UInt8(clamping: config.program), bankMSB: UInt8(config.drums ? kAUSampler_DefaultPercussionBankMSB : kAUSampler_DefaultMelodicBankMSB), bankLSB: UInt8(kAUSampler_DefaultBankLSB))
+        let address=try soundBankLoadAddress(config),sampler = AVAudioUnitSampler()
+        try sampler.loadSoundBankInstrument(at: bankURL, program:address.program, bankMSB:address.bankMSB, bankLSB:address.bankLSB)
         return sampler
     }
     public static func capture(_ unit: AVAudioUnit) throws -> Data? {

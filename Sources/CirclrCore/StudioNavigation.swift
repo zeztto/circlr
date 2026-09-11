@@ -18,17 +18,10 @@ public struct StudioSectionRoute:Identifiable {
     public var tracks:[StudioTrackRoute]
 }
 
-/// Navigation uses actual lane ownership and audible output paths; it never edits music.
+/// Navigation uses lane ownership and structural main-output paths; it never edits music.
 public enum StudioNavigation {
     public static func outputTracks(from id:ID,graph:SectionGraph)->Set<ID> {
-        var frontier=[id],visited=Set<ID>(),result=Set<ID>()
-        let nodes=Dictionary(uniqueKeysWithValues:graph.nodes.map{($0.id,$0)})
-        while let current=frontier.popLast(),visited.count<=graph.nodes.count {
-            guard visited.insert(current).inserted,let node=nodes[current] else{continue}
-            if case .output(let track)=node.content {result.insert(track)}
-            frontier += graph.edges.filter{$0.from==current && !$0.sidechain}.map(\.to)
-        }
-        return result
+        (try? SectionGraphReachability(graph:graph).outputTracks(from:id)) ?? []
     }
     public static func build(_ project:Project)throws->[StudioSectionRoute] {
         guard let album=project.album else{return []}
@@ -42,28 +35,37 @@ public enum StudioNavigation {
                 for use in arrangement.uses {
                     guard let section=project.sections.first(where:{$0.id==use.sectionID}),let graph=try SectionGraphEditing.effective(section:section,use:use) else{continue}
                     let lanes=try ArrangementCompiler.effectiveLanes(section:section,use:use)
-                    let ordered=try SectionGraphValidator.sorted(graph)
-                    let outgoing=Dictionary(grouping:graph.edges.filter{!$0.sidechain},by:\.from)
-                    var outputs:[ID:Set<ID>]=[:]
-                    for node in ordered.reversed() {
-                        var tracks=Set<ID>()
-                        if case .output(let track)=node.content {tracks.insert(track)}
-                        for edge in outgoing[node.id] ?? [] {tracks.formUnion(outputs[edge.to] ?? [])}
-                        outputs[node.id]=tracks
+                    let reachability=try SectionGraphReachability(graph:graph)
+                    let ordered=reachability.orderedNodes
+                    let (_,context,_)=try ArrangementCompiler.context(project:project,use:use,arrangementID:arrangement.id)
+                    // Match scene visibility: a rhythm source needs its resolved pattern;
+                    // audio additionally needs clips, while empty MIDI remains editable.
+                    let visible=try ordered.filter { node in
+                        switch node.content {
+                        case .rhythmMIDI(let trackID),.rhythmAudio(let trackID):
+                            let resolved=try ContextResolver.inheriting(global:project.global,parent:context,settings:node.settings)
+                            guard let pattern=project.patterns.first(where:{$0.id==resolved.rhythm.patternID && $0.trackID==trackID}) else{return false}
+                            if case .rhythmAudio=node.content{return !pattern.audio.isEmpty}
+                            return true
+                        default:return true
+                        }
                     }
+                    let outputs=Dictionary(uniqueKeysWithValues:ordered.map{($0.id,reachability.outputTracks(from:$0.id))})
                     var tracks:[StudioTrackRoute]=[]
                     for track in project.tracks {
                         let laneIDs=Set(lanes.filter{$0.trackID==track.id}.map(\.id))
-                        let destinations=ordered.compactMap { node->StudioDestination? in
+                        let destinations=visible.compactMap { node->StudioDestination? in
                             let owned:Bool
+                            var name=node.name,role=node.content.label
                             switch node.content {
                             case .midi(let lane),.audio(let lane,_):owned=laneIDs.contains(lane)
                             case .instrument(let id),.output(let id):owned=id==track.id
-                            case .rhythmMIDI,.rhythmAudio:return nil
-                            case .effect,.mix:owned=outputs[node.id]?.contains(track.id)==true
+                            case .rhythmMIDI(let id):owned=id==track.id;name += " · 공유 리듬";role="MIDI"
+                            case .rhythmAudio(let id):owned=id==track.id;name += " · 공유 리듬";role="오디오"
+                            case .effect,.mix,.router:owned=outputs[node.id]?.contains(track.id)==true
                             }
                             guard owned else{return nil}
-                            return StudioDestination(id:.music(arrangementID:arrangement.id,useID:use.id,nodeID:node.id),name:node.name,role:node.content.label,connected:outputs[node.id]?.contains(track.id)==true)
+                            return StudioDestination(id:.music(arrangementID:arrangement.id,useID:use.id,nodeID:node.id),name:name,role:role,connected:outputs[node.id]?.contains(track.id)==true)
                         }
                         if !destinations.isEmpty {tracks.append(StudioTrackRoute(id:track.id,name:track.name,destinations:destinations))}
                     }
@@ -73,22 +75,25 @@ public enum StudioNavigation {
         }
         try visit(album.children);return result
     }
-    /// Expand only containing layout groups; use candidate copy so a failed route stays atomic.
-    public static func reveal(_ target:CircleAddress,in project:inout Project)throws {
-        var candidate=project,cursor=target,seen=Set<CircleAddress>()
+    /// Reveal a selection path in the scene without creating document layout overrides.
+    public static func containingGroups(of target:CircleAddress?,in project:Project)throws->Set<CircleAddress> {
+        guard var cursor=target else{return []}
+        var seen=Set<CircleAddress>(),groups=Set<CircleAddress>()
         while cursor != .album,seen.insert(cursor).inserted {
-            let scope=try HierarchyEditing.scope(of:cursor,in:candidate)
+            let scope=try HierarchyEditing.scope(of:cursor,in:project)
             if let member=HierarchyEditing.memberID(cursor) {
-                let layout=try HierarchyEditing.layout(for:scope,in:candidate)
-                if layout.groups.contains(where:{$0.collapsed && $0.members.contains(member)}) {
-                    try HierarchyEditing.editLayout(scope,in:&candidate) {layout in
-                        for i in layout.groups.indices where layout.groups[i].members.contains(member) {layout.groups[i].collapsed=false}
-                    }
+                let layout=try HierarchyEditing.layout(for:scope,in:project)
+                for group in layout.groups where group.collapsed && group.members.contains(member) {
+                    groups.insert(.group(parent:scope,id:group.id))
                 }
             }
             cursor=scope
         }
-        guard try HierarchySceneBuilder.build(candidate).node(target) != nil else{throw CirclrError("이 서클은 현재 편곡에서 사용할 수 없습니다")}
-        project=candidate
+        return groups
+    }
+    public static func scene(revealing target:CircleAddress,in project:Project)throws->HierarchyScene {
+        let scene=try HierarchySceneBuilder.build(project,revealing:target)
+        guard scene.node(target) != nil else{throw CirclrError("이 서클은 현재 편곡에서 사용할 수 없습니다")}
+        return scene
     }
 }

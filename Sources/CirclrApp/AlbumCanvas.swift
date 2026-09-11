@@ -14,15 +14,25 @@ struct AlbumCanvas: NSViewRepresentable {
     var camera = HierarchyCamera()
     var scene: HierarchyScene?
     var renderedRevision = -1
+    var renderedProjectID:ID?
+    var renderedOrbits:Bool?
     var commandID: UUID?
     var initialized = false
     var previousSize = NSSize.zero
     var animation: Timer?
+    var animationDestination: HierarchyCamera?
     var scrollMonitor: Any?
+    private var forwardingAutomationScroll=false
+    private var paletteKeyMonitor:Any?
+    private var paletteFocusObserver:NSObjectProtocol?
+    private var pendingPaletteKeys:[(UUID,NSEvent)]=[]
     var editor: NSHostingView<InlineCircleEditor>?
     var editorAddress: CircleAddress?
     var labelPlacements:[CanvasLabelPlacement]=[]
+    var fileDropPreview:CanvasFileDropPreview?
     var hoverAddress:CircleAddress?
+    var colorTarget: (projectID: ID, address: CircleAddress)?
+    var colorSubscription: AnyCancellable?
     var down = NSPoint.zero
     var dragNode: CircleSceneNode?
     var dragOrigin = Point()
@@ -30,8 +40,24 @@ struct AlbumCanvas: NSViewRepresentable {
     var dragPreview: Point?
     var panOrigin = Point()
     var panning = false
-    var connecting: CircleAddress?
+    var connecting: CirclePortHandle?
+    var connectionRevision = 0
+    var connectionLayoutRevision = 0
+    var connectionProjectID: ID?
+    var connectionToken: UUID?
     var connectionPoint = NSPoint.zero
+    var selectedCable: CircleConnectionID?
+    var selectedCableProjectID: ID?
+    var selectedCanvasPort: CirclePortEndpoint?
+    var selectedCableEnd = CirclePortDirection.output
+    var portTools: NSHostingView<PortToolsView>?
+    var circleAccessibility: [CircleAddress: CircleAccessibility] = [:]
+    var portAccessibility: [CirclePortEndpoint: PortAccessibility] = [:]
+    var cableAccessibility: [CircleConnectionID: CableAccessibility] = [:]
+    var cableMode = CircleCableGesture.Mode.reconnect
+    var cableDrag: CircleCableGesture?
+    var cableDragOriginal = false
+    var cableTools: NSHostingView<CableToolsView>?
     var tracking: NSTrackingArea?
     var meterSubscription:AnyCancellable?
     var albumPlan:AlbumExecutionPlan?
@@ -57,7 +83,10 @@ struct AlbumCanvas: NSViewRepresentable {
         self.store = store; super.init(frame: .zero)
         store.captureHierarchyViewport = { [weak self] in
             guard let self,self.initialized,self.bounds.width>0 else{return nil}
-            return HierarchyViewport(camera:self.camera,width:self.bounds.width,height:self.bounds.height,selection:self.store.hierarchySelection ?? .album,settingsOpen:self.store.hierarchySettingsOpen,midiStepMode:self.store.midiStepMode)
+            // A save may arrive before SwiftUI consumes the latest focus command.
+            self.update()
+            let savedCamera = self.animation?.isValid == true ? (self.animationDestination ?? self.camera) : self.camera
+            return HierarchyViewport(camera:savedCamera,width:self.bounds.width,height:self.bounds.height,selection:self.store.hierarchySelection ?? .album,settingsOpen:self.store.hierarchySettingsOpen,midiStepMode:self.store.midiStepMode,workspace:self.store.capturedStudioWorkspace)
         }
         store.captureMovieFrame = { [weak self] in
             guard let self,self.bounds.width>=64,self.bounds.height>=64 else{return nil}
@@ -67,7 +96,9 @@ struct AlbumCanvas: NSViewRepresentable {
             return bitmap.cgImage
         }
         store.canvasCommands = { [weak self] in self?.availableCommands() ?? [] }
-        store.focusCanvas = { [weak self] in guard let self else{return};self.window?.makeFirstResponder(self) }
+        store.focusCanvas = { [weak self] in guard let self else{return};self.store.editorFocusRequest=nil;self.window?.makeFirstResponder(self) }
+        installCircleColorObserver()
+        registerForDraggedTypes([.fileURL])
         wantsLayer = true; clipsToBounds = true; layer?.masksToBounds = true; layer?.backgroundColor = StudioTheme.canvasNS.cgColor
         setAccessibilityElement(true); setAccessibilityRole(.group); setAccessibilityLabel("앨범 서클 캔버스")
         store.capturePlaybackVisualization = { [weak self] in self?.playbackDiagnostics() ?? [:] }
@@ -79,19 +110,73 @@ struct AlbumCanvas: NSViewRepresentable {
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         if let scrollMonitor { NSEvent.removeMonitor(scrollMonitor); self.scrollMonitor = nil }
+        if let paletteKeyMonitor {NSEvent.removeMonitor(paletteKeyMonitor);self.paletteKeyMonitor=nil}
+        if let paletteFocusObserver {NotificationCenter.default.removeObserver(paletteFocusObserver);self.paletteFocusObserver=nil}
+        pendingPaletteKeys=[]
         if let interactionMonitor { NSEvent.removeMonitor(interactionMonitor); self.interactionMonitor = nil }
         playbackNotifications.removeAll()
         if window != nil {
             installPlaybackObservers()
+            paletteKeyMonitor=NSEvent.addLocalMonitorForEvents(matching:.keyDown){[weak self] event in
+                guard let self,event.window===self.window,let owner=self.store.commandPalette?.id else{return event}
+                guard NSApp.isActive,self.window?.isKeyWindow==true else{self.pendingPaletteKeys=[];return nil}
+                if let field=self.paletteSearch(owner) {
+                    guard self.focusPaletteSearch(field) else{
+                        self.pendingPaletteKeys=[];self.store.status="검색 입력을 시작하지 못했습니다. 검색창을 다시 여세요";return nil
+                    }
+                    let queued=self.pendingPaletteKeys.filter{$0.0==owner && ProcessInfo.processInfo.systemUptime-$0.1.timestamp<=2}.map{$0.1};self.pendingPaletteKeys=[]
+                    for pending in queued {
+                        guard self.store.commandPalette?.id==owner,NSApp.isActive,self.window?.isKeyWindow==true else{return nil}
+                        NSApp.sendEvent(pending)
+                    }
+                    return self.store.commandPalette?.id==owner ? event:nil
+                }
+                self.pendingPaletteKeys.removeAll{$0.0 != owner || ProcessInfo.processInfo.systemUptime-$0.1.timestamp>2}
+                guard self.pendingPaletteKeys.count<256 else{
+                    self.pendingPaletteKeys=[];self.store.status="검색 입력 대기가 길어졌습니다. 검색창을 다시 여세요";return nil
+                }
+                self.pendingPaletteKeys.append((owner,event))
+                return nil
+            }
+            paletteFocusObserver=NotificationCenter.default.addObserver(forName:CommandSearchField.SearchControl.attached,object:nil,queue:.main){[weak self] notification in
+                guard let field=notification.object as? CommandSearchField.SearchControl,let owner=field.focusOwner else{return}
+                DispatchQueue.main.async{[weak self,weak field] in
+                    guard let self else{return}
+                    guard let field,field.active,field.window===self.window,self.store.commandPalette?.id==owner,
+                          NSApp.isActive,self.window?.isKeyWindow==true else{
+                        self.pendingPaletteKeys.removeAll{$0.0==owner};return
+                    }
+                    let events=self.pendingPaletteKeys.filter{$0.0==owner && ProcessInfo.processInfo.systemUptime-$0.1.timestamp<=2}.map{$0.1}
+                    self.pendingPaletteKeys=[]
+                    for event in events {
+                        guard self.store.commandPalette?.id==owner,field.active,field.window===self.window,
+                              NSApp.isActive,self.window?.isKeyWindow==true else{break}
+                        guard self.focusPaletteSearch(field) else{
+                            self.store.status="검색 입력을 시작하지 못했습니다. 검색창을 다시 여세요";break
+                        }
+                        NSApp.sendEvent(event)
+                    }
+                }
+            }
             scrollMonitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { [weak self] event in
                 guard let self, event.window === self.window, self.bounds.contains(self.convert(event.locationInWindow, from: nil)) else { return event }
+                if self.store.outputPreferencesOpen{return event}
                 if self.store.consoleBounds.contains(self.convert(event.locationInWindow,from:nil)){return event}
-                if let content=self.window?.contentView,let hit=content.hitTest(content.convert(event.locationInWindow,from:nil)),hit !== self,!hit.isDescendant(of:self) {return event}
-                // Shift keeps precision-editor scroll available. Plain wheel always controls this camera.
+                if let content=self.window?.contentView,let hit=content.hitTest(content.convert(event.locationInWindow,from:nil)) {
+                    if hit !== self,!hit.isDescendant(of:self){return event}
+                    if self.forwardAutomationControlsScroll(event){return nil}
+                    var candidate:NSView?=hit
+                    while let view=candidate,view !== self {
+                        if view is OrbitAudioView || view is NSScrollView {return event}
+                        candidate=view.superview
+                    }
+                }
+                // Waveforms own source-time navigation and scroll views own their content.
+                // On the remaining editor surface, Shift still keeps editor scroll available.
                 if event.modifierFlags.contains(.shift), let editor = self.editor, editor.frame.contains(self.convert(event.locationInWindow, from: nil)) { return event }
                 self.scrollWheel(with: event); return nil
             }
-        } else { animation?.invalidate(); animation = nil; playbackAnimation?.invalidate(); playbackAnimation = nil }
+        } else { colorTarget = nil; animation?.invalidate(); animation = nil; playbackAnimation?.invalidate(); playbackAnimation = nil }
     }
     override func layout() {
         super.layout()
@@ -111,20 +196,31 @@ struct AlbumCanvas: NSViewRepresentable {
         addTrackingArea(area);tracking=area
     }
     override func mouseMoved(with event:NSEvent) {
-        let node=hit(convert(event.locationInWindow,from:nil))
+        let point=convert(event.locationInWindow,from:nil)
+        let port=CirclePortGeometry.hit(Point(point.x,point.y),visibleHandles:visiblePortHandles())
+        let node=port.flatMap{scene?.node($0.endpoint.node)} ?? hit(point)
         if hoverAddress != node?.id {hoverAddress=node?.id;needsDisplay=true}
-        toolTip=node.map{$0.title+" · "+$0.subtitle+" · 두 번 클릭해 확대"}
+        if let port,let descriptor=node?.ports.first(where:{$0.id==port.endpoint.portID}) {
+            toolTip=(node?.title ?? "")+" · "+descriptor.name+" · 클릭으로 8방향 선택 · 끌어서 연결"
+        } else {toolTip=node.map{$0.title+" · "+$0.subtitle+" · 두 번 클릭해 확대"}}
     }
     func update() {
         if visualSelection != store.hierarchySelection {
             visualSelection = store.hierarchySelection; playbackVisibilityFocus = nil
         }
         if renderedRevision != store.hierarchyRevision {
+            let anchor=editorAddress ?? store.hierarchySelection ?? .album
+            let previous=renderedProjectID==store.project.id && renderedOrbits != nil && renderedOrbits != store.project.usesOrbits ? scene?.node(anchor):nil
             scene = store.hierarchyScene; renderedRevision = store.hierarchyRevision
+            renderedProjectID=store.project.id;renderedOrbits=store.project.usesOrbits
             followedSection = nil
             if let focus = playbackVisibilityFocus, scene?.node(focus) == nil { playbackVisibilityFocus = nil }
             albumPlan=try? AlbumCompiler.compile(store.project)
-            if let selected = store.hierarchySelection, scene?.node(selected) == nil { editor?.removeFromSuperview(); editor = nil; editorAddress = nil }
+            if let selected = store.hierarchySelection, scene?.node(selected) == nil { removePrecisionEditor() }
+            if let previous,let next=scene?.node(anchor) {
+                connecting=nil;orbitDrag=nil;cableDrag=nil;dragNode=nil;dragPreview=nil;panning=false
+                setCamera(camera.preserving(previous,in:next))
+            }
         }
         if let command = store.hierarchyCommand, command.id != commandID {
             commandID = command.id
@@ -132,11 +228,20 @@ struct AlbumCanvas: NSViewRepresentable {
             case .focus(let address, let detail): focus(address, detail: detail)
             case .parent:
                 let parent = store.selectedCircle?.parent ?? editorAddress.flatMap { scene?.node($0)?.parent } ?? .album
-                store.selectHierarchy(parent); focus(parent)
-            case .fit: store.selectHierarchy(.album); focus(.album)
+                store.rememberCircleWorkspace();store.selectHierarchy(parent); focus(parent)
+            case .fit: store.rememberCircleWorkspace();store.selectHierarchy(.album); focus(.album)
             case .restore:
-                if let saved=store.project.hierarchyView,scene?.node(saved.selection) != nil,let restored=saved.restored(width:bounds.width,height:bounds.height) {
-                    store.selectHierarchy(saved.selection);store.hierarchySettingsOpen=saved.settingsOpen;store.midiStepMode=saved.midiStepMode ?? false;setCamera(restored)
+                removePrecisionEditor()
+                connecting=nil;orbitDrag=nil;clearCableSelection()
+                circleAccessibility=[:];portAccessibility=[:];cableAccessibility=[:]
+                if let saved=store.project.hierarchyView,let restored=saved.restored(width:bounds.width,height:bounds.height) {
+                    let selection=StudioWorkspace.restoredSelection(saved.selection,in:store.project)
+                    store.selectHierarchy(selection);scene=store.hierarchyScene;store.midiStepMode=saved.midiStepMode ?? false
+                    if selection==saved.selection {
+                        store.restoreStudioWorkspace(saved.workspace ?? .init(page:saved.settingsOpen ? .settings:.content));store.requestEditorNavigationFocus();setCamera(restored)
+                    } else {
+                        store.restoreStudioWorkspace(.init());focus(selection)
+                    }
                 } else {store.selectHierarchy(.album);store.hierarchySettingsOpen=false;focus(.album)}
             case .zoom(let factor): setCamera(camera.zoomed(to: camera.zoom*factor, around: Point(bounds.midX, bounds.midY)), animated: true)
             }
@@ -149,7 +254,11 @@ struct AlbumCanvas: NSViewRepresentable {
         placeEditor(); needsDisplay = true
     }
     func focus(_ address: CircleAddress, detail: Bool = false) {
-        guard let node = scene?.node(address), bounds.width > 100 else { return }
+        guard let scene=store.hierarchyScene,let node = scene.node(address), bounds.width > 100 else { return }
+        if !detail,node.role == .section,
+           let target=PlaybackFraming.camera(for:node,in:scene,viewport:workspaceViewport) {
+            setCamera(target,animated:true);return
+        }
         var target=camera.focused(on:node,width:workspaceViewport.width,height:workspaceViewport.height,detail:detail)
         if detail {
             let r=max(360,min(620,workspaceViewport.width*0.52))
@@ -161,7 +270,9 @@ struct AlbumCanvas: NSViewRepresentable {
     func setCamera(_ target: HierarchyCamera, animated: Bool = false, manual: Bool = true) {
         if manual { interruptPlaybackFollow() }
         animation?.invalidate(); animation = nil
+        animationDestination = nil
         if animated {
+            animationDestination = target
             let start = camera, time = ProcessInfo.processInfo.systemUptime
             animation = Timer(timeInterval: 1/60, repeats: true) { [weak self] timer in
                 MainActor.assumeIsolated {
@@ -169,31 +280,54 @@ struct AlbumCanvas: NSViewRepresentable {
                     let progress = min(1, (ProcessInfo.processInfo.systemUptime-time)/(manual ? 0.28 : 0.65))
                     self.camera = start.interpolated(to: target, progress: progress)
                     self.placeEditor(); self.needsDisplay = true
-                    if progress >= 1 { timer.invalidate(); self.animation = nil; self.store.hierarchyZoom = self.camera.zoom }
+                    if progress >= 1 {
+                        timer.invalidate(); self.animation = nil; self.store.hierarchyZoom = self.camera.zoom
+                        self.finishConnectionEditorFocus()
+                    }
                 }
             }
             if let animation { RunLoop.main.add(animation, forMode: .common) }
-        } else { camera = target; placeEditor(); needsDisplay = true; store.hierarchyZoom = camera.zoom }
+        } else { camera = target; placeEditor(); needsDisplay = true; store.hierarchyZoom = camera.zoom; finishConnectionEditorFocus() }
     }
     func placeEditor() {
-        if store.movieWriter != nil {editor?.removeFromSuperview();editor=nil;editorAddress=nil;return}
+        defer { refreshCableTools() }
+        if store.movieWriter != nil {removePrecisionEditor();return}
         if store.playback.playing, store.playbackFollow == .following {
-            editor?.removeFromSuperview(); editor = nil; editorAddress = nil; return
+            removePrecisionEditor(); return
         }
-        guard let address = store.hierarchySelection, let node = scene?.node(address), (node.role == .music || store.hierarchySettingsOpen || store.midiImportDraft != nil),
+        guard let address = store.hierarchySelection, let node = scene?.node(address), (node.role == .music || store.hierarchySettingsOpen || store.midiImportDraft != nil || store.connectionsOpen),
               node.radius*camera.zoom >= 325, isVisible(node) else {
-            editor?.removeFromSuperview(); editor = nil; editorAddress = nil; return
+            removePrecisionEditor(); return
         }
         let center = camera.screen(node.center), radius = node.radius*camera.zoom
         let frame=CanvasWorkspaceGeometry.editor(center:CGPoint(x:center.x,y:center.y),radius:radius,within:workspaceViewport)
-        guard frame.intersects(bounds) else { editor?.removeFromSuperview(); editor = nil; editorAddress = nil; return }
+        guard frame.intersects(bounds) else { removePrecisionEditor(); return }
         if editorAddress != address || editor == nil {
-            editor?.removeFromSuperview()
+            removePrecisionEditor()
             let host = NSHostingView(rootView: InlineCircleEditor(store: store))
             host.sizingOptions = []; host.wantsLayer = true; host.layer?.backgroundColor = NSColor.clear.cgColor
             addSubview(host); editor = host; editorAddress = address
         }
         editor?.frame = frame
+        if let editor {store.consumeEditorNavigationFocus(in:editor)}
+    }
+    func removePrecisionEditor() {
+        guard let current=editor else {editorAddress=nil;return}
+        if let responder=window?.firstResponder as? NSView {
+            let fieldOwner=(responder as? NSTextView)?.delegate as? NSView
+            if responder === current || responder.isDescendant(of:current) || fieldOwner?.isDescendant(of:current) == true {
+                window?.makeFirstResponder(self)
+            }
+        }
+        current.removeFromSuperview();editor=nil;editorAddress=nil
+    }
+    func finishConnectionEditorFocus() {
+        guard store.connectionsOpen, let editor else { return }
+        func visit(_ view: NSView) {
+            if let search = view as? PortSearchControl { search.navigation?.scheduleFocusRequest() }
+            for child in view.subviews { visit(child) }
+        }
+        visit(editor)
     }
     func screen(_ node: CircleSceneNode) -> NSPoint {
         var point = node.center
@@ -204,13 +338,12 @@ struct AlbumCanvas: NSViewRepresentable {
         let p = camera.screen(point); return NSPoint(x: p.x, y: p.y)
     }
     func color(_ node: CircleSceneNode) -> NSColor {
-        guard let music = node.music else { return StudioTheme.accentNS }
-        if music.muted { return StudioTheme.secondaryNS }
-        switch music.content {
-        case .midi, .rhythmMIDI: return StudioTheme.accentNS
-        case .audio, .rhythmAudio: return NSColor(srgbRed: 0.62, green: 0.75, blue: 0.94, alpha: 1)
-        default: return StudioTheme.secondaryNS
-        }
+        let value = store.project.circleColors?[node.id] ?? node.baseColor
+        let tint = value.nsColor
+        // Desaturation survives callers replacing alpha for ticks and orbit rings.
+        return node.music?.muted == true
+            ? (tint.blended(withFraction: 0.6, of: StudioTheme.secondaryNS) ?? tint)
+            : tint
     }
     func isVisible(_ node: CircleSceneNode) -> Bool {
         let context=labelContext
@@ -235,8 +368,14 @@ struct AlbumCanvas: NSViewRepresentable {
             let path = NSBezierPath(ovalIn: displayRect)
             NSColor(white: node.role == .music ? 0.105 : 0.065+Double(min(4,node.depth))*0.008, alpha: 1).setFill(); path.fill()
             let selected = store.hierarchySelections.contains(node.id)
-            (selected ? color(node) : StudioTheme.lineNS.withAlphaComponent(node.role == .music ? 0.9 : 0.65)).setStroke()
-            path.lineWidth = selected ? 1.8 : 1; path.stroke()
+            let muted = node.music?.muted == true
+            // A wider neutral under-stroke remains visible beside any custom color,
+            // including black, without replacing it. Screen-space widths also retain
+            // the selection outline on circles too small for a separate inner ring.
+            StudioTheme.textNS.withAlphaComponent(selected ? 0.75 : (muted ? 0.22 : 0.35)).setStroke()
+            path.lineWidth = selected ? 4.4 : 2.2; path.stroke()
+            color(node).withAlphaComponent(selected ? 1 : (muted ? 0.3 : 0.55)).setStroke()
+            path.lineWidth = selected ? 2.4 : 1; path.stroke()
             drawTicks(node, center: center, radius: radius)
             if node.repeatCount > 1, radius > 30 {
                 let rings=SectionRings(repeats:node.repeatCount,baseRadius:node.radius/node.scale)
@@ -255,16 +394,18 @@ struct AlbumCanvas: NSViewRepresentable {
             if radius<22 {continue}
             let isEditor = editorAddress == node.id
             if node.role == .music, !isEditor, radius > 65 { drawMusic(node, center: center, radius: radius) }
-            if radius > 45, node.role != .album, node.role != .group {
-                if node.acceptsInput { port(at: NSPoint(x: center.x-node.outerRadius*camera.zoom, y: center.y), color: color(node), filled: false) }
-                if node.providesOutput { port(at: NSPoint(x: center.x+node.outerRadius*camera.zoom, y: center.y), color: color(node), filled: true) }
-            }
         }
         for node in scene.nodes where isVisible(node) { drawPlaybackCircle(node) }
         drawReadableLabels()
+        drawPortHandles()
+        drawCableEditing()
+        drawPortLabels()
         drawPlaybackCaption()
-        if let address = connecting, let node = scene.node(address) {
-            let center = screen(node); wire(NSPoint(x: center.x+node.outerRadius*camera.zoom,y:center.y), connectionPoint, color: color(node), dashed: true)
+        drawFileDropPreview()
+        if let handle = connecting, let node = scene.node(handle.endpoint.node) {
+            let target=CirclePortGeometry.hit(Point(connectionPoint.x,connectionPoint.y),visibleHandles:visiblePortHandles()) ??
+                CirclePortHandle(endpoint:handle.endpoint,octant:PortOctant(rawValue:(handle.octant.rawValue+4)%8)!,point:Point(connectionPoint.x,connectionPoint.y))
+            if let curve=try? CirclePortGeometry.curve(from:handle,to:target) {wire(curve,color:color(node),dashed:true)}
         }
         updateAccessibility()
     }
@@ -302,7 +443,7 @@ struct AlbumCanvas: NSViewRepresentable {
             color(node).withAlphaComponent(store.hierarchySelection==node.id ? 0.7:0.3).setStroke();arc.lineWidth=2;arc.stroke()
             OrbitDrawing.dot(OrbitDrawing.point(center,radius:radius,phase:interval.start/orbit.timeline.duration),radius:2,color:color(node))
         }
-        if store.hierarchySelection==node.id,let handle=timeHandle(node) {
+        if store.hierarchySelection==node.id,let handle=visibleTimeHandle(node) {
             OrbitDrawing.dot(handle,radius:6,color:StudioTheme.textNS)
             OrbitDrawing.text(node.role == .music ? "시작 시간":"순서 이동",at:NSPoint(x:handle.x,y:handle.y-16),size:10)
         }
@@ -314,10 +455,15 @@ struct AlbumCanvas: NSViewRepresentable {
     }
     func drawEdge(_ edge: CircleSceneEdge, scene: HierarchyScene) {
         guard let a=scene.node(edge.from), let b=scene.node(edge.to), isVisible(a), isVisible(b) else { return }
-        let ac=screen(a),bc=screen(b),from=NSPoint(x:ac.x+a.outerRadius*camera.zoom,y:ac.y),to=NSPoint(x:bc.x-b.outerRadius*camera.zoom,y:bc.y)
+        guard let curve = connectionCurve(edge) else { return }
         let tint: NSColor = edge.kind == .midi ? StudioTheme.accentNS : edge.kind == .flow ? StudioTheme.secondaryNS : NSColor(srgbRed:0.62,green:0.75,blue:0.94,alpha:1)
-        wire(from,to,color:tint.withAlphaComponent(0.55),dashed:edge.kind == .sidechain)
-        drawPlaybackEdge(edge, from: from, to: to, tint: tint)
+        wire(curve,color:tint.withAlphaComponent(0.55),dashed:edge.kind == .sidechain)
+        if let before = try? curve.point(at: 0.48), let tip = try? curve.point(at: 0.52) {
+            let angle = atan2(tip.y-before.y, tip.x-before.x), path = NSBezierPath()
+            for offset in [-0.5, 0.5] { path.move(to: NSPoint(x: tip.x-7*cos(angle+offset), y: tip.y-7*sin(angle+offset))); path.line(to: NSPoint(x:tip.x,y:tip.y)) }
+            tint.setStroke(); path.lineWidth=1.5; path.stroke()
+        }
+        drawPlaybackEdge(edge, curve: curve, tint: tint)
     }
     func wire(_ from:NSPoint,_ to:NSPoint,color:NSColor,dashed:Bool=false) {
         let width=max(30,abs(to.x-from.x)*0.45),path=NSBezierPath()
@@ -378,18 +524,22 @@ struct AlbumCanvas: NSViewRepresentable {
         default: break
         }
     }
-    func hit(_ point:NSPoint,portOnly:Bool=false) -> CircleSceneNode? {
+    func hit(_ point:NSPoint) -> CircleSceneNode? {
         guard let scene else{return nil}
-        if !portOnly,let label=labelPlacements.reversed().first(where:{$0.rect.contains(point)}),let node=scene.node(label.id) {return node}
+        if let label=labelPlacements.reversed().first(where:{$0.rect.contains(point)}),let node=scene.node(label.id) {return node}
         // Rings remain selectable even when a child is under their centre.
         return scene.nodes.reversed().first { node in
             let p=screen(node),r=node.outerRadius*camera.zoom
             guard isVisible(node) else{return false}
-            if portOnly, node.radius*camera.zoom<=45 {return false}
-            return portOnly ? hypot(point.x-(p.x+r),point.y-p.y)<12 : hypot(point.x-p.x,point.y-p.y)<=r+7
+            return hypot(point.x-p.x,point.y-p.y)<=r+7
         }
     }
     override func mouseDown(with event:NSEvent) {
+        var identity=store.numberEditIdentity
+        guard store.resolveActiveNumericDraft(),store.nameEditing.resolve() else{return}
+        identity.revision=store.project.musicRevision
+        guard identity==store.numberEditIdentity else{return}
+        store.editorFocusRequest=nil
         interruptPlaybackFollow()
         window?.makeFirstResponder(self); animation?.invalidate(); animation=nil
         down=convert(event.locationInWindow,from:nil);panOrigin=camera.pan;dragNode=nil;dragPreview=nil
@@ -397,14 +547,20 @@ struct AlbumCanvas: NSViewRepresentable {
         panning=store.panMode || event.buttonNumber==2
         if panning{return}
         let labelHit=labelPlacements.contains{$0.rect.contains(down)}
-        if !labelHit,let node=store.hierarchySelection.flatMap({scene?.node($0)}),let handle=timeHandle(node),hypot(handle.x-down.x,handle.y-down.y)<13,let orbit=node.orbit,let owner=scene?.node(orbit.owner) {
+        if !labelHit,let node=store.hierarchySelection.flatMap({scene?.node($0)}),let handle=visibleTimeHandle(node),hypot(handle.x-down.x,handle.y-down.y)<13,let orbit=node.orbit,let owner=scene?.node(orbit.owner) {
             orbitDrag=node;orbitSeconds=orbit.anchor;orbitTravel=0;orbitRevision=store.project.musicRevision
             let center=screen(owner);orbitPhase=OrbitTimeline.phase(Point(down.x-center.x,down.y-center.y));return
         }
-        if !labelHit,let node=hit(down,portOnly:true),node.providesOutput {connecting=node.id;connectionPoint=down;return}
+        if beginCableDrag(at:down) {return}
+        if let handle=CirclePortGeometry.hit(Point(down.x,down.y),visibleHandles:visiblePortHandles()) {
+            connecting=handle;connectionToken=UUID();connectionPoint=down;connectionRevision=store.project.musicRevision;connectionLayoutRevision=store.project.portLayout?.revision ?? 0;connectionProjectID=store.project.id;portTools?.isHidden=true;needsDisplay=true;return
+        }
+        if !labelHit,let cable=hitCable(down) {selectCable(cable);return}
+        clearCableSelection()
         guard let node=hit(down) else{panning=true;return}
         if !event.modifierFlags.contains(.shift), store.hierarchySelections.contains(node.id), store.hierarchySelections.count > 1 { store.hierarchySelection=node.id }
-        else { store.selectHierarchy(node.id,additive:event.modifierFlags.contains(.shift)) }
+        else if event.modifierFlags.contains(.shift) { store.selectHierarchy(node.id,additive:true) }
+        else { guard store.selectUserWorkspace(node.id) else{return} }
         if event.clickCount==2 {
             if node.role == .group, store.selectedHierarchyGroup?.collapsed == true { store.updateHierarchyGroup { $0.collapsed=false }; update() }
             focus(node.id,detail:node.role == .music);return
@@ -421,6 +577,7 @@ struct AlbumCanvas: NSViewRepresentable {
             orbitSeconds=max(0,min(orbit.timeline.duration,orbit.anchor+orbitTravel*orbit.timeline.duration));needsDisplay=true;return
         }
         if connecting != nil {connectionPoint=p;needsDisplay=true;return}
+        if cableDrag != nil {connectionPoint=p;needsDisplay=true;return}
         if panning {setCamera(HierarchyCamera(pan:Point(panOrigin.x+p.x-down.x,panOrigin.y+p.y-down.y),zoom:camera.zoom));return}
         if let node=dragNode,hypot(p.x-down.x,p.y-down.y)>3 {dragPreview=Point(dragOrigin.x+(p.x-down.x)/camera.zoom/node.scale,dragOrigin.y+(p.y-down.y)/camera.zoom/node.scale);needsDisplay=true}
     }
@@ -440,15 +597,43 @@ struct AlbumCanvas: NSViewRepresentable {
             }
         }
         orbitDrag=nil
-        if let from=connecting,let target=hit(convert(event.locationInWindow,from:nil)),target.id != from {store.connectHierarchy(from,target.id,sidechain:event.modifierFlags.contains(.option))}
+        if cableDrag != nil {finishCableDrag(at:convert(event.locationInWindow,from:nil));cableDrag=nil;refreshCableTools()}
+        if let from=connecting {
+            let point=convert(event.locationInWindow,from:nil)
+            if hypot(point.x-down.x,point.y-down.y) < 3, connectionProjectID == store.project.id, connectionRevision == store.project.musicRevision {
+                connecting=nil; selectCanvasPort(from.endpoint)
+            } else { finishPortConnection(from,at:point) }
+        }
         if dragNode != nil,var p=dragPreview {
             if store.project.album?.layout.snap != false {let spacing=store.project.album?.layout.spacing ?? 32;p=Point((p.x/spacing).rounded()*spacing,(p.y/spacing).rounded()*spacing)}
             store.moveHierarchySelection(dragPositions,delta:Point(p.x-dragOrigin.x,p.y-dragOrigin.y))
         }
-        dragNode=nil;dragPreview=nil;dragPositions=[:];panning=false;connecting=nil;needsDisplay=true
+        dragNode=nil;dragPreview=nil;dragPositions=[:];panning=false;connecting=nil;connectionToken=nil;refreshPortTools();needsDisplay=true
     }
     override func otherMouseUp(with event:NSEvent){mouseUp(with:event)}
+    private func forwardAutomationControlsScroll(_ event:NSEvent)->Bool {
+        guard !forwardingAutomationScroll,event.window===window,store.automationVisible,!store.project.usesOrbits,
+              let editor,editor.window===window,!editor.isHiddenOrHasHiddenAncestor,
+              editor.visibleRect.contains(editor.convert(event.locationInWindow,from:nil)) else{return false}
+        if let content=window?.contentView,let hit=content.hitTest(content.convert(event.locationInWindow,from:nil)),
+           hit !== self,hit !== editor,!hit.isDescendant(of:editor) {return false}
+        func owner(in view:NSView)->NSScrollView? {
+            guard view.window===window,!view.isHiddenOrHasHiddenAncestor,
+                  view.visibleRect.contains(view.convert(event.locationInWindow,from:nil)) else{return nil}
+            for child in view.subviews.reversed() {if let found=owner(in:child){return found}}
+            guard let scroll=view as? NSScrollView,
+                  scroll.contentView.visibleRect.contains(scroll.contentView.convert(event.locationInWindow,from:nil)),
+                  scroll.contentView.visibleRect.width>0,scroll.contentView.visibleRect.height>0 else{return nil}
+            return scroll
+        }
+        guard let scroll=owner(in:editor) else{return false}
+        forwardingAutomationScroll=true
+        defer{forwardingAutomationScroll=false}
+        scroll.scrollWheel(with:event)
+        return true
+    }
     override func scrollWheel(with event:NSEvent) {
+        if forwardingAutomationScroll || forwardAutomationControlsScroll(event){return}
         let p=convert(event.locationInWindow,from:nil)
         if store.consoleBounds.contains(p){super.scrollWheel(with:event);return}
         if event.modifierFlags.contains(.shift) {setCamera(HierarchyCamera(pan:Point(camera.pan.x-event.scrollingDeltaX,camera.pan.y-event.scrollingDeltaY),zoom:camera.zoom));return}
@@ -456,11 +641,32 @@ struct AlbumCanvas: NSViewRepresentable {
         let delta=event.scrollingDeltaY*direction
         let exponent=max(-0.35,min(0.35,delta*(event.hasPreciseScrollingDeltas ? 0.009:0.07)))
         setCamera(camera.zoomed(to:camera.zoom*exp(exponent),around:Point(p.x,p.y)))
-        if let leaf=hit(p),leaf.role == .music,leaf.radius*camera.zoom>=325,store.hierarchySelection != leaf.id {store.selectHierarchy(leaf.id);placeEditor()}
+        if let leaf=hit(p),leaf.role == .music,leaf.radius*camera.zoom>=325,store.hierarchySelection != leaf.id {if store.selectUserWorkspace(leaf.id){placeEditor()}}
     }
     override func magnify(with event:NSEvent){let p=convert(event.locationInWindow,from:nil);setCamera(camera.zoomed(to:camera.zoom*exp(event.magnification),around:Point(p.x,p.y)))}
+    private func focusPaletteSearch(_ field:CommandSearchField.SearchControl)->Bool {
+        guard let window,field.active,field.window===window,NSApp.isActive,window.isKeyWindow else{return false}
+        if let editor=field.currentEditor(),window.firstResponder===editor{return true}
+        if window.firstResponder===field{return true}
+        guard window.makeFirstResponder(field) else{return false}
+        if let editor=field.currentEditor(),window.firstResponder===editor{return true}
+        return window.firstResponder===field
+    }
+    private func paletteSearch(_ owner:UUID)->CommandSearchField.SearchControl? {
+        func find(_ view:NSView)->CommandSearchField.SearchControl? {
+            if let field=view as? CommandSearchField.SearchControl,field.active,field.focusOwner==owner{return field}
+            for child in view.subviews {if let field=find(child){return field}}
+            return nil
+        }
+        return window?.contentView.flatMap{find($0)}
+    }
     override func keyDown(with event:NSEvent) {
+        if store.outputPreferencesOpen || store.libraryOpen || store.soundPickerRequest != nil || store.arrangementPickerRequest != nil || store.commandPalette != nil || store.navigationOpen || store.keyboardHelp {return}
+        if event.keyCode==53,event.modifierFlags.intersection([.command,.control,.option,.shift]).isEmpty,let draft=store.midiImportDraft {
+            store.cancelMIDIImport(draft.id);return
+        }
         if event.modifierFlags.contains(.command) || event.modifierFlags.contains(.control) {super.keyDown(with:event);return}
+        if handleConnectionKey(event) { return }
         if event.modifierFlags.contains([.option,.shift]),[123,124,125,126].contains(event.keyCode),!store.project.usesOrbits {
             let spacing=store.project.album?.layout.spacing ?? 24
             let x=event.keyCode==123 ? -spacing:event.keyCode==124 ? spacing:0
@@ -475,19 +681,31 @@ struct AlbumCanvas: NSViewRepresentable {
             setCamera(HierarchyCamera(pan:Point(camera.pan.x+x,camera.pan.y+y),zoom:camera.zoom));return
         }
         switch event.keyCode {
-        case 53: store.hierarchySettingsOpen=false;store.hierarchyParent()
+        case 53:
+            if cableDrag != nil {cableDrag=nil;connectionToken=nil;refreshCableTools();needsDisplay=true;return}
+            if connecting != nil { connecting=nil;connectionToken=nil;needsDisplay=true;return }
+            if selectedCable != nil {clearCableSelection();return}
+            if store.connectionsOpen {store.connectionsOpen=false;return}
+            store.hierarchySettingsOpen=false;store.hierarchyParent()
         case 49: store.play()
-        case 51,117: store.removeHierarchy()
+        case 51,117:
+            if selectedCable != nil {disconnectSelectedCable()} else {store.removeHierarchy()}
         case 3: store.hierarchyCommand=HierarchyCommand(action:.fit)
         case 4: store.panMode=true
         case 9: store.panMode=false
-        case 36,76: enterSelectedCircle()
+        case 36,76:
+            if event.modifierFlags.intersection([.shift,.option]).isEmpty,store.audioScopeRecoveryAvailable {
+                _ = store.recoverAudioEditScope(identity:store.numberEditIdentity)
+                return
+            }
+            enterSelectedCircle()
         case 48: selectNeighbor(forward:!event.modifierFlags.contains(.shift))
         case 123,126: selectNeighbor(forward:false,additive:event.modifierFlags.contains(.shift))
         case 124,125: selectNeighbor(forward:true,additive:event.modifierFlags.contains(.shift))
         case 0: creationMenu(at:NSPoint(x:bounds.midX,y:bounds.midY),selected:store.hierarchySelection).popUp(positioning:nil,at:NSPoint(x:bounds.midX,y:bounds.midY),in:self)
         case 8: circleMenu(at:NSPoint(x:bounds.midX,y:bounds.midY),selected:store.selectedCircle).popUp(positioning:nil,at:NSPoint(x:bounds.midX,y:bounds.midY),in:self)
         case 15: store.openCircleSettings()
+        case 37: store.showConnections()
         case 24,69: store.hierarchyCommand=HierarchyCommand(action:.zoom(1.25))
         case 27,78: store.hierarchyCommand=HierarchyCommand(action:.zoom(0.8))
         default: super.keyDown(with:event)
@@ -497,24 +715,31 @@ struct AlbumCanvas: NSViewRepresentable {
         let now = ProcessInfo.processInfo.systemUptime
         if playbackAnimation != nil, now-accessibilityUpdateTime < 0.2 { return }
         accessibilityUpdateTime = now
-        guard let scene,let window else{return}
-        let visible=scene.nodes.filter{node in let p=screen(node);return isVisible(node) && bounds.contains(p)}
+        guard let scene,window != nil else{return}
+        let labeled=Set(labelPlacements.map(\.id))
+        let visible=scene.nodes.filter{node in let p=screen(node);return isVisible(node) && (labeled.contains(node.id) || cablePointAvailable(Point(p.x,p.y),labels:false))}
         let children=visible.map { node -> NSAccessibilityElement in
             let p=screen(node),r=min(100,node.radius*camera.zoom)
             let hitRect=labelPlacements.first{$0.id==node.id}?.rect ?? NSRect(x:p.x-r,y:p.y-r,width:max(12,r*2),height:max(12,r*2))
-            let rect=window.convertToScreen(convert(hitRect,to:nil))
-            let element=CircleAccessibility(parent:self,address:node.id)
-            element.setAccessibilityLabel(node.title+" · "+node.subtitle);element.setAccessibilityFrame(rect)
+            let element=circleAccessibility[node.id] ?? CircleAccessibility(parent:self,address:node.id)
+            circleAccessibility[node.id]=element
+            element.setAccessibilityLabel(node.title+" · "+node.subtitle);element.setFrameInView(hitRect,view:self)
+            element.setAccessibilitySelected(store.hierarchySelections.contains(node.id))
             return element
         }
-        setAccessibilityChildren(children+(editor.map{[$0]} ?? []))
+        let ids=Set(visible.map(\.id));circleAccessibility=circleAccessibility.filter{ids.contains($0.key)}
+        var accessible: [Any] = children + connectionAccessibilityChildren()
+        if let editor { accessible.append(editor) }
+        if let cableTools, !cableTools.isHidden { accessible.append(cableTools) }
+        if let portTools, !portTools.isHidden { accessible.append(portTools) }
+        setAccessibilityChildren(accessible)
     }
 }
 @MainActor final class CircleAccessibility:NSAccessibilityElement {
     weak var canvas:AlbumCanvasView?
     let address:CircleAddress
     init(parent:AlbumCanvasView,address:CircleAddress){self.canvas=parent;self.address=address;super.init();setAccessibilityParent(parent);setAccessibilityRole(.button);setAccessibilityEnabled(true)}
-    override func accessibilityPerformPress()->Bool {canvas?.store.focusHierarchy(address,detail:true);return canvas != nil}
+    override func accessibilityPerformPress()->Bool {canvas?.store.focusUserWorkspace(address,detail:true) ?? false}
 }
 
 @MainActor final class CircleMenuAction: NSObject {
@@ -539,8 +764,33 @@ extension AlbumCanvasView {
             item.target=self;item.representedObject=CircleMenuAction(block);(target ?? menu).addItem(item)
         }
         func submenu(_ title:String)->NSMenu {let item=NSMenuItem(title:title,action:nil,keyEquivalent:"");let child=NSMenu();item.submenu=child;menu.addItem(item);return child}
-        action("확대해서 편집"){[weak self] in self?.store.hierarchySettingsOpen=false;self?.store.focusHierarchy(node.id,detail:node.role == .music)}
+        action("확대해서 편집"){[weak self] in _ = self?.store.focusUserWorkspace(node.id,detail:node.role == .music)}
         action(store.hierarchySelections.contains(node.id) ? "선택에서 제외":"선택에 추가"){[weak self] in self?.store.selectHierarchy(node.id,additive:true)}
+        let colors = submenu("서클 색상")
+        let colorProjectID = store.project.id
+        let current = store.project.circleColors?[node.id]
+        action("종류별 기본 색상", in: colors) { [weak self] in
+            guard let self, self.store.project.id == colorProjectID else { return }
+            self.colorTarget = nil
+            self.setCircleColor(nil, for: node.id)
+        }
+        colors.items.last?.state = current == nil ? .on : .off
+        for preset in CircleColor.Preset.allCases {
+            action(preset.title, in: colors) { [weak self] in
+                guard let self, self.store.project.id == colorProjectID else { return }
+                self.colorTarget = nil
+                self.setCircleColor(preset.color, for: node.id)
+            }
+            colors.items.last?.state = current == preset.color ? .on : .off
+            colors.items.last?.image = NSImage(size: NSSize(width: 14, height: 14), flipped: false) { rect in
+                preset.color.nsColor.setFill(); NSBezierPath(ovalIn: rect.insetBy(dx: 2, dy: 2)).fill(); return true
+            }
+        }
+        colors.addItem(.separator())
+        action("사용자 지정…", in: colors) { [weak self] in
+            guard let self, self.store.project.id == colorProjectID else { return }
+            self.chooseCircleColor(node)
+        }
         action("이름·음악 설정"){[weak self] in self?.store.hierarchyTransitionID=nil;self?.store.focusHierarchy(node.id,detail:true);self?.store.hierarchySettingsOpen=true}
         switch node.id {
         case .music(let arrangement,let use,let id):
@@ -560,10 +810,14 @@ extension AlbumCanvasView {
                 for target in a.uses where target.id != use {action(target.name,in:child){[weak self] in self?.store.connectHierarchy(node.id,.section(arrangementID:arrangement,useID:target.id))}}
                 let outgoing=a.edges.filter{$0.from==use}
                 if !outgoing.isEmpty {
-                    let choose=submenu("재생할 연결"),transition=submenu("전환 편집"),remove=submenu("연결 해제")
+                    let isEnd=a.uses.first{$0.id==use}?.isEnd == true
+                    let choose=submenu(isEnd ? "끝 해제 후 재생할 연결":"재생할 연결"),transition=submenu("전환 편집"),remove=submenu("연결 해제")
                     for edge in outgoing {
                         let name=a.uses.first{$0.id==edge.to}?.name ?? "다음 섹션"
-                        action((a.chosenEdges[use]==edge.id ? "✓ ":"")+name,in:choose){[weak self] in self?.store.chooseHierarchyEdge(node.id,edgeID:edge.id)}
+                        let connection=CircleConnectionID(edgeID:edge.id,from:node.id,to:.section(arrangementID:arrangement,useID:edge.to))
+                        action(name,in:choose){[weak self] in self?.store.chooseHierarchyEdge(node.id,edgeID:edge.id)}
+                        choose.items.last?.state=SectionFlowSelection.isSelected(connection,in:store.project) ? .on:.off
+                        choose.items.last?.toolTip=isEnd ? "끝 섹션 지정을 해제하고 이 연결로 재생을 이어갑니다":"이 연결로 다음 섹션을 재생합니다"
                         action(name,in:transition){[weak self] in self?.store.openHierarchyTransition(node.id,edgeID:edge.id)}
                         action(name,in:remove){[weak self] in self?.store.disconnectHierarchy(node.id,edgeID:edge.id)}
                     }

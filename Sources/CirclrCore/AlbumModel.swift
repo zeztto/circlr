@@ -91,12 +91,12 @@ public extension ContextResolver {
 public extension Project {
     /// Existing IDs, media, alternatives and original/variant data remain intact.
     mutating func enableAlbum() {
-        guard album == nil, (1...2).contains(schemaVersion) else { return }
+        guard album == nil, (1...7).contains(schemaVersion) else { return }
         var node = Composition(name: name)
         node.arrangementIDs = arrangements.map(\.id); node.selectedArrangementID = activeArrangementID
         var value = Album(); value.children = [node.id]; value.compositions = [node]
         value.layout.positions[node.id] = Point()
-        album = value; schemaVersion = 2
+        album = value; schemaVersion = max(2,schemaVersion)
     }
     func compositionContext(for arrangementID: ID) throws -> MusicContext {
         guard let album else { return global }
@@ -192,7 +192,7 @@ public struct AlbumExecutionPlan {
 }
 public enum AlbumCompiler {
     public static func compile(_ input: Project) throws -> AlbumExecutionPlan {
-        guard (1...2).contains(input.schemaVersion) else { throw CirclrError("이 앨범의 형식 버전을 지원하지 않습니다") }
+        guard (1...7).contains(input.schemaVersion) else { throw CirclrError("이 앨범의 형식 버전을 지원하지 않습니다") }
         var project = input; project.enableAlbum()
         guard let album = project.album else { throw CirclrError("앨범이 없습니다") }
         try album.validate(arrangements: project.arrangements)

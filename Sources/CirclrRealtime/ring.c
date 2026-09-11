@@ -12,9 +12,12 @@ CirclrRing *circlr_ring_create(uint32_t c, uint32_t f, uint32_t s) {
 }
 void circlr_ring_destroy(CirclrRing *r) { if(r) { free(r->data); free(r->lengths); free(r); } }
 bool circlr_ring_push(CirclrRing *r, const float *const *c, uint32_t n) {
+    return circlr_ring_push_offset(r,c,0,n);
+}
+bool circlr_ring_push_offset(CirclrRing *r, const float *const *c, uint32_t offset, uint32_t n) {
     uint32_t w=atomic_load_explicit(&r->write,memory_order_relaxed), next=(w+1)%r->slots;
     if(n>r->frames || next==atomic_load_explicit(&r->read,memory_order_acquire)) { atomic_fetch_add_explicit(&r->overruns,1,memory_order_relaxed); return false; }
-    for(uint32_t i=0;i<r->channels;i++) memcpy(r->data+((size_t)w*r->channels+i)*r->frames,c[i],n*sizeof(float));
+    for(uint32_t i=0;i<r->channels;i++) memcpy(r->data+((size_t)w*r->channels+i)*r->frames,c[i]+offset,n*sizeof(float));
     r->lengths[w]=n; atomic_store_explicit(&r->write,next,memory_order_release); return true;
 }
 uint32_t circlr_ring_pop(CirclrRing *r, float *const *c) {

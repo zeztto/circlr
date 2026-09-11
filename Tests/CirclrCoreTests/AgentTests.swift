@@ -4,6 +4,96 @@ import XCTest
 final class AgentTests:XCTestCase {
     func project()throws->Project{var p=Project();_=p.addTrack(name:"신스");_=p.addSection(name:"후렴",at:Point(),bars:2);p.enableAlbum();return try SectionGraphMigration.migrate(p)}
     func request(_ p:Project,_ operations:[AgentOperation])->AgentRequest{var r=AgentRequest(method:"apply");r.projectID=p.id;r.expectedRevision=p.musicRevision;var a=AgentArguments();a.operations=operations;r.arguments=a;return r}
+    func testExplicitArrangementDuplicatePreservesCanvasAndOwnerPlaybackChoice()throws {
+        var p=try project()
+        let sourceID=p.activeArrangementID,owner=try XCTUnwrap(p.album?.owner(of:sourceID)?.id)
+        p.arrangements[p.activeIndex].uses[0].repeatCount=3
+        let otherOwner=try AlbumEditing.add(name:"다른 곡",kind:.song,in:&p)
+        p.activeArrangementID=try XCTUnwrap(p.album?.composition(otherOwner)?.selectedArrangementID)
+        let before=p,source=try XCTUnwrap(p.arrangements.first{$0.id==sourceID})
+        XCTAssertNotEqual(p.activeArrangementID,sourceID)
+        var op=AgentOperation("duplicate_arrangement");op.compositionID=owner;op.arrangementID=sourceID;op.name="  후렴 대안\n"
+        // Codable transport must retain the explicit owner just like native apply.
+        let decoded=try JSONDecoder().decode(AgentRequest.self,from:JSONEncoder().encode(request(p,[op])))
+        let changed=try AgentProjectEditing.apply(decoded,to:p),copy=try XCTUnwrap(changed.arrangements.last)
+        XCTAssertEqual(copy.name,"후렴 대안");XCTAssertNotEqual(copy.id,sourceID)
+        XCTAssertEqual(copy.uses.count,source.uses.count)
+        for (original,duplicate) in zip(source.uses,copy.uses) {
+            XCTAssertNotEqual(original.id,duplicate.id)
+            var normalized=duplicate;normalized.id=original.id
+            XCTAssertEqual(normalized,original)
+        }
+        var expected=before;expected.arrangements.append(copy)
+        let ownerIndex=try XCTUnwrap(expected.album?.compositions.firstIndex{$0.id==owner})
+        expected.album!.compositions[ownerIndex].arrangementIDs.append(copy.id)
+        XCTAssertEqual(changed,expected)
+    }
+    func testCurrentArrangementBackgroundClonePreservesEditingAndPlaybackSelection()throws {
+        var p=try project();let source=p.active,owner=try XCTUnwrap(p.album?.owner(of:source.id)?.id)
+        let address=CircleAddress.section(arrangementID:source.id,useID:source.uses[0].id)
+        p.circleColors=[address:CircleColor.Preset.amber.color]
+        var op=AgentOperation("duplicate_arrangement");op.compositionID=owner;op.arrangementID=source.id;op.name="배경 복제"
+        let changed=try AgentProjectEditing.apply(request(p,[op]),to:p),copy=try XCTUnwrap(changed.arrangements.last)
+        XCTAssertNotEqual(copy.id,source.id)
+        var expected=p;expected.arrangements.append(copy)
+        let ownerIndex=try XCTUnwrap(expected.album?.compositions.firstIndex{$0.id==owner})
+        expected.album!.compositions[ownerIndex].arrangementIDs.append(copy.id)
+        expected.circleColors?[.section(arrangementID:copy.id,useID:copy.uses[0].id)]=CircleColor.Preset.amber.color
+        XCTAssertEqual(changed,expected)
+        XCTAssertEqual(changed.activeArrangementID,source.id)
+        XCTAssertEqual(changed.album?.composition(owner)?.selectedArrangementID,source.id)
+    }
+    func testExplicitArrangementSelectionChangesChoiceAndRejectsForeignOwner()throws {
+        var p=try project();let source=p.activeArrangementID,owner=try XCTUnwrap(p.album?.owner(of:source)?.id)
+        let target=try ArrangementSelection.duplicate(source,compositionID:owner,name:"대안",in:&p)
+        try ArrangementSelection.select(source,compositionID:owner,in:&p)
+        let foreignOwner=try AlbumEditing.add(name:"다른 곡",kind:.song,in:&p)
+        let before=p
+        var select=AgentOperation("select_arrangement");select.compositionID=owner;select.arrangementID=target
+        var expected=p;expected.activeArrangementID=target
+        let ownerIndex=try XCTUnwrap(expected.album?.compositions.firstIndex{$0.id==owner})
+        expected.album!.compositions[ownerIndex].selectedArrangementID=target
+        XCTAssertEqual(try AgentProjectEditing.apply(request(p,[select]),to:p),expected)
+        var clone=AgentOperation("duplicate_arrangement");clone.compositionID=owner;clone.arrangementID=source;clone.name="추가 대안"
+        let batch=try AgentProjectEditing.apply(request(p,[select,clone]),to:p)
+        XCTAssertEqual(batch.activeArrangementID,target)
+        XCTAssertEqual(batch.album?.composition(owner)?.selectedArrangementID,target)
+        var invalid=select;invalid.compositionID=foreignOwner
+        XCTAssertThrowsError(try AgentProjectEditing.apply(request(p,[select,invalid]),to:p))
+        invalid=select;invalid.compositionID=nil
+        XCTAssertThrowsError(try AgentProjectEditing.apply(request(p,[invalid]),to:p))
+        invalid=select;invalid.arrangementID=nil
+        XCTAssertThrowsError(try AgentProjectEditing.apply(request(p,[invalid]),to:p))
+        XCTAssertEqual(p,before)
+    }
+    func testArrangementRenameIsMetadataOnlyAndInvalidBatchesAreAtomic()throws {
+        var p=try project();let sourceID=p.activeArrangementID,owner=try XCTUnwrap(p.album?.owner(of:sourceID)?.id)
+        let otherOwner=try AlbumEditing.add(name:"다른 곡",kind:.song,in:&p)
+        p.activeArrangementID=try XCTUnwrap(p.album?.composition(otherOwner)?.selectedArrangementID)
+        let before=p,foreignID=p.activeArrangementID
+        var rename=AgentOperation("rename_arrangement");rename.compositionID=owner;rename.arrangementID=sourceID;rename.name="  새 편곡안\n"
+        var expected=p;expected.arrangements[0].name="새 편곡안"
+        XCTAssertEqual(try AgentProjectEditing.apply(request(p,[rename]),to:p),expected)
+        XCTAssertEqual(try AgentProjectEditing.apply(request(expected,[rename]),to:expected),expected)
+        var duplicate=rename;duplicate.kind="duplicate_arrangement"
+        for kind in ["duplicate_arrangement","rename_arrangement"] {
+            var invalid=rename;invalid.kind=kind;invalid.arrangementID=foreignID
+            XCTAssertThrowsError(try AgentProjectEditing.apply(request(p,[duplicate,invalid]),to:p))
+            invalid=rename;invalid.kind=kind;invalid.compositionID=nil
+            XCTAssertThrowsError(try AgentProjectEditing.apply(request(p,[invalid]),to:p))
+            invalid=rename;invalid.kind=kind;invalid.arrangementID=nil
+            XCTAssertThrowsError(try AgentProjectEditing.apply(request(p,[invalid]),to:p))
+            invalid=rename;invalid.kind=kind;invalid.name=nil
+            XCTAssertThrowsError(try AgentProjectEditing.apply(request(p,[invalid]),to:p))
+            for name in [" \n ",String(repeating:"가",count:121)] {
+                invalid=rename;invalid.kind=kind;invalid.name=name
+                XCTAssertThrowsError(try AgentProjectEditing.apply(request(p,[rename,invalid]),to:p))
+            }
+        }
+        var stale=request(p,[duplicate,rename]);stale.expectedRevision=p.musicRevision+1
+        XCTAssertThrowsError(try AgentProjectEditing.apply(stale,to:p))
+        XCTAssertEqual(p,before)
+    }
     func testStaleWritesAndInvalidBatchDoNotChangeProject()throws{
         let p=try project();var rename=AgentOperation("rename_project");rename.name="변경"
         var stale=request(p,[rename]);stale.expectedRevision=12

@@ -54,4 +54,21 @@ final class HierarchyGeometryTests: XCTestCase {
         XCTAssertGreaterThan(detailed.zoom*repeated.radius,325)
         XCTAssertGreaterThan(repeated.outerRadius,repeated.radius)
     }
+    func testLayoutSwitchPreservesEverySelectedCircleScreenAnchorAndRadius()throws {
+        var (project,freeform)=try scene()
+        project.circleLayout = .orbit
+        let orbital=try HierarchySceneBuilder.build(project)
+        for previous in freeform.nodes {
+            let next=try XCTUnwrap(orbital.node(previous.id))
+            let camera=HierarchyCamera().focused(on:previous,width:1024,height:650,detail:true)
+            let switched=camera.preserving(previous,in:next)
+            XCTAssertEqual(switched.screen(next.center).x,camera.screen(previous.center).x,accuracy:1e-6)
+            XCTAssertEqual(switched.screen(next.center).y,camera.screen(previous.center).y,accuracy:1e-6)
+            XCTAssertEqual(switched.zoom*next.radius,camera.zoom*previous.radius,accuracy:1e-6)
+            let restored=switched.preserving(next,in:previous)
+            XCTAssertEqual(restored.zoom,camera.zoom,accuracy:1e-6)
+            XCTAssertEqual(restored.pan.x,camera.pan.x,accuracy:1e-6)
+            XCTAssertEqual(restored.pan.y,camera.pan.y,accuracy:1e-6)
+        }
+    }
 }

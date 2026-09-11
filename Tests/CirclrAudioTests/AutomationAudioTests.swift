@@ -30,7 +30,7 @@ final class AutomationAudioTests:XCTestCase {
         _=try AudioEditing.apply(.split(sourceOffset:1.317),nodeID:n,useID:u,in:&p)
         let split=try await track(p);XCTAssertEqual(split.left,wet.left);XCTAssertEqual(split.right,wet.right)
         for node in try XCTUnwrap(SectionGraphEditing.effective(section:p.sections[0],use:p.active.uses[0])).nodes where node.automation != nil {
-            for parameter in AutomationParameter.allCases {try AutomationEditing.set(parameter:parameter,enabled:false,nodeID:node.id,useID:u,in:&p)}
+            for parameter in (node.automation ?? []).map(\.parameter) {try AutomationEditing.set(parameter:parameter,enabled:false,nodeID:node.id,useID:u,in:&p)}
         }
         let off=try await track(p);XCTAssertEqual(off.left,dry.left);XCTAssertEqual(off.right,dry.right)
     }

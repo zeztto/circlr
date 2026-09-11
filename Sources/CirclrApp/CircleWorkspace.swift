@@ -12,7 +12,7 @@ struct CircleWorkspace:View {
             HStack(spacing:16) {
                 VStack(alignment:.leading,spacing:5) {
                     if case .section = focus,let use=store.selectedUse {
-                        TextField("서클 이름",text:Binding(get:{use.name},set:{v in store.updateUse("서클 이름"){$0.name=v}})).textFieldStyle(.plain).font(.system(size:23,weight:.semibold)).help("서클 이름 바로 편집")
+                        CommittedNameField(title:"서클 이름",value:Binding(get:{store.selectedUse?.name ?? use.name},set:{v in store.updateUse("서클 이름"){$0.name=v}}),fontSize:23,message:{store.status=$0})
                     } else {Text(title).font(.system(size:23,weight:.semibold)).lineLimit(1)}
 
                 }
@@ -32,6 +32,7 @@ struct CircleWorkspace:View {
         .background(StudioTheme.surface).foregroundStyle(StudioTheme.text)
         .font(.system(size:12)).buttonStyle(CanvasButtonStyle()).controlSize(.regular).toggleStyle(.switch)
         .textFieldStyle(StudioFieldStyle()).tint(StudioTheme.accent).accentColor(StudioTheme.accent).preferredColorScheme(.dark)
+        .numberEditing(in:store)
         .onExitCommand{store.closeFocus()}
         .alert("작업을 완료하지 못했습니다",isPresented:Binding(get:{store.errorMessage != nil},set:{if !$0 {store.errorMessage=nil}})) {Button("확인"){store.errorMessage=nil}} message:{Text(store.errorMessage ?? "")}
     }
@@ -49,9 +50,10 @@ struct CircleWorkspace:View {
         case .signal:
             scroller { if let n=store.selectedSignal { InspectorView(store:store).signal(n); if let track=store.selectedTrack,n.kind == .source { Divider();TrackInspector(store:store,track:track) } } }
         case .edge(let id):
-            scroller { if store.soundView {InspectorView(store:store).signalEdge(id)} else if let e=store.project.active.edges.first(where:{$0.id==id}){InspectorView(store:store).transition(e)} }
+            if store.soundView {scroller {InspectorView(store:store).signalEdge(id)}}
+            else {TransitionWorkspace(store:store,edgeID:id).padding(26)}
         case .track(let id):
-            scroller { if let t=store.project.tracks.first(where:{$0.id==id}) { TextField("트랙 이름",text:Binding(get:{t.name},set:{v in store.updateTrack("트랙 이름"){$0.name=v}})).textFieldStyle(StudioFieldStyle());TrackInspector(store:store,track:t) } }
+            scroller { if let t=store.project.tracks.first(where:{$0.id==id}) { CommittedNameField(title:"트랙 이름",value:Binding(get:{store.project.tracks.first{$0.id==id}?.name ?? t.name},set:{v in store.updateTrack("트랙 이름"){$0.name=v}}),message:{store.status=$0});TrackInspector(store:store,track:t) } }
         case .group(let id):scroller{groupSettings(id)}
         }
     }
@@ -67,14 +69,14 @@ struct CircleWorkspace:View {
     }
     @ViewBuilder func patternSettings(_ id:ID)->some View {
         if let pattern=store.project.patterns.first(where:{$0.id==id}) {
-            TextField("리듬 이름",text:Binding(get:{pattern.name},set:{v in store.mutate("리듬 이름"){p in if let i=p.patterns.firstIndex(where:{$0.id==id}){p.patterns[i].name=v}}})).textFieldStyle(StudioFieldStyle())
-            CompactNumber("길이 · 4분음표 박",value:Binding(get:{pattern.length},set:{v in store.mutate("리듬 길이"){p in if let i=p.patterns.firstIndex(where:{$0.id==id}){p.patterns[i].length=max(0.25,min(16384,v))}}}))
+            CommittedNameField(title:"리듬 이름",value:Binding(get:{store.project.patterns.first{$0.id==id}?.name ?? pattern.name},set:{v in store.mutate("리듬 이름"){p in if let i=p.patterns.firstIndex(where:{$0.id==id}){p.patterns[i].name=v}}}),message:{store.status=$0})
+            CompactNumber("길이 · 4분음표 박",value:Binding(get:{store.project.patterns.first{$0.id==id}?.length ?? pattern.length},set:{v in store.mutate("리듬 길이"){p in if let i=p.patterns.firstIndex(where:{$0.id==id}){p.patterns[i].length=max(0.25,min(16384,v))}}}),range:0.25...16384)
             Text("글로벌 또는 서클 음악 설정에서 이 리듬을 선택하면 곡과 함께 반복 재생합니다.").foregroundStyle(.secondary)
         }
     }
     @ViewBuilder func groupSettings(_ id:ID)->some View {
         if let group=store.layout.groups.first(where:{$0.id==id}) {
-            TextField("그룹 이름",text:Binding(get:{group.name},set:{v in store.editLayout("그룹 이름"){l in if let i=l.groups.firstIndex(where:{$0.id==id}){l.groups[i].name=v}}})).textFieldStyle(StudioFieldStyle())
+            CommittedNameField(title:"그룹 이름",value:Binding(get:{store.layout.groups.first{$0.id==id}?.name ?? group.name},set:{v in store.editLayout("그룹 이름"){l in if let i=l.groups.firstIndex(where:{$0.id==id}){l.groups[i].name=v}}}),message:{store.status=$0})
             Text("\(group.members.count)개 서클").foregroundStyle(.secondary)
             Button(group.collapsed ? "펼치기":"접기"){store.toggleGroup(id);store.closeFocus()}
             Button("그룹 해제"){store.ungroup(id);store.closeFocus()}
@@ -88,7 +90,7 @@ struct GlobalCircleSettings:View {
     var body:some View {
         VStack(alignment:.leading,spacing:18) {
             TextField("곡 이름",text:$name).textFieldStyle(StudioFieldStyle())
-            CompactNumber("템포 · BPM",value:$context.tempo)
+            CompactNumber("템포 · BPM",value:$context.tempo,range:1...999)
             MeterEditor(meter:$context.meter);ScaleEditor(scale:$context.scale)
             Divider(); Text("박 분할과 강세").font(.system(size:12,weight:.semibold));BeatEditor(grid:$context.beatGrid)
             Divider();PatternPicker(project:store.project,assignment:$context.rhythm)

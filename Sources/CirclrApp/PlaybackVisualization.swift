@@ -63,6 +63,9 @@ struct PlaybackVisualFrame {
     func interruptPlaybackFollow() {
         let mode = store.playbackFollow.interrupted(playing: store.playback.playing)
         if mode != store.playbackFollow {
+            // Consume our own mode change before a click starts its manual focus animation.
+            // A later SwiftUI update must not mistake that animation for the old follow transition.
+            lastFollowMode = mode
             store.playbackFollow = mode
             animation?.invalidate(); animation = nil
             followedSection = nil
@@ -100,6 +103,7 @@ struct PlaybackVisualFrame {
                 guard let data = analysis.occurrences[occurrence.id], let arrangement = owners[occurrence.use.id] else { continue }
                 let local = seconds-occurrence.start, section = CircleAddress.section(arrangementID: arrangement, useID: occurrence.use.id)
                 let level = data.section?.level(at: local) ?? 0
+                frame.levels[section] = max(frame.levels[section] ?? 0,level)
                 for parent in scene.path(to: section) { frame.levels[parent.id] = max(frame.levels[parent.id] ?? 0, level) }
                 for (id, envelope) in data.nodes {
                     let address = CircleAddress.music(arrangementID: arrangement, useID: occurrence.use.id, nodeID: id)
@@ -116,16 +120,22 @@ struct PlaybackVisualFrame {
             frame.phases.removeValue(forKey: node.id)
         }
         for edge in scene.edges {
+            let logicalFrom=edge.connectionID?.from ?? edge.from,logicalTo=edge.connectionID?.to ?? edge.to
+            // A collapsed group's displayed endpoint still represents the hidden engine node.
+            if logicalFrom != edge.from {frame.levels[edge.from]=max(frame.levels[edge.from] ?? 0,frame.levels[logicalFrom] ?? 0)}
+            if logicalTo != edge.to {frame.levels[edge.to]=max(frame.levels[edge.to] ?? 0,frame.levels[logicalTo] ?? 0)}
             if edge.kind == .flow {
                 if plan.transitions.contains(where: { $0.edgeID == edge.id && $0.start <= seconds && seconds < $0.start+max(0.35, $0.duration) }) {
                     frame.edgeLevels[edge.id] = max(0.3, frame.levels[edge.from] ?? 0, frame.levels[edge.to] ?? 0)
-                } else if case .section(_, let source) = edge.from, case .section(_, let target) = edge.to,
+                } else if case .section(_, let source) = logicalFrom, case .section(_, let target) = logicalTo,
                           plan.occurrences.enumerated().contains(where: { i, occurrence in
                               i > 0 && occurrence.use.id == target && plan.occurrences[i-1].use.id == source &&
                               occurrence.start <= seconds && seconds < occurrence.start+0.35
                           }) {
                     frame.edgeLevels[edge.id] = 0.6
                 }
+            } else if let connection = edge.connectionID, case .music = connection.from {
+                frame.edgeLevels[edge.id] = prepared.visualization?.edgeLevel(connection, at: seconds, plan: plan, tail: prepared.tailSeconds) ?? 0
             } else if frame.levels[edge.to] != nil {
                 frame.edgeLevels[edge.id] = (frame.levels[edge.from] ?? 0)*edge.gain
             }
@@ -139,16 +149,13 @@ struct PlaybackVisualFrame {
     func followPlaybackSection() {
         guard store.playbackFollow == .following, !visualFrame.stale,
               let target = visualFrame.focus,
-              let node = scene?.node(target), bounds.width > 100 else { return }
-        let top = 95.0, bottom = store.consoleOpen ? max(75, bounds.height-store.consoleBounds.minY+12) : 75
-        let usableHeight = max(160, bounds.height-top-bottom)
-        let viewport = CGRect(x: 0, y: top, width: bounds.width, height: usableHeight)
+              let scene,let node = scene.node(target), bounds.width > 100 else { return }
+        let viewport = workspaceViewport
         guard target != followedSection || viewport != playbackFollowViewport else { return }
+        guard let next=PlaybackFraming.camera(for:node,in:scene,viewport:viewport) else{return}
         followedSection = target
         playbackVisibilityFocus = target
         playbackFollowViewport = viewport
-        var next = camera.focused(on: node, width: bounds.width, height: usableHeight)
-        next.pan.y += top
         setCamera(next, animated: !reducePlaybackMotion, manual: false)
     }
 
@@ -189,16 +196,14 @@ struct PlaybackVisualFrame {
         drawPlayhead(node)
     }
 
-    func drawPlaybackEdge(_ edge: CircleSceneEdge, from: NSPoint, to: NSPoint, tint: NSColor) {
+    func drawPlaybackEdge(_ edge: CircleSceneEdge, curve: CirclePortCurve, tint: NSColor) {
         let strength = displayStrength(visualFrame.edgeLevels[edge.id] ?? 0)
         guard strength > 0, !visualFrame.stale, store.playback.playing else { return }
-        wire(from, to, color: tint.withAlphaComponent(0.3+strength*0.55), dashed: edge.kind == .sidechain)
+        wire(curve, color: tint.withAlphaComponent(0.3+strength*0.55), dashed: edge.kind == .sidechain)
         guard !reducePlaybackMotion else { return }
-        let width = max(30, abs(to.x-from.x)*0.45)
         func point(_ t: Double) -> NSPoint {
-            let s = 1-t
-            return NSPoint(x: s*s*s*from.x+3*s*s*t*(from.x+width)+3*s*t*t*(to.x-width)+t*t*t*to.x,
-                           y: s*s*s*from.y+3*s*s*t*from.y+3*s*t*t*to.y+t*t*t*to.y)
+            let p = (try? curve.point(at: t)) ?? curve.from
+            return NSPoint(x: p.x, y: p.y)
         }
         for index in 0..<3 {
             let phase = (visualFrame.seconds*0.65+Double(index)/3).truncatingRemainder(dividingBy: 1)
@@ -227,9 +232,14 @@ struct PlaybackVisualFrame {
          "meterPlaying": store.meter.playing,
          "frameCount": frameCount, "maximumFrameGap": maximumFrameGap, "reduceMotion": reducePlaybackMotion,
          "camera": store.json(camera), "canvasSize": [bounds.width, bounds.height],
+         "ports":cableDiagnostics(),
          "editorAddress":store.json(editorAddress), "editorFrame":editor.map{[$0.frame.minX,$0.frame.minY,$0.frame.width,$0.frame.height]} ?? [],
+         "canvasKeyboardFocus":window?.firstResponder === self,
          "workspaceViewport":[workspaceViewport.minX,workspaceViewport.minY,workspaceViewport.width,workspaceViewport.height],
-         "labels":labelPlacements.map{["address":store.json($0.id),"rect":[$0.rect.minX,$0.rect.minY,$0.rect.width,$0.rect.height]]},
+         "labels":labelPlacements.map{["address":store.json($0.id),"rect":[$0.rect.minX,$0.rect.minY,$0.rect.width,$0.rect.height],
+                                       "anchor":[$0.anchor.x,$0.anchor.y],"selected":store.hierarchySelections.contains($0.id),
+                                       "title":scene?.node($0.id)?.title ?? ""]},
+         "labelCircles":labelCircles.map{["address":store.json($0.id),"center":[$0.center.x,$0.center.y],"radius":$0.radius]},
          "followViewport": [playbackFollowViewport.minX, playbackFollowViewport.minY, playbackFollowViewport.width, playbackFollowViewport.height],
          "nodes": visualFrame.levels.filter { $0.value > 0.0001 }.map { ["address": store.json($0.key), "level": $0.value] },
          "edges": visualFrame.edgeLevels.filter { $0.value > 0.0001 },

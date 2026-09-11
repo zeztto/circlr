@@ -13,6 +13,167 @@ SPEC.loader.exec_module(server)
 
 
 class MCPTests(unittest.TestCase):
+    def test_pitch_bend_edit_scopes_changes_and_capability(self):
+        normal = dict(kind='edit_pitch_bend', arrangementID='a', useID='u', laneID='l', original=False)
+        shared = dict(kind='edit_pitch_bend', patternID='patt', trackID='t')
+        changes = [dict(kind='insert', beat=1, rawValue=8192), dict(kind='update', index=0, beat=2, range=dict(semitones=2, cents=0)), dict(kind='remove', index=0), dict(kind='setInitial', channel=0, rawValue=8192, range=dict(semitones=2,cents=0)), dict(kind='clear')]
+        probe = dict(ok=True, result=dict(projectID='p', revision=8, runtime=dict(capabilities=dict(midiPitchBendEditing=1))))
+        for address in [normal, shared]:
+            for change in changes:
+                args = dict(projectID='p', expectedRevision=8, operations=[dict(address, change=change)])
+                with patch.object(server, 'rpc', side_effect=[probe, dict(ok=True)]) as rpc:
+                    self.assertFalse(server.call_tool('/qa.sock', 'circlr_apply', args)['isError'])
+                    self.assertEqual(rpc.call_args.args[1]['arguments']['operations'], args['operations'])
+        invalid = [dict(normal, clipID='audio', change=dict(kind='clear')), dict(normal, change=dict(kind='clear', index=0)), dict(normal, change=dict(kind='insert',beat=0,rawValue=0,range=dict(semitones=2,cents=0))), dict(shared, original=False, change=dict(kind='clear')), dict(normal, patternID='patt', change=dict(kind='clear')), {k:v for k,v in dict(normal,change=dict(kind='clear')).items() if k!='original'}]
+        for op in invalid:
+            with patch.object(server, 'rpc') as rpc:
+                with self.assertRaises(ValueError):server.call_tool('/qa.sock','circlr_apply',dict(projectID='p',expectedRevision=8,operations=[op]))
+                rpc.assert_not_called()
+        for value in [None,False,0,2,'1']:
+            probe['result']['runtime']['capabilities']['midiPitchBendEditing']=value
+            with patch.object(server,'rpc',return_value=probe) as rpc:
+                self.assertTrue(server.call_tool('/qa.sock','circlr_apply',dict(projectID='p',expectedRevision=8,operations=[dict(normal,change=dict(kind='clear'))]))['isError'])
+                rpc.assert_called_once()
+
+    def test_shared_audio_edit_variants_forward_explicit_shared_target(self):
+        variants = [('split', {'sourceOffset': 0.5}), ('duplicate', {'beatOffset': 4}),
+                    ('fade', {'fadeIn': 0.1, 'fadeOut': 0.2}), ('delete', {})]
+        operations = [{'kind': 'edit_shared_audio', 'patternID': 'pattern', 'trackID': 'track',
+                       'clipID': 'clip', 'edit': edit, **extra} for edit, extra in variants]
+        args = {'projectID': 'p', 'expectedRevision': 8, 'operations': operations}
+        with patch.object(server, 'rpc', return_value={'ok': True}) as ipc:
+            self.assertFalse(server.call_tool('/qa.sock', 'circlr_apply', args)['isError'])
+            ipc.assert_called_once()
+            request = ipc.call_args.args[1]
+            self.assertEqual(request['method'], 'apply')
+            self.assertEqual(request['expectedRevision'], 8)
+            self.assertEqual(request['arguments']['operations'], operations)
+
+    def test_shared_audio_invalid_batch_never_reaches_ipc(self):
+        operation = {'kind': 'edit_shared_audio', 'patternID': 'pattern', 'trackID': 'track',
+                     'clipID': 'clip', 'edit': 'split', 'sourceOffset': 0.5}
+        invalids = [{k: v for k, v in operation.items() if k != key}
+                    for key in ('patternID', 'trackID', 'clipID', 'edit')]
+        invalids += [{**operation, key: value} for key, value in
+                     [('patternID', 4), ('edit', 'transpose'), ('sourceOffset', 0),
+                      ('sourceOffset', True), ('fadeIn', -1), ('fadeOut', float('nan')),
+                      ('beatOffset', 131073), ('command', 'ignored')]]
+        for invalid in invalids:
+            with self.subTest(invalid=invalid), patch.object(server, 'rpc') as ipc:
+                with self.assertRaises(ValueError):
+                    server.call_tool('/unused.sock', 'circlr_apply',
+                                     {'projectID': 'p', 'expectedRevision': 8, 'operations': [operation, invalid]})
+                ipc.assert_not_called()
+
+    def test_apply_rejects_ignored_or_ambiguous_scope_fields_before_ipc(self):
+        shared = {'kind': 'edit_shared_audio', 'patternID': 'pattern', 'trackID': 'track',
+                  'clipID': 'clip', 'edit': 'delete'}
+        invalids = [{**shared, key: 'other'} for key in ('arrangementID', 'compositionID', 'nodeID', 'useID', 'laneID')]
+        invalids += [{**shared, 'original': False},
+                     {'kind': 'edit_audio', 'patternID': 'pattern', 'edit': 'delete'},
+                     {'kind': 'set_track', 'original': False},
+                     {'kind': 'set_automation', 'patternID': 'pattern'}]
+        for operation in invalids:
+            with self.subTest(operation=operation), patch.object(server, 'rpc') as ipc:
+                with self.assertRaises(ValueError):
+                    server.call_tool('/unused.sock', 'circlr_apply',
+                                     {'projectID': 'p', 'expectedRevision': 8, 'operations': [shared, operation]})
+                ipc.assert_not_called()
+
+    def test_automation_original_scope_is_optional_boolean_and_not_injected(self):
+        operation = {'kind': 'set_automation', 'useID': 'use', 'nodeID': 'node',
+                     'parameter': 'gain', 'automationPoints': [{'beat': 0, 'value': 1}]}
+        for extra in ({}, {'original': False}, {'original': True}):
+            with self.subTest(extra=extra), patch.object(server, 'rpc', return_value={'ok': True}) as ipc:
+                server.call_tool('/qa.sock', 'circlr_apply',
+                                 {'projectID': 'p', 'expectedRevision': 8, 'operations': [{**operation, **extra}]})
+                self.assertEqual(ipc.call_args.args[1]['arguments']['operations'], [{**operation, **extra}])
+        for value in (0, 1, 'true', None):
+            with self.subTest(value=value), patch.object(server, 'rpc') as ipc:
+                with self.assertRaises(ValueError):
+                    server.call_tool('/unused.sock', 'circlr_apply',
+                                     {'projectID': 'p', 'expectedRevision': 8, 'operations': [{**operation, 'original': value}]})
+                ipc.assert_not_called()
+
+    def test_insert_section_requires_explicit_valid_target_and_point(self):
+        operation = {'kind': 'insert_section', 'arrangementID': 'arr', 'useID': 'after', 'name': '새 섹션', 'bars': 4, 'at': {'x': 500, 'y': 0}}
+        base = {'projectID': 'p', 'expectedRevision': 1, 'operations': [operation]}
+        with patch.object(server, 'rpc', return_value={'ok': True}) as ipc:
+            server.call_tool('/qa.sock', 'circlr_apply', base)
+            self.assertEqual(ipc.call_args.args[1]['arguments']['operations'], [operation])
+        invalids = [{k: v for k, v in operation.items() if k != required}
+                    for required in ('arrangementID', 'useID', 'name', 'bars', 'at')]
+        invalids += [{**operation, 'at': point} for point in ({'x': 0}, {'x': True, 'y': 0}, {'x': float('nan'), 'y': 0}, {'x': 10000000, 'y': 0}, {'x': 0, 'y': -10000000})]
+        invalids += [{**operation, 'bars': bars} for bars in (0, 4097, True)]
+        for invalid in invalids:
+            with self.subTest(invalid=invalid), patch.object(server, 'rpc') as ipc:
+                with self.assertRaises(ValueError):
+                    server.call_tool('/unused.sock', 'circlr_apply', {**base, 'operations': [operation, invalid]})
+                ipc.assert_not_called()
+
+    def test_render_tail_is_optional_bounded_and_forwarded_without_ui_defaults(self):
+        for method, scope in [('bounce', {'useID': 'use', 'trackID': 'track'}),
+                              ('export', {'path': '/tmp/new-tail.wav'})]:
+            base = {'projectID': 'p', 'expectedRevision': 1, **scope}
+            for extra in ({}, {'tailSeconds': 0}, {'tailSeconds': 12.5}, {'tailSeconds': 120}):
+                with self.subTest(method=method, extra=extra), patch.object(server, 'rpc', return_value={'ok': True}) as ipc:
+                    server.call_tool('/qa.sock', 'circlr_' + method, {**base, **extra})
+                    forwarded = ipc.call_args.args[1]['arguments']
+                    if extra:
+                        self.assertEqual(forwarded['tailSeconds'], extra['tailSeconds'])
+                    else:
+                        self.assertNotIn('tailSeconds', forwarded)
+            for invalid in (-0.001, 120.001, float('nan'), float('inf'), float('-inf'), True, '2', None):
+                with self.subTest(method=method, invalid=invalid), patch.object(server, 'rpc') as ipc:
+                    with self.assertRaises(ValueError):
+                        server.call_tool('/unused.sock', 'circlr_' + method, {**base, 'tailSeconds': invalid})
+                    ipc.assert_not_called()
+
+    def test_arrangement_apply_requires_explicit_target_and_forwards_atomic_batch(self):
+        operations = [
+            {'kind': 'duplicate_arrangement', 'compositionID': 'owner', 'arrangementID': 'source', 'name': '  대안  '},
+            {'kind': 'rename_arrangement', 'compositionID': 'other-owner', 'arrangementID': 'other-source', 'name': '새 이름'},
+            {'kind': 'select_arrangement', 'compositionID': 'owner', 'arrangementID': 'source'},
+        ]
+        args = {'projectID': 'p', 'expectedRevision': 7, 'operations': operations}
+        with patch.object(server, 'rpc', return_value={'ok': True}) as ipc:
+            self.assertFalse(server.call_tool('/qa.sock', 'circlr_apply', args)['isError'])
+            ipc.assert_called_once()
+            request = ipc.call_args.args[1]
+            self.assertEqual(request['method'], 'apply')
+            self.assertEqual(request['expectedRevision'], 7)
+            self.assertEqual(request['arguments']['operations'], operations)
+        for operation in operations:
+            required = ('compositionID', 'arrangementID') if operation['kind'] == 'select_arrangement' else ('compositionID', 'arrangementID', 'name')
+            for key in required:
+                for invalid in ({k: v for k, v in operation.items() if k != key}, {**operation, key: 123}):
+                    with self.subTest(kind=operation['kind'], key=key, invalid=invalid), patch.object(server, 'rpc') as ipc:
+                        with self.assertRaises(ValueError):
+                            server.call_tool('/unused.sock', 'circlr_apply', {**args, 'operations': [operations[0], invalid]})
+                        ipc.assert_not_called()
+        with patch.object(server, 'rpc') as ipc, self.assertRaisesRegex(ValueError, 'read-only'):
+            server.call_tool('/unused.sock', 'circlr_apply', args, read_only=True)
+        ipc.assert_not_called()
+
+    def test_sounds_read_only_contract_reaches_native(self):
+        args={'soundTarget':'instrument','query':'#５','category':'soundBank','bankDrums':False,'offset':2,'limit':1,'catalogID':'a'*64}
+        with patch.object(server, 'rpc', return_value={'ok':True,'result':{'items':[]}}) as ipc:
+            result=server.call_tool('/qa.sock','circlr_sounds',args,read_only=True)
+            self.assertFalse(result['isError'])
+            self.assertEqual(ipc.call_args.args[1]['method'],'sounds')
+            self.assertEqual(ipc.call_args.args[1]['arguments'],args)
+        self.assertTrue(server.BY_NAME['circlr_sounds']['annotations']['readOnlyHint'])
+        self.assertFalse(server.BY_NAME['circlr_sounds']['annotations']['destructiveHint'])
+
+    def test_sounds_invalid_arguments_never_reach_ipc(self):
+        invalid=[{'soundTarget':'shell'},{'query':'x'*257},{'category':'sampler'},{'bankDrums':0},
+                 {'limit':0},{'limit':129},{'limit':True},{'offset':-1},{'offset':1000001},
+                 {'catalogID':'short'},{'path':'/tmp/private'},{'query':None}]
+        for args in invalid:
+            with self.subTest(args=args),patch.object(server,'rpc') as ipc,self.assertRaises(ValueError):
+                server.call_tool('/unused.sock','circlr_sounds',args,read_only=True)
+            ipc.assert_not_called()
+
     def test_read_only_rejects_every_mutation_before_ipc(self):
         with patch.object(server, 'rpc') as ipc:
             for entry in server.TOOLS:
@@ -61,7 +222,7 @@ class MCPTests(unittest.TestCase):
         self.assertEqual(len(replies), 3)
         self.assertEqual(replies[0]["result"]["protocolVersion"], "2025-11-25")
         tools = replies[1]["result"]["tools"]
-        self.assertEqual(len(tools), 14)
+        self.assertEqual(len(tools), 24)
         self.assertTrue(all("method" not in item for item in tools))
         self.assertTrue(replies[2]["result"]["isError"])
 
@@ -76,6 +237,83 @@ class MCPTests(unittest.TestCase):
         ]:
             with self.assertRaises(ValueError):
                 server.validate(arguments, apply)
+
+    def test_port_contracts_and_revision_forwarding(self):
+        node = {"music": {"arrangementID": "a", "useID": "u", "nodeID": "n"}}
+        other = {"music": {"arrangementID": "a", "useID": "u", "nodeID": "r"}}
+        pair = {"projectID": "p", "expectedRevision": 3, "expectedLayoutRevision": 7,
+                "first": {"node": node, "portID": "out.audio.main"},
+                "second": {"node": other, "portID": "in.audio.bus2"}, "firstOctant": 2, "secondOctant": 7}
+        connection = {"edgeID": "e", "from": node, "to": other}
+        packets = {
+            "ports": {"node": node}, "connect_ports": pair,
+            "reconnect_ports": {**pair, "connectionID": connection},
+            "disconnect_ports": {**{k: pair[k] for k in ("projectID", "expectedRevision", "expectedLayoutRevision")}, "connectionID": connection},
+            "move_ports": {**{k: pair[k] for k in ("projectID", "expectedRevision", "expectedLayoutRevision")}, "moves": [{"id": connection, "placement": {"from": 0, "to": 7}}]},
+        }
+        with patch.object(server, "rpc", return_value={"ok": True}) as ipc:
+            for name, args in packets.items():
+                result = server.call_tool("/qa.sock", "circlr_" + name, args, read_only=name == "ports")
+                self.assertFalse(result["isError"])
+                request = ipc.call_args.args[1]
+                self.assertEqual(request["method"], name)
+                if name != "ports":
+                    self.assertEqual(request["expectedRevision"], 3)
+                    self.assertEqual(request["arguments"]["expectedLayoutRevision"], 7)
+                    self.assertNotIn("projectID", request["arguments"])
+        for key in pair:
+            with self.subTest(missing=key), patch.object(server, "rpc") as ipc, self.assertRaises(ValueError):
+                server.call_tool("/unused.sock", "circlr_connect_ports", {k: v for k, v in pair.items() if k != key})
+            ipc.assert_not_called()
+        for key, value in [("firstOctant", 8), ("secondOctant", True), ("expectedLayoutRevision", -1), ("expectedLayoutRevision", True), ("expectedLayoutRevision", 10**400), ("first", {"node": node, "portID": ""})]:
+            with self.subTest(key=key, value=value), patch.object(server, "rpc") as ipc, self.assertRaises(ValueError):
+                server.call_tool("/unused.sock", "circlr_connect_ports", {**pair, key: value})
+            ipc.assert_not_called()
+
+    def test_port_addresses_are_exact_and_bounded(self):
+        for node in [{"signal": {"_0": "s"}}, {"composition": {"_0": "c"}},
+                     {"section": {"arrangementID": "a", "useID": "u"}},
+                     {"music": {"arrangementID": "a", "useID": "u", "nodeID": "n"}}]:
+            server.validate(node, server.PORT_ADDRESS)
+        for node in [{}, {"group": {}}, {"album": {}}, {"signal": {"_0": ""}},
+                     {"signal": {"_0": "s"}, "composition": {"_0": "c"}},
+                     {"signal": {"_0": "s", "extra": 1}}, {"signal": {"_0": "s" * 1025}},
+                     {"music": {"useID": "u", "nodeID": "n"}}]:
+            with self.subTest(node=node), self.assertRaises(ValueError):
+                server.validate(node, server.PORT_ADDRESS)
+        move = {"id": {"edgeID": "e", "from": {"signal": {"_0": "s"}}, "to": {"signal": {"_0": "t"}}}, "placement": {"from": 0, "to": 7}}
+        for moves in [[], [move] * 129, [{**move, "placement": {"from": 0, "to": -1}}]]:
+            with self.subTest(count=len(moves)), self.assertRaises(ValueError):
+                server.validate({"projectID": "p", "expectedRevision": 0, "expectedLayoutRevision": 0, "moves": moves}, server.BY_NAME["circlr_move_ports"]["inputSchema"])
+
+    def test_explicit_group_binding_schema_and_write_isolation(self):
+        group = {'group': {'parent': {'section': {'arrangementID': 'a', 'useID': 'u'}}, 'id': 'g'}}
+        target = {'node': {'music': {'arrangementID': 'a', 'useID': 'u', 'nodeID': 'n'}}, 'portID': 'out.audio.bus2'}
+        packet = {'projectID': 'p', 'expectedRevision': 1, 'expectedLayoutRevision': 2, 'node': group, 'target': target, 'name': '신스 출력'}
+        for parent in [{'album': {}}, {'sound': {}}, {'composition': {'_0': 'c'}}, {'section': {'arrangementID': 'a', 'useID': 'u'}}]:
+            server.validate({'group': {'parent': parent, 'id': 'g'}}, server.PORT_ADDRESS)
+        with patch.object(server, 'rpc', return_value={'ok': True}) as ipc:
+            self.assertFalse(server.call_tool('/qa.sock', 'circlr_set_group_port', packet)['isError'])
+            self.assertEqual(ipc.call_args.args[1]['arguments']['node'], group)
+            self.assertEqual(ipc.call_args.args[1]['arguments']['expectedLayoutRevision'], 2)
+        for bad in [{**packet, 'name': ''}, {**packet, 'name': 'a'*129}, {**packet, 'node': target['node']},
+                    {**packet, 'node': {'group': {'parent': group, 'id': 'nested'}}},
+                    {k: v for k, v in packet.items() if k != 'expectedLayoutRevision'}]:
+            with patch.object(server, 'rpc') as ipc, self.assertRaises(ValueError):
+                server.call_tool('/unused.sock', 'circlr_set_group_port', bad)
+            ipc.assert_not_called()
+        for name, args in [('set_group_port', packet), ('remove_group_port', {k: v for k, v in packet.items() if k not in {'target', 'name'}} | {'portID': 'b'})]:
+            with patch.object(server, 'rpc') as ipc, self.assertRaisesRegex(ValueError, 'read-only'):
+                server.call_tool('/unused.sock', 'circlr_'+name, args, read_only=True)
+            ipc.assert_not_called()
+
+    def test_record_requires_revision_and_rejects_arbitrary_destination(self):
+        with patch.object(server,'rpc',return_value={'ok':True,'result':{'recording':{'permissionPending':True}}}) as ipc:
+            for args in [{},{'projectID':'p','expectedRevision':True},{'projectID':'p','expectedRevision':0,'path':'/tmp/record.wav'}]:
+                with self.assertRaises(ValueError):server.call_tool('/qa.sock','circlr_record',args)
+            ipc.assert_not_called()
+            server.call_tool('/qa.sock','circlr_record',{'projectID':'p','expectedRevision':0})
+            self.assertEqual(ipc.call_args.args[1]['method'],'record')
 
     def test_finite_edit_packet_is_accepted(self):
         server.validate({"projectID": "p", "expectedRevision": 2, "operations": [{"kind": "set_notes", "useID": "u", "laneID": "l", "notes": [{"beat": 0, "length": 1, "pitch": 66, "velocity": 90}]}]}, server.BY_NAME["circlr_apply"]["inputSchema"])
@@ -113,6 +351,18 @@ class MCPTests(unittest.TestCase):
         for key,value in [('noteIDs',[]),('noteIDs',[3]),('strength',1.1),('strength',True),('edit','unknown'),('semitones',128),('beatOffset',float('inf'))]:
             with self.subTest(key=key,value=value),self.assertRaises(ValueError):
                 server.validate({**packet,'operations':[{**op,key:value}]},spec)
+
+    def test_relative_note_edit_schema_rejects_invalid_delta_before_ipc(self):
+        spec=server.BY_NAME['circlr_apply']['inputSchema']
+        base={'kind':'edit_notes','useID':'u','laneID':'l','noteIDs':['n']}
+        def packet(op):return {'projectID':'p','expectedRevision':0,'operations':[dict(base,**op)]}
+        server.validate(packet({'edit':'length_delta','beatOffset':-.125}),spec)
+        server.validate(packet({'edit':'velocity_delta','velocityOffset':-10}),spec)
+        for value in [-127,127,True,1.5,float('nan')]:
+            with self.subTest(value=value),self.assertRaises(ValueError):
+                server.validate(packet({'edit':'velocity_delta','velocityOffset':value}),spec)
+        with self.assertRaises(ValueError):
+            server.validate(packet({'edit':'velocity','velocity':-1}),spec)
 
     def test_audio_edit_numbers_are_validated(self):
         spec=server.BY_NAME['circlr_apply']['inputSchema']

@@ -9,6 +9,17 @@ public enum CircleAddress: Hashable, Codable, Sendable {
     case music(arrangementID: ID, useID: ID, nodeID: ID)
     indirect case group(parent: CircleAddress, id: ID)
 }
+extension CircleAddress {
+    /// Creation belongs to the musical container, including nested layout groups.
+    public var creationContainer: CircleAddress {
+        switch self {
+        case .music(let arrangement, let use, _): return .section(arrangementID: arrangement, useID: use)
+        case .signal: return .sound
+        case .group(let parent, _): return parent.creationContainer
+        default: return self
+        }
+    }
+}
 public enum CircleRole { case album, song, movement, section, music, group, sound }
 public struct CircleSceneNode: Identifiable {
     public var id: CircleAddress
@@ -28,8 +39,16 @@ public struct CircleSceneNode: Identifiable {
     public var signal: SignalNode?
     public var timeline: OrbitTimeline?
     public var orbit: OrbitPlacement?
-    public var acceptsInput: Bool { signal.map { $0.kind != .source } ?? (music?.content.input != nil || (role != .music && role != .album && role != .group && role != .sound)) }
-    public var providesOutput: Bool { signal.map { $0.kind != .master } ?? (music?.content.output != nil || (role != .music && role != .album && role != .group && role != .sound)) }
+    public var exposedPorts:[CirclePort]? = nil
+    public var ports:[CirclePort] {
+        if let exposedPorts {return exposedPorts}
+        if let signal {return CirclePort.ports(for:signal)}
+        if let music {return CirclePort.ports(for:music.content)}
+        return role == .song || role == .movement || role == .section ? CirclePort.flowPorts:[]
+    }
+    // The canvas queries these every frame; do not allocate descriptor arrays on that path.
+    public var acceptsInput: Bool {exposedPorts.map{$0.contains{$0.direction == .input}} ?? (signal.map{$0.kind != .source} ?? (music?.content.input != nil || role == .song || role == .movement || role == .section))}
+    public var providesOutput: Bool {exposedPorts.map{$0.contains{$0.direction == .output}} ?? (signal.map{$0.kind != .master} ?? (music?.content.output != nil || role == .song || role == .movement || role == .section))}
     public var outerRadius: Double { radius + (SectionRings(repeats: repeatCount).outerRadius-80) * scale }
 }
 public struct CircleSceneEdge: Identifiable {
@@ -39,6 +58,12 @@ public struct CircleSceneEdge: Identifiable {
     public var to: CircleAddress
     public var kind: Kind
     public var gain: Double = 1
+    public var connectionID:CircleConnectionID?
+    public var placement=CircleConnectionPlacement()
+    public var explicitFromPortID:String?
+    public var explicitToPortID:String?
+    public var fromPortID:String {explicitFromPortID ?? (kind == .flow ? CirclePort.flowOutput:kind == .midi ? CirclePort.midiOutput:CirclePort.audioOutput)}
+    public var toPortID:String {explicitToPortID ?? (kind == .flow ? CirclePort.flowInput:kind == .midi ? CirclePort.midiInput:kind == .sidechain ? CirclePort.sidechainInput:CirclePort.audioInput)}
 }
 public struct HierarchyScene {
     public let nodes: [CircleSceneNode]
@@ -70,9 +95,11 @@ public enum HierarchySceneBuilder {
         var childScale = HierarchySceneBuilder.childScale
         var layoutRadius: Double?
     }
-    public static func build(_ project: Project) throws -> HierarchyScene {
+    public static func build(_ project: Project, revealing selection: CircleAddress? = nil) throws -> HierarchyScene {
+        try project.portLayout?.validate()
         guard let album = project.album else { throw CirclrError("앨범 서클 모델이 없습니다") }
         try album.validate(arrangements: project.arrangements)
+        let revealedGroups = (try? StudioNavigation.containingGroups(of: selection, in: project)) ?? []
         var edges: [CircleSceneEdge] = []
         var hiddenOwners: [CircleAddress: CircleAddress] = [:]
         func node(_ address: CircleAddress, title: String, subtitle: String, role: CircleRole,
@@ -129,12 +156,15 @@ public enum HierarchySceneBuilder {
                 let members = tree.children.filter { child in HierarchyEditing.memberID(child.node.id).map(group.members.contains) == true }
                 guard !members.isEmpty else { continue }
                 let center = Point(members.map(\.position.x).reduce(0,+)/Double(members.count), members.map(\.position.y).reduce(0,+)/Double(members.count))
-                var container = Tree(node: node(.group(parent: tree.node.id, id: group.id), title: group.name,
-                                                subtitle: "\(members.count)개 서클" + (group.collapsed ? " · 접힘" : ""), role: .group, context: tree.node.context), position: center)
+                let address = CircleAddress.group(parent: tree.node.id, id: group.id)
+                let collapsed = group.collapsed && !revealedGroups.contains(address)
+                var container = Tree(node: node(address, title: group.name,
+                                                subtitle: "\(members.count)개 서클" + (collapsed ? " · 접힘" : ""), role: .group, context: tree.node.context), position: center)
                 container.childScale = 1
+                container.node.exposedPorts = try? GroupPortEditing.ports(at:container.node.id,in:project)
                 container.children = members.map { item in var copy = item; copy.position = Point(item.position.x-center.x,item.position.y-center.y); return copy }
                 container = finish(container)
-                if group.collapsed {
+                if collapsed {
                     func hide(_ child: Tree) { hiddenOwners[child.node.id] = container.node.id; for nested in child.children { hide(nested) } }
                     for child in container.children { hide(child) }
                     container.children = []; container.node.radius = 100; container.node.childCount = 0
@@ -200,7 +230,8 @@ public enum HierarchySceneBuilder {
                     let to = CircleAddress.music(arrangementID: arrangement.id, useID: use.id, nodeID: edge.to)
                     if visible.contains(from), visible.contains(to) {
                         edges.append(CircleSceneEdge(id: "\(arrangement.id):\(use.id):\(edge.id)", from: from, to: to,
-                                                     kind: edge.sidechain ? .sidechain : (edge.signal == .midi ? .midi : .audio), gain: edge.gain))
+                                                     kind: edge.sidechain ? .sidechain : (edge.signal == .midi ? .midi : .audio), gain: edge.gain,
+                                                     connectionID:.init(edgeID:edge.id,from:from,to:to),explicitFromPortID:edge.fromPortID,explicitToPortID:edge.toPortID))
                     }
                 }
             }
@@ -231,15 +262,16 @@ public enum HierarchySceneBuilder {
                         }
                     } else if !arrangement.uses.isEmpty {tree.node.subtitle += " · 재생 경로 확인"}
                     for edge in arrangement.edges {
-                        edges.append(CircleSceneEdge(id: edge.id, from: .section(arrangementID: arrangement.id, useID: edge.from),
-                                                     to: .section(arrangementID: arrangement.id, useID: edge.to), kind: .flow))
+                        let from=CircleAddress.section(arrangementID:arrangement.id,useID:edge.from),to=CircleAddress.section(arrangementID:arrangement.id,useID:edge.to)
+                        edges.append(CircleSceneEdge(id:edge.id,from:from,to:to,kind:.flow,connectionID:.init(edgeID:edge.id,from:from,to:to)))
                     }
                 }
                 let groupingLayout = composition.children.isEmpty ? (project.arrangements.first { $0.id == composition.selectedArrangementID }?.layout ?? Layout()) : composition.layout
                 trees.append(seal(tree,layout:groupingLayout))
             }
             for pair in zip(ids, ids.dropFirst()) {
-                edges.append(CircleSceneEdge(id: "composition-flow:\(pair.0):\(pair.1)", from: .composition(pair.0), to: .composition(pair.1), kind: .flow))
+                let id="composition-flow:\(pair.0):\(pair.1)",from=CircleAddress.composition(pair.0),to=CircleAddress.composition(pair.1)
+                edges.append(CircleSceneEdge(id:id,from:from,to:to,kind:.flow,connectionID:.init(edgeID:id,from:from,to:to)))
             }
             return trees
         }
@@ -255,7 +287,10 @@ public enum HierarchySceneBuilder {
         let lowerEdge = root.children.map { $0.position.y+$0.node.outerRadius }.max() ?? 0
         sound.position = album.layout.positions["circlr:sound"] ?? Point(0, lowerEdge+sound.node.outerRadius+220)
         root.children.append(sound)
-        for edge in project.signal.edges { edges.append(CircleSceneEdge(id:"signal:\(edge.id)",from:.signal(edge.from),to:.signal(edge.to),kind:edge.sidechain ? .sidechain:.audio,gain:edge.gain)) }
+        for edge in project.signal.edges {
+            let from=CircleAddress.signal(edge.from),to=CircleAddress.signal(edge.to)
+            edges.append(CircleSceneEdge(id:"signal:\(edge.id)",from:from,to:to,kind:edge.sidechain ? .sidechain:.audio,gain:edge.gain,connectionID:.init(edgeID:edge.id,from:from,to:to)))
+        }
         if project.usesOrbits {sound.position=album.layout.positions["circlr:sound"] ?? Point();root.children[root.children.count-1]=sound}
         root = seal(root,layout:album.layout)
         var flattened: [CircleSceneNode] = []
@@ -272,10 +307,14 @@ public enum HierarchySceneBuilder {
         }
         try flatten(root, center: Point(), scale: 1, parent: nil, depth: 0)
         guard Set(flattened.map(\.id)).count == flattened.count else { throw CirclrError("캔버스의 서클 ID가 중복되었습니다") }
+        let placements=Dictionary(uniqueKeysWithValues:(project.portLayout?.connections ?? []).map{($0.id,$0.placement)})
         let displayedEdges = edges.compactMap { edge -> CircleSceneEdge? in
             var copy = edge
+            if let id=copy.connectionID,let placement=placements[id] {copy.placement=placement}
             while let owner = hiddenOwners[copy.from] { copy.from = owner }
             while let owner = hiddenOwners[copy.to] { copy.to = owner }
+            if copy.from != edge.from, let alias=GroupPortEditing.presented(.init(node:edge.from,portID:edge.fromPortID),at:copy.from,in:project) {copy.explicitFromPortID=alias.portID}
+            if copy.to != edge.to, let alias=GroupPortEditing.presented(.init(node:edge.to,portID:edge.toPortID),at:copy.to,in:project) {copy.explicitToPortID=alias.portID}
             return copy.from == copy.to ? nil : copy
         }
         return HierarchyScene(nodes: flattened, edges: displayedEdges)
@@ -292,6 +331,14 @@ public struct HierarchyCamera: Codable, Equatable, Sendable {
         guard value.isFinite, value > 0 else { return self }
         let z = min(1e12, max(1e-6, value)), point = world(anchor)
         return HierarchyCamera(pan: Point(anchor.x-point.x*z, anchor.y-point.y*z), zoom: z)
+    }
+    /// Keep the selected circle in the same screen position and size after a layout change.
+    public func preserving(_ previous:CircleSceneNode,in next:CircleSceneNode)->HierarchyCamera {
+        guard previous.id==next.id,previous.radius.isFinite,previous.radius>0,next.radius.isFinite,next.radius>0 else{return self}
+        let anchor=screen(previous.center),scale=zoom*previous.radius/next.radius
+        guard anchor.x.isFinite,anchor.y.isFinite,scale.isFinite,scale>0,next.center.x.isFinite,next.center.y.isFinite else{return self}
+        let z=min(1e12,max(1e-6,scale))
+        return HierarchyCamera(pan:Point(anchor.x-next.center.x*z,anchor.y-next.center.y*z),zoom:z)
     }
     public func focused(on node: CircleSceneNode, width: Double, height: Double, detail: Bool = false) -> HierarchyCamera {
         let desired = max(80, min(width - 120, height - 160)) * (detail ? 0.68 : 0.43)
@@ -315,8 +362,9 @@ public struct HierarchyViewport: Codable, Equatable {
     public var selection: CircleAddress
     public var settingsOpen: Bool
     public var midiStepMode:Bool?
-    public init(camera: HierarchyCamera, width: Double, height: Double, selection: CircleAddress, settingsOpen: Bool = false, midiStepMode:Bool = false) {
-        self.camera=camera;self.width=width;self.height=height;self.selection=selection;self.settingsOpen=settingsOpen;self.midiStepMode=midiStepMode
+    public var workspace:StudioWorkspace?
+    public init(camera: HierarchyCamera, width: Double, height: Double, selection: CircleAddress, settingsOpen: Bool = false, midiStepMode:Bool = false,workspace:StudioWorkspace? = nil) {
+        self.camera=camera;self.width=width;self.height=height;self.selection=selection;self.settingsOpen=settingsOpen;self.midiStepMode=midiStepMode;self.workspace=workspace
     }
     public func restored(width: Double, height: Double) -> HierarchyCamera? {
         guard camera.zoom.isFinite, (1e-6...1e12).contains(camera.zoom), camera.pan.x.isFinite, camera.pan.y.isFinite,

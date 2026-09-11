@@ -37,8 +37,33 @@ public enum ContextResolver {
 }
 public struct MusicClock: Equatable {
     public let barStarts: [Double]
+    /// First bar boundary at or after the clock end, before truncating a partial bar.
+    /// Used by editor rulers only; beat/second conversion and playback are unchanged.
+    public let barContinuationBeat: Double
     public let meters: [Meter]
     public let tempos: [TempoChange]
+    /// Reconstitutes an exact clock, including inherited partial first/last bars.
+    public init(barStarts: [Double], barContinuationBeat: Double, meters: [Meter], tempos: [TempoChange]) throws {
+        guard (1...4096).contains(meters.count), barStarts.count == meters.count + 1,
+              barStarts.first == 0, barStarts.allSatisfy({ $0.isFinite && $0 >= 0 }),
+              zip(barStarts, barStarts.dropFirst()).allSatisfy({ $0 < $1 }),
+              barContinuationBeat.isFinite, let end = barStarts.last,
+              barContinuationBeat >= end, let lastStart = barStarts.dropLast().last,
+              let lastMeter = meters.last, barContinuationBeat <= lastStart + lastMeter.quarters + 1e-8,
+              !tempos.isEmpty, tempos.count <= 100_000, tempos.first?.beat == 0,
+              tempos.allSatisfy({ $0.beat.isFinite && $0.beat >= 0 && $0.beat < end && $0.bpm.isFinite && (1...999).contains($0.bpm) }),
+              zip(tempos, tempos.dropFirst()).allSatisfy({ $0.beat < $1.beat }) else {
+            throw CirclrError("악기 렌더의 시간 지도를 확인하세요")
+        }
+        for (index, meter) in meters.enumerated() {
+            try ContextResolver.validate(meter)
+            guard barStarts[index+1] - barStarts[index] <= meter.quarters + 1e-8 else {
+                throw CirclrError("악기 렌더의 마디 길이를 확인하세요")
+            }
+        }
+        self.barStarts = barStarts; self.barContinuationBeat = barContinuationBeat
+        self.meters = meters; self.tempos = tempos
+    }
     public var beats: Double { barStarts.last ?? 0 }
     public var seconds: Double { seconds(at: beats) }
     public init(bars: Int, context: MusicContext, meterChanges: [MeterChange] = [], tempoChanges: [TempoChange] = []) throws {
@@ -51,7 +76,7 @@ public struct MusicClock: Equatable {
             try ContextResolver.validate(current)
             ms.append(current); starts.append(starts.last! + current.quarters)
         }
-        barStarts = starts; meters = ms
+        barStarts = starts; meters = ms; barContinuationBeat = starts.last!
         guard tempoChanges.allSatisfy({ $0.beat.isFinite && $0.beat >= 0 && $0.beat < starts.last! && $0.bpm.isFinite && (1...999).contains($0.bpm) }), Set(tempoChanges.map(\.beat)).count == tempoChanges.count else { throw CirclrError("Tempo map의 위치와 BPM을 확인하세요") }
         var ts = tempoChanges.sorted { $0.beat < $1.beat }
         if ts.first?.beat != 0 { ts.insert(TempoChange(beat: 0, bpm: context.tempo), at: 0) }
@@ -63,6 +88,7 @@ public struct MusicClock: Equatable {
         guard count<=4096 else { throw CirclrError("녹음 서클은 4096마디 이내로 지정하세요") }
         let full=try MusicClock(bars:max(1,Int(count)),context:context,tempoChanges:tempoChanges.filter{$0.beat<beats})
         barStarts=full.barStarts.filter{$0<beats}+[beats];meters=Array(full.meters.prefix(barStarts.count-1));tempos=full.tempos
+        barContinuationBeat=full.barContinuationBeat
     }
     public func bpm(at beat: Double) -> Double { tempos.last(where: { $0.beat <= beat })?.bpm ?? tempos[0].bpm }
     public init(parent: MusicClock, start: Double, length: Double, context: MusicContext, inheritTempo: Bool, inheritMeter: Bool) throws {
@@ -71,16 +97,17 @@ public struct MusicClock: Equatable {
         let changes=inheritTempo ? parent.tempos.filter{$0.beat>start && $0.beat<start+length}.map{TempoChange(beat:$0.beat-start,bpm:$0.bpm)}:[]
         let base=try MusicClock(beats:length,context:resolved,tempoChanges:changes)
         tempos=base.tempos
-        guard inheritMeter else {barStarts=base.barStarts;meters=base.meters;return}
+        guard inheritMeter else {barStarts=base.barStarts;meters=base.meters;barContinuationBeat=base.barContinuationBeat;return}
         var starts=[0.0],ms:[Meter]=[]
-        var absolute=start
+        var absolute=start,continuation=length
         while absolute<start+length-1e-9 {
             guard ms.count<4096 else {throw CirclrError("서클은 4096마디 이내로 지정하세요")}
             let meter=parent.meters[parent.bar(at:absolute)]
             let next=parent.barStarts.first{$0>absolute+1e-9} ?? absolute+meter.quarters
+            continuation=(next==parent.beats ? parent.barContinuationBeat:next)-start
             absolute=min(start+length,next);starts.append(absolute-start);ms.append(meter)
         }
-        barStarts=starts;meters=ms
+        barStarts=starts;meters=ms;barContinuationBeat=continuation
     }
     public func seconds(at beat: Double) -> Double {
         if beat <= 0 { return beat * 60 / tempos[0].bpm }
@@ -155,31 +182,33 @@ public enum ArrangementCompiler {
         let ownerID = arrangementID ?? project.arrangements.first(where: { $0.uses.contains(where: { $0.id == use.id }) })?.id ?? project.activeArrangementID
         let parent = try project.compositionContext(for: ownerID)
         let definition = try ContextResolver.inheriting(global: project.global, parent: parent, settings: section.settings)
-        let c = try ContextResolver.inheriting(global: project.global, parent: definition, settings: use.settings)
+        var c = try ContextResolver.inheriting(global: project.global, parent: definition, settings: use.settings)
         // An explicit per-use/global tempo or meter replaces the definition's map.
-        let tempoMap = use.settings.tempo.source == .inherit ? section.tempoChanges : []
+        let tempoMap = use.tempoOverride?.changes ?? (use.settings.tempo.source == .inherit ? section.tempoChanges : [])
+        if let mapOverride=use.tempoOverride {
+            guard project.schemaVersion>=4 else{throw CirclrError("이번 사용 템포 맵에는 version 4 프로젝트가 필요합니다")}
+            c.tempo=mapOverride.initialBPM
+        }
         let meterMap = use.settings.meter.source == .inherit ? section.meterChanges : []
-        return (section, c, try MusicClock(bars: use.barsOverride ?? section.bars, context: c, meterChanges: meterMap, tempoChanges: tempoMap))
+        let clock=try MusicClock(bars:use.barsOverride ?? section.bars,context:c,meterChanges:meterMap,tempoChanges:tempoMap)
+        try use.tempoOverride?.validate(beats:clock.beats)
+        return (section,c,clock)
     }
     public static func compile(_ project: Project, arrangementID: ID? = nil, onlyUseID: ID? = nil) throws -> ExecutionPlan {
-        guard (1...2).contains(project.schemaVersion) else { throw CirclrError("이 프로젝트의 형식 버전을 지원하지 않습니다") }
+        guard (1...7).contains(project.schemaVersion) else { throw CirclrError("이 프로젝트의 형식 버전을 지원하지 않습니다") }
         guard let a = project.arrangements.first(where: { $0.id == (arrangementID ?? project.activeArrangementID) }) else { throw CirclrError("편곡안을 찾을 수 없습니다") }
         if a.uses.isEmpty { return ExecutionPlan(revision: project.musicRevision, arrangementID: a.id, occurrences: [], transitions: [], duration: 0, warnings: []) }
-        guard let first = onlyUseID ?? a.startID else { throw CirclrError("시작 서클을 지정하세요") }
-        guard Set(a.uses.map(\.id)).count == a.uses.count else { throw CirclrError("서클 ID가 중복되었습니다") }
-        let uses = Dictionary(uniqueKeysWithValues: a.uses.map { ($0.id, $0) })
-        var id: ID? = first, visited = Set<ID>(), occurrences: [Occurrence] = [], transitions: [ScheduledTransition] = [], warnings: [String] = [], cursor = 0.0
+        var flow = try ArrangementFlowCursor(a, onlyUseID: onlyUseID)
+        var occurrences: [Occurrence] = [], transitions: [ScheduledTransition] = [], warnings: [String] = [], cursor = 0.0
         var pending: (FlowEdge, Occurrence)?
         var eventCount = 0
-        while let current = id {
-            guard visited.insert(current).inserted else { throw CirclrError("순환 연결을 발견했습니다. 반복 횟수를 사용하세요") }
-            guard let use = uses[current] else { throw CirclrError("연결된 서클을 찾을 수 없습니다") }
-            guard (1...256).contains(use.repeatCount) else { throw CirclrError("\(use.name): 반복 횟수는 1–256회로 지정하세요") }
+        while let use = try flow.next() {
             guard use.gain.isFinite && (0...4).contains(use.gain) else { throw CirclrError("서클 gain 값을 확인하세요") }
             let (section, context, clock) = try context(project: project, use: use, arrangementID: a.id)
             let lanes = try effectiveLanes(section: section, use: use)
             try validateLanes(lanes, project: project)
             let signalPlan = try SectionGraphCompiler.compile(project: project, section: section, use: use, context: context, clock: clock)
+            if signalPlan == nil && lanes.contains(where: { $0.pitchBend != nil || $0.sustain != nil }) { throw CirclrError("피치 벤드·sustain 연주는 섹션 음악 그래프가 필요합니다") }
             for lane in lanes {
                 if lane.notes.contains(where: { $0.beat + $0.length > clock.beats + 0.000001 }) { warnings.append("\(use.name): 섹션 끝에서 MIDI note를 종료합니다") }
             }
@@ -188,6 +217,7 @@ public enum ArrangementCompiler {
                 guard let pattern = project.patterns.first(where: { $0.id == patternID }) else { throw CirclrError("\(use.name): 리듬 패턴을 찾을 수 없습니다") }
                 try validatePattern(pattern, project: project)
                 if pattern.meter != context.meter { warnings.append("\(use.name): 패턴 \(pattern.meter.label) / 서클 \(context.meter.label)") }
+                if signalPlan == nil && (pattern.pitchBend != nil || pattern.sustain != nil) { throw CirclrError("피치 벤드·sustain 패턴은 섹션 음악 그래프가 필요합니다") }
                 if signalPlan == nil { eventCount += Int(ceil(clock.beats / pattern.length)) * (pattern.notes.count + pattern.audio.count) * use.repeatCount }
             }
             eventCount += (signalPlan?.eventCount ?? lanes.reduce(0) { $0 + $1.notes.count + $1.audio.count }) * use.repeatCount
@@ -197,31 +227,13 @@ public enum ArrangementCompiler {
                 occurrence.signalPlan = signalPlan
                 if iteration == 0, let (edge, source) = pending {
                     let t = edge.transition
-                    guard t.length.isFinite, t.length >= 0 else { throw CirclrError("전환 길이를 확인하세요") }
-                    var duration: Double
-                    switch t.anchor {
-                    case .seconds: duration = t.length
-                    case .sourceBars:
-                        guard t.length <= Double(source.clock.meters.count) else { throw CirclrError("전환 길이가 출발 섹션보다 깁니다") }
-                        duration = source.duration - source.clock.seconds(at: source.clock.beatAtBar(Double(source.clock.meters.count) - t.length))
-                    case .targetBars:
-                        guard t.length <= Double(clock.meters.count) else { throw CirclrError("전환 길이가 도착 섹션보다 깁니다") }
-                        duration = clock.seconds(at: clock.beatAtBar(t.length))
-                    }
-                    guard duration.isFinite else { throw CirclrError("전환 시간을 계산할 수 없습니다") }
-                    let start: Double
-                    switch t.mode {
-                    case .within:
-                        guard duration <= source.duration else { throw CirclrError("전환이 출발 섹션 범위를 넘습니다") }
-                        start = source.end - duration
-                    case .insert: start = source.end; occurrence.start += duration
-                    case .overlap:
-                        guard duration < min(source.duration, occurrence.duration) else { throw CirclrError("겹침은 두 섹션보다 짧아야 합니다") }
-                        occurrence.start -= duration; start = occurrence.start
-                    }
+                    let timing=try TransitionTiming(t,source:source.clock,target:clock)
+                    let duration=timing.duration, start=source.end+timing.startOffset
+                    occurrence.start += timing.targetOffset
                     if let p = t.patternID {
                         guard let pattern = project.patterns.first(where: { $0.id == p }) else { throw CirclrError("전환 패턴을 찾을 수 없습니다") }
                         try validatePattern(pattern, project: project)
+                        guard pattern.pitchBend == nil,pattern.sustain == nil else { throw CirclrError("전환 패턴의 피치 벤드·sustain 연주는 아직 지원하지 않습니다") }
                     }
                     if duration > 0 { transitions.append(ScheduledTransition(edgeID: edge.id, transition: t, start: start, duration: duration, sourceOccurrenceID: source.id, targetOccurrenceID: occurrence.id, context: source.context)) }
                     pending = nil
@@ -231,12 +243,7 @@ public enum ArrangementCompiler {
                 occurrences.append(occurrence); cursor = occurrence.end
                 guard occurrences.count <= 10_000, cursor <= 3600 else { throw CirclrError("한 번에 준비할 수 있는 1시간/10,000회 범위를 넘었습니다") }
             }
-            if onlyUseID != nil { break }
-            let edges = a.edges.filter { $0.from == current }
-            if use.isEnd { id = nil }
-            else if edges.count == 1 { pending = (edges[0], occurrences.last!); id = edges[0].to }
-            else if edges.count > 1, let chosen = a.chosenEdges[current], let edge = edges.first(where: { $0.id == chosen }) { pending = (edge, occurrences.last!); id = edge.to }
-            else { throw CirclrError("\(use.name): 다음 연결을 선택하거나 끝으로 지정하세요") }
+            if let edge = try flow.advance(after: use) { pending = (edge, occurrences.last!) }
         }
         _ = try SignalValidator.sorted(project.signal, tracks: project.tracks)
         return ExecutionPlan(revision: project.musicRevision, arrangementID: a.id, occurrences: occurrences, transitions: transitions, duration: occurrences.map(\.end).max() ?? 0, warnings: Array(Set(warnings)).sorted())
@@ -247,6 +254,10 @@ public enum ArrangementCompiler {
     public static func validateLanes(_ lanes: [Lane], project: Project) throws {
         for lane in lanes {
             guard project.tracks.contains(where: { $0.id == lane.trackID }) else { throw CirclrError("연주 트랙을 찾을 수 없습니다") }
+            try lane.pitchBend?.validate();try lane.sustain?.validate()
+            if let bend=lane.pitchBend,let sustain=lane.sustain,bend.channel != sustain.channel {throw CirclrError("같은 MIDI source의 표현 채널은 같아야 합니다")}
+            if lane.sustain != nil && project.schemaVersion<7 {throw CirclrError("Sustain에는 version 7 프로젝트가 필요합니다")}
+            if lane.pitchBend != nil && project.schemaVersion < 5 { throw CirclrError("피치 벤드에는 version 5 프로젝트가 필요합니다") }
             for note in lane.notes { try validateNote(note) }
             for clip in lane.audio {
                 guard project.assets.contains(where: { $0.id == clip.assetID }), clip.beat.isFinite, clip.beat >= 0, clip.duration.isFinite, clip.duration > 0, clip.sourceStart.isFinite, clip.sourceStart >= 0, clip.gain.isFinite, (0...4).contains(clip.gain), clip.sourceBPM.isFinite, clip.sourceBPM > 0 else { throw CirclrError("오디오 clip의 파일·위치·길이를 확인하세요") }
@@ -256,7 +267,7 @@ public enum ArrangementCompiler {
     }
     public static func validatePattern(_ pattern: RhythmPattern, project: Project) throws {
         guard pattern.length.isFinite, (1.0/1024...1_048_576).contains(pattern.length) else { throw CirclrError("패턴 길이를 확인하세요") }
-        var lane = Lane(trackID: pattern.trackID); lane.notes = pattern.notes; lane.audio = pattern.audio
+        var lane = Lane(trackID: pattern.trackID); lane.notes = pattern.notes; lane.audio = pattern.audio; lane.pitchBend = pattern.pitchBend; lane.sustain = pattern.sustain
         try validateLanes([lane], project: project)
         guard pattern.notes.allSatisfy({ $0.beat < pattern.length }) else { throw CirclrError("패턴 밖의 note 위치를 확인하세요") }
     }

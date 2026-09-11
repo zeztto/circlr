@@ -299,6 +299,9 @@ struct SongCanvas:NSViewRepresentable {
         needsDisplay=true;deferCameraCommit()
     }
     override func keyDown(with event:NSEvent) {
+        if event.keyCode==53,event.modifierFlags.intersection([.command,.control,.option,.shift]).isEmpty,let draft=store.midiImportDraft {
+            store.cancelMIDIImport(draft.id);return
+        }
         let plain=event.modifierFlags.intersection([.command,.control,.option]).isEmpty
         if plain && event.keyCode==4 {store.panMode=true;window?.invalidateCursorRects(for:self)}
         else if plain && event.keyCode==9 {store.panMode=false;window?.invalidateCursorRects(for:self)}

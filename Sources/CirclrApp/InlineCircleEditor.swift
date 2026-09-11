@@ -5,31 +5,89 @@ import CirclrAudio
 /// Lives in the canvas view's hierarchy. It never creates an NSWindow or a docked pane.
 struct InlineCircleEditor: View {
     @ObservedObject var store: AppStore
-    @State private var topPitch = 72
-    @FocusState private var nameFocused:Bool
+    @State private var viewState=EditorViewportState()
+    @State private var viewKey:EditorWorkspaceKey?
+    @State private var viewProjectID:ID?
+    @State private var viewGeneration:Int?
+    @State private var nameFocused=false
+    @StateObject private var connectionKeyboard=PortKeyboardFocus()
+    private var sharedPattern:RhythmPattern? {store.editPatternID.flatMap{id in store.project.patterns.first{$0.id==id}}}
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                TextField("서클 이름", text: Binding(get: { store.selectedCircle?.title ?? "" }, set: { store.renameHierarchy($0) }))
-                    .textFieldStyle(.plain).font(.system(size: 17, weight: .semibold)).focused($nameFocused).disabled(store.midiImportDraft != nil)
-                Spacer()
-                if store.selectedMusic != nil {
-                    Button(store.automationVisible ? "편집으로":"오토메이션") {if store.automationVisible {store.automationOpen=false}else{store.showAutomation()}}.help("이 서클의 볼륨·팬 곡선 · ⌘5")
-                    Button { store.hierarchySettingsOpen.toggle() } label: { Image(systemName: "slider.horizontal.3") }.help("템포·박자·스케일·반복 설정")
-                }
-                Button { store.hierarchySettingsOpen = false; store.hierarchyParent() } label: { Image(systemName: "arrow.up.left.and.arrow.down.right") }.help("상위 서클로 축소 · Esc")
-            }
+        VStack(alignment: .leading, spacing: 8) {
+            InlineEditorHeader(store:store,nameFocus:$nameFocused,connectionKeyboard:connectionKeyboard)
+                .fixedSize(horizontal:false,vertical:true)
             if store.selectedMusic != nil {StudioRouteBar(store:store)}
-            if let draft=store.midiImportDraft {MIDIImportView(store:store,draft:draft)} else if let id=store.hierarchyTransitionID,let edge=store.project.active.edges.first(where:{$0.id==id}) {
-                HStack{Text("섹션 사이 전환");Spacer();Button("서클 설정"){store.hierarchyTransitionID=nil}}
-                ScrollView{VStack(alignment:.leading,spacing:18){InspectorView(store:store).transition(edge)}}
+            if store.audioRecordingStatusVisible {AudioRecordingStatusView(store:store)}
+            // The flexible body cannot renegotiate the title/route/footer positions.
+            GeometryReader { geometry in
+                editorContent.frame(width:geometry.size.width,height:geometry.size.height,alignment:.topLeading)
+            }.clipped()
+            HStack {
+                if store.selectedMusic != nil {
+                    let identity=store.numberEditIdentity
+                    Picker("서클 편집 범위",selection:Binding(get:{store.editOriginal},set:{_ = store.setMusicEditScope(original:$0,identity:identity)})) {
+                        Text("서클 · 이번 사용").tag(false);Text("서클 · 공유 원본").tag(true)
+                    }.labelsHidden().controlSize(.mini).frame(width:130)
+                        .help("서클 이름·속성의 편집 범위 · 공유 원본 변경은 같은 원본의 다른 사용에도 반영됩니다. 트랙 음색·레벨은 이 선택과 관계없이 트랙 전체에 적용됩니다. 리듬 패턴의 노트·클립은 이 선택과 관계없이 같은 패턴의 모든 사용에 적용됩니다.")
+                        .disabled(store.preparing || store.midiRecording || store.audioRecordingBusy || store.audioRecordPending || store.midiImportDraft != nil)
+                }
+                if let pattern=sharedPattern {
+                    Text("패턴: \(pattern.name)").lineLimit(1).truncationMode(.middle)
+                        .help("공유 리듬 패턴: \(pattern.name)")
+                    Text("노트·클립은 모든 사용에 반영").fixedSize()
+                        .help("노트·클립 편집은 같은 리듬 패턴을 사용하는 모든 곳에 반영됩니다. 서클 편집 범위 선택과 별개입니다.")
+                } else {
+                Text(store.currentAudioClip != nil && !store.automationVisible && !store.hierarchySettingsOpen && !store.connectionsOpen && store.midiImportDraft==nil ? "파형 위 휠로 확대·축소 · ⇧ 휠로 원본 시간 이동":"빈 공간 휠로 확대·축소 · 목록 위 휠로 스크롤")
+                }; Spacer(); Text("⌘S 저장") }
+                .font(.system(size: 11)).foregroundStyle(StudioTheme.secondary)
+        }
+        .frame(maxWidth:.infinity,maxHeight:.infinity,alignment:.topLeading)
+        .padding(14).background(store.project.usesOrbits && !store.hierarchySettingsOpen && store.midiImportDraft==nil ? Color.clear:StudioTheme.surface).foregroundStyle(StudioTheme.text)
+        .font(.system(size: 13)).buttonStyle(CanvasButtonStyle()).controlSize(.regular)
+        .tint(StudioTheme.accent).preferredColorScheme(.dark)
+        .background(EditorFocusNavigationAttachment(store:store).allowsHitTesting(false))
+        .numberEditing(in:store)
+        .onExitCommand {
+            if let draft=store.midiImportDraft {store.cancelMIDIImport(draft.id)}
+            else {store.hierarchySettingsOpen = false;store.hierarchyParent()}
+        }
+        .onAppear {
+            loadViewState()
+            // A false FocusState write can clear focus already assigned by the connection editor.
+            if store.hierarchySettingsOpen && store.hierarchyTransitionID==nil { nameFocused = true }
+        }
+        .onChange(of:store.hierarchySettingsOpen){_,value in
+            let shouldFocus=value && store.hierarchyTransitionID==nil
+            if shouldFocus || nameFocused {nameFocused=shouldFocus}
+        }
+        .onChange(of:store.hierarchyTransitionID){_,id in if id != nil && nameFocused {nameFocused=false}}
+        .onChange(of:viewState){_,_ in rememberViewState()}
+        .onDisappear{rememberViewState()}
+        .onChange(of:store.editOriginal){_,_ in rememberViewState();loadViewState()}
+        .onChange(of:store.hierarchySelection){_,_ in rememberViewState();loadViewState()}
+        .onChange(of:store.mediaImportGeneration){_,_ in loadViewState()}
+        .onChange(of:store.editorBeats){_,_ in if isCurrentView {viewState=store.validatedEditorViewport(viewState)}}
+        .onChange(of:store.currentAudioClip?.assetID){_,_ in if isCurrentView {viewState=store.validatedEditorViewport(viewState)}}
+    }
+    @ViewBuilder private var editorContent:some View {
+        VStack(alignment:.leading,spacing:12) {
+            if let issue=store.musicEditingIssue,!store.audioIsOutsideSharedOriginal {
+                let identity=store.numberEditIdentity
+                VStack(alignment:.leading,spacing:12) {
+                    Text("공유 원본에서 편집할 수 없습니다").font(.system(size:13,weight:.medium))
+                    Text(issue).foregroundStyle(StudioTheme.secondary).fixedSize(horizontal:false,vertical:true)
+                    if store.editOriginal {Button("이번 사용 편집") {_ = store.setMusicEditScope(original:false,identity:identity)}}
+                }
+            } else if store.connectionsOpen { PortConnectionsEditor(store: store,keyboard:connectionKeyboard).id(store.hierarchySelection).id(store.mediaImportGeneration) }
+            else if let draft=store.midiImportDraft {MIDIImportView(store:store,draft:draft).id(draft.id)} else if let id=store.hierarchyTransitionID,let edge=store.project.active.edges.first(where:{$0.id==id}) {
+                TransitionWorkspace(store:store,edgeID:edge.id)
             } else if let plugin = store.embeddedPlugin {
                 HStack { Text("Audio Unit"); Spacer(); Button("서클로 돌아가기") { store.embeddedPlugin = nil } }
                 EmbeddedPlugin(controller: plugin)
             } else if let signal=store.selectedSignal,case .signal = store.hierarchySelection {
                 ScrollView { VStack(alignment:.leading,spacing:16) {
                     InspectorView(store:store).signal(signal)
-                    if let track=store.selectedTrack { TrackInspector(store:store,track:track) }
+                    if let track=store.selectedTrack { TrackLevelEditor(store:store,track:track) }
                     ForEach(store.project.signal.edges.filter{$0.from==signal.id}) { edge in
                         HStack { Text(store.project.signal.nodes.first{$0.id==edge.to}?.name ?? "출력"); Spacer(); Button("연결 해제"){store.disconnectHierarchy(.signal(signal.id),edgeID:edge.id)} }
                     }
@@ -37,95 +95,94 @@ struct InlineCircleEditor: View {
             } else if store.hierarchySelection == .sound {
                 VStack(alignment:.leading,spacing:16) { Text("모든 곡의 트랙 출력을 버스와 마스터로 연결합니다"); Button("버스 서클 추가"){store.addHierarchyBus()}; Menu("전역 이펙터 추가"){ForEach(EffectKind.allCases,id:\.self){kind in Button(AppStore.effectName(kind)){store.addHierarchySignalEffect(kind)}}}; Spacer() }
             } else if store.hierarchySettingsOpen || store.selectedMusic == nil {
-                ScrollView { HierarchySettingsEditor(store: store).padding(.trailing, 8) }
+                ScrollView { HierarchySettingsEditor(store: store).padding(.trailing, 8).rememberEditorScroll(scroll("settings")) }
             } else if store.automationVisible {
                 AutomationEditor(store:store)
-            } else if let node = store.selectedMusic {
+            } else if let node = store.musicEditingNode ?? (store.audioIsOutsideSharedOriginal ? store.selectedMusic:nil) {
                 switch node.content {
                 case .midi, .rhythmMIDI: midi
                 case .audio: audio
                 case .effect(let effect):
-                    ScrollView { VStack(spacing: 18) {
-                        EffectControls(effect: Binding(get: { effect }, set: { value in store.updateMusic("이펙트 편집") { $0.content = .effect(value) } }), allowsAU: true)
+                    let projectID=store.project.id, address=store.hierarchySelection
+                    let original=store.editOriginal,generation=store.mediaImportGeneration
+                    ScrollView { VStack(alignment: .leading, spacing: 22) {
+                        EffectControls(effect: Binding(get: {if case .effect(let value)=store.musicEditingNode?.content {return value};return effect}, set: { value in store.updateMusic("이펙트 편집") { $0.content = .effect(value) } }), allowsAU: true,isCurrent:{store.project.id==projectID && store.hierarchySelection==address && store.editOriginal==original && store.mediaImportGeneration==generation},chooseAudioUnit:{store.showSoundPicker(.musicEffect)})
+                        SoundPickerButton(title:"Audio Unit 이펙트 찾기",current:effect.kind == .audioUnit ? effect.plugin?.name ?? "Audio Unit 선택 필요":"설치된 Audio Unit 이펙트") {store.showSoundPicker(.musicEffect)}
                         if effect.kind == .audioUnit {
-                            StudioChoice("Audio Unit", selection: Binding(get: { effect.plugin?.id ?? "" }, set: { id in store.updateMusic("Audio Unit 선택") { var value = effect; value.plugin = store.effects.first { $0.id == id }; $0.content = .effect(value) } }), options: [("", "선택")]+store.effects.map { ($0.id, $0.name) })
                             Button("플러그인 편집") { store.showMusicPluginEditor() }.disabled(effect.plugin == nil)
                         }
-                        signalControls(node)
-                    }.padding(.trailing, 8) }
-                case .instrument, .output:
-                    if let track = store.selectedTrack { ScrollView { TrackInspector(store: store, track: track) } }
+                        HStack(spacing: 22) {
+                            Toggle("음소거",isOn:Binding(get:{node.muted},set:{value in store.updateMusic("음소거"){$0.muted=value}}))
+                            ValueField(title:"출력 볼륨 dB",value:Binding(get:{store.musicEditingNode?.gain ?? node.gain},set:{value in store.updateMusic("출력 볼륨"){$0.gain=value}}),range:0...4,presentation:.gainDecibels)
+                                .help("0 dB 원래 레벨 · −∞ 무음")
+                            Spacer(minLength:8)
+                            TrackBounceButton(store:store)
+                        }.frame(maxWidth:660,alignment:.leading)
+                    }.padding(.trailing, 8).rememberEditorScroll(scroll("effect")) }
+                case .instrument:
+                    if let track = store.selectedTrack { ScrollView { TrackInspector(store: store, track: track,showsTrackLevel:false,showsAutomationLinks:true).rememberEditorScroll(scroll("instrument")) } }
+                case .output:
+                    if let track = store.selectedTrack { ScrollView { OutputEditor(store:store,track:track).rememberEditorScroll(scroll("output")) } }
                 case .mix: signalControls(node); Spacer()
-                case .rhythmAudio: Text("리듬 패턴의 오디오 클립"); AudioLane(store: store); Spacer()
+                case .router(let router):
+                    ScrollView {
+                        VStack(alignment:.leading,spacing:14) {
+                            AudioRouterEditor(store:store,router:router)
+                            signalControls(node)
+                        }.padding(.trailing,8).rememberEditorScroll(scroll("router"))
+                    }
+                case .rhythmAudio: SharedRhythmAudioWorkspace(store:store,viewport:$viewState.audio)
                 }
             }
-            if let use=store.selectedUse,let track=store.selectedTrackID,store.selectedMusic != nil {
-                let takes=(store.project.takes ?? []).filter{$0.useID==use.id && $0.lane.trackID==track && ($0.targetLaneID == nil || $0.targetLaneID==store.selectedLaneID)}
-                if !takes.isEmpty {Menu("녹음 테이크 선택"){ForEach(takes){take in Button(take.name){store.activateTake(take)}}}}
-            }
-            HStack { Text("휠로 확대·축소 · ⇧ 휠로 편집 영역 이동"); Spacer(); Text("⌘S 저장") }
-                .font(.system(size: 11)).foregroundStyle(StudioTheme.secondary)
-        }
-        .frame(maxWidth:.infinity,maxHeight:.infinity,alignment:.topLeading)
-        .padding(14).background(store.project.usesOrbits && !store.hierarchySettingsOpen && store.midiImportDraft==nil ? Color.clear:StudioTheme.surface).foregroundStyle(StudioTheme.text)
-        .font(.system(size: 13)).buttonStyle(CanvasButtonStyle()).controlSize(.regular)
-        .tint(StudioTheme.accent).preferredColorScheme(.dark)
-        .onExitCommand { store.hierarchySettingsOpen = false; store.hierarchyParent() }
-        .onAppear { topPitch = store.currentLane?.notes.map(\.pitch).max().map { min(128,max(12,$0+1)) } ?? (store.selectedTrack?.instrument.drums == true ? 48 : 72);nameFocused=store.hierarchySettingsOpen }
-        .onChange(of:store.hierarchySettingsOpen){_,value in nameFocused=value}
+        }.frame(maxWidth:.infinity,maxHeight:.infinity,alignment:.topLeading)
     }
-    private var midi: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 8) {
-                Picker("MIDI 편집 방식",selection:$store.midiStepMode){Text(store.project.usesOrbits ? "궤도":"피아노 롤").tag(false);Text("스텝").tag(true)}.pickerStyle(.segmented).labelsHidden().frame(width:110)
-                Text("\(store.currentLane?.notes.count ?? 0)개 노트").foregroundStyle(StudioTheme.secondary)
-                Menu("MIDI"){Button("MIDI 파일 가져오기"){store.chooseMIDIImport()};Divider();Button("노트 전체 선택 · ⌘A"){store.selectMIDINotes(Set((store.currentLane?.notes ?? []).map(\.id)))};Button("선택 해제"){store.selectedNoteID=nil};Divider();Menu("패턴 추가"){ForEach(MIDIPattern.allCases,id:\.self){pattern in Button(pattern.label){store.generateMIDI(pattern)}}};Button("MIDI 저장"){store.exportMIDI()}}
-                Button("바운스"){store.bounceTrack()}.disabled(store.preparing).help("이 트랙의 섹션 출력을 이펙트와 함께 오디오로 변환")
-                Spacer()
-                Button { topPitch = max(12, topPitch-12) } label: { Image(systemName: "minus") }.help("한 옥타브 아래")
-                Text("\(Scale.roots[(topPitch-1)%12])\((topPitch-1)/12-1)").monospacedDigit().help("표시 범위의 가장 높은 음")
-                Button { topPitch = min(128, topPitch+12) } label: { Image(systemName: "plus") }.help("한 옥타브 위")
-                Button { store.startMIDIRecording() } label: { Label(store.midiRecording ? "녹음 정지" : "MIDI 녹음", systemImage: "record.circle") }.disabled(store.editPatternID != nil)
-            }
-            if store.midiStepMode {StepEditor(store:store,topPitch:topPitch)} else if store.project.usesOrbits {
-                OrbitMIDIEditor(store:store,topPitch:topPitch-1).frame(minHeight:120,maxHeight:.infinity)
-            } else { GeometryReader { geometry in
-                ScrollView([.horizontal, .vertical]) {
-                    PianoRoll(store: store, topPitch: topPitch-1).frame(width: max(geometry.size.width, store.editorBeats*48+64), height: 452)
-                }.background(StudioTheme.canvas)
-            } }
-            if !store.selectedMIDIIDs.isEmpty {MIDISelectionControls(store:store)}
-            if store.selectedMIDIIDs.count==1,let id = store.selectedNoteID, let note = store.currentLane?.notes.first(where: { $0.id == id }) {
-                HStack(spacing: 10) {
-                    Text("\(Scale.roots[note.pitch%12])\(note.pitch/12-1)").monospacedDigit().accessibilityLabel("음높이 \(note.pitch)")
-                    ValueField(title: "시작 박", value: noteBinding(id, \.beat, note.beat), range: 0...max(0,store.editorBeats-note.length))
-                    ValueField(title: "길이", value: noteBinding(id, \.length, note.length), range: 0.03125...max(0.03125,store.editorBeats-note.beat))
-                    ValueField(title: "세기", value: Binding(get: { Double(note.velocity) }, set: { value in guard var lane=store.currentLane,let i=lane.notes.firstIndex(where:{$0.id==id}) else{return};lane.notes[i].velocity=Int(value);store.setLane(lane) }), range: 1...127)
-                    Button { store.removeNote() } label: { Image(systemName: "trash") }.help("선택 노트 삭제")
-                }
-            } else if store.selectedMIDIIDs.isEmpty { Text(store.midiStepMode ? "셀 클릭으로 입력 · ⌥ 클릭으로 선택 · Tab으로 입력 필드 이동" : store.project.usesOrbits ? "원호에 노트 입력 · 각도로 시간 이동 · 반경으로 음높이 · 끝 점으로 길이 조절":"빈 칸에 노트 입력 · 드래그로 이동 · 오른쪽 끝으로 길이 조절").font(.system(size: 11)).foregroundStyle(StudioTheme.secondary) }
-        }
-    }
-    func noteBinding(_ id: ID, _ key: WritableKeyPath<Note, Double>, _ fallback: Double) -> Binding<Double> {
-        Binding(get: { store.currentLane?.notes.first { $0.id == id }?[keyPath: key] ?? fallback }, set: { value in
-            guard var lane = store.currentLane, let i = lane.notes.firstIndex(where: { $0.id == id }) else { return }
-            lane.notes[i][keyPath: key] = value; store.setLane(lane)
-        })
+    @ViewBuilder private var midi:some View {
+        if store.sustainOpen {SustainWorkspace(store:store)}
+        else if store.pitchBendOpen {PitchBendWorkspace(store:store)}
+        else if store.project.usesOrbits && !store.midiStepMode {MIDIOrbitWorkspace(store:store,viewport:$viewState.orbit,scroll:scroll("orbitControls"))}else{MIDIGridWorkspace(store:store,topPitch:$viewState.topPitch,steps:$viewState.steps,pianoScroll:scroll("piano"),stepScroll:scroll("steps"))}
     }
     @ViewBuilder private var audio: some View {
         if case .audio(_,let clipID) = store.selectedMusic?.content,
            let clip = store.currentLane?.audio.first(where: { $0.id == clipID }), let asset=store.project.assets.first(where: { $0.id == clip.assetID }) {
-            AudioWorkspaceView(store:store,clip:clip,asset:asset)
+            AudioWorkspaceView(store:store,clip:clip,asset:asset,viewport:$viewState.audio)
+        }else if store.audioIsOutsideSharedOriginal {
+            let identity=store.numberEditIdentity
+            VStack(alignment:.leading,spacing:12) {
+                Text("공유 원본 편집 중").font(.system(size:13,weight:.medium))
+                Text("이 오디오는 이번 사용에 추가되어 공유 원본에는 없습니다. 이번 사용 편집으로 전환하면 파형과 구간을 조절할 수 있습니다.")
+                    .foregroundStyle(StudioTheme.secondary).fixedSize(horizontal:false,vertical:true)
+                Button("이번 사용 편집") {
+                    if store.recoverAudioEditScope(identity:identity) {store.focusCanvas?()}
+                }.keyboardShortcut(.defaultAction).disabled(!store.audioScopeRecoveryAvailable)
+                    .help("선택한 오디오를 유지하고 이번 사용 편집으로 전환 · Return")
+            }.frame(maxWidth:.infinity,maxHeight:.infinity,alignment:.topLeading)
+        }else{
+            Text("선택한 오디오의 구간 또는 원본 파일 정보를 찾을 수 없습니다.")
+                .foregroundStyle(StudioTheme.secondary).fixedSize(horizontal:false,vertical:true)
+                .frame(maxWidth:.infinity,maxHeight:.infinity,alignment:.topLeading)
         }
+    }
+    private var isCurrentView:Bool {viewKey==store.editorWorkspaceKey && viewProjectID==store.project.id && viewGeneration==store.mediaImportGeneration}
+    private func loadViewState() {
+        viewKey=store.editorWorkspaceKey;viewProjectID=store.project.id;viewGeneration=store.mediaImportGeneration
+        viewState=store.initialEditorViewport()
+    }
+    private func rememberViewState() {
+        guard let viewKey,viewProjectID==store.project.id,viewGeneration==store.mediaImportGeneration else{return}
+        store.editorViewStates[viewKey]=viewState
+    }
+    private func scroll(_ name:String)->Binding<EditorScrollPosition> {
+        Binding(get:{viewState.scrolls[name] ?? .init()},set:{viewState.scrolls[name]=$0})
     }
     func editClip(_ clip: AudioClip, _ edit: (inout AudioClip) -> Void) {
         store.editAudioClip(clip,edit)
     }
-    func clipBinding(_ clip: AudioClip, _ key: WritableKeyPath<AudioClip, Double>) -> Binding<Double> { Binding(get: { clip[keyPath:key] }, set: { value in editClip(clip) { $0[keyPath:key]=value } }) }
+    func clipBinding(_ clip: AudioClip, _ key: WritableKeyPath<AudioClip, Double>) -> Binding<Double> { Binding(get: { store.currentLane?.audio.first{$0.id==clip.id}?[keyPath:key] ?? clip[keyPath:key] }, set: { value in editClip(clip) { $0[keyPath:key]=value } }) }
     @ViewBuilder func signalControls(_ node: MusicCircle) -> some View {
         Toggle("음소거", isOn: Binding(get: { node.muted }, set: { value in store.updateMusic("음소거") { $0.muted=value } }))
-        Button("트랙 바운스"){store.bounceTrack()}.disabled(store.preparing || store.selectedTrack == nil)
-        ValueField(title: "출력 볼륨", value: Binding(get: { node.gain }, set: { value in store.updateMusic("출력 볼륨") { $0.gain=value } }), range: 0...4)
+        TrackBounceButton(store:store)
+        ValueField(title: "출력 볼륨 dB", value: Binding(get: { store.musicEditingNode?.gain ?? node.gain }, set: { value in store.updateMusic("출력 볼륨") { $0.gain=value } }), range: 0...4, presentation: .gainDecibels)
+            .help("0 dB 원래 레벨 · −∞ 무음")
     }
 }
 
@@ -167,62 +224,63 @@ struct AudioTrimView: View {
 
 struct HierarchySettingsEditor: View {
     @ObservedObject var store: AppStore
-    @State private var settings=ContextSettings()
-    @State private var global=MusicContext()
-    private var context: MusicContext { store.selectedCircle?.context ?? store.project.global }
-    func value<T>(_ key:WritableKeyPath<ContextSettings,Setting<T>>,_ fallback:T)->Binding<T> {Binding(get:{settings[keyPath:key].value ?? fallback},set:{settings[keyPath:key] = .local($0)})}
     var body: some View {
-        VStack(alignment:.leading,spacing:18) {
+        VStack(alignment:.leading,spacing:10) {
+            if case .section=store.hierarchySelection,let use=store.selectedUse {
+                Button{store.showConnections(portID:CirclePort.flowOutput)}label:{
+                    HStack(spacing:12) {
+                        Text("섹션 순서·전환").font(.system(size:13,weight:.medium))
+                        Text("다음 연결 \(store.project.active.edges.filter{$0.from==use.id}.count)개").font(.system(size:12)).foregroundStyle(StudioTheme.secondary)
+                        Spacer(minLength:8)
+                        Image(systemName:"arrow.triangle.branch").foregroundStyle(StudioTheme.accent)
+                    }.padding(.horizontal,12).frame(height:32).background(StudioTheme.raised,in:RoundedRectangle(cornerRadius:6))
+                }.buttonStyle(.plain).frame(maxWidth:660).accessibilityLabel("섹션 순서·전환 · "+use.name).help("다음 섹션 검색 · 재생 분기 · 전환 효과 · 연결 L")
+            }
+            if case .composition(let id)=store.hierarchySelection,
+               let composition=store.project.album?.composition(id),!composition.arrangementIDs.isEmpty {
+                ArrangementPickerButton(store:store,owner:composition)
+            }
+            if store.selectedMusic != nil {
+                HStack(spacing:12) {
+                    Toggle("공유 원본 편집",isOn:Binding(get:{store.editOriginal},set:{_ = store.setMusicEditScope(original:$0,identity:store.numberEditIdentity)}))
+                    Text(store.editOriginal ? "같은 원본을 사용하는 서클에 반영":"이번 사용에만 반영").font(.system(size:11)).foregroundStyle(StudioTheme.secondary)
+                }
+            }
+            if let use=store.selectedUse,store.selectedMusic==nil,store.selectedHierarchyGroup==nil {
+                MIDIWorkspaceToolbarLayout(gap:16) {
+                SectionLengthControl(store:store)
+                CountControl(title:"반복",value:Binding(get:{store.selectedUse?.repeatCount ?? use.repeatCount},set:{v in store.updateUse("섹션 반복"){$0.repeatCount=v}}),range:1...256)
+                }
+            }
+            if let music=store.musicEditingNode {
+                if music.content.input == nil {
+                    HStack(spacing:18) {
+                    ValueField(title:"부모 안 시작 박",value:Binding(get:{store.musicEditingNode?.startBeat ?? music.startBeat},set:{v in store.updateMusic("시작 박"){$0.startBeat=v}}),range:0...131072,presentation:.beatPosition)
+                    ValueField(title:"길이 박",value:Binding(get:{store.musicEditingNode?.lengthBeats ?? store.currentClock?.beats ?? 32},set:{v in store.updateMusic("길이"){$0.lengthBeats=v}}),range:0.03125...131072)
+                    CountControl(title:"반복",value:Binding(get:{store.musicEditingNode?.repeatCount ?? music.repeatCount},set:{v in store.updateMusic("반복"){$0.repeatCount=v}}),range:1...256)
+                    }
+                }
+            }
+            if case .composition(let id)=store.hierarchySelection,let composition=store.project.album?.composition(id) {
+                CountControl(title:"곡·악장 반복",value:Binding(get:{store.project.album?.compositions.first{$0.id==id}?.repeatCount ?? composition.repeatCount},set:{value in store.mutate("곡·악장 반복"){p in if let i=p.album?.compositions.firstIndex(where:{$0.id==id}){p.album?.compositions[i].repeatCount=value}}}),range:1...256)
+            }
             if let group=store.selectedHierarchyGroup {
                 Text("\(group.members.count)개 서클 · 음악과 연결을 유지하는 배치 그룹")
                 Button(group.collapsed ? "그룹 펼치기" : "그룹 접기") {store.updateHierarchyGroup{$0.collapsed.toggle()};store.hierarchySettingsOpen=false;store.hierarchyCommand=HierarchyCommand(action:.focus(store.hierarchySelection ?? .album,false))}
                 Button("그룹 해제"){store.ungroupHierarchy()}
-            } else if store.hierarchySelection == .album {
-                CompactNumber("템포 · BPM",value:$global.tempo);MeterEditor(meter:$global.meter);ScaleEditor(scale:$global.scale)
-                BeatEditor(grid:$global.beatGrid);PatternPicker(project:store.project,assignment:$global.rhythm)
-                Button("앨범에 적용") {do{try ContextResolver.validate(global);store.mutate("앨범 음악 설정"){$0.global=global}}catch{store.fail(error)}}
-            } else {
-                SourcePicker(title:"템포",setting:$settings.tempo,fallback:context.tempo)
-                if settings.tempo.source == .local {CompactNumber("BPM",value:value(\.tempo,context.tempo))}
-                SourcePicker(title:"박자",setting:$settings.meter,fallback:context.meter)
-                if settings.meter.source == .local {MeterEditor(meter:value(\.meter,context.meter))}
-                SourcePicker(title:"스케일",setting:$settings.scale,fallback:context.scale)
-                if settings.scale.source == .local {ScaleEditor(scale:value(\.scale,context.scale))}
-                SourcePicker(title:"박 분할·강세",setting:$settings.beatGrid,fallback:context.beatGrid)
-                if settings.beatGrid.source == .local {BeatEditor(grid:value(\.beatGrid,context.beatGrid))}
-                SourcePicker(title:"리듬 패턴",setting:$settings.rhythm,fallback:context.rhythm)
-                if settings.rhythm.source == .local {PatternPicker(project:store.project,assignment:value(\.rhythm,context.rhythm))}
-                Button("서클에 적용") {store.updateHierarchySettings(settings)}
+            } else if let address=store.hierarchySelection {
+                MusicContextEditor(store:store,address:address,projectID:store.project.id,generation:store.mediaImportGeneration,original:store.selectedMusic != nil && store.editOriginal)
             }
-            if let use=store.selectedUse,store.selectedMusic == nil,store.selectedHierarchyGroup == nil {
-                CountControl(title:"마디",value:Binding(get:{use.barsOverride ?? store.project.sections.first{$0.id==use.sectionID}?.bars ?? 8},set:{v in store.updateUse("섹션 길이"){$0.barsOverride=v}}),range:1...1024)
-                CountControl(title:"반복",value:Binding(get:{use.repeatCount},set:{v in store.updateUse("섹션 반복"){$0.repeatCount=v}}),range:1...256)
+            if store.selectedUse != nil,store.selectedMusic == nil,store.selectedHierarchyGroup == nil {
                 HStack{Button("시작 섹션으로 지정"){store.setStart()};Button("재사용"){store.reuse()};Button("독립 원본으로 분리"){store.detach()}}
-                let address=CircleAddress.section(arrangementID:store.project.activeArrangementID,useID:use.id)
-                Menu("다음 섹션 연결"){ForEach(store.project.active.uses.filter{$0.id != use.id}){target in Button(target.name){store.connectHierarchy(address,.section(arrangementID:store.project.activeArrangementID,useID:target.id))}}}
-                ForEach(store.project.active.edges.filter{$0.from==use.id}){edge in
-                    HStack{Text(store.project.active.uses.first{$0.id==edge.to}?.name ?? "다음 섹션");Spacer();Button(store.project.active.chosenEdges[use.id]==edge.id ? "재생 경로":"이 경로 재생"){store.chooseHierarchyEdge(address,edgeID:edge.id)};Button("전환 편집"){store.openHierarchyTransition(address,edgeID:edge.id)};Button("연결 해제"){store.disconnectHierarchy(address,edgeID:edge.id)}}
-                }
             }
-            if let music=store.selectedMusic {
-                Toggle("공유 원본 편집",isOn:$store.editOriginal)
+            if let music=store.musicEditingNode {
                 Toggle("음소거",isOn:Binding(get:{music.muted},set:{v in store.updateMusic("음소거"){$0.muted=v}}))
-                if music.content.input == nil {
-                    ValueField(title:"부모 안 시작 박",value:Binding(get:{music.startBeat},set:{v in store.updateMusic("시작 박"){$0.startBeat=v}}),range:0...131072)
-                    ValueField(title:"길이 박",value:Binding(get:{music.lengthBeats ?? store.currentClock?.beats ?? 32},set:{v in store.updateMusic("길이"){$0.lengthBeats=v}}),range:0.03125...131072)
-                    CountControl(title:"반복",value:Binding(get:{music.repeatCount},set:{v in store.updateMusic("반복"){$0.repeatCount=v}}),range:1...256)
-                }
             }
-            if case .composition(let id)=store.hierarchySelection,let composition=store.project.album?.composition(id) {
-                CountControl(title:"곡·악장 반복",value:Binding(get:{composition.repeatCount},set:{value in store.mutate("곡·악장 반복"){p in if let i=p.album?.compositions.firstIndex(where:{$0.id==id}){p.album?.compositions[i].repeatCount=value}}}),range:1...256)
-                if !composition.arrangementIDs.isEmpty {
-                    StudioChoice("편곡안",selection:Binding(get:{composition.selectedArrangementID ?? ""},set:{store.chooseHierarchyArrangement($0)}),options:store.project.arrangements.filter{composition.arrangementIDs.contains($0.id)}.map{($0.id,$0.name)})
-                    Button("편곡안 복제"){store.duplicateHierarchyArrangement()}
-                }
+            if case .composition(let id)=store.hierarchySelection,store.project.album?.composition(id) != nil {
                 Button("악장 추가"){store.addComposition(.movement)}
             }
             if store.selectedUse != nil,store.selectedHierarchyGroup == nil { Button("리듬 패턴 만들기") { store.makeHierarchyPattern() } }
-        }.onAppear{settings=store.hierarchySettings;global=store.project.global}
-        .id(store.hierarchySelection)
+        }.id(store.hierarchySelection)
     }
 }

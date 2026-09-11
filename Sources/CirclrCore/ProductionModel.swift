@@ -112,6 +112,13 @@ public enum MIDIGenerator {
 }
 
 public enum MIDIFile {
+    /// Preserves source expression with independent melodic MIDI channels.
+    public static func encode(sources:[(String,Lane)],tempo:Double,meter:Meter,tempoChanges:[TempoChange]=[],sustainEndBeat:Double?=nil)throws->Data {
+        if tempoChanges.isEmpty && !sources.contains(where:{$0.1.pitchBend != nil || $0.1.sustain != nil}) {
+            return try encode(lanes:sources.map{($0.0,$0.1.notes)},tempo:tempo,meter:meter)
+        }
+        return try MIDIExpressionExport.encode(sources:sources,tempo:tempo,meter:meter,tempoChanges:tempoChanges,sustainEndBeat:sustainEndBeat)
+    }
     /// SMF format 1, 960 PPQN. Off events sort before on events at the same tick.
     public static func encode(lanes: [(String,[Note])], tempo: Double, meter: Meter) throws -> Data {
         guard tempo.isFinite,(60_000_000.0/16_777_215...999).contains(tempo),[1,2,4,8,16,32].contains(meter.denominator),(1...32).contains(meter.numerator),lanes.count<256 else {throw CirclrError("MIDI tempo·박자·트랙 수를 확인하세요")}

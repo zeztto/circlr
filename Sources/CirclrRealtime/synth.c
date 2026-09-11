@@ -5,7 +5,7 @@
 #define VOICES 64
 #define EVENTS 2048
 #define TAU 6.28318530717958647692
-typedef struct { int pitch, active, released; double lastL,lastR; double age, releaseAge, releaseLevel, level, velocity, frequency, phase[7], tinePhase, l1,l2,r1,r2; } Voice;
+typedef struct { int pitch, active, released, keyHeld, deferredRelease; uint64_t streamID, voiceID; double lastL,lastR; double age, releaseAge, releaseLevel, level, velocity, frequency, phase[7], tinePhase, l1,l2,r1,r2; } Voice;
 typedef struct { int pitch, velocity, on; } Event;
 struct CirclrSynth { int style,version; double resonance,width,filterEnvelope,stealL,stealR; double cutoff,attack,decay,sustain,release,detune; Voice voices[VOICES]; Event events[EVENTS]; atomic_uint read,write; atomic_bool overflow; double character,motion,motionPhase; unsigned chorusWrite; float chorusL[2048],chorusR[2048]; };
 CirclrSynth *circlr_synth_create(int style,double cutoff,double attack,double decay,double sustain,double release,double detune) {
@@ -18,8 +18,8 @@ CirclrSynth *circlr_synth_create_v2(int style,double cutoff,double attack,double
     if(s){s->version=2;s->resonance=resonance;s->width=width;s->filterEnvelope=filterEnvelope;}
     return s;
 }
-static void render_v2(CirclrSynth *s,float *left,float *right,uint32_t frames);
-static void render_v3(CirclrSynth *s,float *left,float *right,uint32_t frames);
+static void render_v2(CirclrSynth *s,float *left,float *right,uint32_t frames,const double *cutoffHz,const double *resonance);
+static void render_v3(CirclrSynth *s,float *left,float *right,uint32_t frames,const double *cutoffHz,const double *resonance);
 CirclrSynth *circlr_synth_create_v3(int style,double cutoff,double attack,double decay,double sustain,double release,double detune,double resonance,double width,double filterEnvelope,double character,double motion) {
     CirclrSynth *s=circlr_synth_create_v2(style,cutoff,attack,decay,sustain,release,detune,resonance,width,filterEnvelope);
     if(s){s->version=3;s->character=character;s->motion=motion;}
@@ -32,9 +32,92 @@ void circlr_synth_note(CirclrSynth *s,int pitch,int velocity,int on) {
     if(w-r>=EVENTS){atomic_store(&s->overflow,1);return;}
     s->events[w%EVENTS]=(Event){pitch,velocity,on};atomic_store_explicit(&s->write,w+1,memory_order_release);
 }
+// These entry points are synchronous and belong exclusively to the render owner.
+// Zero identities distinguish legacy queued voices; no controller table is retained.
+static int owned_frequency(int pitch,double semitones,double *frequency) {
+    if(pitch<0 || pitch>127 || !isfinite(semitones) || semitones < -128.27 || semitones > 128.27)return 0;
+    // Keep the zero-bend arithmetic exactly equal to the legacy note-on path.
+    double hz=440*pow(2,(pitch-69)/12.0);
+    if(semitones!=0)hz*=pow(2,semitones/12.0);
+    if(!isfinite(hz) || hz<=0)return 0;
+    *frequency=hz;return 1;
+}
+int circlr_synth_owned_note_on(CirclrSynth *s,uint64_t streamID,uint64_t voiceID,int pitch,int velocity,double semitones) {
+    double frequency;
+    if(!s || !streamID || !voiceID || velocity<1 || velocity>127 || !owned_frequency(pitch,semitones,&frequency))return 0;
+    for(int i=0;i<VOICES;i++){
+        Voice *v=&s->voices[i];
+        if(v->active && v->streamID==streamID && v->voiceID==voiceID)return 0;
+    }
+    int chosen=-1;double oldest=-1;
+    for(int i=0;i<VOICES;i++){
+        if(!s->voices[i].active){chosen=i;break;}
+        if(s->voices[i].age>oldest){oldest=s->voices[i].age;chosen=i;}
+    }
+    Voice *v=&s->voices[chosen];
+    if(s->version>=2 && v->active){s->stealL+=v->lastL;s->stealR+=v->lastR;}
+    *v=(Voice){0};v->active=1;v->pitch=pitch;v->velocity=fmin(127,velocity)/127.0;v->frequency=frequency;
+    v->streamID=streamID;v->voiceID=voiceID;v->keyHeld=1;
+    for(int n=0;n<7;n++)v->phase[n]=fmod(n*0.173+pitch*0.019,1);
+    return 1;
+}
+int circlr_synth_owned_note_off(CirclrSynth *s,uint64_t streamID,uint64_t voiceID) {
+    return circlr_synth_owned_note_off_pedal(s,streamID,voiceID,0);
+}
+int circlr_synth_owned_note_off_pedal(CirclrSynth *s,uint64_t streamID,uint64_t voiceID,int pedalDown) {
+    if(!s || !streamID || !voiceID || (pedalDown!=0 && pedalDown!=1))return 0;
+    for(int i=0;i<VOICES;i++){
+        Voice *v=&s->voices[i];
+        if(v->active && v->streamID==streamID && v->voiceID==voiceID && !v->released){
+            v->keyHeld=0;
+            if(pedalDown){v->deferredRelease=1;}
+            else{v->deferredRelease=0;v->released=1;v->releaseLevel=v->level;}
+            break;
+        }
+    }
+    return 1;
+}
+int circlr_synth_owned_sustain_release(CirclrSynth *s,uint64_t streamID) {
+    if(!s || !streamID)return 0;
+    for(int i=0;i<VOICES;i++){
+        Voice *v=&s->voices[i];
+        if(v->active && v->streamID==streamID && !v->keyHeld && v->deferredRelease && !v->released){
+            v->deferredRelease=0;v->released=1;v->releaseLevel=v->level;
+        }
+    }
+    return 1;
+}
+int circlr_synth_owned_pitch_bend(CirclrSynth *s,uint64_t streamID,double semitones) {
+    double frequencies[VOICES],validatedFrequency;
+    if(!s || !streamID || !owned_frequency(69,semitones,&validatedFrequency))return 0;
+    // Validate the whole bounded pool before mutation, including release voices.
+    for(int i=0;i<VOICES;i++){
+        Voice *v=&s->voices[i];
+        if(v->active && v->streamID==streamID && !owned_frequency(v->pitch,semitones,&frequencies[i]))return 0;
+    }
+    for(int i=0;i<VOICES;i++){
+        Voice *v=&s->voices[i];
+        if(v->active && v->streamID==streamID)v->frequency=frequencies[i];
+    }
+    return 1;
+}
 static double blep(double p,double dt){if(p<dt){p/=dt;return p+p-p*p-1;}if(p>1-dt){p=(p-1)/dt;return p*p+p+p+1;}return 0;}
 static double saw(double p,double dt){return 2*p-1-blep(p,dt);}
+static double base_cutoff(const CirclrSynth *s,const double *values,uint32_t index) {
+    if(!values)return s->cutoff;
+    double hz=values[index];return isfinite(hz) && hz>=40 && hz<=20000 ? hz:s->cutoff;
+}
+static double base_resonance(const CirclrSynth *s,const double *values,uint32_t index) {
+    if(!values)return s->resonance;
+    double value=values[index];return isfinite(value) && value>=0 && value<=0.9 ? value:s->resonance;
+}
 void circlr_synth_render(CirclrSynth *s,float *left,float *right,uint32_t frames) {
+    circlr_synth_render_cutoff(s,left,right,NULL,frames);
+}
+void circlr_synth_render_cutoff(CirclrSynth *s,float *left,float *right,const double *cutoffHz,uint32_t frames) {
+    circlr_synth_render_filter(s,left,right,cutoffHz,NULL,frames);
+}
+void circlr_synth_render_filter(CirclrSynth *s,float *left,float *right,const double *cutoffHz,const double *resonance,uint32_t frames) {
     if(!s)return;
     unsigned r=atomic_load_explicit(&s->read,memory_order_relaxed),w=atomic_load_explicit(&s->write,memory_order_acquire);
     if(atomic_exchange(&s->overflow,0)){
@@ -50,8 +133,8 @@ void circlr_synth_render(CirclrSynth *s,float *left,float *right,uint32_t frames
         }else{for(int i=0;i<VOICES;i++){Voice *v=&s->voices[i];if(v->active && v->pitch==e.pitch && !v->released){v->released=1;v->releaseLevel=v->level;break;}}}
     }
     atomic_store_explicit(&s->read,r,memory_order_release);
-    if(s->version==3){render_v3(s,left,right,frames);return;}
-    if(s->version==2){render_v2(s,left,right,frames);return;}
+    if(s->version==3){render_v3(s,left,right,frames,cutoffHz,resonance);return;}
+    if(s->version==2){render_v2(s,left,right,frames,cutoffHz,resonance);return;}
     const double dt=1.0/48000;
     for(int vi=0;vi<VOICES;vi++){Voice *v=&s->voices[vi];if(!v->active)continue;
         int count=s->style==3?7:(s->style==2?1:3);double increments[7];
@@ -71,7 +154,7 @@ void circlr_synth_render(CirclrSynth *s,float *left,float *right,uint32_t frames
                 double pan=count==1?.5:(double)n/(count-1);l+=value*sqrt(1-pan);rr+=value*sqrt(pan);
                 v->phase[n]+=increments[n];v->phase[n]-=floor(v->phase[n]);
             }
-            double cutoff=s->cutoff*(s->style==4 ? (.2+.8*exp(-v->age*8)) : 1);
+            double cutoff=base_cutoff(s,cutoffHz,i)*(s->style==4 ? (.2+.8*exp(-v->age*8)) : 1);
             double alpha=1-exp(-TAU*cutoff/48000);v->l1+=alpha*(l/count-v->l1);v->l2+=alpha*(v->l1-v->l2);v->r1+=alpha*(rr/count-v->r1);v->r2+=alpha*(v->r1-v->r2);
             double gain=env*v->velocity*.28;
             left[i]+=(float)(v->l2*gain);right[i]+=(float)(v->r2*gain);v->age+=dt;
@@ -84,7 +167,7 @@ static double lowpass_v2(double input,double g,double k,double *s1,double *s2) {
     double a=1/(1+g*(g+k)),v1=a*(*s1+g*(input-*s2)),v2=*s2+g*v1;
     *s1=2*v1-*s1;*s2=2*v2-*s2;return v2;
 }
-static void render_v2(CirclrSynth *s,float *left,float *right,uint32_t frames) {
+static void render_v2(CirclrSynth *s,float *left,float *right,uint32_t frames,const double *cutoffHz,const double *resonance) {
     const double dt=1.0/48000;
     // Carry the stolen voice's last sample down over ~4 ms instead of a hard reset.
     for(uint32_t i=0;i<frames;i++){left[i]+=(float)s->stealL;right[i]+=(float)s->stealR;s->stealL*=0.97;s->stealR*=0.97;}
@@ -122,8 +205,8 @@ static void render_v2(CirclrSynth *s,float *left,float *right,uint32_t frames) {
             // Tracking preserves brightness across registers; envelope works in octaves.
             double tracking=pow(v->frequency/261.625565,.28);
             double sweep=s->filterEnvelope*exp(-v->age*4/fmax(.03,s->decay));
-            double cutoff=fmin(18000,fmax(40,s->cutoff*tracking*(.65+.35*v->velocity)*pow(2,sweep)));
-            double g=tan(TAU*.5*cutoff/48000),k=2-1.6*s->resonance;
+            double cutoff=fmin(18000,fmax(40,base_cutoff(s,cutoffHz,i)*tracking*(.65+.35*v->velocity)*pow(2,sweep)));
+            double g=tan(TAU*.5*cutoff/48000),k=2-1.6*base_resonance(s,resonance,i);
             double gain=env*pow(v->velocity,1.35)*.32;
             v->lastL=lowpass_v2(l/count,g,k,&v->l1,&v->l2)*gain;
             v->lastR=lowpass_v2(r/count,g,k,&v->r1,&v->r2)*gain;
@@ -143,7 +226,7 @@ static float chorus_tap(const float *line,unsigned write,double delay) {
     unsigned index=(unsigned)position;double fraction=position-index;
     return (float)(line[index]*(1-fraction)+line[(index+1)&2047]*fraction);
 }
-static void render_v3(CirclrSynth *s,float *left,float *right,uint32_t frames) {
+static void render_v3(CirclrSynth *s,float *left,float *right,uint32_t frames,const double *cutoffHz,const double *resonance) {
     const double dt=1.0/48000;
     // Fixed stack scratch and preallocated delay lines: no allocation/lock in callback.
     for(uint32_t offset=0;offset<frames;offset+=256){
@@ -217,8 +300,8 @@ static void render_v3(CirclrSynth *s,float *left,float *right,uint32_t frames) {
                 double sweep=s->filterEnvelope*exp(-v->age*3/fmax(.03,s->decay));
                 if(style==8)sweep+=1.1*env; // brass opens with its attack, not before it
                 double motionOctaves=(style==0 || style==9)?s->motion*.22*movement:0;
-                double cutoff=fmin(18000,fmax(40,s->cutoff*tracking*(.55+.45*v->velocity)*pow(2,sweep+motionOctaves)));
-                double g=tan(TAU*.5*cutoff/48000),k=2-1.6*s->resonance;
+                double cutoff=fmin(18000,fmax(40,base_cutoff(s,cutoffHz,offset+i)*tracking*(.55+.45*v->velocity)*pow(2,sweep+motionOctaves)));
+                double g=tan(TAU*.5*cutoff/48000),k=2-1.6*base_resonance(s,resonance,offset+i);
                 double gain=env*velocityGain;
                 v->lastL=lowpass_v2(l/normalization,g,k,&v->l1,&v->l2)*gain;
                 v->lastR=lowpass_v2(r/normalization,g,k,&v->r1,&v->r2)*gain;

@@ -5,54 +5,74 @@ import CirclrRealtime
 import CirclrCore
 
 @MainActor public final class Playback {
-    public let engine = AVAudioEngine()
-    private let player = AVAudioPlayerNode()
-    public private(set) var playing = false
-    public private(set) var offset: Double = 0
-    public private(set) var prepared: PreparedAudio?
-    private var generation = 0
-    private var connected = false
-    private var connectionTask: Task<Void,Never>?
-    private var connectionReady = false
-    // Opening the canvas must not synchronously acquire the system output device.
-    public init() {}
-    private func connectOutputIfNeeded() async throws {
-        guard !connected else { return }
-        if connectionTask == nil {
-            let engine = engine, player = player
-            connectionTask = Task.detached(priority:.userInitiated) { [weak self] in
-                engine.attach(player)
-                engine.connect(player,to:engine.mainMixerNode,format:AVAudioFormat(standardFormatWithSampleRate:PCM.rate,channels:2))
-                await self?.markConnectionReady()
+    public private(set) var offset:Double=0
+    public private(set) var prepared:PreparedAudio?
+    private let transport:PlaybackTransport
+    private let outputWorker:OutputWorkerProcess?
+    private var activeID:UUID?
+    private var generation=0
+    public var onOutputChange:(()->Void)?
+    public var outputStatus:PlaybackOutputStatus {
+        if let outputWorker {return outputWorker.status}
+        var value=outputConnection.status;value.transport=transport.status;return value
+    }
+    private lazy var outputConnection:PlaybackOutputConnection = {
+        let transport=transport
+        let connection=PlaybackOutputConnection{report in await transport.connect(report:report)}
+        connection.onChange = {[weak self] in self?.onOutputChange?()}
+        return connection
+    }()
+    public init(){transport=PlaybackTransport();outputWorker=OutputWorkerProcess()}
+    init(factory:@escaping @Sendable()->any PlaybackBackend){transport=PlaybackTransport(factory:factory);outputWorker=nil}
+    init(outputWorker:OutputWorkerProcess){transport=PlaybackTransport();self.outputWorker=outputWorker}
+    deinit{outputWorker?.cancel();transport.shutdown()}
+    public var playing:Bool {if let outputWorker {return outputWorker.status.transport.phase == .playing};let state=transport.status;return state.id==activeID && state.phase == .playing}
+    public var seconds:Double {
+        if let outputWorker {let state=outputWorker.status.transport;return state.phase == .playing ? min(prepared?.mix.duration ?? .greatestFiniteMagnitude,offset+state.seconds):0}
+        let state=transport.status
+        guard state.id==activeID,state.phase == .playing else{return 0}
+        return min(prepared?.mix.duration ?? .greatestFiniteMagnitude,offset+state.seconds)
+    }
+    public func play(_ audio:PreparedAudio,from:Double=0,selection:OutputDeviceSelection = .systemDefault)async throws {
+        try await start(audio,from:from,timeout:10,selection:selection)
+    }
+    func start(_ audio:PreparedAudio,from:Double=0,timeout:Double,selection:OutputDeviceSelection = .systemDefault)async throws {
+        guard from.isFinite,from>=0,timeout.isFinite,timeout>0 else{throw PlaybackTransportError.invalidPosition}
+        try Task.checkCancellation()
+        stop();prepared=audio;offset=min(audio.mix.duration,from)
+        guard Int((offset*PCM.rate).rounded())<audio.mix.count else{return}
+        if let outputWorker {try await outputWorker.play(audio.mix,from:offset,timeout:timeout,selection:selection);return}
+        guard selection == .systemDefault else{throw CirclrError("이 출력 경로는 장치 지정을 지원하지 않습니다") }
+        generation+=1;let ticket=generation
+        try await outputConnection.waitUntilReady(timeout:timeout)
+        try Task.checkCancellation()
+        guard generation==ticket else{throw CancellationError()}
+        let id=try transport.begin(audio.mix,from:offset);activeID=id
+        let deadline=ProcessInfo.processInfo.systemUptime+timeout
+        do {
+            while true {
+                try Task.checkCancellation()
+                guard generation==ticket else{throw CancellationError()}
+                let state=transport.status
+                if state.id==id,state.didStart{return}
+                if state.id==id,state.phase == .failed{throw CirclrError(state.message ?? "출력을 시작할 수 없습니다")}
+                if state.id==id,state.phase == .idle{throw CancellationError()}
+                guard ProcessInfo.processInfo.systemUptime<deadline else{throw PlaybackTransportError.timedOut}
+                try await Task.sleep(for:.milliseconds(16))
             }
+        }catch{
+            transport.cancel(id)
+            if activeID==id{activeID=nil;offset=0}
+            throw error
         }
-        let deadline=Date().addingTimeInterval(10),ticket=generation
-        while !connectionReady {
-            try Task.checkCancellation()
-            guard ticket==generation else{throw CancellationError()}
-            guard Date()<deadline else{throw CirclrError("오디오 출력 장치 연결이 10초를 넘었습니다. macOS 출력 장치 연결 상태를 확인하세요")}
-            try await Task.sleep(for:.milliseconds(40))
-        }
-        connected = true
     }
-    private func markConnectionReady(){connectionReady=true}
-    public var seconds: Double {
-        guard playing, let t = player.lastRenderTime, let p = player.playerTime(forNodeTime:t) else { return offset }
-        return offset+Double(p.sampleTime)/p.sampleRate
+    public func stop() {
+        generation+=1
+        if let outputWorker {outputWorker.cancel();activeID=nil;offset=0;return}
+        outputConnection.cancelWait()
+        if let activeID{transport.cancel(activeID)}
+        activeID=nil;offset=0
     }
-    public func play(_ audio: PreparedAudio, from: Double = 0) async throws {
-        stop(); prepared = audio; offset = max(0,min(audio.mix.duration,from))
-        let part = audio.mix.slice(Int((offset*PCM.rate).rounded())..<audio.mix.count)
-        guard part.count > 0 else { return }
-        generation += 1; let ticket = generation
-        try await connectOutputIfNeeded()
-        guard generation == ticket, !Task.isCancelled else { return }
-        player.scheduleBuffer(try part.buffer(),completionCallbackType:.dataPlayedBack) { [weak self] _ in
-            Task { @MainActor in guard let self, self.generation == ticket else { return }; self.playing = false; self.offset = 0 }
-        }
-        try engine.start(); player.play(); playing = true
-    }
-    public func stop() { generation += 1; if connected { player.stop(); engine.stop() }; playing = false; offset = 0 }
 }
 
 public final class TakeWriter {
@@ -66,8 +86,8 @@ public final class TakeWriter {
     public private(set) var frames: AVAudioFramePosition = 0
     public init(url:URL,format:AVAudioFormat) throws {
         guard format.commonFormat == .pcmFormatFloat32, !format.isInterleaved,
-              let ring = circlr_ring_create(format.channelCount,4096,64),
-              let scratch = AVAudioPCMBuffer(pcmFormat:format,frameCapacity:4096) else { throw CirclrError("녹음 입력은 Float32 non-interleaved 형식이어야 합니다") }
+              let scratch = AVAudioPCMBuffer(pcmFormat:format,frameCapacity:4096),
+              let ring = circlr_ring_create(format.channelCount,4096,64) else { throw CirclrError("녹음 입력은 Float32 non-interleaved 형식이어야 합니다") }
         self.ring = ring; self.scratch = scratch; self.url = url
         do { try FileManager.default.createDirectory(at:url.deletingLastPathComponent(),withIntermediateDirectories:true); file = try AVAudioFile(forWriting:url,settings:format.settings) }
         catch { throw error }
@@ -75,10 +95,11 @@ public final class TakeWriter {
         timer.schedule(deadline:.now(),repeating:.milliseconds(5)); timer.setEventHandler { [weak self] in self?.drain() }; timer.resume()
     }
     deinit { timer?.cancel(); circlr_ring_destroy(ring) }
-    public func append(_ buffer:AVAudioPCMBuffer) {
-        guard let channels = buffer.floatChannelData else { return }
+    public func append(_ buffer:AVAudioPCMBuffer,frames:AVAudioFrameCount?=nil) {
+        guard let channels = buffer.floatChannelData,buffer.format.channelCount>=scratch.format.channelCount else { return }
         let pointers = UnsafeRawPointer(channels).assumingMemoryBound(to:Optional<UnsafePointer<Float>>.self)
-        _ = circlr_ring_push(ring,pointers,buffer.frameLength)
+        let count=min(frames ?? buffer.frameLength,buffer.frameLength);var offset:UInt32=0
+        while offset<count {let n=min(4096,count-offset);_=circlr_ring_push_offset(ring,pointers,offset,n);offset+=n}
     }
     private func drain() {
         guard let channels = scratch.floatChannelData else { return }
@@ -91,27 +112,6 @@ public final class TakeWriter {
     public func finish() throws {
         timer?.cancel(); timer = nil
         try queue.sync { drain(); file = nil; if let failure { throw failure }; if circlr_ring_overruns(ring)>0 { throw CirclrError("녹음 쓰기가 입력을 따라가지 못했습니다. 보존된 원본: \(url.path)") } }
-    }
-}
-
-@MainActor public final class AudioRecorder {
-    private let engine = AVAudioEngine()
-    private var writer: TakeWriter?
-    public private(set) var recording = false
-    public init() {}
-    public func start(to url:URL) throws {
-        guard !recording else { return }
-        let input = engine.inputNode, format = input.outputFormat(forBus:0)
-        guard format.sampleRate > 0, format.channelCount > 0 else { throw CirclrError("사용 가능한 오디오 입력 장치가 없습니다") }
-        let writer = try TakeWriter(url:url,format:format); self.writer = writer
-        input.installTap(onBus:0,bufferSize:1024,format:format) { buffer,_ in writer.append(buffer) }
-        do { try engine.start(); recording = true }
-        catch { input.removeTap(onBus:0); self.writer = nil; throw error }
-    }
-    public func stop() throws -> URL? {
-        guard recording else { return nil }
-        engine.inputNode.removeTap(onBus:0); engine.stop(); recording = false
-        let current = writer; writer = nil; try current?.finish(); return current?.url
     }
 }
 

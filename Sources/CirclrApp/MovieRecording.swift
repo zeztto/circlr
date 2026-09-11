@@ -13,6 +13,7 @@ extension AppStore {
         guard !FileManager.default.fileExists(atPath:url.path) else{fail(CirclrError("기존 영상을 보존하려면 새 파일 이름을 지정하세요"));return}
         if playback.playing {stop()}
         movieGeneration+=1;let generation=movieGeneration
+        let outputSelection=outputPreferences.selection
         moviePreparing=true;status="영상 녹화를 위한 오디오 준비"
         prepare(onlySelection:false,autoplay:false){[weak self] audio in
             guard let self,self.movieGeneration==generation,self.moviePreparing else{return}
@@ -23,12 +24,12 @@ extension AppStore {
                     guard self.movieGeneration==generation,self.moviePreparing else{recorder.cancel();return}
                     self.movieWriter=recorder;self.movieRevision=self.project.musicRevision;self.movieSeconds=0
                     self.playbackFollow=self.playbackFollow.startingPlayback()
-                    try await self.playback.play(audio)
+                    try await self.playback.play(audio,selection:outputSelection)
                     guard self.movieGeneration==generation,self.movieWriter === recorder else{recorder.cancel();return}
                     self.moviePreparing=false
                     try recorder.append(self.captureMovieFrame?() ?? image,seconds:0)
                     self.status="영상 녹화 중 · 캔버스 + 음악"
-                }catch{guard self.movieGeneration==generation else{return};self.movieWriter?.cancel();self.movieWriter=nil;self.moviePreparing=false;self.fail(error)}
+                }catch{guard self.movieGeneration==generation else{return};self.movieWriter?.cancel();self.movieWriter=nil;self.moviePreparing=false;self.handlePlaybackError(error)}
             }
         }
     }

@@ -89,6 +89,8 @@ public struct Lane: Codable, Equatable, Identifiable {
     public var trackID: ID
     public var notes: [Note] = []
     public var audio: [AudioClip] = []
+    public var pitchBend:MIDIPitchBendSequence?
+    public var sustain:MIDISustainSequence?
     public init(trackID: ID) { self.trackID = trackID }
 }
 public struct PluginDescriptor: Codable, Equatable, Identifiable, Sendable {
@@ -105,10 +107,12 @@ public struct Instrument: Codable, Equatable {
     public var kind: Kind = .soundBank
     public var program: Int = 0
     public var drums = false
+    /// Missing in older songs means the original default Sound Bank variation.
+    public var bankLSB: Int?
     public var plugin: PluginDescriptor?
     public var synth: SynthPatch?
     public var sample: SampleInstrument?
-    public init(program: Int = 0, drums: Bool = false) { self.program = program; self.drums = drums }
+    public init(program: Int = 0, drums: Bool = false, bankLSB: Int? = nil) { self.program = program; self.drums = drums; self.bankLSB=bankLSB }
 }
 public struct Track: Codable, Equatable, Identifiable {
     public var id: ID = newID()
@@ -146,6 +150,7 @@ public struct SectionUse: Codable, Equatable, Identifiable {
     public var isEnd = true
     public var settings = ContextSettings()
     public var barsOverride: Int?
+    public var tempoOverride:UseTempoOverride?
     public var laneOverrides: [ID: Lane] = [:]
     public var addedLanes: [Lane] = []
     public var excludedLaneIDs: [ID] = []
@@ -153,7 +158,7 @@ public struct SectionUse: Codable, Equatable, Identifiable {
     public var gain: Double = 1
     public var graphEdits: SectionGraphEdits?
     public init(sectionID: ID, name: String) { self.sectionID = sectionID; self.name = name }
-    public var isVariant: Bool { !laneOverrides.isEmpty || !addedLanes.isEmpty || !excludedLaneIDs.isEmpty || barsOverride != nil || !effects.isEmpty || settings != ContextSettings() || gain != 1 || graphEdits.map({ !$0.isEmpty }) == true }
+    public var isVariant: Bool { !laneOverrides.isEmpty || !addedLanes.isEmpty || !excludedLaneIDs.isEmpty || barsOverride != nil || tempoOverride != nil || !effects.isEmpty || settings != ContextSettings() || gain != 1 || graphEdits.map({ !$0.isEmpty }) == true }
 }
 public struct RhythmPattern: Codable, Equatable, Identifiable {
     public var id: ID = newID()
@@ -163,6 +168,8 @@ public struct RhythmPattern: Codable, Equatable, Identifiable {
     public var trackID: ID
     public var notes: [Note] = []
     public var audio: [AudioClip] = []
+    public var pitchBend:MIDIPitchBendSequence?
+    public var sustain:MIDISustainSequence?
     public init(name: String, trackID: ID) { self.name = name; self.trackID = trackID }
 }
 public enum TransitionMode: String, Codable, CaseIterable { case within, insert, overlap }
@@ -257,6 +264,10 @@ public struct Project: Codable, Equatable {
     public var album: Album?
     public var hierarchyView: HierarchyViewport?
     public var circleLayout: CircleLayout?
+    public var portLayout:CirclePortLayout?
+    /// Appearance overrides belong to a circle occurrence, not its shared musical content.
+    /// Optional storage keeps manifests written before custom colors compatible.
+    public var circleColors: [CircleAddress: CircleColor]?
     public var usesOrbits: Bool { circleLayout != .freeform }
     public var id: ID = newID()
     public var name = "새 곡"
@@ -284,7 +295,7 @@ public struct Project: Codable, Equatable {
         signal.layout.positions[node.id] = Point(100, Double(tracks.count - 1) * 220)
         if let master = signal.nodes.first(where: { $0.kind == .master }) {
             signal.edges.append(SignalEdge(from: node.id, to: master.id))
-            signal.layout.positions[master.id] = Point(650, 100)
+            if signal.layout.positions[master.id] == nil {signal.layout.positions[master.id] = Point(650, 100)}
         }
         return track.id
     }
