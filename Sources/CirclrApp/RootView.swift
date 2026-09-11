@@ -150,8 +150,24 @@ struct RootView: View {
                         Menu("앨범 사운드에 이펙터"){ForEach(EffectKind.allCases,id:\.self){kind in Button(AppStore.effectName(kind)){store.addHierarchySignalEffect(kind)}}}
                     }
                 }
-            }label:{Label("서클 추가",systemImage:"plus").font(.system(size:12,weight:.semibold)).foregroundStyle(StudioTheme.canvas).padding(.horizontal,8).padding(.vertical,5)}
+            } label: {
+                HStack(spacing:6) {
+                    Image(systemName:"plus")
+                    Text("서클 추가")
+                    Image(systemName:"chevron.down").font(.system(size:9,weight:.bold))
+                }
+                .font(.system(size:12,weight:.semibold))
+                .foregroundStyle(StudioTheme.canvas)
+                .padding(.horizontal,10).frame(minHeight:30)
                 .background(StudioTheme.accent,in:RoundedRectangle(cornerRadius:6))
+                .contentShape(RoundedRectangle(cornerRadius:6))
+                .accessibilityElement(children:.ignore)
+                .accessibilityLabel("서클 추가")
+            }
+            .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden)
+            .fixedSize(horizontal:true,vertical:false)
+            .help("현재 위치에 서클 추가")
+            .accessibilityLabel("서클 추가")
         }.menuStyle(.borderlessButton).padding(.horizontal,22).frame(height:66).background(StudioTheme.surface)
     }
     private var creationContainer:CircleAddress {(store.hierarchySelection ?? .album).creationContainer}

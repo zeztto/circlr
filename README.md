@@ -30,6 +30,8 @@ These are implemented development features, not a guarantee of compatibility wit
 
 Download the current **[0.30.0-preview.1](https://github.com/zeztto/circlr/releases/tag/v0.30.0-preview.1)** for Apple Silicon. This is build158 for evaluation with incomplete QA, not the completed 0.30.0 milestone. Repository access is required while the project remains private. Build from `main` to use the integrated development source.
 
+The development source includes the build159 dark-mode visibility fix for the Add Circle menu; the published preview remains build158.
+
 **Requirements:** macOS 14+, Xcode 26+ selected as the active developer directory, and Python 3. Native validation currently covers Apple Silicon. The interface is currently in Korean; this README is available in both languages.
 
 ```sh

@@ -30,6 +30,8 @@
 
 Apple Silicon용 **[0.30.0-preview.1](https://github.com/zeztto/circlr/releases/tag/v0.30.0-preview.1)**을 내려받을 수 있습니다. QA가 남아 있는 build158 평가판이며 0.30.0 마일스톤 완료판은 아닙니다. 저장소가 비공개인 동안 접근 권한이 필요합니다. 통합 개발 소스는 `main`에서 빌드합니다.
 
+개발 소스에는 서클 추가 메뉴의 다크모드 가시성을 수정한 build159가 포함되며, 배포된 평가판은 build158입니다.
+
 **필요 환경:** macOS 14 이상, 활성 개발자 디렉터리로 선택된 Xcode 26 이상, Python 3. 현재 native 검증 환경은 Apple Silicon입니다. 앱 UI는 한국어이며 README는 한국어와 영어로 제공합니다.
 
 ```sh
