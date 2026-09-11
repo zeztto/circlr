@@ -1,6 +1,6 @@
 # 0.1 단계 제품 로드맵
 
-현재 버전: [0.40.0](0.40.0.md), 앱 build162. 가시성·루프·시작 화면·감상/팔로우·녹화·데모4곡을 통합했다. 실제 GUI·청취·FPS·한글 IME는 이번 버전의 명시적 사용자 유예이며 자동 검사와 구분한다. [최종 QA](0.40.0-final-qa.md). 다음 제품 단계는0.50의 표현·믹스 신뢰성이다.
+현재 정식 배포: [0.40.0](https://github.com/zeztto/circlr/releases/tag/v0.40.0), 앱 build162. 가시성·루프·시작 화면·감상/팔로우·녹화·데모4곡을 통합했다. 실제 GUI·청취·FPS·한글 IME는 이번 버전의 명시적 사용자 유예이며 자동 검사와 구분한다. [최종 QA](0.40.0-final-qa.md). 다음 제품 단계는0.50의 표현·믹스 신뢰성이다.
 
 | 버전 | 사용자에게 전달할 결과 | 핵심 작업 | 릴리스 필수 증거 |
 |---|---|---|---|
@@ -15,7 +15,7 @@
 
 ## 0.40.0 우선 요구사항 — 루프·시작 화면·녹화·감상 모드
 
-상태: **IMPLEMENTED / 출고 검증 중**. 아래 항목은0.40의 원래 인수 기준이며 삭제하지 않는다. 코드·자동/offline 검증 결과는 [버전 기록](0.40.0.md)과 [최종 QA](0.40.0-final-qa.md)를 따른다. 실제 GUI·입출력 청취·장시간 프레임 실측·IME 항목은 사용자가 이번 버전에서 USER_WAIVED로 지정했다.
+상태: **RELEASED / 0.40.0 build162**. 아래 항목은0.40의 원래 인수 기준이며 삭제하지 않는다. 코드·자동/offline 검증 결과는 [버전 기록](0.40.0.md)과 [최종 QA](0.40.0-final-qa.md)를 따른다. 실제 GUI·입출력 청취·장시간 프레임 실측·IME 항목은 사용자가 이번 버전에서 USER_WAIVED로 지정했다.
 
 
 English: 0.40.0 prioritizes gapless looping of the current song or section and a launch screen offering New Song, Load Template and Load Demo. It also prioritizes diagnosing and fixing reported screen-recording stutter, with frame-pacing and audio/video synchronization checks. A text-free viewing mode will show circle and signal flow during playback and recording. Playback follow will offer song, section and explicitly pinned circle targets, with separate camera framing controls. The implementation now includes these controls and four bundled demos. Native GUI/listening/FPS/IME QA was explicitly waived for0.40. Further musical refinement of f0r h3r remains in0.60.0.
