@@ -30,6 +30,8 @@ These are implemented development features, not a guarantee of compatibility wit
 
 Download **[circlr 0.40.0](https://github.com/zeztto/circlr/releases/tag/v0.40.0)** for Apple Silicon. The repository is public; build from `main` for source development.
 
+The downloaded app is ad-hoc signed and not notarized by Apple. If macOS blocks its first launch, verify the download, then use **System Settings → Privacy & Security → Open Anyway**. [macOS installation and first launch](docs/install-macos.md#english).
+
 The colored **f0r h3r v5** demo is included. Choose **File → 데모곡 불러오기…** to open an editable copy.
 
 **Requirements:** macOS 14+, Xcode 26+ selected as the active developer directory, and Python 3. Native validation currently covers Apple Silicon. The interface is currently in Korean; this README is available in both languages.

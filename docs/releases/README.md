@@ -58,7 +58,7 @@ git diff --check
 - `build-app.sh`는 아이콘·Resources/Codex를 생성하고 **현재 checkout의 dist 앱을 교체/보관**한다. 사용자 실행 앱 경로와 같으면 먼저 저장·종료·백업/출고 경계를 해결한다. 다른 checkout의 설치 앱을 임의로 교체하지 않는다.
 - 앱과 모든 helper를 함께 빌드한다. 앱 바이너리만 새로 만든 뒤 이전 helper를 결합한 패키지를 최종 후보로 승인하지 않는다.
 - `build-agent-kit.py`는 Info.plist 버전과 MCP 소스를 반영한다. 버전 변경 후 생성한 `Resources/Codex/manifest.json` 및 실제 변경된 kit 파일을 검토·commit한다.
-- ad-hoc codesign 성공은 notarization 또는 일반 사용자 배포 인증이 아니다. 로컬 비공개 출고와 향후 public 배포 조건을 구분한다.
+- 현재 공개 패키지는 ad-hoc 서명이며 Apple notarization을 받지 않았다. codesign 검증 성공은 Apple 배포 인증을 뜻하지 않는다. 릴리스 노트에는 [macOS 설치·첫 실행 안내](../install-macos.md)를 연결해 Gatekeeper의 ‘그래도 열기’ 절차를 제공한다. Developer ID 서명·notarization·stapling 도입 전까지 이 상태를 명시한다.
 - I/O 차단 QA 앱은 UI 검증용이다. 실제 재생·녹음·청취 gate에는 실제 helper를 가진 후보가 필요하다. 기존 물리 I/O 정지 경계는 자동 해제하지 않는다.
 
 ## Git·문서·배포 완료 절차

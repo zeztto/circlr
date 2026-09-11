@@ -13,11 +13,11 @@
 
 ### 설치 및 호환
 
-- 패키지: `circlr-<version>-macos.zip`, build `<build>`
+- 패키지: `circlr-<version>-build<build>-macos-arm64.zip`, build `<build>`
 - 지원 환경: <검증한 macOS 및 CPU architecture>
 - 배포 상태: <prerelease 또는 stable; 코드 서명·notarization 상태>
 - 프로젝트 호환: <schema, 구버전 프로젝트 처리, migration 여부>
-- 설치: <압축 해제·실행 절차 및 실제 필요한 안내>
+- 설치: <압축 해제·실행 절차 및 실제 필요한 안내>. [macOS 설치·보안 경고 안내](https://github.com/zeztto/circlr/blob/main/docs/install-macos.md#한국어).
 - 무결성: ZIP과 `SHA256SUMS`를 같은 폴더에 내려받아 `shasum -a 256 -c SHA256SUMS`를 실행한다.
 
 ### 검증 및 알려진 제한
@@ -36,11 +36,11 @@
 
 ### Installation and compatibility
 
-- Package: `circlr-<version>-macos.zip`, build `<build>`
+- Package: `circlr-<version>-build<build>-macos-arm64.zip`, build `<build>`
 - Supported environment: <verified macOS and CPU architecture>
 - Distribution: <prerelease or stable; code signing and notarization status>
 - Project compatibility: <schema, older projects, and migration behavior>
-- Installation: <extraction and launch instructions>
+- Installation: <extraction and launch instructions>. [macOS installation and security alerts](https://github.com/zeztto/circlr/blob/main/docs/install-macos.md#english).
 - Integrity: Download the ZIP and `SHA256SUMS` into one directory, then run `shasum -a 256 -c SHA256SUMS`.
 
 ### Verification and known limitations

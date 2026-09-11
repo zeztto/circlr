@@ -8,6 +8,7 @@ Start with [English](../README.md) or [한국어](../README.ko.md). The current 
 
 | Topic / 목적 | Document / 문서 |
 |---|---|
+| Install downloaded app / 다운로드한 앱 설치 | [macOS installation / macOS 설치](install-macos.md) |
 | First build and basic controls / 첫 빌드·기본 조작 | [English](../README.md#getting-started) · [한국어](../README.ko.md#시작하기) |
 | Circle time and navigation / 궤도의 시간·탐색 | [Orbit timeline](19-orbit-timeline.md) |
 | Audio editing / 오디오 편집 | [Audio workspace](52-audio-workspace.md) |
