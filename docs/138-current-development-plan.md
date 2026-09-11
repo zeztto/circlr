@@ -1,5 +1,7 @@
 # 현행 개발 계획
 
+운영 전환: 기능 확장은 일단 중단하고 실사용 문제부터 수정한다. 현재 상태·QA·업데이트 우선순위는 [build151 인수인계](178-development-handoff.md)를 우선 참고하며, 아래는 후속 개발의 상세 설계로 유지한다.
+
 기준: 2026-09-11, integration-worktree의 build120 소스(`b06c4a9`)에서 시작해 build127의 소스·검증 기록을 기준으로 build151 검증 결과까지 반영했다. 이 문서는 다음 실행과 완료 판단을 위한 계획이며 [누적 로드맵](25-development-roadmap.md)의 과거 검증 결과를 새로 수행한 검사로 바꾸지 않는다. 전체 DAW·음악 품질·접근성은 아직 완료되지 않았다.
 
 ## 제품의 완료 방향
@@ -14,7 +16,7 @@
 |---|---|---|
 | 악기 미리 듣기 | 기본 `AuditionTransport`가 `WorkerAuditionBackend`를 사용하며 service에서 native backend 생성. build118 mock lifecycle·Release 패키징 기록 | 실제 synth/sampler/AU의 소리·latency·note-off·장치 복구. 프로세스 격리는 HAL 정상화 증거가 아님 |
 | 편집 접근 | build149 높이240미만·폭600..<800의 plot/controls 배치·wheel·draft resize 검증([계획](172-automation-guidance.md)).  build148 신스 수치→같은 범위 곡선 진입·초안 확정/오류 보호 검증, 최종 감사 완료([계획](171-synth-automation-shortcuts.md)).  build146 낮은 오디오 화면의 첫4수치·파형·action 및 입력/Undo 검증, data 감사 PASS_DATA_ONLY·UI 감사 PASS_WITH_SCOPE_LIMITS([계획](168-audio-compact-layout.md)).  build145 좁은 트랙 경로 배치·역할 탐색 검증, data 감사 PASS_DATA_ONLY·UI 감사 PASS_WITH_SCOPE_LIMITS([계획](167-track-route-density.md)).  build144 공유 오디오 최초 수치 4개·파형/작업 동시 표시와 Tab·Undo/Redo·재열기 검증([계획](166-shared-audio-editor-density.md)).  build143 일반·공유 오디오 history의 조건부 파형/focus 복귀 및 다른 탐색 유지 검증([계획](165-audio-edit-history-return.md)).  build142 가져오기 대상/트랙 가시성·새 MIDI 이번 use piano 진입·오디오 action 접근 및 native import/split 검증([계획](164-import-and-audio-workflow.md)).  build141 공통 요청·창 활성화 재시도 및 두 출발 rapid 음악 불변 검증([계획](163-editor-focus-intent.md)).  build140 MIDI·오디오 진입 포커스 부분 개선 검증, 당시 빠른 모드 전환 async focus 경쟁은 위 build141에서 후속 검증([계획](162-editor-navigation-focus.md)).  build139 서클별 첫 방문·재방문·명시적 스텝 진입과 invalid draft 탐색 보호·r166 재시작 검증([계획](161-circle-editor-memory.md)).  build138 섹션 설정↔원래 child 편집 복귀·앨범 대상 표시, 정상 변경/오류·삭제/길이 축소·r166 재시작 검증([기록](160-section-settings-return.md)).  build137 섹션 길이 출처·복귀와 4자리 가시성, 4096/4097 경계·r156 재시작 검증 완료.  build116 공유 리듬 오디오, build117 오디오 수치 접근, build119 신스 포커스 노출, build120 콘솔 설정 복원. build136 네 MIDI 모드의 직접 파일 작업·수치 확정·취소 복귀·작은 창 배치 및 Core 13개 검증 | 한 곡 전체의 연속 사용성, 모든 폼·최소 높이·VoiceOver·IME 조합 |
-| 전자음악 편집 | 스텝·노트 편집·비파괴 오디오 편집·gain/pan automation. build129 내장 신스 cutoff의 GUI/MCP·PCM·바운스/복원, build131 MIDI tempo map의 이번 use 적용·해제·오프라인 출력·저장/재열기 검증. build133–135 내장 신스 pitch bend 렌더·SMF 가져오기·GUI/MCP 편집·내보내기 왕복 검증 | CC/페달, pitch bend의 모든 backend 지원, cutoff 외 신스 파라미터·plugin 자동화, 실시간 write/touch/latch, comping/time warp. 실제 연주·청취는 별도 |
+| 전자음악 편집 | 스텝·노트 편집·비파괴 오디오 편집·gain/pan automation. build129 내장 신스 cutoff의 GUI/MCP·PCM·바운스/복원, build131 MIDI tempo map의 이번 use 적용·해제·오프라인 출력·저장/재열기 검증. build133–135 내장 신스 pitch bend 렌더·SMF 가져오기·GUI/MCP 편집·내보내기 왕복 검증 | 일반 CC 확장, 페달·pitch bend의 모든 backend 지원, cutoff 외 신스 파라미터·plugin 자동화, 실시간 write/touch/latch, comping/time warp. 실제 연주·청취는 별도 |
 | 입출력·영상 | 출력 helper, 녹음 상태·파일 처리, `CanvasMovieWriter`의 H.264/AAC·PCM timestamp 경로 | 정상 장치에서의 녹음→편집→재생, 실제 출력과 영상 동기·최소화/복원 |
 | AI·아티스트 | 로컬 socket/MCP, revision 검증·실제 작업 로그, 전문 음악 역할 kit | 앱 내 Codex 계정 대화, 통합 아티스트·멀티미디어 catalog |
 
