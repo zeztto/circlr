@@ -12,7 +12,7 @@ In circlr, a circle is a timeline. Build a song from sections, place MIDI, audio
 
 *Actual 0.50.0 build166 app showing the bundled f0r h3r project. [Capture details](docs/images/README.md).*
 
-> **0.50.0 · build166 — publication pending.** Outward orbit layout and responsive controls. Native checks covered 1440, 1024, 900 and 700-point window widths and long titles. [Verification record](docs/releases/0.50.0-qa.md).
+> **0.50.0 · build166.** Outward orbit layout and responsive controls. Native checks covered 1440, 1024, 900 and 700-point window widths and long titles. [Verification record](docs/releases/0.50.0-qa.md).
 
 ## What you can work with
 
@@ -28,7 +28,7 @@ These are implemented development features, not a guarantee of compatibility wit
 
 ## Getting started
 
-**0.50.0 build166** is the current candidate; publication under `v0.50.0` is pending. Download available Apple Silicon packages from [GitHub Releases](https://github.com/zeztto/circlr/releases), or build from `main` for source development.
+Download **0.50.0 build166** for Apple Silicon from [GitHub Releases](https://github.com/zeztto/circlr/releases/tag/v0.50.0), or build from `main` for source development.
 
 The downloaded app is ad-hoc signed and not notarized by Apple. If macOS blocks its first launch, verify the download, then use **System Settings → Privacy & Security → Open Anyway**. [macOS installation and first launch](docs/install-macos.md#english).
 
