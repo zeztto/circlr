@@ -1,5 +1,7 @@
 # 써클러 개발 방향과 실행 계획
 
+현재 버전 범위·완료 판단은 [버전별 로드맵](releases/roadmap.md)과 [릴리스 운영](releases/README.md)을 따른다. 아래는 과거 build 검증과 상세 설계 이력이다.
+
 build135에서 피치 벤드 직접 편집·MCP 표현 편집·SMF 내보내기를 연결했다. 회귀 816개·내부 skip 2개·실패 0개, 최종 Release 47.35초·패키지와 native 편집/SMF 왕복·취소/재시작을 확인했다. UI/artifact 최종 독립 감사도 PASS했다. 다음은 한 곡의 통합 표현 편집 사용성·AU/sampler 및 물리 청취 경계다. [검증 기록](157-pitch-bend-edit-and-export.md).
 
 build134에서 MIDI pitch bend/RPN 가져오기와 preserve/omit·고정 오류·GUI/MCP 동일 적용을 연결했다. 회귀 793개·내부 skip 2개·실패 0개, Release 85.97초·native 적용/Undo·저장/재열기와 stress 제한 처리를 확인했다. 최종 독립 감사·QA 종료와 최종 서명 재검사도 통과했다. 다음은 곡선 UI·MCP 표현 편집·SMF 내보내기이며 AU/sampler·물리 청취도 남아 있다. [검증 기록](156-midi-pitch-bend-import.md).
