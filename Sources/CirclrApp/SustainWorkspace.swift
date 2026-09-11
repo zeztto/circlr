@@ -81,7 +81,7 @@ struct SustainPlot:NSViewRepresentable {
     let focus:MIDIEditorFocus
     let fields:NumberFieldFocus
     func makeNSView(context:Context)->SustainPlotView {let view=SustainPlotView(store:store);focus.view=view;return view}
-    func updateNSView(_ view:SustainPlotView,context:Context){view.fields=fields;view.refresh();view.needsDisplay=true}
+    func updateNSView(_ view:SustainPlotView,context:Context){view.fields=fields;view.refresh();view.needsDisplay=true;store.fulfillEditorFocusWhenMounted(view)}
 }
 @MainActor final class SustainPlotView:NSView {
     let store:AppStore

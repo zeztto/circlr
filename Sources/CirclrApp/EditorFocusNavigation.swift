@@ -113,7 +113,10 @@ extension AppStore {
             case .audio,.rhythmAudio:awaitingAudio=request.page == .content && currentAudioClip != nil
             default:awaitingAudio=false
             }
-            if !awaitingAudio {editorFocusRequest=nil}
+            // The pedal subtree can mount after the enclosing attachment.
+            // Keep only the existing request; identity/input guards still run on retry.
+            let awaitingSustain=request.page == .sustain && sustainOpen && currentLane != nil
+            if !awaitingAudio && !awaitingSustain {editorFocusRequest=nil}
         }
     }
 }
