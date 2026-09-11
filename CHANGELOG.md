@@ -1,5 +1,12 @@
 # 변경 이력
 
+## 문서 — 한국어·영어 README 및 GitHub Release 절차
+
+- README를 제품 소개·실제 실행 화면·빌드·기본 조작·기여 안내로 재구성하고 `README.ko.md`를 추가했다. 누적 build 기록은 `docs/history/readme-build157.md`에 보존했다.
+- 문서·소스 안내와 기여 지침, build157의 앱 창 스크린샷 2개 및 촬영 범위를 추가하고 MCP 연결 예시의 개인 경로를 제거했다.
+- 완료 버전은 한·영 노트·검증 패키지·SHA256을 포함한 GitHub Release 등록과 원격 검증까지 수행한다. 문서 수정과 미완료 build는 릴리스하지 않는다. 앱 버전·build·소스 동작 변경은 없다.
+- 한·영 GFM 렌더링·실제 이미지 표시·상대 링크·독립 문서 검토를 확인했다. 참고 구성: [LMMS](https://github.com/LMMS/lmms), [OBS Studio](https://github.com/obsproject/obs-studio), [ComfyUI](https://github.com/Comfy-Org/ComfyUI).
+
 ## 0.30.0 — 개발 중, 미출고
 
 - MIDI 파일 접근·읽기·파싱을 백그라운드 작업으로 옮기고 취소 및 늦은 결과 보호를 연결했다. 샘플 라이브러리 접근 권한은 읽기 작업 종료까지 유지한다.

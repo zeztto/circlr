@@ -4,7 +4,22 @@ Python 표준 라이브러리만 사용하는 로컬 stdio MCP 서버다. 음악
 
 ## 연결
 
-써클러 앱을 실행한 다음 MCP 클라이언트에 루트의 `.mcp.json` 설정을 등록한다. stdio 명령은 `/usr/bin/python3 /Users/sungwoonjeon/Documents/ChatGPT/circlr/mcp/server.py`다. 이 설정 파일을 작성한 것만으로 이미 실행 중인 Codex의 도구 목록이 자동 갱신되는 것은 아니다.
+Run circlr, then register this stdio server in your MCP client. Replace `/absolute/path/to/circlr` with your checkout path. Saving a configuration does not automatically reload an already running client.
+
+써클러 실행 후 MCP 클라이언트에 아래 stdio 설정을 등록합니다. `/absolute/path/to/circlr`를 실제 checkout 경로로 바꾸세요. 이미 실행 중인 클라이언트는 설정을 다시 읽어야 합니다.
+
+```json
+{
+  "mcpServers": {
+    "circlr": {
+      "command": "python3",
+      "args": ["/absolute/path/to/circlr/mcp/server.py"]
+    }
+  }
+}
+```
+
+Agent sequence: `circlr_snapshot` → `circlr_inspect` → revision-checked `circlr_apply` → `circlr_job` for asynchronous work → `circlr_save`. Inspect capabilities from the running app; never infer them from this README alone.
 
 기본 소켓은 `~/Library/Application Support/circlr/Agent/agent.sock`이다. 검증 앱에는 `--socket` 또는 `CIRCLR_SOCKET`으로 `~/Library/Application Support/circlr-hierarchy-qa/Agent/agent.sock`을 지정한다. 폴더 권한은 0700, 소켓 권한은 0600이고 앱은 연결한 프로세스의 UID도 확인한다.
 
@@ -39,7 +54,7 @@ build 62부터 `circlr_sounds`로 실제 음색을 조회한다. 먼저 snapshot
 
 `edit_notes`는 실제 `useID`·`laneID`·중복 없는 `noteIDs`와 `edit`를 받는다. `transpose`는 `semitones`, `move`·`duplicate`는 4분음표 단위 `beatOffset`, `velocity`는 1–127을 지정한다. `quantize`는 `subdivisions`(기본 4)와 `strength`(0–1, 기본 1), `delete`는 ID만 사용한다. 그룹 이동은 음정·시간 간격을 유지하며 범위를 넘으면 batch 전체를 거부한다. 복제만 새 ID를 만들고, 비선택 노트·오디오는 유지한다. 선택한 MIDI 서클에 개별 길이가 있으면 일치하는 `nodeID`도 지정한다. 실제 변화가 없는 명령은 Undo를 늘리지 않는다.
 
-0.17의 MIDI 파일 가져오기는 GUI의 **⌥⌘I**에서 제공한다. 파일 읽기를 위한 MCP operation은 아직 없다. snapshot의 `selectedNoteIDs`와 `recording`(`midi`·`audio`·`permissionPending`)은 읽기 전용 상태다. 녹음 권한 대기는 `circlr_stop`으로 취소할 수 있다.
+0.17의 MIDI 파일 가져오기는 GUI의 **⌥⌘I**에서 제공한다. 현재 개발 앱에서는 `circlr_import_midi`도 제공한다. 사용 전 `snapshot.runtime.capabilities`와 도구 schema를 확인한다. snapshot의 `selectedNoteIDs`와 `recording`(`midi`·`audio`·`permissionPending`)은 읽기 전용 상태다. 녹음 권한 대기는 `circlr_stop`으로 취소할 수 있다.
 
 0.18의 `edit_audio`는 실제 `useID`·오디오 `nodeID`와 `edit`를 받는다. `split`에는 선택 구간 시작부터의 원본 초 `sourceOffset`, `fade`에는 원본 초 `fadeIn`·`fadeOut`이 필요하다. `duplicate`의 로컬 4분음표 박 `beatOffset`은 선택 항목이며 생략하면 마지막 반복 뒤에 배치한다. `delete`는 해당 서클과 연결을 지우고 asset을 보존한다. 이후 inspect로 새 clip/node ID를 확인한다. 분할 이전의 fade·resample 기준·반복 주기를 보존하며 조각의 추가 fade는 기존 envelope에 곱해진다. 내부 `renderWindow`와 바운스 `familyID`를 직접 쓰지 않는다. [정확한 시간 의미와 제한](../docs/32-audio-editing.md).
 
@@ -64,7 +79,7 @@ Core/MCP 검사와 native 명령/UI 확인을 마쳤으며 저장/재열기·pro
 - open은 미저장 편집이 있으면 거부한다. save는 다른 프로젝트를 덮어쓰지 않는다. export는 새 WAV 경로만 허용한다.
 - 입력은 최대 8 MiB, 편집 batch는 128 operations, 이벤트는 최근 500개, 작업 상태는 최근 64개다.
 - 연결이 끊겨 쓰기 성공 여부가 불명확하면 snapshot/job을 읽는다. native request를 재전송할 때는 동일 ID와 동일 bytes를 사용한다. 새 ID로 무조건 재실행하지 않는다. 최근 요청 캐시는 앱 재시작 후에는 유지되지 않는다.
-- 현재 한 번에 한 렌더 작업을 실행한다. 자동 MIDI 생성·샘플 악기·내장 신스는 외부 플러그인 없이 사용할 수 있다. 하드웨어 녹음과 플러그인 설치는 MCP 도구에 포함하지 않는다.
+- 현재 한 번에 한 렌더 작업을 실행한다. 자동 MIDI 생성·샘플 악기·내장 신스는 외부 플러그인 없이 사용할 수 있다. 마이크 녹음은 `circlr_record`로 제공한다. 플러그인 설치는 MCP 도구에 포함하지 않는다.
 
 `snapshot.playback.windowAttached`, `windowVisible`, `windowOccluded`, `meterPlaying`으로 창이 가려져 표시 작업이 멈춘 상태와 실제 음악 재생을 구분할 수 있다. 백그라운드 재생 명령은 사용자의 다른 창을 자동으로 앞으로 밀어내지 않는다.
 

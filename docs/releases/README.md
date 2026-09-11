@@ -6,7 +6,7 @@
 
 - 현재 버전 계획: [0.30.0 기본 제작 흐름](0.30.0.md).
 - 이후 버전 순서: [제품 로드맵](roadmap.md).
-- 다음 버전 시작 시 [버전 문서 양식](TEMPLATE.md)을 복사한다.
+- 다음 버전 시작 시 [버전 문서 양식](TEMPLATE.md)을 복사한다. 출고할 때 [한·영 릴리스 노트 양식](RELEASE_NOTES_TEMPLATE.md)을 `<version>-notes.md`로 작성한다.
 - build151/152의 과거 구현·QA는 [인수인계](../178-development-handoff.md), [포커스 검증](../179-pedal-focus-mount.md)에 보존한다. 과거 PASS는 새 후보의 QA를 대체하지 않는다.
 - 실행 우선순위는 **사용자의 최신 지시 → 이 운영 규약 → 해당 버전 문서 → 기존 상세 설계/이력** 순서로 읽는다. 기존 문서의 ‘다음 작업’은 현행 버전 범위를 자동으로 늘리지 않는다.
 
@@ -23,7 +23,7 @@
 | RC | 버전/build 확정, 동일 후보 패키지, 필수 QA 실행 | 필수 QA PASS, 미실행·실패 없음 |
 | IN_REVIEW | 독립 diff·QA 증거·호환·보안 검토, 결함 조치 | 차단 결함 0, 필수 시나리오 전부 충족 |
 | APPROVED | README·CHANGELOG·버전 기록·실사용 패키지 안내 완료, 리드 출고 결정 | 최종 commit 및 annotated tag 준비 |
-| RELEASED | 승인한 commit/tag를 원격에 push하고 동일 SHA 확인 | 사용자에게 버전·패키지·변경·검증·제한 보고 |
+| RELEASED | 원격 branch/tag SHA 일치, GitHub Release 게시, 한·영 노트 및 검증된 패키지·SHA256 등록 | release URL·draft/prerelease·첨부 자산 확인 후 사용자 안내 |
 
 필수 QA 실패/미실행이면 RC 또는 IN_PROGRESS에 머문다. 환경 문제는 해당 gate와 필요한 입력을 기록하고 독립 작업을 진행한다. 완료를 위해 필수 항목을 임의로 선택 사항으로 바꾸지 않는다. 낮은 우선순위의 비차단 제한만 영향·재현·후속 버전을 명시해 수용할 수 있다. ‘한 단계씩’의 종료 단위는 작은 수정이나 build가 아니라 위 절차를 마친 버전이다. 사용자 정지·질문·필수 외부 입력은 중간 중단 사유다.
 
@@ -65,24 +65,49 @@ git diff --check
 
 현재 `codex/daw-integration`의 검증된 HEAD가 첫 기준이다. 다음 구현 시작 때 이 HEAD에서 `release/0.30.0`을 만들고, 이후에는 직전 릴리스 tag에서 `release/<version>`을 만든다. 기존 커밋·브랜치를 재작성하지 않는다. 버전 중간에는 복구용 로컬 commit 또는 필요시 private WIP push가 가능하지만 릴리스로 세지 않는다.
 
-최종 순서는 **구현 → QA → 독립 검토/수정 → 문서 → 최종 commit → tag → push → 원격 확인**이다.
+최종 순서는 **구현 → QA → 독립 검토/수정 → 문서 → 최종 commit → tag → push → GitHub Release 등록 → 원격 검증**이다. 사용자 요청에 따라 앞으로 완료하는 모든 제품 버전(patch 포함)에 GitHub Release를 등록한다. 문서 수정이나 미완료 후보 build는 새 제품 릴리스가 아니다.
 
-1. README 상단에 현재 승인 버전과 시작 문서, CHANGELOG에 버전 단위 변경·호환·제한을 기록한다. build별 상세 이력은 참고 문서로 유지한다.
-2. 버전 문서에 필수 작업/QA PASS, 검토자·지적/조치, 후보 build·SHA256·앱 위치, 이전 앱/프로젝트 복구 방법, 알려진 제한을 채운다. 로컬 절대 경로는 기계별 값이므로 레포에는 상대 경로·재현 명령을 우선 기록한다.
-3. `git status`와 staged diff를 검토해 소스·문서·테스트·허용된 생성물만 포함한다. 음악 원본·라이선스 샘플·QA 앱·로컬 설정·인증정보는 올리지 않는다.
-4. 최종 commit에 승인본을 포함하고 `v0.30.0` annotated tag를 붙인다. 문서의 승인은 출고 판단이며 실제 RELEASED 여부는 원격 branch/tag 확인으로 판정한다. commit 자신의 SHA를 본문에 넣으려고 추가 commit을 반복하지 않는다.
-5. 명시적 branch/tag만 한 번에 push한다. 기존 tag는 이동/삭제하지 않는다. 새 버전 예시:
+1. 한국어·영어 README와 CHANGELOG에 승인 버전의 변화·호환·제한을 반영한다. `<version>-notes.md`에 두 언어로 설치, 변경, QA, 알려진 제한, 복구 방법을 작성한다. 자동 생성 commit 목록만을 릴리스 설명으로 사용하지 않는다.
+2. 버전 문서에 필수 작업/QA PASS, 검토자·조치, 후보 build·SHA256·앱 위치, 이전 앱/프로젝트 복구 방법을 채운다. 동일 승인 후보의 앱과 5개 helper·Codex kit를 검증하고, 배포 패키지 내용에 음악 원본·Splice 등 재배포 불가 샘플·QA 프로젝트·인증정보·로컬 설정이 없는지 확인한다. 소스 공개나 저장소 공개 전환은 별도 작업이다.
+3. staged diff에 소스·문서·테스트·허용된 생성물만 포함해 최종 commit한다. 패키지가 이 commit의 소스에 대응하는지 확인한다. 소스나 생성물이 바뀌었다면 재빌드하고 영향받는 QA부터 다시 수행한다. 승인 commit에서 annotated tag를 만들고 명시적 branch/tag만 push한다. 기존 tag를 이동/삭제하지 않는다.
+4. 검증된 앱을 ZIP으로 패키징하고 SHA256 파일을 만든다. 압축을 별도 임시 폴더에 풀어 버전/build, 서명, 모든 helper, kit 및 앱 시작을 확인한다. 아래 명령은 **출고 승인 이후**의 예시이며 현재 0.30.0 실행 지시가 아니다. `dist/써클러.app`은 검증된 승인 후보여야 한다.
 
 ```sh
-git tag -a v0.30.0 -m 'circlr 0.30.0: approved release'
-git push --atomic origin HEAD:refs/heads/release/0.30.0 refs/tags/v0.30.0
-git rev-parse HEAD
-git ls-remote origin refs/heads/release/0.30.0 'refs/tags/v0.30.0^{}'
-git status --short
+release_version=0.30.0
+release_tag="v$release_version"
+release_asset="dist/circlr-$release_version-macos.zip"
+release_notes="docs/releases/$release_version-notes.md"
+release_commit=$(git rev-parse HEAD)
+
+git status --short                         # 작업 트리가 깨끗한지 확인
+codesign --verify --deep --strict 'dist/써클러.app'
+ditto -c -k --sequesterRsrc --keepParent 'dist/써클러.app' "$release_asset"
+(cd dist && shasum -a 256 "circlr-$release_version-macos.zip" > SHA256SUMS)
+# 압축 해제 후 동일 후보의 버전/서명/시작 검증을 마친 뒤 진행
+git tag -a "$release_tag" -m "circlr $release_version: approved release"
+git push --atomic origin "HEAD:refs/heads/release/$release_version" "refs/tags/$release_tag"
+git ls-remote origin "refs/heads/release/$release_version" "refs/tags/$release_tag^{}"
 ```
 
-annotated tag의 원격 `^{}` 결과와 branch가 승인한 로컬 HEAD와 같아야 한다. 거절/실패 시 RELEASED로 보고하지 않고 오류를 해결한다. main/default branch 병합과 public GitHub Release 게시를 암묵적으로 수행하지 않는다.
+두 원격 SHA가 `$release_commit`과 일치해야 한다. 실패하면 등록을 멈추고 원인을 해결한다. 노트에는 최종 SHA를 넣을 수 있지만, commit 자신의 SHA를 기록하려고 추가 commit을 반복하지 않는다. 출고 기록은 tag와 Release URL로 연결한다.
 
-6. 최종 안내에는 실제 사용 가능한 패키지 경로·버전·핵심 변화·QA·남은 제한·commit/tag를 제공한다. 실제 사용자 앱을 교체했는지 명시한다. 패키지를 만들지 않았으면 소스만 전달한 것으로 표시하고 사용자 출고 gate를 충족했다고 하지 않는다.
+5. GitHub Release를 같은 tag로 등록한다. 현행 0.x는 개발용 **prerelease**로 등록하며, 안정판 전환은 버전 계획에서 정한다. prerelease도 필수 QA를 생략하는 수단이 아니다. 이미 존재하는 Release는 먼저 조회하고 중복 생성하거나 검증된 자산을 임의로 덮어쓰지 않는다. 아래는 기존 비공개 저장소를 유지하는 명령이다.
+
+```sh
+gh release create "$release_tag" --repo zeztto/circlr --verify-tag \
+  --title "circlr $release_version" --notes-file "$release_notes" \
+  --prerelease --latest=false "$release_asset" dist/SHA256SUMS
+
+gh release view "$release_tag" --repo zeztto/circlr \
+  --json url,tagName,isDraft,isPrerelease,assets,body
+release_download=$(mktemp -d)
+gh release download "$release_tag" --repo zeztto/circlr \
+  --dir "$release_download" --pattern "circlr-$release_version-macos.zip" --pattern SHA256SUMS
+(cd "$release_download" && shasum -a 256 -c SHA256SUMS)
+shasum -a 256 "$release_asset" "$release_download/circlr-$release_version-macos.zip"
+```
+
+6. **RELEASED gate:** 원격 peeled tag/branch가 승인 commit과 일치하고, Release URL이 조회되며 `isDraft=false`, `isPrerelease`가 승인 계획과 일치해야 한다. 한·영 노트와 예상 ZIP·SHA256SUMS가 있고, 내려받은 ZIP의 SHA256이 로컬 승인 ZIP 및 첨부 checksum과 모두 같아야 한다. 하나라도 실패하면 버전 완료로 보고하지 않는다. draft 생성이나 tag push만으로 이 gate를 충족하지 않는다.
+7. 최종 안내에 Release URL, 버전/build, 패키지, 주요 변화, QA와 제한, commit/tag를 제공한다. 실제 사용자 앱 교체 여부를 명시한다. 저장소가 private이면 링크 접근에는 저장소 권한이 필요하다. default branch 병합·저장소 public 전환·사용자 앱 교체는 Release 등록과 별도다.
 
 실행 앱 교체 후 문제가 있으면 보관한 이전 앱과 **이전 schema의 프로젝트 백업**으로 복구한다. 새 schema 프로젝트를 구버전 앱에 그대로 덮어 열지 않는다. 이미 공개된 tag는 유지하고 수정 버전을 새로 만든다.

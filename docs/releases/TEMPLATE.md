@@ -46,5 +46,10 @@
 - 알려진 비차단 제한:
 - 리드 결정 APPROVED 또는 보류 사유:
 - 태그: v<version>
+- 한·영 릴리스 노트: `<version>-notes.md` ([양식](RELEASE_NOTES_TEMPLATE.md))
+- 배포 ZIP·SHA256SUMS·재배포 가능 자산 확인:
+- GitHub Release URL / isDraft / isPrerelease:
+- 원격 branch·peeled tag의 승인 commit 일치:
+- 내려받은 패키지와 로컬 승인 패키지의 SHA256 일치:
 
-실제 RELEASED는 원격 branch와 annotated tag의 peeled SHA가 승인 commit과 일치할 때만 판정한다. 문서 승인 상태만으로 push나 설치가 완료됐다고 보고하지 않는다. [공통 종료 절차](README.md)를 따른다.
+실제 RELEASED는 원격 branch와 annotated tag의 peeled SHA가 승인 commit과 일치하고, GitHub Release 게시·한영 노트·패키지·checksum 및 원격 상태 검증까지 통과했을 때만 판정한다. 문서 승인 상태만으로 push나 설치가 완료됐다고 보고하지 않는다. [공통 종료 절차](README.md)를 따른다.
