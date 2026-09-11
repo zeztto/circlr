@@ -222,7 +222,9 @@ class MCPTests(unittest.TestCase):
         self.assertEqual(len(replies), 3)
         self.assertEqual(replies[0]["result"]["protocolVersion"], "2025-11-25")
         tools = replies[1]["result"]["tools"]
-        self.assertEqual(len(tools), 24)
+        self.assertEqual(len(tools), 26)
+        self.assertEqual(len({item["name"] for item in tools}), len(tools))
+        self.assertTrue({"circlr_playback_loop", "circlr_workspace_view", "circlr_focus"}.issubset({item["name"] for item in tools}))
         self.assertTrue(all("method" not in item for item in tools))
         self.assertTrue(replies[2]["result"]["isError"])
 

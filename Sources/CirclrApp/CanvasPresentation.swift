@@ -45,7 +45,10 @@ extension AlbumCanvasView {
     var labelCircles:[CanvasLabelCircle] {
         guard let scene else{return []}
         return scene.nodes.compactMap{node in
-            guard node.childCount==0,(node.role == .music || node.role == .group),isVisible(node),editorAddress != node.id else{return nil}
+            // Outward orbits occupy their own space: labels must also avoid song/section rings.
+            // Expanded visual groups still surround their members, so exclude that enclosure.
+            let blocksLabels = scene.isOrbit ? (node.role != .group || node.childCount == 0) : (node.childCount == 0 && (node.role == .music || node.role == .group))
+            guard blocksLabels,isVisible(node),editorAddress != node.id else{return nil}
             let p=screen(node),r=node.radius*camera.zoom
             guard CGRect(x:p.x-r,y:p.y-r,width:r*2,height:r*2).intersects(workspaceViewport) else{return nil}
             return CanvasLabelCircle(id:node.id,center:p,radius:r)

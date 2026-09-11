@@ -141,7 +141,7 @@ public enum HierarchySceneBuilder {
         var timedMembersByOwner: [CircleAddress: Set<ID>] = [:]
         func node(_ address: CircleAddress, title: String, subtitle: String, role: CircleRole,
                   context: MusicContext, repeats: Int = 1, clock: MusicClock? = nil, music: MusicCircle? = nil, signal: SignalNode? = nil) -> CircleSceneNode {
-            CircleSceneNode(id: address, center: Point(), radius: role == .music ? 80 : 200, scale: 1, depth: 0,
+            CircleSceneNode(id: address, center: Point(), radius: project.usesOrbits ? OrbitSceneLayout.radius(role:role,music:music,signal:signal) : (role == .music ? 80 : 200), scale: 1, depth: 0,
                             title: title, subtitle: subtitle, role: role, repeatCount: repeats, childCount: 0, context: context, clock: clock, music: music, signal: signal)
         }
         func finish(_ input: Tree) -> Tree {
@@ -160,43 +160,58 @@ public enum HierarchySceneBuilder {
             tree.childScale = 1
             // A ring describes time, never an enclosure. Keep its size stable under edits.
             let ring = tree.node.radius
+            let gap = OrbitSceneLayout.gap
             var occupied: [(Point, Double)] = []
-            var untimedIndex = 0
+            var placed: [CircleAddress: (Point, Double)] = [:]
             let timed = Set(tree.children.filter { $0.node.orbit != nil }.compactMap { HierarchyEditing.memberID($0.node.id) })
-            let offsets = OrbitLayoutOffsets.positions(in: layout, timed: timed)
-            let laneColumns = max(3, Int(ceil(sqrt(Double(tree.children.filter { $0.node.orbit == nil }.count)))))
-            for i in tree.children.indices {
-                let child = tree.children[i]
-                let extent = child.node.outerRadius
-                let saved = HierarchyEditing.memberID(child.node.id).flatMap { offsets[$0] } ?? Point()
-                var position: Point
+            // Legacy freeform coordinates affect the initial projection only. Resolve collisions
+            // after that projection, before applying explicitly saved user offsets.
+            var legacy = layout; legacy.orbitLayoutVersion = nil; legacy.orbitPositions = nil
+            let projected = OrbitLayoutOffsets.positions(in: legacy, timed: timed)
+            let childIDs = Set(tree.children.map { $0.node.id })
+            let connections = edges.filter { $0.kind != .flow && $0.kind != .sidechain && childIDs.contains($0.from) && childIDs.contains($0.to) }
+            var pending = Array(tree.children.indices)
+            var fallbackIndex = 0
+            while !pending.isEmpty {
+                let next = pending.first { tree.children[$0].node.orbit != nil } ?? pending.first { index in
+                    connections.filter { $0.to == tree.children[index].node.id }.allSatisfy { placed[$0.from] != nil }
+                } ?? pending[0]
+                pending.removeAll { $0 == next }
+                let child = tree.children[next], extent = child.node.outerRadius
+                let id = HierarchyEditing.memberID(child.node.id)
+                let projection = id.flatMap { projected[$0] } ?? Point()
+                let predecessors = connections.filter { $0.to == child.node.id }.compactMap { placed[$0.from] }
+                let angle: Double
+                var distance = ring + extent + gap
                 if let orbit = child.node.orbit {
-                    let angle = orbit.timeline.angle(at: orbit.anchor)
-                    var distance = ring + (child.node.role == .music ? 0 : extent+80)
-                    position = Point(cos(angle)*distance, sin(angle)*distance)
-                    // Distinct satellites may share the exact time attachment. Fan outward;
-                    // never alter compiler time to resolve a visual collision.
-                    var attempt = 0
-                    while occupied.contains(where: { hypot(position.x-$0.0.x, position.y-$0.0.y) < extent+$0.1+48 }) {
-                        attempt += 1
-                        // Sample different bearings before growing the next compact shell.
-                        // Only satellite geometry changes; the exact time attachment stays put.
-                        distance = ring + extent + 80 + Double((attempt-1)/8)*(extent*2+64)
-                        let bearing = angle + Double(attempt)*Double.pi*(3-sqrt(5))
-                        position = Point(cos(bearing)*distance,sin(bearing)*distance)
-                    }
-                    tree.children[i].node.orbit?.radius = ring
+                    angle = orbit.timeline.angle(at:orbit.anchor)
+                    tree.children[next].node.orbit?.radius = ring
+                } else if let nearest = predecessors.max(by: { hypot($0.0.x,$0.0.y) < hypot($1.0.x,$1.0.y) }) {
+                    angle = atan2(nearest.0.y,nearest.0.x)
+                    distance = max(distance,hypot(nearest.0.x,nearest.0.y)+nearest.1+extent+gap)
                 } else {
-                    // Untimed processors occupy an external signal lane, not the time ring.
-                    position = Point(ring+extent+160+Double(untimedIndex % laneColumns)*(extent*2+64), Double(untimedIndex / laneColumns)*(extent*2+64))
-                    untimedIndex += 1
-                    while occupied.contains(where: { hypot(position.x-$0.0.x, position.y-$0.0.y) < extent+$0.1+48 }) {
-                        position.x += extent*2+64
-                    }
+                    angle = -Double.pi/2 + Double(fallbackIndex)*Double.pi*(3-sqrt(5))
+                    fallbackIndex += 1
                 }
-                occupied.append((position, extent))
-                // Saved positions are visual offsets in orbit mode. They cannot change time.
-                tree.children[i].position = Point(position.x+saved.x, position.y+saved.y)
+                func candidate(_ bearing: Double, _ radius: Double) -> Point {
+                    Point(cos(bearing)*radius+projection.x,sin(bearing)*radius+projection.y)
+                }
+                var position = candidate(angle,distance), attempt = 0
+                while hypot(position.x,position.y) < distance || occupied.contains(where: {
+                    hypot(position.x-$0.0.x,position.y-$0.0.y) < extent+$0.1+gap
+                }) {
+                    attempt += 1
+                    let shell = distance + Double((attempt-1)/8)*(extent*2+gap)
+                    let bearing = angle + Double(attempt)*Double.pi*(3-sqrt(5))
+                    position = candidate(bearing,shell)
+                }
+                occupied.append((position,extent)); placed[child.node.id] = (position,extent)
+                if layout.orbitLayoutVersion == 1 {
+                    let saved = id.flatMap { layout.orbitPositions?[$0] } ?? Point()
+                    // Explicit layout intent may intentionally overlap; never silently move it.
+                    position = Point(position.x-projection.x+saved.x,position.y-projection.y+saved.y)
+                }
+                tree.children[next].position = position
             }
             return tree
         }
@@ -353,14 +368,14 @@ public enum HierarchySceneBuilder {
             let labels: [SignalKind:String] = [.source:"트랙 출력",.effect:"전역 이펙터",.bus:"버스",.master:"마스터"]
             sound.children.append(Tree(node: node(.signal(signal.id), title: signal.name, subtitle: labels[signal.kind] ?? "사운드", role: .music, context: project.global, signal: signal), position: project.signal.layout.positions[signal.id] ?? Point()))
         }
-        sound = seal(sound,layout:project.signal.layout)
-        let lowerEdge = root.children.map { $0.position.y+$0.node.outerRadius }.max() ?? 0
-        sound.position = album.layout.positions["circlr:sound"] ?? Point(0, lowerEdge+sound.node.outerRadius+220)
-        root.children.append(sound)
         for edge in project.signal.edges {
             let from=CircleAddress.signal(edge.from),to=CircleAddress.signal(edge.to)
             edges.append(CircleSceneEdge(id:"signal:\(edge.id)",from:from,to:to,kind:edge.sidechain ? .sidechain:.audio,gain:edge.gain,connectionID:.init(edgeID:edge.id,from:from,to:to)))
         }
+        sound = seal(sound,layout:project.signal.layout)
+        let lowerEdge = root.children.map { $0.position.y+$0.node.outerRadius }.max() ?? 0
+        sound.position = album.layout.positions["circlr:sound"] ?? Point(0, lowerEdge+sound.node.outerRadius+220)
+        root.children.append(sound)
         if project.usesOrbits {sound.position=album.layout.positions["circlr:sound"] ?? Point();root.children[root.children.count-1]=sound}
         root = seal(root,layout:album.layout)
         var flattened: [CircleSceneNode] = []

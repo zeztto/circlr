@@ -29,7 +29,7 @@ final class OrbitTests: XCTestCase {
             XCTAssertEqual(hypot(offset.x,offset.y),orbit.radius,accuracy:1e-9)
         }
         XCTAssertTrue(scene.nodes.allSatisfy { $0.scale == 1 })
-        XCTAssertEqual(song.radius,200)
+        XCTAssertEqual(song.radius,280)
     }
     func testTempoMapTicksAndRoundTripUseSecondsRatherThanUniformBars() throws {
         let clock=try MusicClock(bars:3,context:MusicContext(),meterChanges:[MeterChange(bar:1,meter:Meter(3,4))],tempoChanges:[TempoChange(beat:4,bpm:60)])

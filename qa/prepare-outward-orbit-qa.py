@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
-"""Prepare isolated 0.50.0/build166 native QA inputs; never launch or stop an app.
+"""Prepare isolated versioned native QA inputs; never launch or stop an app.
 
 Run from any directory. Existing evidence causes an immediate failure. If preparation
 fails, the partial directory remains for inspection and is never silently replaced.
 """
+import argparse
+import re
 import hashlib
 import json
 from pathlib import Path
@@ -14,11 +16,17 @@ import uuid
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE_APP = ROOT / 'dist/써클러.app'
-OUT = ROOT / 'qa/generated/outward-orbit/build166'
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument('--version', default='0.50.1')
+parser.add_argument('--build', default='169')
+args = parser.parse_args()
+assert re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+', args.version)
+assert re.fullmatch(r'[0-9]{1,8}', args.build)
+VERSION, BUILD = args.version, args.build
+OUT = ROOT / 'qa/generated/outward-orbit' / ('build' + BUILD)
 APP = OUT / '써클러 통합 검증.app'
 SOURCE_FIXTURE = SOURCE_APP / 'Contents/Resources/Demos/f0r-h3r.circlr'
-FIXTURE = OUT / 'fixtures/f0r-h3r-outward-orbit-build166.circlr'
-VERSION, BUILD = '0.50.0', '166'
+FIXTURE = OUT / 'fixtures' / ('f0r-h3r-outward-orbit-build' + BUILD + '.circlr')
 BUNDLE_ID = 'com.circlr.integrationqa'
 
 
@@ -54,7 +62,7 @@ def main():
         raise SystemExit(f'기존 QA 증거를 보존합니다: {OUT}')
     source_info = plistlib.loads((SOURCE_APP / 'Contents/Info.plist').read_bytes())
     if (source_info.get('CFBundleShortVersionString'), source_info.get('CFBundleVersion')) != (VERSION, BUILD):
-        raise SystemExit('dist app이 0.50.0/build166이 아닙니다')
+        raise SystemExit(f'dist app이 {VERSION}/build{BUILD}이 아닙니다')
     raw_manifest = (SOURCE_FIXTURE / 'manifest.json').read_bytes()
     project = json.loads(raw_manifest)
     original_id = project['id']
@@ -77,7 +85,7 @@ def main():
     FIXTURE.parent.mkdir()
     shutil.copytree(SOURCE_FIXTURE, FIXTURE)
     # A distinct identity prevents the QA copy sharing the source project's session.
-    project['id'] = str(uuid.uuid5(uuid.NAMESPACE_URL, 'circlr/outward-orbit/build166/f0r-h3r')).upper()
+    project['id'] = str(uuid.uuid5(uuid.NAMESPACE_URL, f'circlr/outward-orbit/build{BUILD}/f0r-h3r')).upper()
     (FIXTURE / 'manifest.json').write_text(json.dumps(project, ensure_ascii=False, indent=2) + '\n')
     comparison = dict(project, id=original_id)
     if comparison != json.loads(raw_manifest):

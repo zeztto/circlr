@@ -814,7 +814,7 @@ extension AlbumCanvasView {
     }
     func circleMenu(at point:NSPoint, selected:CircleSceneNode? = nil)->NSMenu {
         let create=creationMenu(at:point,selected:selected?.id)
-        guard let node=selected ?? hit(point) else{return create}
+        guard let node=selected ?? hit(point) else{appendAutoLayoutMenu(to:create,context:creationScope(at:point,selected:selected?.id));return create}
         let menu=NSMenu()
         let createItem=NSMenuItem(title:"서클 만들기",action:nil,keyEquivalent:"")
         createItem.submenu=create;menu.addItem(createItem);menu.addItem(.separator())
@@ -907,6 +907,7 @@ extension AlbumCanvasView {
         if node.role != .album,node.role != .group,node.role != .sound,node.signal?.kind != .source,node.signal?.kind != .master {
             menu.addItem(.separator());action("서클 삭제"){[weak self] in self?.store.selectHierarchy(node.id);self?.store.removeHierarchy()}
         }
+        appendAutoLayoutMenu(to:menu,context:node.id)
         return menu
     }
 }

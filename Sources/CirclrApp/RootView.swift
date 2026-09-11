@@ -279,6 +279,7 @@ struct RootView: View {
                 Toggle("그리드",isOn:Binding(get:{store.project.album?.layout.grid ?? true},set:{value in store.setCanvasViewPreferences(grid:value)}))
                 Toggle("놓을 때 스냅",isOn:Binding(get:{store.project.album?.layout.snap ?? true},set:{value in store.setCanvasViewPreferences(snap:value)}))
                 Divider()
+                autoLayoutMenu
                 Button("가로 정렬"){store.alignHierarchy(0)}.disabled(store.project.usesOrbits || store.hierarchySelections.count<2)
                 Button("세로 정렬"){store.alignHierarchy(1)}.disabled(store.project.usesOrbits || store.hierarchySelections.count<2)
                 Button("동일 간격"){store.alignHierarchy(2)}.disabled(store.project.usesOrbits || store.hierarchySelections.count<3)
@@ -287,6 +288,14 @@ struct RootView: View {
                 Divider();Button("전체 앨범 맞추기"){store.hierarchyCommand=HierarchyCommand(action:.fit)}
             }label:{Image(systemName:"square.grid.3x3")}.menuStyle(.borderlessButton).help("그리드·정렬 기준")
         }.padding(3).background(StudioTheme.canvas.opacity(0.94),in:RoundedRectangle(cornerRadius:6))
+    }
+    private var autoLayoutMenu:some View {
+        Menu("자동 정렬") {
+            Text(store.hierarchyAutoLayoutScope()?.label ?? "같은 위치의 서클을 2개 이상 선택하세요")
+            ForEach(store.hierarchyAutoLayoutModes,id:\.1){mode,title in
+                Button(title){store.autoLayoutHierarchy(mode)}
+            }
+        }.disabled(store.hierarchyAutoLayoutLocked || store.hierarchyAutoLayoutScope()==nil)
     }
     private var compactActions:some View {
         Menu {
@@ -305,6 +314,7 @@ struct RootView: View {
             Toggle("궤도 타임라인",isOn:Binding(get:{store.project.usesOrbits},set:{store.setCanvasViewPreferences(layout:$0 ? .orbit:.freeform)}))
             Toggle("그리드",isOn:Binding(get:{store.project.album?.layout.grid ?? true},set:{store.setCanvasViewPreferences(grid:$0)}))
             Toggle("놓을 때 스냅",isOn:Binding(get:{store.project.album?.layout.snap ?? true},set:{store.setCanvasViewPreferences(snap:$0)}))
+            autoLayoutMenu
             Button("가로 정렬"){store.alignHierarchy(0)}.disabled(store.project.usesOrbits || store.hierarchySelections.count<2)
             Button("세로 정렬"){store.alignHierarchy(1)}.disabled(store.project.usesOrbits || store.hierarchySelections.count<2)
             Button("동일 간격"){store.alignHierarchy(2)}.disabled(store.project.usesOrbits || store.hierarchySelections.count<3)

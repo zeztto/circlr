@@ -1,5 +1,17 @@
 # Screenshots · 실행 화면
 
+## 0.50.1 build169
+
+Actual native app showing the bundled f0r h3r project after automatic layout. The hero shows the song’s radial layout; portrait captures show horizontal signal flow and radial section layout. The UI is Korean. These images document layout, not audio playback. JPEG files are copied byte-for-byte from `qa/generated/outward-orbit/build169/`; the landscape capture was delivered at reduced pixel dimensions.
+
+자동 정렬한 동봉 f0r h3r 프로젝트의 실제 앱 화면입니다. 대표 이미지는 곡의 방사형 배치, 세로 이미지는 섹션의 가로 신호 흐름·방사형 배치를 보여줍니다. 화면 배치 증거이며 오디오 재생 검증은 아닙니다. JPEG는 원본 바이트 그대로 복사했으며 가로 캡처는 창 크기보다 작은 픽셀 크기로 제공되었습니다.
+
+| File | Source | Window | JPEG pixels | SHA256 |
+|---|---|---|---|---|
+| `circlr-song-build169.jpg` | `landscape-song-radial.jpg` | 2560×1355 | 1451×768 | `fcc3991bef3260ad3efa7ecc58221633044e3afb37923234c309b749ecd9f76f` |
+| `circlr-horizontal-build169.jpg` | `portrait-horizontal.jpg` | 700×1000 | 700×1000 | `632fcd16a202181058a99d07e44c2089b8e04f2f3a193031d026f9b8117a6351` |
+| `circlr-radial-build169.jpg` | `portrait-radial.jpg` | 700×1000 | 700×1000 | `3775a690a959366c4df7a2c84dda8fda65b9d70f672d71c051b06a5481989ee7` |
+
 ## 0.50.0 build166
 
 Actual native QA app showing the bundled f0r h3r project. The portrait capture includes a long title used to check truncation. These screenshots document layout, not audio playback. JPEG files are copied unchanged from `qa/generated/outward-orbit/build166/`.

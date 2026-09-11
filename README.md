@@ -8,27 +8,29 @@ English · [한국어](README.ko.md)
 
 In circlr, a circle is a timeline. Build a song from sections, place MIDI, audio, instruments and effects inside them, and connect their inputs and outputs. Move between the whole arrangement and detailed editing on one zoomable canvas.
 
-![Song sections unfolding around the song orbit in circlr](docs/images/circlr-landscape-build166.jpg)
+![Song sections unfolding around the song orbit in circlr](docs/images/circlr-song-build169.jpg)
 
-*Actual 0.50.0 build166 app showing the bundled f0r h3r project. [Capture details](docs/images/README.md).*
+*Actual 0.50.1 build169 app showing the bundled f0r h3r project. [Capture details](docs/images/README.md).*
 
-> **0.50.0 · build166.** Outward orbit layout and responsive controls. Native checks covered 1440, 1024, 900 and 700-point window widths and long titles. [Verification record](docs/releases/0.50.0-qa.md).
+> **0.50.1 · build169 — publication pending.** Radial, horizontal and vertical automatic layout. Native UI checks covered 2560×1355 landscape and 700×1000 portrait windows. [Verification record](docs/releases/0.50.1-qa.md).
 
 ## What you can work with
 
 - **Song form:** nested album, song and section circles; reusable sections, repetitions and arrangement variations.
-- **A connected canvas:** free placement, grids, groups, custom colors and connections around eight directions with explicit IN/OUT.
+- **A connected canvas:** free placement, automatic layout, grids, groups, custom colors and connections around eight directions with explicit IN/OUT.
 - **MIDI and audio:** orbital note editing, a drum/synth step editor, pitch bend and sustain editing, waveform trim, split and fades.
 - **Sound and motion:** instrument/effect routing, automation, bounce and source restoration; playback-follow and signal visualization controls.
 - **Local agents:** an MCP interface for inspecting and editing projects, generating MIDI, rendering and saving, with activity visible in the console.
 
-![Portrait window with responsive controls and a long project title](docs/images/circlr-portrait-build166.jpg)
+| Horizontal signal flow | Radial layout |
+|---|---|
+| <img src="docs/images/circlr-horizontal-build169.jpg" width="280" alt="Horizontal signal flow"> | <img src="docs/images/circlr-radial-build169.jpg" width="280" alt="Radial layout"> |
 
 These are implemented development features, not a guarantee of compatibility with every audio device or plug-in. Artist profiles and a combined text, image and video workspace are the [longer-term direction](docs/21-artist-universe.md).
 
 ## Getting started
 
-Download **0.50.0 build166** for Apple Silicon from [GitHub Releases](https://github.com/zeztto/circlr/releases/tag/v0.50.0), or build from `main` for source development.
+**0.50.1 build169** is the current candidate; publication under `v0.50.1` is pending. Download available Apple Silicon packages from [GitHub Releases](https://github.com/zeztto/circlr/releases), or build from `main` for source development.
 
 The downloaded app is ad-hoc signed and not notarized by Apple. If macOS blocks its first launch, verify the download, then use **System Settings → Privacy & Security → Open Anyway**. [macOS installation and first launch](docs/install-macos.md#english).
 
@@ -45,7 +47,7 @@ open 'dist/써클러.app'
 
 The build packages the app, its five audio helpers and the agent kit together. Local packages use ad-hoc signing and are not notarized. Keep a separate copy of important projects when trying development builds.
 
-0.50 unfolds section and signal nodes around time orbits and adapts the top controls to landscape and portrait windows. It retains song/section loops, viewing controls, startup templates and four bundled demos. See the [release notes](docs/releases/0.50.0-notes.md).
+0.50.1 adds automatic layout around time orbits. Use **right-click or the top grid / 서클 도구 menu → 자동 정렬**, then choose **중심에서 방사형** (radial), **가로 신호 흐름** (horizontal) or **세로 신호 흐름** (vertical). It applies to multiple selected circles with the same parent, or otherwise to circles in the current container. Musical timing is preserved, and one Undo restores the layout. [Release notes](docs/releases/0.50.1-notes.md).
 
 ## First session
 

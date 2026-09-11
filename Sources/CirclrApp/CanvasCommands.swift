@@ -102,6 +102,11 @@ extension AppStore {
         add("layout","궤도 / 자유 배치 전환"){[weak self] in guard let self else{return};self.setCanvasViewPreferences(layout:self.project.usesOrbits ? .freeform:.orbit)}
         add("grid","그리드 켜기 / 끄기"){[weak self] in guard let self else{return};self.setCanvasViewPreferences(grid:!(self.project.album?.layout.grid ?? true))}
         add("snap","그리드 스냅 켜기 / 끄기"){[weak self] in guard let self else{return};self.setCanvasViewPreferences(snap:!(self.project.album?.layout.snap ?? true))}
+        if !hierarchyAutoLayoutLocked,let scope=hierarchyAutoLayoutScope() {
+            for (index,entry) in hierarchyAutoLayoutModes.enumerated() {
+                add("auto-layout-\(index)","자동 정렬 · "+entry.1+" · "+scope.label){[weak self] in self?.autoLayoutHierarchy(entry.0)}
+            }
+        }
         if let movie=lastMovieURL {add("reveal-movie","저장한 영상 Finder에서 보기"){NSWorkspace.shared.activateFileViewerSelecting([movie])}}
         if hierarchySelections.count>=2 {
             add("group","선택한 서클로 그룹 만들기","⌘G"){[weak self] in self?.makeHierarchyGroup()}
@@ -146,6 +151,24 @@ extension AppStore {
 }
 
 extension AlbumCanvasView {
+    func appendAutoLayoutMenu(to menu:NSMenu,context:CircleAddress) {
+        let item=NSMenuItem(title:"자동 정렬",action:nil,keyEquivalent:"")
+        let child=NSMenu();child.autoenablesItems=false
+        let scope=store.hierarchyAutoLayoutScope(context:context)
+        let info=NSMenuItem(title:scope?.label ?? "같은 위치의 서클을 2개 이상 선택하세요",action:nil,keyEquivalent:"")
+        info.isEnabled=false;child.addItem(info)
+        let projectID=store.project.id
+        for (mode,title) in store.hierarchyAutoLayoutModes {
+            let choice=NSMenuItem(title:title,action:#selector(runCircleMenu(_:)),keyEquivalent:"")
+            choice.target=self;choice.isEnabled=scope != nil && !store.hierarchyAutoLayoutLocked
+            choice.representedObject=CircleMenuAction{[weak self] in
+                guard let self,self.store.project.id==projectID else{return}
+                self.store.autoLayoutHierarchy(mode,context:context)
+            }
+            child.addItem(choice)
+        }
+        item.submenu=child;menu.addItem(item)
+    }
     func creationScope(at point:NSPoint, selected:CircleAddress?=nil)->CircleAddress {
         let address=selected ?? hit(point)?.id ?? store.hierarchySelection ?? .album
         return address.creationContainer
@@ -225,6 +248,7 @@ extension AlbumCanvasView {
             menu.items.enumerated().flatMap { index,item -> [StudioCommand] in
                 let identity=path+"-\(index)"
                 let title=prefix+item.title
+                if item.title=="자동 정렬" {return []} // Added once below through the shared workspace command scope.
                 if let child=item.submenu {return flatten(child,prefix:title+" · ",path:identity)}
                 guard let action=item.representedObject as? CircleMenuAction else{return []}
                 return [StudioCommand(id:identity,title:title,run:action.run)]

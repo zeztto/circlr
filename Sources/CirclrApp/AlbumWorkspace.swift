@@ -140,6 +140,52 @@ extension AppStore {
         let addresses = hierarchySelections
         mutate("서클 정렬", musical: false) { try HierarchyEditing.align(addresses, mode: mode, in: &$0) }
     }
+    var hierarchyAutoLayoutModes:[(HierarchyAutoLayoutMode,String)] {
+        [(.radial,"중심에서 방사형"),(.horizontal,"가로 신호 흐름"),(.vertical,"세로 신호 흐름")]
+    }
+    var hierarchyAutoLayoutLocked:Bool {
+        viewingMode || startupOpen || outputPreferencesOpen || sectionInsertionLocked
+    }
+    func hierarchyAutoLayoutScope(context:CircleAddress? = nil)->(addresses:Set<CircleAddress>,container:CircleAddress,label:String)? {
+        let current=context ?? hierarchySelection ?? .album
+        if hierarchySelections.count>=2 {
+            guard let first=hierarchySelections.first,
+                  let scene=try? HierarchySceneBuilder.build(project,revealing:first),let owner=scene.node(first)?.parent,
+                  hierarchySelections.allSatisfy({scene.node($0)?.parent==owner}) else{return nil}
+            return (hierarchySelections,owner,"선택한 서클 · \(hierarchySelections.count)개")
+        }
+        let container:CircleAddress
+        switch current {
+        case .music,.signal:guard let owner=try? HierarchyEditing.scope(of:current,in:project) else{return nil};container=owner
+        default:container=current
+        }
+        var visible=project
+        if case .group(let parent,let id)=container {
+            try? HierarchyEditing.editLayout(parent,in:&visible){layout in
+                if let index=layout.groups.firstIndex(where:{$0.id==id}) {layout.groups[index].collapsed=false}
+            }
+        }
+        guard let scene=try? HierarchySceneBuilder.build(visible,revealing:container) else{return nil}
+        let addresses=Set(scene.children(of:container).map(\.id))
+        guard addresses.count>=2 else{return nil}
+        return (addresses,container,(scene.node(container)?.title ?? "현재 위치")+" 안의 서클 · \(addresses.count)개")
+    }
+    func autoLayoutHierarchy(_ mode:HierarchyAutoLayoutMode,context:CircleAddress? = nil) {
+        guard !hierarchyAutoLayoutLocked else {status="현재 작업을 마친 뒤 자동 정렬하세요";return}
+        var identity=numberEditIdentity
+        guard resolveActiveNumericDraft(),nameEditing.resolve() else{return}
+        identity.revision=project.musicRevision
+        guard identity==numberEditIdentity,!hierarchyAutoLayoutLocked,
+              let scope=hierarchyAutoLayoutScope(context:context) else{return}
+        let before=project
+        mutate("자동 정렬",musical:false){try HierarchyAutoLayout.apply(mode,addresses:scope.addresses,in:&$0)}
+        guard project != before else{return}
+        playbackFollow=playbackFollow.interrupted(playing:playback.playing)
+        // Match the visible orbit context to the bounds we are framing after a context-menu action.
+        hierarchySettingsOpen=false
+        focusHierarchy(scope.container)
+        status="자동 정렬 완료 · "+scope.label
+    }
     func updateHierarchyGroup(_ edit: (inout CanvasGroup) -> Void) {
         guard case .group(let parent,let id) = hierarchySelection else { return }
         mutate("그룹 편집", musical: false) { project in
