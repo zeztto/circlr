@@ -1,6 +1,6 @@
 # 0.1 단계 제품 로드맵
 
-현재 배포: [0.30.0](https://github.com/zeztto/circlr/releases/tag/v0.30.0), 앱 build161, 공개 MIT 정식 릴리스. 사용자가 승인한 native QA 유예는 [QA 기록](0.30.0-final-qa.md)에 남기고 0.40 회귀 검증으로 인계한다. 현재 [0.40.0 실행 계획](0.40.0.md)에 따라 가시성을 최우선으로 개발한다. native QA·실제 한글 입력은 이번 버전도 사용자 승인으로 유예하며 코드 검토를 수행한다.
+현재 버전: [0.40.0](0.40.0.md), 앱 build162. 가시성·루프·시작 화면·감상/팔로우·녹화·데모4곡을 통합했다. 실제 GUI·청취·FPS·한글 IME는 이번 버전의 명시적 사용자 유예이며 자동 검사와 구분한다. [최종 QA](0.40.0-final-qa.md). 다음 제품 단계는0.50의 표현·믹스 신뢰성이다.
 
 | 버전 | 사용자에게 전달할 결과 | 핵심 작업 | 릴리스 필수 증거 |
 |---|---|---|---|
@@ -15,9 +15,10 @@
 
 ## 0.40.0 우선 요구사항 — 루프·시작 화면·녹화·감상 모드
 
-상태: **PLANNED / 미구현**. 0.30.0의 기본 재생 안정화를 전제로 다음 버전에 반영한다. 기존 0.40.0 녹음 범위는 보존하되 **R40-01 → R40-02 → R40-03 → 기존 녹음 통합 QA** 순으로 진행한다. 기존 결함인 **R40-04 화면 녹화 끊김 진단은 R40-01과 함께 먼저 시작**하며 수정 후 루프·재생 팔로우와 통합 검증한다. **R40-05 텍스트 없는 감상 모드**와 **R40-06 팔로우 대상 선택**은 R40-04의 화면/영상 렌더 검증에 함께 포함한다. 착수 시 버전 실행 계획에서 파일 소유·의존성과 아래 기준을 동결한다. 이번 로드맵 변경으로 현재 앱이 기능을 지원하게 되는 것은 아니다.
+상태: **IMPLEMENTED / 출고 검증 중**. 아래 항목은0.40의 원래 인수 기준이며 삭제하지 않는다. 코드·자동/offline 검증 결과는 [버전 기록](0.40.0.md)과 [최종 QA](0.40.0-final-qa.md)를 따른다. 실제 GUI·입출력 청취·장시간 프레임 실측·IME 항목은 사용자가 이번 버전에서 USER_WAIVED로 지정했다.
 
-English: 0.40.0 prioritizes gapless looping of the current song or section and a launch screen offering New Song, Load Template and Load Demo. It also prioritizes diagnosing and fixing reported screen-recording stutter, with frame-pacing and audio/video synchronization checks. A text-free viewing mode will show circle and signal flow during playback and recording. Playback follow will offer song, section and explicitly pinned circle targets, with separate camera framing controls. These are planned changes; R40-07 adds a 3–5 song demo library, with the reviewed f0r h3r added in 0.60.0.
+
+English: 0.40.0 prioritizes gapless looping of the current song or section and a launch screen offering New Song, Load Template and Load Demo. It also prioritizes diagnosing and fixing reported screen-recording stutter, with frame-pacing and audio/video synchronization checks. A text-free viewing mode will show circle and signal flow during playback and recording. Playback follow will offer song, section and explicitly pinned circle targets, with separate camera framing controls. The implementation now includes these controls and four bundled demos. Native GUI/listening/FPS/IME QA was explicitly waived for0.40. Further musical refinement of f0r h3r remains in0.60.0.
 
 ### R40-01 · 전체 곡 / 섹션 루프 재생
 
@@ -57,7 +58,7 @@ English: 0.40.0 prioritizes gapless looping of the current song or section and a
 
 ### R40-04 · 화면 녹화 프레임 끊김 개선
 
-**상태: 사용자 제보 / 원인 미확인 / 미수정.** 화면 녹화가 제대로 작동하지 않고 프레임이 심하게 끊긴다는 피드백을 기록한다. 실행 build·장치·해상도·FPS·저장된 영상의 상태는 아직 확인하지 않았으며, 특정 renderer나 encoder가 원인이라고 단정하지 않는다.
+**상태: 소프트웨어 캡처·인코딩 병목 보완 / 실제 native FPS 미측정.** 화면 녹화가 제대로 작동하지 않고 프레임이 심하게 끊긴다는 피드백을 기록한다. 실행 build·장치·해상도·FPS·저장된 영상의 상태는 아직 확인하지 않았으며, 특정 renderer나 encoder가 원인이라고 단정하지 않는다.
 
 **사용자 결과:** 재생 비주얼라이저를 매끄러운 영상으로 녹화하고, 내보낸 MP4에서도 궤도·노드 시그널·팔로우 움직임과 음악이 일치한다. 기존 녹화 결함을 0.90.0의 멀티미디어 확장까지 미루지 않는다.
 

@@ -12,7 +12,7 @@
 
 *직접 작성한 QA 프로젝트를 연 실제 개발 앱 0.30.0 build157입니다. 편집 화면이며 오디오 재생을 증명하는 화면은 아닙니다. [촬영 정보](docs/images/README.md).*
 
-> **0.30.0 · build161.** MIT 오픈소스 프로젝트입니다. 실제 출력은 사용자 청취를 확인했으며, 한글 IME와 남은 native QA는 사용자 승인으로 유예했습니다. [검증 기록](docs/releases/0.30.0-final-qa.md).
+> **0.40.0 · build162.** MIT 오픈소스 프로젝트입니다. 자동 검사·오프라인 미디어 검증을 수행했으며, 실제 GUI·청취·프레임 실측·한글 IME QA는 사용자 요청으로 유예했습니다. [검증 기록](docs/releases/0.40.0-final-qa.md).
 
 ## 할 수 있는 작업
 
@@ -28,7 +28,7 @@
 
 ## 시작하기
 
-Apple Silicon용 **[0.30.0 정식 릴리스](https://github.com/zeztto/circlr/releases/tag/v0.30.0)**를 내려받으세요. 공개 저장소이며 소스는 `main`에서 빌드할 수 있습니다.
+Apple Silicon용 **[0.40.0 정식 릴리스](https://github.com/zeztto/circlr/releases/tag/v0.40.0)**를 내려받으세요. 공개 저장소이며 소스는 `main`에서 빌드할 수 있습니다.
 
 컬러를 적용한 **f0r h3r v5**가 동봉됩니다. **파일 → 데모곡 불러오기…**에서 편집 가능한 사본을 여세요.
 
@@ -43,7 +43,7 @@ open 'dist/써클러.app'
 
 빌드는 앱·오디오 helper 5개·에이전트 키트를 함께 패키징합니다. 로컬 패키지는 ad-hoc 서명이며 공증되지 않았습니다. 개발 버전을 시험할 때 중요한 프로젝트는 사본으로 보관하세요.
 
-`release/0.40.0`에서 캔버스 가시성과 텍스트 없는 감상·팔로우를 우선 개선하고, 곡/섹션 루프·시작 템플릿·클래식 MIDI 데모 3곡을 통합하고 있습니다. [0.40 실행 계획](docs/releases/0.40.0.md)을 참고하세요. 현재 0.30 다운로드에는 이 개발 변경이 포함되지 않습니다.
+0.40에는 텍스트 없는 감상 모드·세부 팔로우·곡/섹션 연속 루프·영상 녹화 개선·시작 템플릿·데모4곡을 포함합니다. [버전 기록](docs/releases/0.40.0.md)을 참고하세요.
 
 ## 첫 작업
 
@@ -70,4 +70,4 @@ Swift 패키지는 프로젝트 모델(`CirclrCore`), 오디오 처리(`CirclrAu
 
 완료한 버전마다 Git 태그와 GitHub Release를 만들고 한국어·영어 변경 안내, 검증한 앱 패키지, 체크섬을 제공합니다. 개발 build 번호 증가와 문서 수정은 릴리스를 만들지 않습니다. [변경 이력](CHANGELOG.md) · [릴리스 절차](docs/releases/README.md).
 
-코드·문서·아이콘은 [MIT](LICENSE), 음악은 [별도 이용 조건](Resources/Demos/DEMO-LICENSE.md)입니다. 데모는 앱·포크와 함께 재배포할 수 있으며 곡의 별도 발매 권한은 포함하지 않습니다. 타악기 자산 6개는 CC0입니다. [라이선스 범위와 출처](THIRD_PARTY_NOTICES.md) · [기여 안내](CONTRIBUTING.md).
+코드·문서·아이콘은 [MIT](LICENSE), 음악은 [별도 이용 조건](Resources/Demos/DEMO-LICENSE.md)입니다. 데모는 앱·포크와 함께 재배포할 수 있으며 곡의 별도 발매 권한은 포함하지 않습니다. 타악기 자산6개는 CC0, 클래식 MIDI 원본은 Public Domain입니다. [라이선스 범위와 출처](THIRD_PARTY_NOTICES.md) · [기여 안내](CONTRIBUTING.md).

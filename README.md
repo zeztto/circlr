@@ -12,7 +12,7 @@ In circlr, a circle is a timeline. Build a song from sections, place MIDI, audio
 
 *Actual development app, 0.30.0 build157, using an authored QA project. The screenshot shows editing; it does not demonstrate audio playback. [Capture details](docs/images/README.md).*
 
-> **0.30.0 · build161.** An MIT open-source project. Audible output was confirmed by the user; Korean IME and remaining native QA were waived for this release. [Verification record](docs/releases/0.30.0-final-qa.md).
+> **0.40.0 · build162.** An MIT open-source project. Automated and offline media checks were completed; native GUI, listening, frame-rate and Korean IME QA were explicitly user-waived. [Verification record](docs/releases/0.40.0-final-qa.md).
 
 ## What you can work with
 
@@ -28,7 +28,7 @@ These are implemented development features, not a guarantee of compatibility wit
 
 ## Getting started
 
-Download **[circlr 0.30.0](https://github.com/zeztto/circlr/releases/tag/v0.30.0)** for Apple Silicon. The repository is public; build from `main` for source development.
+Download **[circlr 0.40.0](https://github.com/zeztto/circlr/releases/tag/v0.40.0)** for Apple Silicon. The repository is public; build from `main` for source development.
 
 The colored **f0r h3r v5** demo is included. Choose **File → 데모곡 불러오기…** to open an editable copy.
 
@@ -43,7 +43,7 @@ open 'dist/써클러.app'
 
 The build packages the app, its five audio helpers and the agent kit together. Local packages use ad-hoc signing and are not notarized. Keep a separate copy of important projects when trying development builds.
 
-Development continues on `release/0.40.0`, prioritizing canvas readability, text-free viewing and follow controls, with song/section loops, startup templates and three additional classical MIDI demos in progress. See the [0.40 execution plan](docs/releases/0.40.0.md); these changes are not in the 0.30 download.
+0.40 adds text-free viewing, detailed playback follow, continuous song/section loops, video recording, startup templates and four bundled demos. See the [version record](docs/releases/0.40.0.md).
 
 ## First session
 
@@ -70,4 +70,4 @@ The Swift package separates the project model (`CirclrCore`), audio processing (
 
 Each completed version will have a Git tag and a GitHub Release with Korean/English notes, a verified app package and checksums. Development build numbers and documentation edits do not create releases. [Changelog](CHANGELOG.md) · [Release procedure](docs/releases/README.md).
 
-Code, documentation and icons use the [MIT License](LICENSE). Music has [separate demo terms](Resources/Demos/DEMO-LICENSE.md): redistribution with the app and forks is permitted, but standalone music releases are not licensed. Six percussion assets remain CC0. See [licensing scope and credits](THIRD_PARTY_NOTICES.md) and [contributing](CONTRIBUTING.md).
+Code, documentation and icons use the [MIT License](LICENSE). Music has [separate demo terms](Resources/Demos/DEMO-LICENSE.md): redistribution with the app and forks is permitted, but standalone music releases are not licensed. Six percussion assets remain CC0; classical MIDI sources remain Public Domain. See [licensing scope and credits](THIRD_PARTY_NOTICES.md) and [contributing](CONTRIBUTING.md).
