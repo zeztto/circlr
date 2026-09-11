@@ -7,7 +7,7 @@
 | **0.30.0** | 한 곡의 기본 제작 흐름을 끝까지 사용할 수 있는 기준판 | 생성/송폼·편집·키보드·파일/범위·실제 기본 재생·바운스·재열기 통합 | [0.30 계획](0.30.0.md)의 필수 QA 전부 PASS, 실제 패키지와 복구 경로 |
 | **0.40.0** | 앱에서 작업을 시작하고 곡·섹션을 끊김 없이 반복 청취하며 녹음·편집 | **우선: 곡/섹션 루프 재생, 새 곡·템플릿·데모 시작 화면, 화면 녹화 프레임 끊김 개선·텍스트 없는 감상 모드·팔로우 대상 선택**. 이어서 입력 장치·권한·녹음/테이크·trim/split/fade·Undo | 루프 경계 PCM·실제 연속 청취·정지/범위 전환, 시작 화면 3개 경로·오류/취소·원본 보존, 실제 녹음/재열기, 녹화 프레임 간격·누락·MP4 청취/동기, 감상 모드의 텍스트 제거·복귀, 곡/섹션/지정 서클 팔로우 전환 |
 | 0.50.0 | 표현과 믹스를 신뢰할 수 있는 전자음악 작업 | bend/페달 범위·backend 지원 명확화, automation·routing·레벨·tail 안정화 | GUI/MCP/렌더 일치, 지원 backend 실제 청취, clipping/tail/tempo 경계 |
-| 0.60.0 | 내장 음색으로 완성한 f0r h3r 제작 기준 | 신스 음질·patch, 단순한 DJ 드럼·베이스, city pop 화성·future bass 후렴, 믹스, 시작 화면 데모를 검토 완료한 f0r h3r로 갱신 | 한 곡 실제 청취와 사용자 검토, 편집 프로젝트·WAV/stems, 사용 권리 기록 |
+| 0.60.0 | 내장 음색으로 완성한 f0r h3r 제작 기준 | 신스 음질·patch, 단순한 DJ 드럼·베이스, city pop 화성·future bass 후렴, 믹스, 공개곡 데모를 유지하고 검토 완료한 f0r h3r 추가 | 한 곡 실제 청취와 사용자 검토, 편집 프로젝트·WAV/stems, 사용 권리 기록 |
 | 0.70.0 | 앱 안에서 AI와 대화하며 작업하고 중단/복원 | 기존 MCP 누락 보완, 공식 Codex 연결 계약 재확인, 계정·세션·스트림·STOP | 실제 로그인/대화/도구/취소·재연결, revision·권한·로그 보호 |
 | 0.80.0 | 아티스트별 작품과 버전·자산 관리 | 프로필 선택·작품 catalog·출처·자산 이동/백업 | 실제 작품 등록/탐색·참조 복구, 아티스트 전환 중 초안/AI 작업 격리 |
 | 0.90.0 | 음악·이미지·영상·텍스트를 연결해 작업물로 출력 | 시간 궤도와 미디어 참조 구분, 0.40 녹화 안정화를 바탕으로 해상도/FPS 확장·장시간 영상·음악 동기·출력 | 실제 MP4 시작/끝 동기·중단 복구, 미디어 누락·백업/재열기 |
@@ -17,7 +17,7 @@
 
 상태: **PLANNED / 미구현**. 0.30.0의 기본 재생 안정화를 전제로 다음 버전에 반영한다. 기존 0.40.0 녹음 범위는 보존하되 **R40-01 → R40-02 → R40-03 → 기존 녹음 통합 QA** 순으로 진행한다. 기존 결함인 **R40-04 화면 녹화 끊김 진단은 R40-01과 함께 먼저 시작**하며 수정 후 루프·재생 팔로우와 통합 검증한다. **R40-05 텍스트 없는 감상 모드**와 **R40-06 팔로우 대상 선택**은 R40-04의 화면/영상 렌더 검증에 함께 포함한다. 착수 시 버전 실행 계획에서 파일 소유·의존성과 아래 기준을 동결한다. 이번 로드맵 변경으로 현재 앱이 기능을 지원하게 되는 것은 아니다.
 
-English: 0.40.0 prioritizes gapless looping of the current song or section and a launch screen offering New Song, Load Template and Load Demo. It also prioritizes diagnosing and fixing reported screen-recording stutter, with frame-pacing and audio/video synchronization checks. A text-free viewing mode will show circle and signal flow during playback and recording. Playback follow will offer song, section and explicitly pinned circle targets, with separate camera framing controls. These are planned changes; 0.60.0 will upgrade the bundled demo to the reviewed f0r h3r production.
+English: 0.40.0 prioritizes gapless looping of the current song or section and a launch screen offering New Song, Load Template and Load Demo. It also prioritizes diagnosing and fixing reported screen-recording stutter, with frame-pacing and audio/video synchronization checks. A text-free viewing mode will show circle and signal flow during playback and recording. Playback follow will offer song, section and explicitly pinned circle targets, with separate camera framing controls. These are planned changes; R40-07 adds a 3–5 song demo library, with the reviewed f0r h3r added in 0.60.0.
 
 ### R40-01 · 전체 곡 / 섹션 루프 재생
 
@@ -101,6 +101,17 @@ English: 0.40.0 prioritizes gapless looping of the current song or section and a
 - **감상·녹화:** 텍스트 숨김 모드에서도 선택한 팔로우와 단축키가 유지된다. 설정을 바꾸기 위해 숨긴 텍스트를 녹화 프레임에 자동 노출하지 않는다. 녹화 영상의 카메라 이동에도 같은 대상·구도·실제 재생 시간을 적용하며 R40-04 프레임/AV 동기 조건을 유지한다.
 
 **완료 기준:** 여러 곡과 재사용 섹션이 있는 프로젝트에서 곡/섹션/고정 서클/끄기를 비교하고, 화면에 보이는 대상 ID와 실제 재생 위치를 대조한다. 섹션·곡·루프 경계, 빠른 대상 전환, 삭제된 고정 대상, 배율 유지/전체 맞춤, 수동 탐색 후 재개, 저장/재열기, 감상 모드·실제 녹화, GUI/MCP 상태 일치를 확인한다. 카메라 튐·뒤늦은 이전 대상 복귀·음악 데이터/출력 변경이 없어야 한다.
+
+### R40-07 · 공개 MIDI·스템 기반 데모 3~5곡
+
+**상태: RESEARCHED / PLANNED, 미탑재.** 0.40.0 시작 화면에 최소 3곡·목표 4곡의 편집 가능한 데모를 제공한다. Satie·Grieg·Debussy의 Public Domain MIDI와 Lithium의 CC0 stems를 우선 검토한다. [후보·공식 라이선스·편곡·QA 계획](demo-library-plan.md)에 출처와 미검증 범위를 기록했다.
+
+- 먼저 Gymnopédie 한 곡을 편곡·실제 청취 검토한 뒤 확대한다. 곡→섹션→MIDI/오디오/악기/FX 계층, 공유 반복과 변형, 섹션 재배치, 바운스를 각각 학습할 수 있게 만든다.
+- R40-02/03의 로더·원본 보존과 R40-01/04/05/06의 루프·녹화·감상·팔로우 QA를 실제 데모로 연결한다. 원본 MIDI를 그대로 넣거나 QA fixture를 데모로 이름만 바꾸지 않는다.
+- 파일별 권리·출처·checksum, 내장 음색 권리, 실제 청취·오프라인 로드·편집·재열기·WAV/stem 출력·패키지 성능 검증을 탑재 gate로 삼는다.
+- 0.60.0의 검토 완료된 f0r h3r를 다섯 번째 데모로 추가한다. 기존 공개곡 데모를 일괄 교체하지 않는다. 0.40 범위 동결 시 최소 3곡의 제작 비용과 일정 의존성을 반영한다.
+
+English: R40-07 plans at least three, targeting four, openly reusable MIDI/stem arrangements in 0.40.0. Each will demonstrate editable circle hierarchy, form, looping and bouncing. Add the reviewed f0r h3r as the fifth demo in 0.60.0. Research is complete; assets and arrangements are not yet bundled.
 
 ## 의존성과 범위 관리
 

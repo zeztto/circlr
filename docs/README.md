@@ -16,6 +16,7 @@ Start with [English](../README.md) or [한국어](../README.ko.md). The current 
 | Contributing / 기여 | [CONTRIBUTING](../CONTRIBUTING.md) · [AGENTS](../AGENTS.md) |
 | Architecture / 구조 | [Hierarchy](15-hierarchy-canvas-architecture.md) · [Agent interface](17-agent-interface.md) |
 | Current version / 현재 버전 | [0.30.0 plan](releases/0.30.0.md) · [QA evidence](releases/0.30.0-qa.md) |
+| Demo library / 데모곡 후보·편곡 | [Sources and plan](releases/demo-library-plan.md) |
 | Next versions / 다음 버전 | [Roadmap](releases/roadmap.md) |
 | Release publishing / 릴리스 등록 | [Process](releases/README.md) · [Bilingual notes template](releases/RELEASE_NOTES_TEMPLATE.md) |
 | Changes / 변경 내역 | [CHANGELOG](../CHANGELOG.md) · [Archived README](history/readme-build157.md) |
