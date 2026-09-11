@@ -336,6 +336,23 @@ import CirclrAudio
             scheduleRecovery()
         } catch { fail(error) }
     }
+    /// Finish synchronous pointer creation in the history entry created by its action.
+    func createOnCanvas(at world:Point,_ action:()->Void) {
+        let previousHistory=undoStack.last?.id
+        let existing=Set(hierarchyScene?.nodes.map(\.id) ?? [])
+        action()
+        guard project.usesOrbits,undoStack.last?.id != previousHistory,
+              let address=hierarchySelection,!existing.contains(address) else{return}
+        do {
+            var candidate=project
+            let scene=try HierarchySceneBuilder.build(candidate,revealing:address)
+            guard let node=scene.node(address) else{return}
+            let offset=try HierarchyEditing.position(address,in:candidate)
+            try HierarchyEditing.move(address,to:Point(offset.x+(world.x-node.center.x)/node.scale,offset.y+(world.y-node.center.y)/node.scale),in:&candidate)
+            // No second history entry: undo removes the creation; redo restores its final position.
+            project=candidate;dirty=true;scheduleRecovery()
+        }catch{fail(error)}
+    }
     /// Only viewing preferences bypass history; actual positions, groups and ports remain undoable.
     func setCanvasViewPreferences(layout: CircleLayout? = nil, grid: Bool? = nil, snap: Bool? = nil) {
         var candidate = project
@@ -506,9 +523,9 @@ import CirclrAudio
         var pattern = RhythmPattern(name:name,trackID:track.id); pattern.meter = currentContext.meter; pattern.length = currentContext.meter.quarters
         mutate("패턴 만들기") { $0.patterns.append(pattern) }; openPattern(pattern.id)
     }
-    func importAudio(at point:Point? = nil) {
+    func importAudio(at point:Point? = nil,orbitWorldPosition:Point? = nil) {
         guard canStartMediaImport,let destination=audioImportDestination(at:point) else {status="재생·녹음을 정지하고 오디오를 넣을 섹션을 선택하세요";return}
-        let request=mediaImportRequest(destination)
+        let request=mediaImportRequest(destination,orbitWorldPosition:orbitWorldPosition)
         let panel=NSOpenPanel();panel.title="오디오 가져오기";panel.allowedContentTypes=[.audio];panel.allowsMultipleSelection=true
         panel.message=AudioImportPlacement.destinationLabel(destination,in:project)+(editPatternID==nil ? "\n여러 파일은 각각 새 트랙에 배치합니다.":"\n선택한 파일을 이 리듬 패턴에 함께 배치합니다.")
         guard panel.runModal() == .OK else{return}

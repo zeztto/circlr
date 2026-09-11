@@ -41,6 +41,37 @@ final class HierarchyEditingTests: XCTestCase {
         try HierarchyEditing.move(first, to: Point(-600,280), in: &p)
         XCTAssertEqual(try HierarchyEditing.position(first, in: p), Point(-600,280))
     }
+    func testOrbitGroupAbsoluteMovesIncludeMembersWithoutSavedOffsets() throws {
+        var p = try fixture(); p.circleLayout = .orbit
+        let ids = addresses(p), sorted = ids.sorted { HierarchyEditing.memberID($0)! < HierarchyEditing.memberID($1)! }
+        let group = try HierarchyEditing.group(ids, name: "혼합 배치", in: &p)
+        let scope = try HierarchyEditing.scope(of: sorted[0], in: p)
+        try HierarchyEditing.editLayout(scope, in: &p) { layout in
+            layout.orbitLayoutVersion = 1
+            layout.orbitPositions = [HierarchyEditing.memberID(sorted[0])!: Point(100,40)]
+        }
+        XCTAssertEqual(try HierarchyEditing.position(group, in: p), Point(50, 20))
+        for target in [Point(110, 70), Point(-30, 90), Point(0, 0)] {
+            let before = try HierarchySceneBuilder.build(p)
+            let origin = try HierarchyEditing.position(group, in: p)
+            try HierarchyEditing.move(group, to: target, in: &p)
+            XCTAssertEqual(try HierarchyEditing.position(group, in: p), target)
+            let after = try HierarchySceneBuilder.build(p)
+            for id in ids {
+                let old = try XCTUnwrap(before.node(id)), next = try XCTUnwrap(after.node(id))
+                XCTAssertEqual(next.center.x-old.center.x,target.x-origin.x,accuracy:1e-9)
+                XCTAssertEqual(next.center.y-old.center.y,target.y-origin.y,accuracy:1e-9)
+                XCTAssertEqual(next.orbit,old.orbit)
+            }
+        }
+        // Legacy freeform keeps its established stored-members-only centroid.
+        p.circleLayout = .freeform
+        try HierarchyEditing.editLayout(scope, in: &p) { layout in
+            layout.positions[HierarchyEditing.memberID(sorted[0])!] = Point(100, 40)
+            layout.positions.removeValue(forKey: HierarchyEditing.memberID(sorted[1])!)
+        }
+        XCTAssertEqual(try HierarchyEditing.position(group, in: p), Point(100, 40))
+    }
     func testCollapsedGroupHidesChildrenKeepsExternalWiresAndDoesNotChangeExecution() throws {
         var p = try fixture(); let ids=addresses(p)
         let group = try HierarchyEditing.group(ids, name: "연주", in: &p)

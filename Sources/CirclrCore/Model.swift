@@ -199,6 +199,8 @@ public struct CanvasGroup: Codable, Equatable, Identifiable {
     public init(name: String, members: [ID]) { self.name = name; self.members = members }
 }
 public struct Layout: Codable, Equatable {
+    public var orbitLayoutVersion: Int?
+    public var orbitPositions: [ID: Point]?
     public var positions: [ID: Point] = [:]
     public var groups: [CanvasGroup] = []
     public var pan = Point(100, 150)

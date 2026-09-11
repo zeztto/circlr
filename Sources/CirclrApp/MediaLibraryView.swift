@@ -11,7 +11,7 @@ extension AppStore {
     func closeMediaLibrary() {libraryOpen=false;focusCanvas?()}
     func refreshLibraryDestination() {
         library.notice=""
-        libraryDestination=audioImportDestination(at:nil).map(mediaImportRequest)
+        libraryDestination=audioImportDestination(at:nil).map{mediaImportRequest($0)}
     }
     var libraryDestinationCurrent:Bool {
         guard let target=libraryDestination else{return false}

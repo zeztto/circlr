@@ -211,6 +211,7 @@ public enum SectionGraphEditing {
         graph.nodes.removeAll { ids.contains($0.id) }
         graph.edges.removeAll { ids.contains($0.from) || ids.contains($0.to) }
         graph.layout.positions = graph.layout.positions.filter { !ids.contains($0.key) }
+        graph.layout.orbitPositions = graph.layout.orbitPositions?.filter { !ids.contains($0.key) }
     }
 }
 

@@ -1,4 +1,5 @@
 import Foundation
+import CoreGraphics
 
 public enum CircleAddress: Hashable, Codable, Sendable {
     case album
@@ -68,10 +69,12 @@ public struct CircleSceneEdge: Identifiable {
 public struct HierarchyScene {
     public let nodes: [CircleSceneNode]
     public let edges: [CircleSceneEdge]
+    public let isOrbit: Bool
+    let timedMembersByOwner: [CircleAddress: Set<ID>]
     private let nodesByID: [CircleAddress: CircleSceneNode]
     private let childrenByParent: [CircleAddress: [CircleSceneNode]]
-    public init(nodes: [CircleSceneNode], edges: [CircleSceneEdge]) {
-        self.nodes = nodes; self.edges = edges
+    public init(nodes: [CircleSceneNode], edges: [CircleSceneEdge], isOrbit: Bool = false, timedMembersByOwner: [CircleAddress: Set<ID>] = [:]) {
+        self.nodes = nodes; self.edges = edges; self.isOrbit = isOrbit; self.timedMembersByOwner = timedMembersByOwner
         nodesByID = Dictionary(uniqueKeysWithValues: nodes.map { ($0.id, $0) })
         var children: [CircleAddress: [CircleSceneNode]] = [:]
         for node in nodes { if let parent = node.parent { children[parent, default: []].append(node) } }
@@ -79,6 +82,39 @@ public struct HierarchyScene {
     }
     public func node(_ address: CircleAddress) -> CircleSceneNode? { nodesByID[address] }
     public func children(of address: CircleAddress) -> [CircleSceneNode] { childrenByParent[address] ?? [] }
+    /// World units per saved local layout unit; visual groups do not shrink members.
+    public func childScale(of address: CircleAddress) -> Double {
+        guard let parent = node(address) else { return 1 }
+        return parent.scale * (isOrbit || parent.role == .group ? 1 : HierarchySceneBuilder.childScale)
+    }
+    /// Exact musical attachment, independent of the satellite's visual layout offset.
+    public func orbitAnchor(for address: CircleAddress) -> Point? {
+        guard let orbit = node(address)?.orbit, let owner = node(orbit.owner) else { return nil }
+        let point = orbit.timeline.point(at: orbit.anchor, radius: orbit.radius)
+        return Point(owner.center.x + point.x, owner.center.y + point.y)
+    }
+    /// Only the current semantic level is framed; descendants remain available through focus.
+    public func contextBounds(of address: CircleAddress) -> CGRect? {
+        guard let owner = node(address) else { return nil }
+        var targets = children(of: address)
+        if isOrbit {
+            func addGroupMembers(_ group: CircleSceneNode) {
+                for member in children(of: group.id) {
+                    targets.append(member)
+                    if member.role == .group { addGroupMembers(member) }
+                }
+            }
+            for group in targets where group.role == .group { addGroupMembers(group) }
+        }
+        if isOrbit || targets.isEmpty { targets.insert(owner, at: 0) }
+        var result = CGRect.null
+        for target in targets {
+            let r = target.outerRadius
+            guard r.isFinite, r > 0, target.center.x.isFinite, target.center.y.isFinite else { return nil }
+            result = result.union(CGRect(x: target.center.x-r, y: target.center.y-r, width: r*2, height: r*2))
+        }
+        return result.isNull ? nil : result
+    }
     public func path(to address: CircleAddress) -> [CircleSceneNode] {
         var result: [CircleSceneNode] = [], cursor: CircleAddress? = address
         while let current = cursor, let node = node(current), result.count < 68 { result.append(node); cursor = node.parent }
@@ -102,6 +138,7 @@ public enum HierarchySceneBuilder {
         let revealedGroups = (try? StudioNavigation.containingGroups(of: selection, in: project)) ?? []
         var edges: [CircleSceneEdge] = []
         var hiddenOwners: [CircleAddress: CircleAddress] = [:]
+        var timedMembersByOwner: [CircleAddress: Set<ID>] = [:]
         func node(_ address: CircleAddress, title: String, subtitle: String, role: CircleRole,
                   context: MusicContext, repeats: Int = 1, clock: MusicClock? = nil, music: MusicCircle? = nil, signal: SignalNode? = nil) -> CircleSceneNode {
             CircleSceneNode(id: address, center: Point(), radius: role == .music ? 80 : 200, scale: 1, depth: 0,
@@ -110,24 +147,56 @@ public enum HierarchySceneBuilder {
         func finish(_ input: Tree) -> Tree {
             var tree = input
             tree.node.childCount = tree.children.count
+            if project.usesOrbits && tree.node.role != .group { tree.childScale = 1; return tree }
             for child in tree.children {
                 let extent = hypot(child.position.x, child.position.y) + child.node.outerRadius
                 tree.node.radius = max(tree.node.radius, extent * tree.childScale + 60)
             }
             return tree
         }
-        func orbiting(_ input: Tree) -> Tree {
-            guard project.usesOrbits else {return input}
-            var tree=input
-            let untimed=tree.children.filter{$0.node.orbit == nil}
-            var edge=untimed.map{hypot($0.position.x,$0.position.y)+($0.layoutRadius ?? $0.node.outerRadius)}.max() ?? 60
-            for i in tree.children.indices where tree.children[i].node.orbit != nil {
-                let extent=tree.children[i].layoutRadius ?? tree.children[i].node.outerRadius
-                let radius=edge+extent+70
-                let orbit=tree.children[i].node.orbit!
-                tree.children[i].position=orbit.timeline.point(at:orbit.anchor,radius:radius)
-                tree.children[i].node.orbit?.radius=radius
-                edge=radius+extent+40
+        func orbiting(_ input: Tree, layout: Layout) -> Tree {
+            guard project.usesOrbits else { return input }
+            var tree = input
+            tree.childScale = 1
+            // A ring describes time, never an enclosure. Keep its size stable under edits.
+            let ring = tree.node.radius
+            var occupied: [(Point, Double)] = []
+            var untimedIndex = 0
+            let timed = Set(tree.children.filter { $0.node.orbit != nil }.compactMap { HierarchyEditing.memberID($0.node.id) })
+            let offsets = OrbitLayoutOffsets.positions(in: layout, timed: timed)
+            let laneColumns = max(3, Int(ceil(sqrt(Double(tree.children.filter { $0.node.orbit == nil }.count)))))
+            for i in tree.children.indices {
+                let child = tree.children[i]
+                let extent = child.node.outerRadius
+                let saved = HierarchyEditing.memberID(child.node.id).flatMap { offsets[$0] } ?? Point()
+                var position: Point
+                if let orbit = child.node.orbit {
+                    let angle = orbit.timeline.angle(at: orbit.anchor)
+                    var distance = ring + (child.node.role == .music ? 0 : extent+80)
+                    position = Point(cos(angle)*distance, sin(angle)*distance)
+                    // Distinct satellites may share the exact time attachment. Fan outward;
+                    // never alter compiler time to resolve a visual collision.
+                    var attempt = 0
+                    while occupied.contains(where: { hypot(position.x-$0.0.x, position.y-$0.0.y) < extent+$0.1+48 }) {
+                        attempt += 1
+                        // Sample different bearings before growing the next compact shell.
+                        // Only satellite geometry changes; the exact time attachment stays put.
+                        distance = ring + extent + 80 + Double((attempt-1)/8)*(extent*2+64)
+                        let bearing = angle + Double(attempt)*Double.pi*(3-sqrt(5))
+                        position = Point(cos(bearing)*distance,sin(bearing)*distance)
+                    }
+                    tree.children[i].node.orbit?.radius = ring
+                } else {
+                    // Untimed processors occupy an external signal lane, not the time ring.
+                    position = Point(ring+extent+160+Double(untimedIndex % laneColumns)*(extent*2+64), Double(untimedIndex / laneColumns)*(extent*2+64))
+                    untimedIndex += 1
+                    while occupied.contains(where: { hypot(position.x-$0.0.x, position.y-$0.0.y) < extent+$0.1+48 }) {
+                        position.x += extent*2+64
+                    }
+                }
+                occupied.append((position, extent))
+                // Saved positions are visual offsets in orbit mode. They cannot change time.
+                tree.children[i].position = Point(position.x+saved.x, position.y+saved.y)
             }
             return tree
         }
@@ -174,7 +243,8 @@ public enum HierarchySceneBuilder {
             return tree
         }
         func seal(_ input: Tree, layout: Layout) -> Tree {
-            let positioned=orbiting(input)
+            timedMembersByOwner[input.node.id] = Set(input.children.filter { $0.node.orbit != nil }.compactMap { HierarchyEditing.memberID($0.node.id) })
+            let positioned=orbiting(input,layout:layout)
             var natural=positioned.node.radius
             for child in positioned.children {natural=max(natural,(hypot(child.position.x,child.position.y)+(child.layoutRadius ?? child.node.outerRadius))*positioned.childScale+60)}
             var result=finish(grouped(positioned,layout:layout))
@@ -317,7 +387,7 @@ public enum HierarchySceneBuilder {
             if copy.to != edge.to, let alias=GroupPortEditing.presented(.init(node:edge.to,portID:edge.toPortID),at:copy.to,in:project) {copy.explicitToPortID=alias.portID}
             return copy.from == copy.to ? nil : copy
         }
-        return HierarchyScene(nodes: flattened, edges: displayedEdges)
+        return HierarchyScene(nodes: flattened, edges: displayedEdges, isOrbit: project.usesOrbits, timedMembersByOwner: timedMembersByOwner)
     }
 }
 

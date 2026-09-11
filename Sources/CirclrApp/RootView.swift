@@ -7,16 +7,32 @@ struct RootView: View {
     private static let appBuild=Bundle.main.object(forInfoDictionaryKey:"CFBundleVersion") as? String ?? "development"
     @ObservedObject var store: AppStore
     var body: some View {
-        VStack(spacing:0) {
+        GeometryReader {geometry in workspace(width:geometry.size.width)}
+            .frame(minWidth:700,minHeight:600)
+    }
+    private func workspace(width:CGFloat)->some View {
+        let chrome=WorkspaceChromeLayout(width:width)
+        return VStack(spacing:0) {
             if !store.viewingMode {
-                header
+                header(chrome)
                 Rectangle().fill(StudioTheme.line.opacity(0.65)).frame(height:1)
             }
             AlbumCanvas(store:store)
-                .overlay(alignment:.topLeading){if !store.viewingMode {breadcrumbs.padding(20)}}
-                .overlay(alignment:.topTrailing){if !store.viewingMode {actions.padding(20)}}
-                .overlay(alignment:.bottomLeading){if !store.viewingMode {AgentConsole(store:store).background(GeometryReader{geometry in Color.clear.preference(key:AgentConsoleBoundsKey.self,value:geometry.frame(in:.named("albumCanvas")))}).padding(.leading,20).padding(.trailing,210).padding(.bottom,18)}}
-                .overlay(alignment:.bottomTrailing){if store.viewingMode {ViewingModeControls(store:store).padding(20)} else {navigation.padding(20)}}
+                .overlay(alignment:.top) {
+                    if !store.viewingMode {
+                        HStack(alignment:.top,spacing:12) {
+                            breadcrumbs(compact:chrome.compactOverlays).frame(maxWidth:.infinity,alignment:.leading)
+                            if chrome.compactOverlays {compactActions} else {actions.fixedSize(horizontal:true,vertical:false)}
+                        }.padding(chrome.inset)
+                    }
+                }
+                .overlay(alignment:.bottom) {
+                    if store.viewingMode {
+                        HStack {Spacer();ViewingModeControls(store:store)}.padding(chrome.inset)
+                    } else {
+                        footer(chrome).padding(.horizontal,chrome.inset).padding(.bottom,16)
+                    }
+                }
                 .coordinateSpace(name:"albumCanvas")
                 .onPreferenceChange(AgentConsoleBoundsKey.self){if store.consoleBounds != $0 {store.consoleBounds=$0}}
         }
@@ -86,17 +102,43 @@ struct RootView: View {
         .onChange(of:store.keyboardHelp){_,open in if open,store.outputPreferencesOpen{store.closeOutputPreferences(returnFocus:false)}}
         .onChange(of:store.arrangementPickerRequest?.id){_,id in if id != nil,store.outputPreferencesOpen{store.closeOutputPreferences(returnFocus:false)}}
         .onChange(of:store.soundPickerRequest?.id){_,id in if id != nil,store.outputPreferencesOpen{store.closeOutputPreferences(returnFocus:false)}}
-        .frame(minWidth:1024,minHeight:740).background(StudioTheme.canvas)
+        .background(StudioTheme.canvas)
         .font(.system(size:12)).foregroundStyle(StudioTheme.text).buttonStyle(CanvasButtonStyle())
         .numberEditing(in:store)
         .onExitCommand{if store.startupOpen {store.closeStartup()} else if store.viewingMode {_ = store.setViewingMode(false)} else if !store.viewingMode,store.outputPreferencesOpen {store.closeOutputPreferences()} else if store.arrangementPickerRequest != nil {store.closeArrangementPicker()} else if store.soundPickerRequest != nil {store.closeSoundPicker()} else if !store.viewingMode,store.libraryOpen {store.closeMediaLibrary()} else if store.connectionsOpen {store.connectionsOpen=false;store.focusCanvas?()} else if !store.viewingMode,store.navigationOpen {store.navigationOpen=false;store.focusCanvas?()} else if store.commandPalette != nil {store.commandPalette=nil;store.focusCanvas?()} else if !store.viewingMode,store.keyboardHelp {store.keyboardHelp=false} else if let draft=store.midiImportDraft {store.cancelMIDIImport(draft.id)} else {store.hierarchySettingsOpen=false;store.hierarchyParent()}}
         .alert("작업을 완료하지 못했습니다",isPresented:Binding(get:{store.errorMessage != nil},set:{if !$0{store.errorMessage=nil}})){Button("확인"){store.errorMessage=nil}}message:{Text(store.errorMessage ?? "")}
     }
-    private var header:some View {
-        GeometryReader { geometry in headerRow(compact:geometry.size.width<1180) }.frame(height:66)
+    private func header(_ chrome:WorkspaceChromeLayout)->some View {
+        VStack(spacing:0) {
+            if chrome.twoHeaderRows {
+                HStack(spacing:12) {
+                    brand
+                    projectMenu.frame(maxWidth:.infinity,alignment:.leading)
+                    globalSettings(compact:true)
+                    addCircleMenu
+                }.frame(height:58)
+                HStack(spacing:10) {
+                    TransportControls(store:store,meter:store.meter,compact:true)
+                    movieButton
+                    Spacer(minLength:8)
+                    utilityMenu
+                }.frame(height:58)
+            } else {
+                HStack(spacing:12) {
+                    brand
+                    projectMenu.frame(width:160)
+                    Rectangle().fill(StudioTheme.line).frame(width:1,height:24)
+                    TransportControls(store:store,meter:store.meter,compact:chrome.compactTransport)
+                    movieButton
+                    Spacer(minLength:8)
+                    utilityMenu
+                    globalSettings(compact:chrome.compactTransport)
+                    addCircleMenu
+                }.frame(height:66)
+            }
+        }.menuStyle(.borderlessButton).padding(.horizontal,chrome.inset).background(StudioTheme.surface)
     }
-    private func headerRow(compact:Bool)->some View {
-        HStack(spacing:compact ? 10:14) {
+    private var brand:some View {
             VStack(alignment:.leading,spacing:1) {
                 Text("circlr").font(.system(size:25,weight:.semibold)).tracking(-1)
                 Text("\(Self.appVersion) · \(Self.appBuild)")
@@ -105,25 +147,36 @@ struct RootView: View {
                     .accessibilityLabel("써클러 버전 \(Self.appVersion), 빌드 \(Self.appBuild)")
                     .help("버전 \(Self.appVersion) · 빌드 \(Self.appBuild)")
             }.fixedSize()
+    }
+    private var projectMenu:some View {
             Menu {
                 Button("새 앨범"){store.newProject()};Button("열기…"){store.open()};Button("저장"){store.save()};Button("다른 이름으로 저장…"){store.save(as:true)}
                 Divider();Button("앨범 WAV 내보내기…"){store.export()};Button("트랙별 stems 내보내기…"){store.export(stems:true)}
-            }label:{HStack(spacing:7){Text(store.project.name).lineLimit(1);if store.dirty{Circle().fill(StudioTheme.accent).frame(width:4,height:4)}}.frame(maxWidth:compact ? 110:170,alignment:.leading)}
-            Rectangle().fill(StudioTheme.line).frame(width:1,height:24)
-            TransportControls(store:store,meter:store.meter,compact:compact)
+            }label:{HStack(spacing:7){Text(store.project.name).lineLimit(1);if store.dirty{Circle().fill(StudioTheme.accent).frame(width:4,height:4)}}.frame(maxWidth:.infinity,alignment:.leading)}
+    }
+    private var movieButton:some View {
             Button{store.toggleMovieRecording()}label:{
                 Image(systemName:store.movieWriter != nil ? "stop.circle.fill":"record.circle")
                     .foregroundStyle(store.movieWriter != nil ? Color.red:StudioTheme.secondary)
             }.help(store.movieWriter != nil ? "영상 녹화 마치기":"캔버스와 음악을 MP4로 녹화")
                 .accessibilityLabel(store.movieWriter != nil ? "영상 녹화 마치기":"영상 녹화 시작")
                 .disabled(store.movieFinalizing != nil)
-            Spacer(minLength:8)
-            Button{store.showMediaLibrary()}label:{HStack(spacing:6){Image(systemName:"waveform");if !compact{Text("샘플")}}}.accessibilityLabel("샘플 라이브러리").help("로컬 샘플 검색·미리 듣기 · ⌥⌘L")
-            Button{store.showNavigation()}label:{HStack(spacing:6){Image(systemName:"arrow.left.arrow.right");if !compact{Text("작업 이동")}}}.help("섹션·트랙·음색·이펙트로 바로 이동 · ⌘J").accessibilityLabel("작업 이동")
-            Button{store.showCommands()}label:{Image(systemName:"command")}.help("명령 검색 · ⇧⌘P")
+    }
+    private func globalSettings(compact:Bool)->some View {
             Button{store.focusHierarchy(.album,detail:true);store.hierarchySettingsOpen=true}label:{
                 HStack(spacing:compact ? 7:12){Text("앨범").font(.system(size:11)).foregroundStyle(StudioTheme.secondary);Text("\(store.project.global.tempo.formatted())").font(.system(size:18,weight:.medium,design:.rounded)).monospacedDigit();Text("BPM").font(.system(size:11)).foregroundStyle(StudioTheme.secondary);Text(store.project.global.meter.label);if !compact{Text(store.project.global.scale.label).foregroundStyle(StudioTheme.secondary)}}
             }.fixedSize(horizontal:true,vertical:false).help("앨범의 글로벌 음악 설정").accessibilityLabel("앨범 글로벌 음악 설정").accessibilityValue("\(store.project.global.tempo.formatted()) BPM · \(store.project.global.meter.label) · \(store.project.global.scale.label)")
+    }
+    private var utilityMenu:some View {
+        Menu {
+            Button("샘플 라이브러리…"){store.showMediaLibrary()}
+            Button("작업 이동…"){store.showNavigation()}
+            Button("명령 검색…"){store.showCommands()}
+            Button("텍스트 없는 감상 모드"){_ = store.setViewingMode(true)}
+        }label:{Image(systemName:"ellipsis").frame(width:24,height:24)}
+            .accessibilityLabel("작업 도구").help("샘플·작업 이동·명령 검색·감상 모드")
+    }
+    private var addCircleMenu:some View {
             Menu {
                 Text(creationTitle)
                 switch creationContainer {
@@ -173,7 +226,6 @@ struct RootView: View {
             .fixedSize(horizontal:true,vertical:false)
             .help("현재 위치에 서클 추가")
             .accessibilityLabel("서클 추가")
-        }.menuStyle(.borderlessButton).padding(.horizontal,22).frame(height:66).background(StudioTheme.surface)
     }
     private var creationContainer:CircleAddress {(store.hierarchySelection ?? .album).creationContainer}
     private var creationTitle:String {
@@ -184,16 +236,16 @@ struct RootView: View {
         default:return "앨범에 추가"
         }
     }
-    private var breadcrumbs:some View {
+    private func breadcrumbs(compact:Bool)->some View {
         let path=store.hierarchyScene?.path(to:store.hierarchySelection ?? .album) ?? []
         return HStack(spacing:3) {
             if let root=path.first {breadcrumb(root)}
-            if path.count>4 {
+            if path.count>(compact ? 2:4) {
                 Image(systemName:"chevron.right").font(.system(size:10)).foregroundStyle(StudioTheme.secondary)
-                Menu("…") {ForEach(Array(path.dropFirst().dropLast(2))){node in Button(node.title){store.hierarchySettingsOpen=false;store.focusHierarchy(node.id)}}}
+                Menu("…") {ForEach(Array(path.dropFirst().dropLast(compact ? 1:2))){node in Button(node.title){store.hierarchySettingsOpen=false;store.focusHierarchy(node.id)}}}
                     .menuStyle(.borderlessButton).fixedSize().accessibilityLabel("상위 서클 경로")
             }
-            ForEach(Array(path.count>4 ? path.suffix(2):path.dropFirst())){node in
+            ForEach(Array(path.count>(compact ? 2:4) ? path.suffix(compact ? 1:2):path.dropFirst())){node in
                 Image(systemName:"chevron.right").font(.system(size:10)).foregroundStyle(StudioTheme.secondary)
                 breadcrumb(node)
             }
@@ -235,6 +287,54 @@ struct RootView: View {
                 Divider();Button("전체 앨범 맞추기"){store.hierarchyCommand=HierarchyCommand(action:.fit)}
             }label:{Image(systemName:"square.grid.3x3")}.menuStyle(.borderlessButton).help("그리드·정렬 기준")
         }.padding(3).background(StudioTheme.canvas.opacity(0.94),in:RoundedRectangle(cornerRadius:6))
+    }
+    private var compactActions:some View {
+        Menu {
+            if let owner=store.arrangementPickerOwner {
+                Button("현재 곡의 편곡안…"){store.showArrangementPicker(compositionID:owner.id)}
+            }
+            if store.canEditCirclePorts {Button("서클 연결…"){store.showConnections()}}
+            if let address=store.hierarchySelection {
+                Button("선택 서클 설정…"){store.connectionsOpen=false;store.hierarchyTransitionID=nil;store.focusHierarchy(address,detail:true);store.hierarchySettingsOpen=true}
+            }
+            if store.selectedUse != nil {
+                Button("선택 섹션 듣기"){store.play(onlySelection:true)}
+                Button("섹션 재사용"){store.reuse()}
+            }
+            Divider()
+            Toggle("궤도 타임라인",isOn:Binding(get:{store.project.usesOrbits},set:{store.setCanvasViewPreferences(layout:$0 ? .orbit:.freeform)}))
+            Toggle("그리드",isOn:Binding(get:{store.project.album?.layout.grid ?? true},set:{store.setCanvasViewPreferences(grid:$0)}))
+            Toggle("놓을 때 스냅",isOn:Binding(get:{store.project.album?.layout.snap ?? true},set:{store.setCanvasViewPreferences(snap:$0)}))
+            Button("가로 정렬"){store.alignHierarchy(0)}.disabled(store.project.usesOrbits || store.hierarchySelections.count<2)
+            Button("세로 정렬"){store.alignHierarchy(1)}.disabled(store.project.usesOrbits || store.hierarchySelections.count<2)
+            Button("동일 간격"){store.alignHierarchy(2)}.disabled(store.project.usesOrbits || store.hierarchySelections.count<3)
+            Button("원형 그룹 만들기"){store.makeHierarchyGroup()}.disabled(store.hierarchySelections.count<2)
+            if let group=store.selectedHierarchyGroup {
+                Button(group.collapsed ? "그룹 펼치기":"그룹 접기"){store.updateHierarchyGroup{$0.collapsed.toggle()}}
+                Button("그룹 해제"){store.ungroupHierarchy()}
+            }
+            Button("전체 앨범 맞추기"){store.hierarchyCommand=HierarchyCommand(action:.fit)}
+        }label:{Label("서클 도구",systemImage:"slider.horizontal.3")}
+            .menuStyle(.borderlessButton).fixedSize().padding(3)
+            .background(StudioTheme.canvas.opacity(0.94),in:RoundedRectangle(cornerRadius:6))
+            .accessibilityLabel("선택 서클 도구")
+    }
+    @ViewBuilder private func footer(_ chrome:WorkspaceChromeLayout)->some View {
+        if chrome.compactOverlays {
+            VStack(alignment:.trailing,spacing:8) {
+                navigation
+                measuredConsole.frame(maxWidth:.infinity,alignment:.leading)
+            }
+        } else {
+            HStack(alignment:.bottom,spacing:16) {
+                measuredConsole.frame(maxWidth:.infinity,alignment:.leading)
+                navigation.fixedSize(horizontal:true,vertical:false)
+            }
+        }
+    }
+    private var measuredConsole:some View {
+        AgentConsole(store:store)
+            .background(GeometryReader{geometry in Color.clear.preference(key:AgentConsoleBoundsKey.self,value:geometry.frame(in:.named("albumCanvas")))})
     }
     private var status:some View {
         VStack(alignment:.leading,spacing:7) {
@@ -303,7 +403,7 @@ struct TransportControls:View {
                 .accessibilityLabel("루프 재생 범위")
                 .accessibilityValue(store.playbackLoopCaption ?? store.playbackLoopMode.rawValue)
                 .help("재생 중 루프 범위는 다음 경계에서 전환 · 루프 해제 후 잔향 재생")
-            if store.audioRecordingBusy {Button(store.audioRecordTitle){store.stop()}.disabled(store.audioRecordingLocked).foregroundStyle(.red)}
+            if store.audioRecordingBusy {Button(store.audioRecordTitle){store.stop()}.disabled(store.audioRecordingLocked).foregroundStyle(.red).lineLimit(1).frame(maxWidth:110)}
             else if store.midiRecording {Button("녹음 정지"){store.stop()}.foregroundStyle(.red)}
         }
     }

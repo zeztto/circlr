@@ -262,6 +262,13 @@ struct PlaybackVisualFrame {
          "meterPlaying": store.meter.playing,
          "frameCount": frameCount, "maximumFrameGap": maximumFrameGap, "reduceMotion": reducePlaybackMotion,
          "camera": store.json(camera), "canvasSize": [bounds.width, bounds.height],
+         "orbitContext":store.json(labelContext?.id),
+         "visibleCircles":(scene?.nodes ?? []).filter(isVisible).map { node -> [String:Any] in
+             let p=screen(node)
+             return ["address":store.json(node.id),"center":[p.x,p.y],"radius":node.radius*camera.zoom,
+                     "hollow":isTimelineRing(node),"centerHit":store.json(hit(p)?.id),
+                     "timeHandle":visibleTimeHandle(node).map{[$0.x,$0.y]} ?? []]
+         },
          "ports":cableDiagnostics(),
          "editorAddress":store.json(editorAddress), "editorFrame":editor.map{[$0.frame.minX,$0.frame.minY,$0.frame.width,$0.frame.height]} ?? [],
          "canvasKeyboardFocus":window?.firstResponder === self,

@@ -185,7 +185,7 @@ struct AlbumCanvas: NSViewRepresentable {
     }
     override func layout() {
         super.layout()
-        if !initialized, bounds.width > 100, let root = scene?.node(.album) { camera = camera.focused(on: root, width: bounds.width, height: bounds.height); initialized = true }
+        if !initialized, bounds.width > 100, let root = scene?.node(.album) { camera = orbitContextCamera(root.id) ?? camera.focused(on: root, width: bounds.width, height: bounds.height); initialized = true }
         if previousSize.width > 0, previousSize != bounds.size {
             camera.pan.x += (bounds.width-previousSize.width)/2
             camera.pan.y += (bounds.height-previousSize.height)/2
@@ -261,6 +261,9 @@ struct AlbumCanvas: NSViewRepresentable {
     }
     func focus(_ address: CircleAddress, detail: Bool = false) {
         guard let scene=store.hierarchyScene,let node = scene.node(address), bounds.width > 100 else { return }
+        if scene.isOrbit, (!detail || node.role != .music), let target=orbitContextCamera(address,in:scene) {
+            setCamera(target,animated:true);return
+        }
         if !detail,node.role == .section,
            let target=PlaybackFraming.camera(for:node,in:scene,viewport:workspaceViewport) {
             setCamera(target,animated:true);return
@@ -272,6 +275,15 @@ struct AlbumCanvas: NSViewRepresentable {
         }
         target.pan=Point(workspaceViewport.midX-node.center.x*target.zoom,workspaceViewport.midY-node.center.y*target.zoom)
         setCamera(target,animated:true)
+    }
+    func orbitContextCamera(_ address:CircleAddress,in currentScene:HierarchyScene? = nil)->HierarchyCamera? {
+        guard let scene=currentScene ?? scene,scene.isOrbit,let content=scene.contextBounds(of:address) else{return nil}
+        let viewport=workspaceViewport
+        let zoom=max(1e-6,min(1e12,min(max(80,viewport.width-100)/max(1,content.width),max(80,viewport.height-100)/max(1,content.height))))
+        return HierarchyCamera(pan:Point(viewport.midX-content.midX*zoom,viewport.midY-content.midY*zoom),zoom:zoom)
+    }
+    func isTimelineRing(_ node:CircleSceneNode)->Bool {
+        store.project.usesOrbits && node.role != .music && node.signal == nil
     }
     func setCamera(_ target: HierarchyCamera, animated: Bool = false, manual: Bool = true) {
         if manual { interruptPlaybackFollow() }
@@ -356,6 +368,11 @@ struct AlbumCanvas: NSViewRepresentable {
     func isVisible(_ node: CircleSceneNode) -> Bool {
         let context=labelContext
         let direct=node.parent==context?.id
+        if let scene,scene.isOrbit,let context {
+            let path=scene.path(to:node.id)
+            let visibleChild=path.dropLast().last(where:{$0.role != .group})?.id==context.id
+            return node.id==context.id || direct || visibleChild
+        }
         guard node.radius*camera.zoom > (direct ? 0.000001:(store.project.usesOrbits ? 1.2:20)) else { return false }
         // At editing depth, unrelated overlapping freeform branches must not cover the active circle.
         if let scene,let selected=context,
@@ -374,7 +391,9 @@ struct AlbumCanvas: NSViewRepresentable {
             guard rect.intersects(bounds), radius < 1e7 else { continue }
             let displayRect=radius<3 && node.parent==labelContext?.id ? NSRect(x:center.x-3,y:center.y-3,width:6,height:6):rect
             let path = NSBezierPath(ovalIn: displayRect)
-            NSColor(white: node.role == .music ? 0.105 : 0.065+Double(min(4,node.depth))*0.008, alpha: 1).setFill(); path.fill()
+            if !isTimelineRing(node) {
+                NSColor(white: node.role == .music ? 0.105 : 0.065+Double(min(4,node.depth))*0.008, alpha: 1).setFill(); path.fill()
+            }
             let selected = store.hierarchySelections.contains(node.id)
             let muted = node.music?.muted == true
             // A wider neutral under-stroke remains visible beside any custom color,
@@ -436,24 +455,32 @@ struct AlbumCanvas: NSViewRepresentable {
     func timeHandle(_ node:CircleSceneNode)->NSPoint? {
         guard store.project.usesOrbits,let orbit=node.orbit,let owner=scene?.node(orbit.owner),node.radius*camera.zoom>1.2 else{return nil}
         let center=screen(owner),seconds=orbitDrag?.id==node.id ? orbitSeconds:orbit.anchor
-        return OrbitDrawing.point(center,radius:(orbit.radius+node.outerRadius*1.22)*camera.zoom,phase:seconds/orbit.timeline.duration)
+        return OrbitDrawing.point(center,radius:orbit.radius*camera.zoom,phase:seconds/orbit.timeline.duration)
     }
     func drawOrbit(_ node:CircleSceneNode) {
         guard store.viewingMode || editorAddress == nil else{return}
-        guard let orbit=node.orbit,let owner=scene?.node(orbit.owner),isVisible(node),owner.radius*camera.zoom>100 else{return}
+        // The active time control survives hiding its owner body at a deeper context.
+        if store.hierarchySelection==node.id,let handle=visibleTimeHandle(node) {
+            OrbitDrawing.dot(handle,radius:6,color:StudioTheme.textNS)
+            OrbitDrawing.text(node.role == .music ? "시작 시간":"순서 이동",at:NSPoint(x:handle.x,y:handle.y-16),size:10)
+        }
+        guard let orbit=node.orbit,let owner=scene?.node(orbit.owner),isVisible(node),isVisible(owner),owner.radius*camera.zoom>4 else{return}
         guard owner.radius*camera.zoom<max(bounds.width,bounds.height)*4 else{return}
         let center=screen(owner),radius=orbit.radius*camera.zoom
         guard radius<1e7 else{return}
-        let ring=OrbitDrawing.arc(center,radius:radius,from:0,to:1)
-        StudioTheme.lineNS.setStroke();ring.lineWidth=1;ring.stroke()
+        let anchor=OrbitDrawing.point(center,radius:radius,phase:orbit.anchor/orbit.timeline.duration)
+        let satellite=screen(node),distance=hypot(satellite.x-anchor.x,satellite.y-anchor.y)
+        if distance>node.radius*camera.zoom {
+            let inset=node.radius*camera.zoom/distance
+            let endpoint=NSPoint(x:satellite.x+(anchor.x-satellite.x)*inset,y:satellite.y+(anchor.y-satellite.y)*inset)
+            let connector=NSBezierPath();connector.move(to:anchor);connector.line(to:endpoint)
+            color(node).withAlphaComponent(store.hierarchySelection==node.id ? 0.85:0.4).setStroke();connector.lineWidth=1.2;connector.stroke()
+        }
+        OrbitDrawing.dot(anchor,radius:3,color:color(node))
         for interval in orbit.intervals {
             let arc=OrbitDrawing.arc(center,radius:radius,from:interval.start/orbit.timeline.duration,to:interval.end/orbit.timeline.duration)
             color(node).withAlphaComponent(store.hierarchySelection==node.id ? 0.95:0.6).setStroke();arc.lineWidth=store.hierarchySelection==node.id ? 3:2;arc.stroke()
             OrbitDrawing.dot(OrbitDrawing.point(center,radius:radius,phase:interval.start/orbit.timeline.duration),radius:2,color:color(node))
-        }
-        if store.hierarchySelection==node.id,let handle=visibleTimeHandle(node) {
-            OrbitDrawing.dot(handle,radius:6,color:StudioTheme.textNS)
-            OrbitDrawing.text(node.role == .music ? "시작 시간":"순서 이동",at:NSPoint(x:handle.x,y:handle.y-16),size:10)
         }
     }
     func drawPlayhead(_ node:CircleSceneNode) {
@@ -540,7 +567,9 @@ struct AlbumCanvas: NSViewRepresentable {
         return scene.nodes.reversed().first { node in
             let p=screen(node),r=node.outerRadius*camera.zoom
             guard isVisible(node) else{return false}
-            return hypot(point.x-p.x,point.y-p.y)<=r+7
+            let distance=hypot(point.x-p.x,point.y-p.y)
+            if isTimelineRing(node),r>22 {return distance>=max(0,node.radius*camera.zoom-8) && distance<=r+8}
+            return distance<=r+7
         }
     }
     override func mouseDown(with event:NSEvent) {
@@ -565,8 +594,8 @@ struct AlbumCanvas: NSViewRepresentable {
             orbitDrag=node;orbitSeconds=orbit.anchor;orbitTravel=0;orbitRevision=store.project.musicRevision
             let center=screen(owner);orbitPhase=OrbitTimeline.phase(Point(down.x-center.x,down.y-center.y));return
         }
-        if beginCableDrag(at:down) {return}
-        if let handle=CirclePortGeometry.hit(Point(down.x,down.y),visibleHandles:visiblePortHandles()) {
+        if !labelHit,beginCableDrag(at:down) {return}
+        if !labelHit,let handle=CirclePortGeometry.hit(Point(down.x,down.y),visibleHandles:visiblePortHandles()) {
             connecting=handle;connectionToken=UUID();connectionPoint=down;connectionRevision=store.project.musicRevision;connectionLayoutRevision=store.project.portLayout?.revision ?? 0;connectionProjectID=store.project.id;portTools?.isHidden=true;needsDisplay=true;return
         }
         if !labelHit,let cable=hitCable(down) {selectCable(cable);return}
@@ -579,7 +608,7 @@ struct AlbumCanvas: NSViewRepresentable {
             if node.role == .group, store.selectedHierarchyGroup?.collapsed == true { store.updateHierarchyGroup { $0.collapsed=false }; update() }
             focus(node.id,detail:node.role == .music);return
         }
-        if node.role != .album, !store.project.usesOrbits || (node.orbit == nil && node.role != .group) {dragNode=node;dragOrigin=store.hierarchyLocalPosition(node);dragPositions=Dictionary(uniqueKeysWithValues:store.hierarchySelections.compactMap{address in scene?.node(address).map{(address,store.hierarchyLocalPosition($0))}})}
+        if node.role != .album {dragNode=node;dragOrigin=store.hierarchyLocalPosition(node);dragPositions=Dictionary(uniqueKeysWithValues:store.hierarchySelections.compactMap{address in scene?.node(address).map{(address,store.hierarchyLocalPosition($0))}})}
         needsDisplay=true
     }
     override func otherMouseDown(with event:NSEvent){mouseDown(with:event)}
@@ -736,9 +765,20 @@ struct AlbumCanvas: NSViewRepresentable {
         guard let scene,window != nil else{return}
         let labeled=Set(labelPlacements.map(\.id))
         let visible=scene.nodes.filter{node in let p=screen(node);return isVisible(node) && (labeled.contains(node.id) || cablePointAvailable(Point(p.x,p.y),labels:false))}
-        let children=visible.map { node -> NSAccessibilityElement in
+        let children=visible.compactMap { node -> NSAccessibilityElement? in
             let p=screen(node),r=min(100,node.radius*camera.zoom)
-            let hitRect=labelPlacements.first{$0.id==node.id}?.rect ?? NSRect(x:p.x-r,y:p.y-r,width:max(12,r*2),height:max(12,r*2))
+            let hitRect:NSRect
+            if let label=labelPlacements.first(where:{$0.id==node.id}) {hitRect=label.rect}
+            else if isTimelineRing(node),node.radius*camera.zoom>22 {
+                // AX coordinate clicks must target the selectable perimeter, never its empty interior.
+                let handles=visiblePortHandles()
+                guard let point=(0..<32).map({OrbitDrawing.point(p,radius:node.radius*camera.zoom,phase:Double($0)/32)}).first(where:{candidate in
+                    cablePointAvailable(Point(candidate.x,candidate.y)) && hit(candidate)?.id==node.id &&
+                    CirclePortGeometry.hit(Point(candidate.x,candidate.y),visibleHandles:handles)==nil &&
+                    visibleTimeHandle(node).map{hypot($0.x-candidate.x,$0.y-candidate.y)>16} != false
+                }) else{return nil}
+                hitRect=NSRect(x:point.x-5,y:point.y-5,width:10,height:10)
+            } else {hitRect=NSRect(x:p.x-r,y:p.y-r,width:max(12,r*2),height:max(12,r*2))}
             let element=circleAccessibility[node.id] ?? CircleAccessibility(parent:self,address:node.id)
             circleAccessibility[node.id]=element
             element.setAccessibilityLabel(node.title+" · "+node.subtitle);element.setFrameInView(hitRect,view:self)

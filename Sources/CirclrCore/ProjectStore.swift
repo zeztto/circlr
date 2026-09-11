@@ -42,7 +42,7 @@ public enum ProjectStore {
         try MIDISustainStorage.validate(in:p)
         try p.portLayout?.validate()
         func unique(_ ids:[ID]) throws { guard ids.allSatisfy({!$0.isEmpty}),Set(ids).count==ids.count else { throw CirclrError("프로젝트에 비어 있거나 중복된 ID가 있습니다") } }
-        func layout(_ l:Layout) throws { guard l.zoom.isFinite,(0.25...2.5).contains(l.zoom),l.spacing.isFinite,(12...256).contains(l.spacing),l.pan.x.isFinite,l.pan.y.isFinite,l.positions.values.allSatisfy({$0.x.isFinite && $0.y.isFinite && abs($0.x)<1e7 && abs($0.y)<1e7}) else { throw CirclrError("Canvas 좌표를 확인하세요") };try unique(l.groups.map(\.id)) }
+        func layout(_ l:Layout) throws { guard OrbitLayoutOffsets.isValid(l), l.zoom.isFinite,(0.25...2.5).contains(l.zoom),l.spacing.isFinite,(12...256).contains(l.spacing),l.pan.x.isFinite,l.pan.y.isFinite,l.positions.values.allSatisfy({$0.x.isFinite && $0.y.isFinite && abs($0.x)<1e7 && abs($0.y)<1e7}) else { throw CirclrError("Canvas 좌표를 확인하세요") };try unique(l.groups.map(\.id)) }
         try ContextResolver.validate(p.global)
         guard p.album == nil || p.schemaVersion >= 2 else { throw CirclrError("앨범은 version 2 프로젝트로 저장해야 합니다") }
         if let album = p.album {

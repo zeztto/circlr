@@ -153,7 +153,7 @@ extension AlbumCanvasView {
     func localCreationPoint(_ point:NSPoint, owner:CircleAddress)->Point {
         guard let parent=scene?.node(owner) else{return Point()}
         let world=Point((point.x-camera.pan.x)/camera.zoom,(point.y-camera.pan.y)/camera.zoom)
-        let scale=parent.scale*HierarchySceneBuilder.childScale
+        let scale=scene?.childScale(of:owner) ?? parent.scale*HierarchySceneBuilder.childScale
         var local=Point((world.x-parent.center.x)/scale,(world.y-parent.center.y)/scale)
         if store.project.album?.layout.snap != false {
             let spacing=store.project.album?.layout.spacing ?? 24
@@ -169,8 +169,11 @@ extension AlbumCanvasView {
             item.representedObject=CircleMenuAction{[weak self] in
                 guard let self else{return}
                 let owner=owner ?? scope
+                let world=self.camera.world(Point(point.x,point.y))
                 self.store.selectHierarchy(owner);self.store.hierarchySettingsOpen=false
-                action(self.store,owner==scope ? position:self.localCreationPoint(point,owner:owner))
+                self.store.createOnCanvas(at:world) {
+                    action(self.store,owner==scope ? position:self.localCreationPoint(point,owner:owner))
+                }
             }
             (target ?? menu).addItem(item)
         }
@@ -200,9 +203,9 @@ extension AlbumCanvasView {
         case .section:
             add("MIDI 서클 만들기"){ $0.addMIDICircle(at:$1) }
             add("오디오 라우터 서클 만들기"){ $0.addMusicRouter(at:$1) }
-            add("오디오 파일로 서클 만들기…"){ store,point in
+            add("오디오 파일로 서클 만들기…"){ [weak self] store,local in
                 if store.selectedTrackID==nil {store.selectedTrackID=store.project.tracks.first?.id}
-                store.importAudio(at:point)
+                store.importAudio(at:local,orbitWorldPosition:self.map{$0.camera.world(Point(point.x,point.y))})
             }
             let item=NSMenuItem(title:"이펙터 서클 만들기",action:nil,keyEquivalent:""),child=NSMenu()
             item.submenu=child;menu.addItem(item)

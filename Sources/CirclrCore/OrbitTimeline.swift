@@ -43,7 +43,9 @@ public struct OrbitPlacement: Codable, Equatable {
     public var timeline: OrbitTimeline
     public var anchor: Double
     public var intervals: [OrbitInterval]
-    /// In the owner's world units after scene flattening; independent of visual groups.
+    /// Owner time-ring radius in world units after scene flattening. The visual
+    /// satellite can sit outside this ring; its position never changes the anchor.
+    /// Legacy freeform scenes retain their historical placement radius.
     public var radius: Double = 0
     public init(owner: CircleAddress, timeline: OrbitTimeline, anchor: Double, intervals: [OrbitInterval]) {
         self.owner=owner; self.timeline=timeline; self.anchor=anchor; self.intervals=intervals

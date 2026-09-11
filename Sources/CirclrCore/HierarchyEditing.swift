@@ -67,23 +67,39 @@ public enum HierarchyEditing {
         }
         project = candidate
     }
+    public static func timedMembers(in scope: CircleAddress, project: Project) throws -> Set<ID> {
+        if case .group(let parent, _) = scope { return try timedMembers(in:parent,project:project) }
+        // Recorded before visual grouping, including hidden members and compiler off-path state.
+        return try HierarchySceneBuilder.build(project).timedMembersByOwner[scope] ?? []
+    }
     public static func position(_ address: CircleAddress, in project: Project) throws -> Point {
-        let value = try layout(for: scope(of: address, in: project), in: project)
+        let scope = try scope(of: address, in: project)
+        let value = try layout(for: scope, in: project)
+        let positions = project.usesOrbits ? OrbitLayoutOffsets.positions(in:value,timed:try timedMembers(in:scope,project:project)) : value.positions
         if case .group(_,let id) = address {
             guard let group = value.groups.first(where: { $0.id == id }) else { throw CirclrError("그룹이 없습니다") }
-            let points = group.members.compactMap { value.positions[$0] }
+            let points = group.members.compactMap { positions[$0] ?? (project.usesOrbits ? Point() : nil) }
             guard !points.isEmpty else { return Point() }
             return Point(points.map(\.x).reduce(0,+)/Double(points.count), points.map(\.y).reduce(0,+)/Double(points.count))
         }
-        if address == .sound,value.positions["circlr:sound"] == nil,let node=try HierarchySceneBuilder.build(project).node(.sound) { return Point(node.center.x/node.scale,node.center.y/node.scale) }
-        return memberID(address).flatMap { value.positions[$0] } ?? Point()
+        if address == .sound,!project.usesOrbits,value.positions["circlr:sound"] == nil,let node=try HierarchySceneBuilder.build(project).node(.sound) { return Point(node.center.x/node.scale,node.center.y/node.scale) }
+        return memberID(address).flatMap { positions[$0] } ?? Point()
     }
     public static func move(_ address: CircleAddress, to point: Point, in project: inout Project) throws {
         let scope = try scope(of: address, in: project), old = try position(address, in: project)
+        let orbit = project.usesOrbits
+        let timed = orbit ? try timedMembers(in:scope,project:project) : []
         try editLayout(scope, in: &project) { layout in
+            if orbit { OrbitLayoutOffsets.materialize(&layout,timed:timed) }
+            var positions = orbit ? (layout.orbitPositions ?? [:]) : layout.positions
             if case .group(_,let id) = address, let group = layout.groups.first(where: { $0.id == id }) {
-                for member in group.members { if let p = layout.positions[member] { layout.positions[member] = Point(p.x+point.x-old.x,p.y+point.y-old.y) } }
-            } else if let id = memberID(address) { layout.positions[id] = point }
+                for member in group.members {
+                    if let p = positions[member] ?? (orbit ? Point() : nil) {
+                        positions[member] = Point(p.x+point.x-old.x,p.y+point.y-old.y)
+                    }
+                }
+            } else if let id = memberID(address) { positions[id] = point }
+            if orbit { layout.orbitPositions = positions } else { layout.positions = positions }
         }
     }
     @discardableResult public static func group(_ addresses: Set<CircleAddress>, name: String, in project: inout Project) throws -> CircleAddress {
@@ -101,13 +117,20 @@ public enum HierarchyEditing {
         guard addresses.count >= 2, let first = addresses.first else { return }
         let scope = try scope(of: first, in: project)
         guard try addresses.allSatisfy({ try self.scope(of: $0, in: project) == scope }) else { throw CirclrError("같은 부모 안의 서클만 정렬하세요") }
-        let pairs = try addresses.map { ($0, try position($0, in: project)) }.sorted { $0.1.x < $1.1.x }
+        let scene = project.usesOrbits ? try HierarchySceneBuilder.build(project) : nil
+        let pairs = try addresses.map { address in
+            (address, try scene?.node(address)?.center ?? position(address, in: project))
+        }.sorted { $0.1.x < $1.1.x }
         let x = pairs.map { $0.1.x }.reduce(0,+)/Double(pairs.count), y = pairs.map { $0.1.y }.reduce(0,+)/Double(pairs.count)
         var candidate = project
         for (i,pair) in pairs.enumerated() {
             var point = pair.1
             if mode == 0 { point.y = y } else if mode == 1 { point.x = x }
             else { point.x = pairs.first!.1.x+Double(i)*(pairs.last!.1.x-pairs.first!.1.x)/Double(pairs.count-1) }
+            if let node = scene?.node(pair.0) {
+                let offset = try position(pair.0,in:project)
+                point = Point(offset.x+(point.x-node.center.x)/node.scale,offset.y+(point.y-node.center.y)/node.scale)
+            }
             try move(pair.0, to: point, in: &candidate)
         }
         project = candidate

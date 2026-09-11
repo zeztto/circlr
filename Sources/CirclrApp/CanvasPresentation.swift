@@ -27,6 +27,14 @@ extension AlbumCanvasView {
     }
     var labelContext:CircleSceneNode? {
         guard let scene else{return nil}
+        if scene.isOrbit {
+            var context=scene.node(playbackVisibilityFocus ?? store.hierarchySelection ?? .album) ?? scene.node(.album)
+            if let node=context,node.role == .music || (node.role == .group && !node.ports.isEmpty),editorAddress != node.id {
+                context=node.parent.flatMap{scene.node($0)} ?? node
+            }
+            while let node=context,let content=scene.contextBounds(of:node.id),max(content.width,content.height)*camera.zoom<120,let parent=node.parent.flatMap({scene.node($0)}) {context=parent}
+            return context
+        }
         let context=scene.path(to:playbackVisibilityFocus ?? store.hierarchySelection ?? .album)
             .last(where:{$0.radius*camera.zoom>min(workspaceViewport.width,workspaceViewport.height)*0.22}) ?? scene.node(.album)
         // Inspecting a circle's ports keeps its siblings and cables available until a precision editor opens.

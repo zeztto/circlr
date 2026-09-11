@@ -65,7 +65,7 @@ public enum ProjectEditing {
         project.arrangements[i].uses.removeAll { ids.contains($0.id) }
         project.arrangements[i].edges.removeAll { ids.contains($0.from) || ids.contains($0.to) }
         project.arrangements[i].chosenEdges = project.arrangements[i].chosenEdges.filter { key, value in !ids.contains(key) && project.arrangements[i].edges.contains(where: { $0.id == value }) }
-        for id in ids { project.arrangements[i].layout.positions.removeValue(forKey: id) }
+        for id in ids { project.arrangements[i].layout.positions.removeValue(forKey: id); project.arrangements[i].layout.orbitPositions?.removeValue(forKey: id) }
         for g in project.arrangements[i].layout.groups.indices { project.arrangements[i].layout.groups[g].members.removeAll { ids.contains($0) } }
         project.arrangements[i].layout.groups.removeAll { $0.members.isEmpty }
         if let start = project.arrangements[i].startID, ids.contains(start) { project.arrangements[i].startID = project.arrangements[i].uses.first?.id }
@@ -80,6 +80,7 @@ public enum ProjectEditing {
         a.chosenEdges = Dictionary(uniqueKeysWithValues: a.chosenEdges.compactMap { k,v in guard let key = map[k], let value = edgeMap[v] else { return nil }; return (key,value) })
         a.startID = a.startID.flatMap { map[$0] }
         a.layout.positions = Dictionary(uniqueKeysWithValues: a.layout.positions.map { (map[$0.key] ?? $0.key, $0.value) })
+        a.layout.orbitPositions = a.layout.orbitPositions.map { Dictionary(uniqueKeysWithValues: $0.map { (map[$0.key] ?? $0.key, $0.value) }) }
         a.layout.groups = a.layout.groups.map { g in var copy = g; copy.id = newID(); copy.members = g.members.compactMap { map[$0] }; return copy }
         project.arrangements.append(a); project.activeArrangementID = a.id
         if let ownerIndex {

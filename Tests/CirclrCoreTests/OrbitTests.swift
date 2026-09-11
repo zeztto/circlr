@@ -23,13 +23,13 @@ final class OrbitTests: XCTestCase {
         for use in p.active.uses {
             let node=try XCTUnwrap(scene.node(.section(arrangementID:p.activeArrangementID,useID:use.id))),orbit=try XCTUnwrap(node.orbit)
             XCTAssertEqual(orbit.intervals,plan.occurrences.filter{$0.use.id==use.id}.map{OrbitInterval($0.start,$0.end)})
-            let offset=Point(node.center.x-song.center.x,node.center.y-song.center.y)
+            let attachment=try XCTUnwrap(scene.orbitAnchor(for:node.id))
+            let offset=Point(attachment.x-song.center.x,attachment.y-song.center.y)
             XCTAssertEqual(OrbitTimeline.phase(offset),orbit.anchor/plan.duration,accuracy:1e-9)
             XCTAssertEqual(hypot(offset.x,offset.y),orbit.radius,accuracy:1e-9)
         }
-        for node in scene.nodes {if let parent=node.parent.flatMap(scene.node) {
-            XCTAssertLessThanOrEqual(hypot(node.center.x-parent.center.x,node.center.y-parent.center.y)+node.outerRadius,parent.radius+1e-8)
-        }}
+        XCTAssertTrue(scene.nodes.allSatisfy { $0.scale == 1 })
+        XCTAssertEqual(song.radius,200)
     }
     func testTempoMapTicksAndRoundTripUseSecondsRatherThanUniformBars() throws {
         let clock=try MusicClock(bars:3,context:MusicContext(),meterChanges:[MeterChange(bar:1,meter:Meter(3,4))],tempoChanges:[TempoChange(beat:4,bpm:60)])

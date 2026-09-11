@@ -107,7 +107,7 @@ public extension Project {
 
 public enum AlbumEditing {
     static func validateLayout(_ layout: Layout) throws {
-        guard layout.zoom.isFinite, (0.25...2.5).contains(layout.zoom),
+        guard OrbitLayoutOffsets.isValid(layout), layout.zoom.isFinite, (0.25...2.5).contains(layout.zoom),
               layout.pan.x.isFinite, layout.pan.y.isFinite,
               layout.spacing.isFinite, (12...256).contains(layout.spacing),
               layout.positions.values.allSatisfy({ $0.x.isFinite && $0.y.isFinite && abs($0.x) < 1e7 && abs($0.y) < 1e7 })

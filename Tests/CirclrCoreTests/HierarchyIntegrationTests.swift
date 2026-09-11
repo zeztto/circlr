@@ -10,7 +10,8 @@ final class HierarchyIntegrationTests: XCTestCase {
         p.enableAlbum();return try SectionGraphMigration.migrate(p)
     }
     func testGlobalSignalSceneUsesRealNodesEdgesAndMovesIndependently() throws {
-        var p=try fixture();var fx=SignalNode(kind:.effect,name:"앨범 Delay");fx.effect=Effect(.delay,amount:0.25,secondary:0.3)
+        for layout in [CircleLayout.orbit, .freeform] {
+        var p=try fixture();p.circleLayout=layout;var fx=SignalNode(kind:.effect,name:"앨범 Delay");fx.effect=Effect(.delay,amount:0.25,secondary:0.3)
         let source=p.signal.nodes.first{$0.kind == .source}!,master=p.signal.nodes.first{$0.kind == .master}!
         p.signal.nodes.append(fx);p.signal.layout.positions[fx.id]=Point(340,0)
         p.signal.edges=[SignalEdge(from:source.id,to:fx.id),SignalEdge(from:fx.id,to:master.id)]
@@ -21,14 +22,24 @@ final class HierarchyIntegrationTests: XCTestCase {
         XCTAssertFalse(before.node(.signal(master.id))!.providesOutput)
         XCTAssertEqual(before.edges.filter{$0.id.hasPrefix("signal:")}.count,2)
         try HierarchyEditing.move(.signal(fx.id),to:Point(420,90),in:&p)
-        XCTAssertEqual(p.signal.layout.positions[fx.id],Point(420,90))
+        XCTAssertEqual(layout == .orbit ? p.signal.layout.orbitPositions?[fx.id] : p.signal.layout.positions[fx.id],Point(420,90))
         XCTAssertEqual(p.signal.edges.count,2)
         let soundPosition=try HierarchyEditing.position(.sound,in:p),beforeMove=try HierarchySceneBuilder.build(p)
         try HierarchyEditing.move(.sound,to:Point(soundPosition.x+100,soundPosition.y+50),in:&p)
         let afterMove=try HierarchySceneBuilder.build(p)
-        XCTAssertEqual(afterMove.node(.signal(fx.id))!.center.x-beforeMove.node(.signal(fx.id))!.center.x,30,accuracy:1e-8)
-        XCTAssertEqual(afterMove.node(.signal(fx.id))!.center.y-beforeMove.node(.signal(fx.id))!.center.y,15,accuracy:1e-8)
+        let expectedScale = layout == .orbit ? 1.0 : 0.3
+        XCTAssertEqual(beforeMove.childScale(of:.album),expectedScale,accuracy:1e-9)
+        for signal in p.signal.nodes {
+            let old = try XCTUnwrap(beforeMove.node(.signal(signal.id)))
+            let moved = try XCTUnwrap(afterMove.node(.signal(signal.id)))
+            XCTAssertEqual(moved.center.x-old.center.x,100*expectedScale,accuracy:1e-8)
+            XCTAssertEqual(moved.center.y-old.center.y,50*expectedScale,accuracy:1e-8)
+        }
+        for old in beforeMove.nodes where old.id != .sound && old.signal == nil {
+            XCTAssertEqual(afterMove.node(old.id)?.center,old.center)
+        }
         _=try SignalValidator.sorted(p.signal,tracks:p.tracks)
+        }
     }
     func testRecordedTakeTargetsExactLaneAcrossActiveArrangements() throws {
         var p=try fixture();let target=p.sections[0].lanes[1],original=p.sections[0].lanes[0]

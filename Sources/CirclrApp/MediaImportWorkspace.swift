@@ -8,6 +8,7 @@ struct MediaImportRequest:Equatable {
     let generation:Int
     let selection:CircleAddress?
     let destination:AudioImportDestination
+    var orbitWorldPosition:Point? = nil
 }
 
 extension AppStore {
@@ -17,8 +18,8 @@ extension AppStore {
         guard let use=selectedUse else{return nil}
         return .section(arrangementID:project.activeArrangementID,useID:use.id,trackID:AudioImportPlacement.suggestedTrack(for:hierarchySelection,selectedTrack:selectedTrackID),beat:selectedBeat,position:point,original:editOriginal)
     }
-    func mediaImportRequest(_ destination:AudioImportDestination)->MediaImportRequest {
-        MediaImportRequest(projectID:project.id,revision:project.musicRevision,generation:mediaImportGeneration,selection:hierarchySelection,destination:destination)
+    func mediaImportRequest(_ destination:AudioImportDestination,orbitWorldPosition:Point? = nil)->MediaImportRequest {
+        MediaImportRequest(projectID:project.id,revision:project.musicRevision,generation:mediaImportGeneration,selection:hierarchySelection,destination:destination,orbitWorldPosition:orbitWorldPosition)
     }
     func cancelMediaImport() {
         mediaImportGeneration+=1
@@ -53,6 +54,17 @@ extension AppStore {
                 guard self.project.id==request.projectID,self.project.musicRevision==request.revision,!self.midiRecording,!self.audioRecordPending,!self.audioRecordingBusy else {self.status="가져오는 동안 음악이 변경되어 파일을 적용하지 않았습니다";return}
                 var candidate=self.project
                 let clips=try AudioImportEditing.apply(staged.assets,to:request.destination,projectID:request.projectID,revision:request.revision,in:&candidate)
+                if candidate.usesOrbits,let world=request.orbitWorldPosition,
+                   case .section(let a,let u,_,_,_,_)=request.destination {
+                    let scene=try HierarchySceneBuilder.build(candidate,revealing:.section(arrangementID:a,useID:u))
+                    for (index,clip) in clips.enumerated() {
+                        let address=CircleAddress.music(arrangementID:a,useID:u,nodeID:"audio:\(clip)")
+                        guard let node=scene.node(address) else{throw CirclrError("가져온 오디오의 화면 위치를 찾을 수 없습니다")}
+                        let offset=try HierarchyEditing.position(address,in:candidate)
+                        let target=Point(world.x+Double(index%4)*220,world.y+Double(index/4)*220)
+                        try HierarchyEditing.move(address,to:Point(offset.x+(target.x-node.center.x)/node.scale,offset.y+(target.y-node.center.y)/node.scale),in:&candidate)
+                    }
+                }
                 self.mutate("오디오 \(staged.assets.count)개 가져오기"){$0=candidate}
                 guard staged.assets.allSatisfy({asset in self.project.assets.contains{$0.id==asset.id}}) else{return}
                 retained=true

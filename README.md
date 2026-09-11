@@ -8,11 +8,11 @@ English · [한국어](README.ko.md)
 
 In circlr, a circle is a timeline. Build a song from sections, place MIDI, audio, instruments and effects inside them, and connect their inputs and outputs. Move between the whole arrangement and detailed editing on one zoomable canvas.
 
-![A section's circular timelines and MIDI, instrument, effect and audio connections in circlr](docs/images/circlr-orbit-build157.jpg)
+![Song sections unfolding around the song orbit in circlr](docs/images/circlr-landscape-build166.jpg)
 
-*Actual development app, 0.30.0 build157, using an authored QA project. The screenshot shows editing; it does not demonstrate audio playback. [Capture details](docs/images/README.md).*
+*Actual 0.50.0 build166 app showing the bundled f0r h3r project. [Capture details](docs/images/README.md).*
 
-> **0.40.0 · build162.** An MIT open-source project. Automated and offline media checks were completed; native GUI, listening, frame-rate and Korean IME QA were explicitly user-waived. [Verification record](docs/releases/0.40.0-final-qa.md).
+> **0.50.0 · build166 — publication pending.** Outward orbit layout and responsive controls. Native checks covered 1440, 1024, 900 and 700-point window widths and long titles. [Verification record](docs/releases/0.50.0-qa.md).
 
 ## What you can work with
 
@@ -22,19 +22,19 @@ In circlr, a circle is a timeline. Build a song from sections, place MIDI, audio
 - **Sound and motion:** instrument/effect routing, automation, bounce and source restoration; playback-follow and signal visualization controls.
 - **Local agents:** an MCP interface for inspecting and editing projects, generating MIDI, rendering and saving, with activity visible in the console.
 
-![MIDI notes drawn as arcs and edited within the same canvas](docs/images/circlr-midi-build157.jpg)
+![Portrait window with responsive controls and a long project title](docs/images/circlr-portrait-build166.jpg)
 
 These are implemented development features, not a guarantee of compatibility with every audio device or plug-in. Artist profiles and a combined text, image and video workspace are the [longer-term direction](docs/21-artist-universe.md).
 
 ## Getting started
 
-Download **[circlr 0.40.0](https://github.com/zeztto/circlr/releases/tag/v0.40.0)** for Apple Silicon. The repository is public; build from `main` for source development.
+**0.50.0 build166** is the current candidate; publication under `v0.50.0` is pending. Download available Apple Silicon packages from [GitHub Releases](https://github.com/zeztto/circlr/releases), or build from `main` for source development.
 
 The downloaded app is ad-hoc signed and not notarized by Apple. If macOS blocks its first launch, verify the download, then use **System Settings → Privacy & Security → Open Anyway**. [macOS installation and first launch](docs/install-macos.md#english).
 
 The colored **f0r h3r v5** demo is included. Choose **File → 데모곡 불러오기…** to open an editable copy.
 
-**Requirements:** macOS 14+, Xcode 26+ selected as the active developer directory, and Python 3. Native validation currently covers Apple Silicon. The interface is currently in Korean; this README is available in both languages.
+**Source build requirements:** macOS 14+, Xcode 26+ selected as the active developer directory, and Python 3. Native validation currently covers Apple Silicon. The interface is currently in Korean; this README is available in both languages.
 
 ```sh
 git clone --branch main https://github.com/zeztto/circlr.git
@@ -45,7 +45,7 @@ open 'dist/써클러.app'
 
 The build packages the app, its five audio helpers and the agent kit together. Local packages use ad-hoc signing and are not notarized. Keep a separate copy of important projects when trying development builds.
 
-0.40 adds text-free viewing, detailed playback follow, continuous song/section loops, video recording, startup templates and four bundled demos. See the [version record](docs/releases/0.40.0.md).
+0.50 unfolds section and signal nodes around time orbits and adapts the top controls to landscape and portrait windows. It retains song/section loops, viewing controls, startup templates and four bundled demos. See the [release notes](docs/releases/0.50.0-notes.md).
 
 ## First session
 
