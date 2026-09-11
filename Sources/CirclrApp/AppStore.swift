@@ -227,7 +227,8 @@ import CirclrAudio
         selectedTrackID = project.addTrack(name:"악기 1")
         _ = project.addTrack(name:"드럼",drums:true)
         project.enableAlbum(); project.name = "새 앨범"
-        timer = Timer.scheduledTimer(withTimeInterval:1/30,repeats:true) { [weak self] _ in Task { @MainActor in self?.tick() } }
+        timer = Timer(timeInterval:1/30,repeats:true) { [weak self] _ in Task { @MainActor in self?.tick() } }
+        if let timer {RunLoop.main.add(timer,forMode:.common)}
         do {
             let input = try MIDIInput()
             input.onMessage = { [weak self] status,pitch,velocity,_ in

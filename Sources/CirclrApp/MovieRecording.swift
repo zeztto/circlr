@@ -38,8 +38,10 @@ extension AppStore {
         guard movieRevision==project.musicRevision else{finishMovieRecording();status="음악 변경으로 영상 녹화를 마쳤습니다";return}
         if !playback.playing {finishMovieRecording();return}
         let seconds=min(playback.seconds,playback.prepared?.mix.duration ?? playback.seconds)
-        guard seconds>movieSeconds || recorder.frameCount==0 else{return}
+        guard seconds>movieSeconds || recorder.submittedFrameCount==0 else{return}
         do {
+            try recorder.checkForFailure()
+            guard recorder.canAcceptFrame else{recorder.reportSkippedCapture();return}
             guard let frame=captureMovieFrame?() else{throw CirclrError("캔버스 화면을 읽을 수 없습니다")}
             try recorder.append(frame,seconds:seconds);movieSeconds=seconds
         }catch{recorder.cancel();movieWriter=nil;fail(error)}
@@ -48,7 +50,7 @@ extension AppStore {
         movieGeneration+=1;moviePreparing=false
         guard let recorder=movieWriter else{return}
         movieWriter=nil
-        guard recorder.frameCount>0 else{recorder.cancel();status="영상 준비 취소";return}
+        guard recorder.submittedFrameCount>0 else{recorder.cancel();status="영상 준비 취소";return}
         let duration=max(movieSeconds,playback.seconds)
         status="영상 저장 중"
         movieFinalizing=Task { @MainActor [weak self] in

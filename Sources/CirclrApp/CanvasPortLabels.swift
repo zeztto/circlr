@@ -21,12 +21,12 @@ extension AlbumCanvasView {
             if endpoints.contains(where: { $0.endpoint == handle.endpoint }) { continue }
             if handle == near || (chosen[handle.endpoint] != near && handle.octant == port.defaultOctant) { chosen[handle.endpoint] = handle }
         }
-        let font = NSFont.systemFont(ofSize: 10, weight: .semibold)
+        let font = NSFont.systemFont(ofSize: StudioTheme.portLabelSize, weight: .semibold)
         let requests = order.compactMap { endpoint -> PortLabelRequest? in
             guard let handle = chosen[endpoint], let port = scene.node(endpoint.node)?.ports.first(where: { $0.id == endpoint.portID }) else { return nil }
-            let width = ceil((shortPortLabel(port) as NSString).size(withAttributes: [.font: font]).width)+8
+            let width = ceil((shortPortLabel(port) as NSString).size(withAttributes: [.font: font]).width)+12
             let active = endpoints.contains { $0.endpoint == endpoint } || endpoint == selectedCanvasPort || endpoint == near?.endpoint
-            return .init(endpoint: endpoint, anchor: CGPoint(x:handle.point.x,y:handle.point.y), size:CGSize(width:width,height:19), octant:handle.octant, priority:active ? 10:0)
+            return .init(endpoint: endpoint, anchor: CGPoint(x:handle.point.x,y:handle.point.y), size:CGSize(width:width,height:23), octant:handle.octant, priority:active ? 10:0)
         }
         var obstacles = labelPlacements.map { $0.rect.insetBy(dx:-4,dy:-4) }
         obstacles += all.map { CGRect(x:$0.point.x-10,y:$0.point.y-10,width:20,height:20) }
@@ -40,9 +40,12 @@ extension AlbumCanvasView {
     func drawPortLabels() {
         for placement in portLabelPlacements() {
             guard let port = scene?.node(placement.endpoint.node)?.ports.first(where: { $0.id == placement.endpoint.portID }) else { continue }
-            StudioTheme.canvasNS.setFill(); NSBezierPath(roundedRect:placement.rect,xRadius:3,yRadius:3).fill()
-            let textRect = placement.rect.insetBy(dx:4,dy:2)
-            (shortPortLabel(port) as NSString).draw(in:textRect,withAttributes:[.font:NSFont.systemFont(ofSize:10,weight:.semibold),.foregroundColor:StudioTheme.textNS])
+            let badge = NSBezierPath(roundedRect:placement.rect,xRadius:4,yRadius:4)
+            StudioTheme.surfaceNS.setFill(); badge.fill()
+            // A neutral edge keeps labels visible even beside a black custom circle.
+            StudioTheme.lineNS.setStroke(); badge.lineWidth=1; badge.stroke()
+            let textRect = placement.rect.insetBy(dx:6,dy:3)
+            (shortPortLabel(port) as NSString).draw(in:textRect,withAttributes:[.font:NSFont.systemFont(ofSize:StudioTheme.portLabelSize,weight:.semibold),.foregroundColor:StudioTheme.textNS])
         }
     }
 }

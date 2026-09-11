@@ -43,6 +43,8 @@ open 'dist/써클러.app'
 
 The build packages the app, its five audio helpers and the agent kit together. Local packages use ad-hoc signing and are not notarized. Keep a separate copy of important projects when trying development builds.
 
+Development continues on `release/0.40.0`, prioritizing canvas readability, viewing and follow controls. See the [0.40 execution plan](docs/releases/0.40.0.md); these changes are not in the 0.30 download.
+
 ## First session
 
 1. Right-click empty canvas space to create a circle. Add sections to plan the song, then add MIDI, audio, instruments and effects inside them.

@@ -68,6 +68,7 @@ struct AlbumCanvas: NSViewRepresentable {
     var playbackNotifications: [AnyCancellable] = []
     var interactionMonitor: Any?
     var visualFrame = PlaybackVisualFrame()
+    var lastFollowSettings = PlaybackFollowSettings()
     var followedSection: CircleAddress?
     var playbackFollowViewport = CGRect.zero
     var playbackVisibilityFocus: CircleAddress?
@@ -86,7 +87,7 @@ struct AlbumCanvas: NSViewRepresentable {
             // A save may arrive before SwiftUI consumes the latest focus command.
             self.update()
             let savedCamera = self.animation?.isValid == true ? (self.animationDestination ?? self.camera) : self.camera
-            return HierarchyViewport(camera:savedCamera,width:self.bounds.width,height:self.bounds.height,selection:self.store.hierarchySelection ?? .album,settingsOpen:self.store.hierarchySettingsOpen,midiStepMode:self.store.midiStepMode,workspace:self.store.capturedStudioWorkspace)
+            return HierarchyViewport(camera:savedCamera,width:self.bounds.width,height:self.bounds.height,selection:self.store.hierarchySelection ?? .album,settingsOpen:self.store.hierarchySettingsOpen,midiStepMode:self.store.midiStepMode,workspace:self.store.capturedStudioWorkspace,playbackFollowSettings:self.store.playbackFollowSettings)
         }
         store.captureMovieFrame = { [weak self] in
             guard let self,self.bounds.width>=64,self.bounds.height>=64 else{return nil}
@@ -437,10 +438,10 @@ struct AlbumCanvas: NSViewRepresentable {
         let center=screen(owner),radius=orbit.radius*camera.zoom
         guard radius<1e7 else{return}
         let ring=OrbitDrawing.arc(center,radius:radius,from:0,to:1)
-        color(node).withAlphaComponent(0.13).setStroke();ring.lineWidth=0.7;ring.stroke()
+        StudioTheme.lineNS.setStroke();ring.lineWidth=1;ring.stroke()
         for interval in orbit.intervals {
             let arc=OrbitDrawing.arc(center,radius:radius,from:interval.start/orbit.timeline.duration,to:interval.end/orbit.timeline.duration)
-            color(node).withAlphaComponent(store.hierarchySelection==node.id ? 0.7:0.3).setStroke();arc.lineWidth=2;arc.stroke()
+            color(node).withAlphaComponent(store.hierarchySelection==node.id ? 0.95:0.6).setStroke();arc.lineWidth=store.hierarchySelection==node.id ? 3:2;arc.stroke()
             OrbitDrawing.dot(OrbitDrawing.point(center,radius:radius,phase:interval.start/orbit.timeline.duration),radius:2,color:color(node))
         }
         if store.hierarchySelection==node.id,let handle=visibleTimeHandle(node) {
@@ -457,7 +458,7 @@ struct AlbumCanvas: NSViewRepresentable {
         guard let a=scene.node(edge.from), let b=scene.node(edge.to), isVisible(a), isVisible(b) else { return }
         guard let curve = connectionCurve(edge) else { return }
         let tint: NSColor = edge.kind == .midi ? StudioTheme.accentNS : edge.kind == .flow ? StudioTheme.secondaryNS : NSColor(srgbRed:0.62,green:0.75,blue:0.94,alpha:1)
-        wire(curve,color:tint.withAlphaComponent(0.55),dashed:edge.kind == .sidechain)
+        wire(curve,color:tint.withAlphaComponent(0.78),dashed:edge.kind == .sidechain)
         if let before = try? curve.point(at: 0.48), let tip = try? curve.point(at: 0.52) {
             let angle = atan2(tip.y-before.y, tip.x-before.x), path = NSBezierPath()
             for offset in [-0.5, 0.5] { path.move(to: NSPoint(x: tip.x-7*cos(angle+offset), y: tip.y-7*sin(angle+offset))); path.line(to: NSPoint(x:tip.x,y:tip.y)) }

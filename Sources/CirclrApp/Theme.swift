@@ -7,9 +7,14 @@ enum StudioTheme {
     static let canvasNS = NSColor(white:0.065,alpha:1)
     static let surfaceNS = NSColor(white:0.105,alpha:1)
     static let raisedNS = NSColor(white:0.145,alpha:1)
-    static let lineNS = NSColor(white:0.24,alpha:1)
+    static let lineNS = NSColor(white:0.32,alpha:1)
     static let textNS = NSColor(white:0.94,alpha:1)
-    static let secondaryNS = NSColor(white:0.63,alpha:1)
+    static let secondaryNS = NSColor(white:0.70,alpha:1)
+    // Screen-space label sizes stay readable while the orbital camera zooms.
+    static let canvasTitleSize:CGFloat = 14
+    static let canvasSelectedTitleSize:CGFloat = 15
+    static let canvasSubtitleSize:CGFloat = 12
+    static let portLabelSize:CGFloat = 11
     static let accentNS = NSColor(srgbRed:0.52,green:0.88,blue:0.73,alpha:1)
     static let canvas = Color(nsColor:canvasNS)
     static let surface = Color(nsColor:surfaceNS)
@@ -23,6 +28,7 @@ enum StudioTheme {
 struct StudioFieldStyle:TextFieldStyle {
     func _body(configuration:TextField<Self._Label>)->some View {
         configuration.textFieldStyle(.plain).padding(.horizontal,10).padding(.vertical,8)
+            .foregroundStyle(StudioTheme.text)
             .background(StudioTheme.raised,in:RoundedRectangle(cornerRadius:6))
             .overlay(RoundedRectangle(cornerRadius:6).strokeBorder(StudioTheme.line))
     }
@@ -39,8 +45,10 @@ struct StudioChoice<Value:Hashable>:View {
             Menu {
                 ForEach(options,id:\.0){value,name in Button((selection==value ? "✓ ":"")+name){selection=value}}
             } label: {
-                HStack(spacing:16){Text(options.first{$0.0==selection}?.1 ?? "선택").lineLimit(1);Spacer(minLength:4);Image(systemName:"chevron.down").font(.system(size:9,weight:.semibold)).foregroundStyle(StudioTheme.secondary)}
+                HStack(spacing:16){Text(options.first{$0.0==selection}?.1 ?? "선택").lineLimit(1);Spacer(minLength:4);Image(systemName:"chevron.down").font(.system(size:11,weight:.semibold)).foregroundStyle(StudioTheme.secondary)}
+                    .foregroundStyle(StudioTheme.text)
                     .padding(.horizontal,11).padding(.vertical,9).background(StudioTheme.raised,in:RoundedRectangle(cornerRadius:5))
+                    .overlay(RoundedRectangle(cornerRadius:5).strokeBorder(StudioTheme.line))
             }.menuStyle(.borderlessButton).menuIndicator(.hidden).frame(maxWidth:title.isEmpty ? .infinity:240).accessibilityLabel(title.isEmpty ? "선택":title).accessibilityValue(options.first{$0.0==selection}?.1 ?? "선택되지 않음")
         }
     }

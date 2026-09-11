@@ -185,6 +185,7 @@ private struct NativeNumberField: NSViewRepresentable {
     func makeCoordinator() -> Coordinator {Coordinator(self)}
     func makeNSView(context:Context) -> Control {
         let field=Control()
+        context.coordinator.field=field
         field.isBordered=false;field.drawsBackground=false;field.focusRingType = .none
         field.font = .monospacedDigitSystemFont(ofSize:13,weight:.regular)
         field.delegate=context.coordinator
@@ -207,7 +208,7 @@ private struct NativeNumberField: NSViewRepresentable {
         commitTarget?.action={ [weak coordinator] in coordinator?.commit() ?? false }
         coordinator.draft.refresh(value:value,context:self.context.beforeTyping(),editing:coordinator.active || coordinator.draft.isDirty)
         // Reassigning even identical text can destroy AppKit's select-all after Tab.
-        if field.stringValue != coordinator.draft.text {field.stringValue=coordinator.draft.text}
+        if !coordinator.isComposing,field.stringValue != coordinator.draft.text {field.stringValue=coordinator.draft.text}
         field.alignment = alignment == .center ? .center:.right
         field.isEnabled=isEnabled
         field.textColor = error.isEmpty ? StudioTheme.textNS:.systemRed
@@ -219,6 +220,8 @@ private struct NativeNumberField: NSViewRepresentable {
     }
     final class Coordinator:NSObject,NSTextFieldDelegate {
         var parent:NativeNumberField
+        weak var field:Control?
+        var isComposing:Bool {(field?.currentEditor() as? NSTextView)?.hasMarkedText() == true}
         var draft:NumberEditSession<NumberEditIdentity?>
         var active=false
         init(_ parent:NativeNumberField) {self.parent=parent;draft=NumberEditSession(presentation:parent.presentation);draft.reset(value:parent.value)}
@@ -231,7 +234,7 @@ private struct NativeNumberField: NSViewRepresentable {
         func controlTextDidChange(_ notification:Notification) {
             guard let field=notification.object as? NSTextField else {return}
             draft.type(field.stringValue,value:parent.value,context:parent.context.beforeTyping())
-            if let report=parent.onValidityChange {
+            if !isComposing,let report=parent.onValidityChange {
                 do {
                     let next=try draft.resolve(value:parent.value,context:parent.context.current(),range:parent.range,integerOnly:parent.integerOnly)
                     if let next {try parent.validate?(next)}
@@ -240,6 +243,7 @@ private struct NativeNumberField: NSViewRepresentable {
             }
         }
         func control(_ control:NSControl,textShouldEndEditing fieldEditor:NSText) -> Bool {
+            if (fieldEditor as? NSTextView)?.hasMarkedText() == true {return false}
             // This callback precedes selection of the next field. Invalid drafts may blur,
             // but are retained with an error and never reach the model.
             _=commit();return true
@@ -248,6 +252,7 @@ private struct NativeNumberField: NSViewRepresentable {
             active=false;parent.editing=false
         }
         func control(_ control:NSControl,textView:NSTextView,doCommandBy command:Selector) -> Bool {
+            if textView.hasMarkedText() {return false}
             if command == #selector(NSResponder.cancelOperation(_:)) {
                 draft.reset(value:parent.value);parent.error="";parent.onValidityChange?(nil)
                 (control as? NSTextField)?.stringValue=draft.text
@@ -270,6 +275,7 @@ private struct NativeNumberField: NSViewRepresentable {
             if control.window?.identifier?.rawValue == "main" {parent.context.focusCanvas()}
         }
         @discardableResult func commit() -> Bool {
+            guard !isComposing else {parent.error="입력 중인 숫자를 먼저 확정하세요";return false}
             do {
                 let next=try draft.resolve(value:parent.value,context:parent.context.current(),range:parent.range,integerOnly:parent.integerOnly)
                 if let next {try parent.validate?(next)}

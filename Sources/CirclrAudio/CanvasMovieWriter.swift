@@ -4,15 +4,120 @@ import CoreGraphics
 import CoreVideo
 import CirclrCore
 
-/// Records caller-supplied canvas frames alongside the same prepared PCM used for playback.
-/// All calls belong to one actor; file/codec work never enters the audio render callback.
+/// A bounded hand-off: at most one captured image is retained by the encoder queue.
+/// AppKit capture remains on the caller's main actor; pixel conversion, PCM packing,
+/// codec submission and finalization execute on the private serial queue.
 @MainActor public final class CanvasMovieWriter {
     public let url:URL
     public let width:Int
     public let height:Int
-    public private(set) var frameCount=0
-    public private(set) var droppedFrames=0
-    public private(set) var lastSeconds=0.0
+    private let worker:CanvasMovieEncoder
+    private let state=MovieWriterState()
+    private let queue=DispatchQueue(label:"com.circlr.movie-encoder",qos:.userInitiated)
+    public var frameCount:Int {state.read{$0.frames}}
+    public var submittedFrameCount:Int {state.read{$0.submitted}}
+    public var skippedCaptureCount:Int {state.read{$0.skipped}}
+    public var droppedFrames:Int {state.read{$0.dropped}}
+    public var lastSeconds:Double {state.read{$0.lastSeconds}}
+    public var pendingFrameCount:Int {state.read{$0.pending ? 1:0}}
+    public var maximumPendingFrames:Int {state.read{$0.maximumPending}}
+    public var maximumEncodeSeconds:Double {state.read{$0.maximumEncodeSeconds}}
+    public func checkForFailure() throws {if let error=state.read({$0.failure}) {throw error}}
+    /// Queue capacity, not a promise that the hardware encoder will accept the next frame.
+    public var canAcceptFrame:Bool {state.read{!$0.pending && !$0.closed && $0.failure == nil}}
+    /// Call only when a scheduled capture is skipped because canAcceptFrame is false.
+    public func reportSkippedCapture() {state.change{if !$0.closed {$0.dropped+=1;$0.skipped+=1}}}
+    public init(url:URL,size:CGSize,pcm:PCM) throws {
+        worker=try CanvasMovieEncoder(url:url,size:size,pcm:pcm)
+        self.url=url;self.width=worker.width;self.height=worker.height
+    }
+    public func append(_ image:CGImage,seconds:Double) throws {
+        guard seconds.isFinite,seconds>=0 else{return}
+        let accepted=try state.change { value -> Bool in
+            if let failure=value.failure {throw failure}
+            guard !value.closed else{return false}
+            guard seconds>value.lastSubmitted else{return false}
+            guard !value.pending else{value.dropped+=1;value.skipped+=1;return false}
+            value.pending=true;value.submitted+=1;value.lastSubmitted=seconds
+            value.maximumPending=1;return true
+        }
+        guard accepted else{return}
+        let worker=worker,state=state
+        queue.async {
+            defer{state.change{$0.pending=false}}
+            guard !state.read({$0.cancelled}) else{return}
+            let start=ProcessInfo.processInfo.systemUptime
+            do {
+                let before=worker.frameCount
+                try worker.append(image,seconds:seconds)
+                state.change {
+                    $0.frames=worker.frameCount;$0.lastSeconds=worker.lastSeconds
+                    if worker.frameCount==before {$0.dropped+=1}
+                    $0.maximumEncodeSeconds=max($0.maximumEncodeSeconds,ProcessInfo.processInfo.systemUptime-start)
+                }
+            }catch{state.change{$0.failure=error};worker.cancel()}
+        }
+    }
+    public func finish(seconds:Double) async throws {
+        let shouldFinish=state.change {value -> Bool in
+            guard !value.closed else{return false};value.closed=true;return true
+        }
+        guard shouldFinish else{return}
+        let worker=worker,state=state
+        try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { (continuation:CheckedContinuation<Void,Error>) in
+                queue.async {
+                    do {
+                        if let error=state.read({$0.failure}) {throw error}
+                        try worker.finish(seconds:seconds,isCancelled:{state.read{$0.cancelled}},publish:{
+                            try state.change {value in
+                                guard !value.cancelled else{throw CancellationError()}
+                                try worker.publish()
+                            }
+                        })
+                        continuation.resume()
+                    }catch{worker.cancel();continuation.resume(throwing:error)}
+                }
+            }
+        } onCancel: {state.change{$0.cancelled=true}}
+    }
+    public func cancel() {
+        state.change{$0.cancelled=true;$0.closed=true}
+        let worker=worker
+        queue.async{worker.cancel()}
+    }
+    /// A queue barrier for shutdown/tests; no codec work runs on the waiting actor.
+    public func waitUntilIdle() async {
+        await withCheckedContinuation { continuation in queue.async{continuation.resume()} }
+    }
+    deinit {
+        state.change{$0.cancelled=true;$0.closed=true}
+        let worker=worker
+        queue.async{worker.cancel()}
+    }
+}
+
+private final class MovieWriterState:@unchecked Sendable {
+    struct Value {
+        var frames=0,submitted=0,dropped=0,skipped=0,maximumPending=0
+        var pending=false,closed=false,cancelled=false
+        var lastSubmitted = -Double.infinity,lastSeconds=0.0,maximumEncodeSeconds=0.0
+        var failure:Error?
+    }
+    private var value=Value()
+    private let lock=NSLock()
+    func read<T>(_ body:(Value)->T)->T {lock.lock();defer{lock.unlock()};return body(value)}
+    @discardableResult func change<T>(_ body:(inout Value)throws->T) rethrows -> T {lock.lock();defer{lock.unlock()};return try body(&value)}
+}
+
+/// Accessed exclusively by CanvasMovieWriter's encoder queue after initialization.
+private final class CanvasMovieEncoder:@unchecked Sendable {
+    let url:URL
+    let width:Int
+    let height:Int
+    private(set) var frameCount=0
+    private(set) var droppedFrames=0
+    private(set) var lastSeconds=0.0
     private let staging:URL
     private let writer:AVAssetWriter
     private let video:AVAssetWriterInput
@@ -82,7 +187,7 @@ import CirclrCore
             audioCursor+=count
         }
     }
-    public func finish(seconds:Double) async throws {
+    func finish(seconds:Double,isCancelled:()->Bool,publish:()throws->Void) throws {
         guard !ended else{return};ended=true
         guard frameCount>0 else{cancel();throw CirclrError("녹화된 화면이 없습니다")}
         let duration=min(pcm.duration,max(lastSeconds+1/30,seconds))
@@ -92,18 +197,25 @@ import CirclrCore
         let deadline=Date().addingTimeInterval(20)
         do {
             while audioCursor<limit {
-                try Task.checkCancellation()
+                if isCancelled() {throw CancellationError()}
                 if writer.status == .failed {throw writer.error ?? CirclrError("영상 인코딩 실패")}
                 if Date()>deadline {throw CirclrError("영상 오디오 저장 대기 시간이 지났습니다")}
                 try appendAudio(until:limit)
-                if audioCursor<limit {try await Task.sleep(for:.milliseconds(5))}
+                if audioCursor<limit {Thread.sleep(forTimeInterval:0.005)}
             }
             audio.markAsFinished();writer.endSession(atSourceTime:end)
-            await writer.finishWriting()
+            let completion=DispatchSemaphore(value:0)
+            writer.finishWriting{completion.signal()}
+            while completion.wait(timeout:.now()+0.01) == .timedOut {
+                if isCancelled() {throw CancellationError()}
+                if Date()>deadline {throw CirclrError("영상 인코딩 완료 대기 시간이 지났습니다")}
+            }
+            if isCancelled() {throw CancellationError()}
             guard writer.status == .completed else{throw writer.error ?? CirclrError("영상을 완성하지 못했습니다")}
-            try FileManager.default.moveItem(at:staging,to:url)
+            try publish()
         }catch{cancel();throw error}
     }
+    func publish() throws {try FileManager.default.moveItem(at:staging,to:url)}
     public func cancel() {
         ended=true
         if writer.status == .writing {writer.cancelWriting()}

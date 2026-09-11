@@ -147,16 +147,46 @@ struct PlaybackVisualFrame {
     }
 
     func followPlaybackSection() {
-        guard store.playbackFollow == .following, !visualFrame.stale,
-              let target = visualFrame.focus,
-              let scene,let node = scene.node(target), bounds.width > 100 else { return }
-        let viewport = workspaceViewport
-        guard target != followedSection || viewport != playbackFollowViewport else { return }
-        guard let next=PlaybackFraming.camera(for:node,in:scene,viewport:viewport) else{return}
-        followedSection = target
-        playbackVisibilityFocus = target
-        playbackFollowViewport = viewport
-        setCamera(next, animated: !reducePlaybackMotion, manual: false)
+        guard store.playbackFollow == .following, bounds.width > 100 else { return }
+        let settings=store.playbackFollowSettings
+        if settings.target == .pinned,let pin=settings.pinned,(visualFrame.stale || scene?.node(pin) == nil),
+           let revealed=try? HierarchySceneBuilder.build(store.project,revealing:pin) { scene=revealed }
+        guard let scene else { return }
+        let resolution=PlaybackFollowResolver.resolve(settings,currentSection:visualFrame.focus,
+            activeCircles:participatingFollowCircles(in:scene),in:scene)
+        // A stale render may still reveal a removed pin. Suspend it immediately,
+        // but never move the camera using playback positions from old music.
+        if visualFrame.stale,resolution != .missingPinnedTarget {
+            if animation?.isValid == true {followedSection=nil}
+            animation?.invalidate();animation=nil;animationDestination=nil
+            return
+        }
+        let target:CircleAddress
+        switch resolution {
+        case .inactive:
+            // Resume an interrupted arrival when this pin participates again.
+            // A completed arrival keeps its cache, avoiding redundant loop zooms.
+            if animation?.isValid == true {followedSection=nil}
+            animation?.invalidate();animation=nil;animationDestination=nil
+            return
+        case .missingPinnedTarget:
+            animation?.invalidate();animation=nil;animationDestination=nil
+            store.playbackFollow = .suspended
+            store.status="고정한 서클을 찾을 수 없습니다. 팔로우 대상을 다시 선택하세요"
+            followedSection=nil
+            return
+        case .target(let address): target=address
+        }
+        let viewport=workspaceViewport
+        guard target != followedSection || viewport != playbackFollowViewport || settings != lastFollowSettings else { return }
+        var framingCamera=camera
+        if settings.framing == .keepZoom,animation?.isValid == true,let destination=animationDestination {framingCamera.zoom=destination.zoom}
+        guard let next=PlaybackFollowResolver.camera(for:target,settings:settings,current:framingCamera,scene:scene,viewport:viewport) else { return }
+        // Only real section-use changes get the excursion, never initial focus or a loop of one use.
+        let changesSection=settings.target == .section && followedSection != nil && target != followedSection && lastFollowSettings.target == .section
+        followedSection=target;lastFollowSettings=settings
+        playbackVisibilityFocus=target;playbackFollowViewport=viewport
+        animatePlaybackFollow(to:next,changesSection:changesSection)
     }
 
     func displayStrength(_ level: Double) -> Double {
@@ -224,7 +254,7 @@ struct PlaybackVisualFrame {
 
     func playbackDiagnostics() -> [String: Any] {
         ["playing": store.playback.playing, "seconds": store.playback.seconds, "displaySeconds": visualFrame.seconds,
-         "follow": store.playbackFollow.rawValue, "focusedSection": store.json(followedSection),
+         "follow": store.playbackFollow.rawValue, "followSettings":store.json(store.playbackFollowSettings), "followedTarget":store.json(followedSection), "focusedSection": store.json(followedSection),
          "currentSection": store.json(visualFrame.focus), "caption": visualFrame.caption,
          "stale": visualFrame.stale, "animated": playbackAnimation != nil,
          "windowAttached": window != nil, "windowVisible": window?.isVisible ?? false,

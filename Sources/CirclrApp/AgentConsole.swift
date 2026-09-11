@@ -18,7 +18,7 @@ struct AgentConsole:View {
                 Button{withAnimation(.easeOut(duration:0.18)){store.consoleOpen.toggle()}}label:{Image(systemName:"terminal");Text("콘솔");Image(systemName:store.consoleOpen ? "chevron.down":"chevron.up").font(.system(size:9))}
                     .keyboardShortcut("`",modifiers:.control).help("콘솔 접기·펼치기 · Ctrl `")
                 Circle().fill(store.agentSocket == nil ? StudioTheme.secondary:StudioTheme.accent).frame(width:5,height:5)
-                Text(store.agentSocket == nil ? "연결 없음":"MCP 연결 가능").font(.system(size:10)).foregroundStyle(StudioTheme.secondary)
+                Text(store.agentSocket == nil ? "연결 없음":"MCP 연결 가능").font(.system(size:11)).foregroundStyle(StudioTheme.secondary)
                 if store.consoleOpen {
                     Menu("로그 높이") {
                         Button("작게 · 40pt"){store.setConsoleLogHeight(40)}
@@ -37,7 +37,7 @@ struct AgentConsole:View {
                         ProgressView().controlSize(.small)
                         Button("취소"){store.stop()}.accessibilityLabel("바운스 취소")
                     }else{
-                        Text(job.kind).font(.system(size:10,design:.monospaced))
+                        Text(job.kind).font(.system(size:11,design:.monospaced))
                         ProgressView(value:job.progress).frame(width:65)
                         Button("정지"){store.stop()}
                     }
@@ -52,8 +52,17 @@ struct AgentConsole:View {
                         Button("바운스 서클 보기"){_=store.focusUserWorkspace(node.id,detail:true,explicitIntent:.content)}
                     }
                 }
-                Text("r\(store.project.musicRevision)").font(.system(size:10,design:.monospaced)).foregroundStyle(StudioTheme.secondary).padding(.trailing,12)
+                Text("r\(store.project.musicRevision)").font(.system(size:11,design:.monospaced)).foregroundStyle(StudioTheme.secondary).padding(.trailing,12)
             }.frame(height:34)
+            if !store.status.isEmpty {
+                HStack(alignment:.top,spacing:8) {
+                    Image(systemName:store.agentJob?.state == "failed" ? "exclamationmark.circle":"info.circle")
+                        .foregroundStyle(StudioTheme.secondary)
+                    Text(store.status).font(.system(size:12)).foregroundStyle(StudioTheme.text)
+                        .lineLimit(2).frame(maxWidth:.infinity,alignment:.leading)
+                        .help(store.status).accessibilityLabel("작업 상태 · "+store.status)
+                }.padding(.horizontal,12).padding(.bottom,8)
+            }
             if store.consoleOpen {
                 Rectangle().fill(StudioTheme.line).frame(height:1)
                 ScrollViewReader { proxy in

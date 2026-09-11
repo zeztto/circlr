@@ -95,7 +95,7 @@ struct RootView: View {
             VStack(alignment:.leading,spacing:1) {
                 Text("circlr").font(.system(size:25,weight:.semibold)).tracking(-1)
                 Text("\(Self.appVersion) · \(Self.appBuild)")
-                    .font(.system(size:10,weight:.medium,design:.monospaced))
+                    .font(.system(size:11,weight:.medium,design:.monospaced))
                     .foregroundStyle(StudioTheme.secondary)
                     .accessibilityLabel("써클러 버전 \(Self.appVersion), 빌드 \(Self.appBuild)")
                     .help("버전 \(Self.appVersion) · 빌드 \(Self.appBuild)")
@@ -105,7 +105,7 @@ struct RootView: View {
                 Divider();Button("앨범 WAV 내보내기…"){store.export()};Button("트랙별 stems 내보내기…"){store.export(stems:true)}
             }label:{HStack(spacing:7){Text(store.project.name).lineLimit(1);if store.dirty{Circle().fill(StudioTheme.accent).frame(width:4,height:4)}}.frame(maxWidth:compact ? 110:170,alignment:.leading)}
             Rectangle().fill(StudioTheme.line).frame(width:1,height:24)
-            TransportControls(store:store,meter:store.meter)
+            TransportControls(store:store,meter:store.meter,compact:compact)
             Button{store.toggleMovieRecording()}label:{
                 Image(systemName:store.movieWriter != nil ? "stop.circle.fill":"record.circle")
                     .foregroundStyle(store.movieWriter != nil ? Color.red:StudioTheme.secondary)
@@ -113,11 +113,11 @@ struct RootView: View {
                 .accessibilityLabel(store.movieWriter != nil ? "영상 녹화 마치기":"영상 녹화 시작")
                 .disabled(store.movieFinalizing != nil)
             Spacer(minLength:8)
-            Button{store.showMediaLibrary()}label:{Label("샘플",systemImage:"waveform")}.help("로컬 샘플 검색·미리 듣기 · ⌥⌘L")
+            Button{store.showMediaLibrary()}label:{HStack(spacing:6){Image(systemName:"waveform");if !compact{Text("샘플")}}}.accessibilityLabel("샘플 라이브러리").help("로컬 샘플 검색·미리 듣기 · ⌥⌘L")
             Button{store.showNavigation()}label:{HStack(spacing:6){Image(systemName:"arrow.left.arrow.right");if !compact{Text("작업 이동")}}}.help("섹션·트랙·음색·이펙트로 바로 이동 · ⌘J").accessibilityLabel("작업 이동")
             Button{store.showCommands()}label:{Image(systemName:"command")}.help("명령 검색 · ⇧⌘P")
             Button{store.focusHierarchy(.album,detail:true);store.hierarchySettingsOpen=true}label:{
-                HStack(spacing:compact ? 7:12){Text("앨범").font(.system(size:11)).foregroundStyle(StudioTheme.secondary);Text("\(store.project.global.tempo.formatted())").font(.system(size:18,weight:.medium,design:.rounded)).monospacedDigit();Text("BPM").font(.system(size:9)).foregroundStyle(StudioTheme.secondary);Text(store.project.global.meter.label);Text(store.project.global.scale.label).foregroundStyle(StudioTheme.secondary)}
+                HStack(spacing:compact ? 7:12){Text("앨범").font(.system(size:11)).foregroundStyle(StudioTheme.secondary);Text("\(store.project.global.tempo.formatted())").font(.system(size:18,weight:.medium,design:.rounded)).monospacedDigit();Text("BPM").font(.system(size:11)).foregroundStyle(StudioTheme.secondary);Text(store.project.global.meter.label);if !compact{Text(store.project.global.scale.label).foregroundStyle(StudioTheme.secondary)}}
             }.fixedSize(horizontal:true,vertical:false).help("앨범의 글로벌 음악 설정").accessibilityLabel("앨범 글로벌 음악 설정").accessibilityValue("\(store.project.global.tempo.formatted()) BPM · \(store.project.global.meter.label) · \(store.project.global.scale.label)")
             Menu {
                 Text(creationTitle)
@@ -195,7 +195,7 @@ struct RootView: View {
         }.padding(3).background(StudioTheme.canvas.opacity(0.94),in:RoundedRectangle(cornerRadius:6))
     }
     private func breadcrumb(_ node:CircleSceneNode)->some View {
-        Button{store.hierarchySettingsOpen=false;store.focusHierarchy(node.id)}label:{Text(node.role == .album ? "앨범":node.title).lineLimit(1).frame(maxWidth:130).foregroundStyle(node.id==store.hierarchySelection ? StudioTheme.text:StudioTheme.secondary)}.help(node.title+" · "+node.subtitle)
+        Button{store.hierarchySettingsOpen=false;store.focusHierarchy(node.id)}label:{Text(node.role == .album ? "앨범":node.title).font(.system(size:13,weight:node.id==store.hierarchySelection ? .semibold:.regular)).lineLimit(1).frame(maxWidth:130).foregroundStyle(node.id==store.hierarchySelection ? StudioTheme.text:StudioTheme.secondary)}.help(node.title+" · "+node.subtitle)
     }
     private var actions:some View {
         HStack(spacing:5) {
@@ -251,6 +251,7 @@ struct RootView: View {
 struct TransportControls:View {
     @ObservedObject var store:AppStore
     @ObservedObject var meter:TransportMeter
+    var compact=false
     var body:some View {
         HStack(spacing:12) {
             Button {store.play()} label:{Image(systemName:meter.playing || store.preparing || store.auditionStatus.pending || store.moviePreparing || store.midiRecording || store.audioRecording || store.audioRecordingBusy ? "stop.fill":"play.fill").font(.system(size:13)).foregroundStyle(StudioTheme.accent).frame(width:24,height:26)}
@@ -260,13 +261,31 @@ struct TransportControls:View {
                 footer:store.mediaImportTask != nil ? "Space로 취소":store.auditionStatus.pending ? store.auditionPresentation.footer:store.outputCanCancel ? "Space로 취소":nil,
                 textColor:StudioTheme.text,secondaryColor:StudioTheme.secondary)
             Button { store.playbackFollow = store.playbackFollow.toggled() } label: {
-                Label(store.playbackFollow == .suspended ? "팔로우 재개" : "재생 팔로우", systemImage: store.playbackFollow == .following ? "scope" : "location.slash")
-                    .font(.system(size:11)).lineLimit(1).fixedSize(horizontal:true,vertical:false)
+                HStack(spacing:6) {
+                    Image(systemName:store.playbackFollow == .following ? "scope":"location.slash")
+                    if !compact {Text(store.playbackFollow == .suspended ? "팔로우 재개":store.playbackFollow == .off ? "팔로우 꺼짐":store.playbackFollowSettings.target == .song ? "곡 팔로우":store.playbackFollowSettings.target == .pinned ? "고정 팔로우":"섹션 팔로우")}
+                }.font(.system(size:12,weight:.medium)).lineLimit(1).fixedSize(horizontal:true,vertical:false)
                     .foregroundStyle(store.playbackFollow == .following ? StudioTheme.accent : StudioTheme.secondary)
             }
             .accessibilityLabel(store.playbackFollow == .suspended ? "재생 팔로우 재개" : "재생 팔로우")
             .accessibilityValue(store.playbackFollow == .following ? "켜짐" : store.playbackFollow == .off ? "꺼짐" : "일시 중지")
-            .help("현재 섹션을 따라갑니다. 화면을 직접 조작하면 멈춥니다")
+            .help("선택한 대상을 따라갑니다. 화면을 직접 조작하면 일시 중지합니다")
+            Menu {
+                Button((store.playbackFollowSettings.target == .song ? "✓ ":"")+"현재 곡 서클"){store.choosePlaybackFollowTarget(.song)}
+                Button((store.playbackFollowSettings.target == .section ? "✓ ":"")+"현재 섹션 서클"){store.choosePlaybackFollowTarget(.section)}
+                Button("선택한 서클 고정"){store.choosePlaybackFollowTarget(.pinned)}.disabled(store.hierarchySelection == nil)
+                Button("팔로우 끄기"){store.playbackFollow = .off}
+                Divider()
+                Button((store.playbackFollowSettings.framing == .fit ? "✓ ":"")+"대상 전체 맞춤"){store.choosePlaybackFollowFraming(.fit)}
+                Button((store.playbackFollowSettings.framing == .keepZoom ? "✓ ":"")+"현재 배율 유지"){store.choosePlaybackFollowFraming(.keepZoom)}
+                Menu("섹션 전환 연출") {
+                    Button((store.playbackFollowSettings.transition == .off ? "✓ ":"")+"끄기"){store.choosePlaybackFollowTransition(.off)}
+                    Button((store.playbackFollowSettings.transition == .subtle ? "✓ ":"")+"은은하게"){store.choosePlaybackFollowTransition(.subtle)}
+                    Button((store.playbackFollowSettings.transition == .emphasized ? "✓ ":"")+"강조"){store.choosePlaybackFollowTransition(.emphasized)}
+                }
+            } label:{Image(systemName:"chevron.down")}
+                .menuStyle(.borderlessButton).menuIndicator(.hidden)
+                .accessibilityLabel("재생 팔로우 대상과 구도").help("곡·섹션·고정 서클과 전환 연출")
             if store.audioRecordingBusy {Button(store.audioRecordTitle){store.stop()}.disabled(store.audioRecordingLocked).foregroundStyle(.red)}
             else if store.midiRecording {Button("녹음 정지"){store.stop()}.foregroundStyle(.red)}
         }

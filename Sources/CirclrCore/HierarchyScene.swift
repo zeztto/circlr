@@ -363,7 +363,9 @@ public struct HierarchyViewport: Codable, Equatable {
     public var settingsOpen: Bool
     public var midiStepMode:Bool?
     public var workspace:StudioWorkspace?
-    public init(camera: HierarchyCamera, width: Double, height: Double, selection: CircleAddress, settingsOpen: Bool = false, midiStepMode:Bool = false,workspace:StudioWorkspace? = nil) {
+    public var playbackFollowSettings:PlaybackFollowSettings?
+    public init(camera: HierarchyCamera, width: Double, height: Double, selection: CircleAddress, settingsOpen: Bool = false, midiStepMode:Bool = false,workspace:StudioWorkspace? = nil,playbackFollowSettings:PlaybackFollowSettings? = nil) {
+        self.playbackFollowSettings=playbackFollowSettings
         self.camera=camera;self.width=width;self.height=height;self.selection=selection;self.settingsOpen=settingsOpen;self.midiStepMode=midiStepMode;self.workspace=workspace
     }
     public func restored(width: Double, height: Double) -> HierarchyCamera? {
