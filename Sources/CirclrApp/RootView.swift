@@ -3,6 +3,8 @@ import AppKit
 import CirclrCore
 
 struct RootView: View {
+    private static let appVersion=Bundle.main.object(forInfoDictionaryKey:"CFBundleShortVersionString") as? String ?? "development"
+    private static let appBuild=Bundle.main.object(forInfoDictionaryKey:"CFBundleVersion") as? String ?? "development"
     @ObservedObject var store: AppStore
     var body: some View {
         VStack(spacing:0) {
@@ -90,7 +92,14 @@ struct RootView: View {
     }
     private func headerRow(compact:Bool)->some View {
         HStack(spacing:compact ? 10:14) {
-            Text("circlr").font(.system(size:25,weight:.semibold)).tracking(-1)
+            VStack(alignment:.leading,spacing:1) {
+                Text("circlr").font(.system(size:25,weight:.semibold)).tracking(-1)
+                Text("\(Self.appVersion) · \(Self.appBuild)")
+                    .font(.system(size:10,weight:.medium,design:.monospaced))
+                    .foregroundStyle(StudioTheme.secondary)
+                    .accessibilityLabel("써클러 버전 \(Self.appVersion), 빌드 \(Self.appBuild)")
+                    .help("버전 \(Self.appVersion) · 빌드 \(Self.appBuild)")
+            }.fixedSize()
             Menu {
                 Button("새 앨범"){store.newProject()};Button("열기…"){store.open()};Button("저장"){store.save()};Button("다른 이름으로 저장…"){store.save(as:true)}
                 Divider();Button("앨범 WAV 내보내기…"){store.export()};Button("트랙별 stems 내보내기…"){store.export(stems:true)}

@@ -111,3 +111,11 @@ shasum -a 256 "$release_asset" "$release_download/circlr-$release_version-macos.
 7. 최종 안내에 Release URL, 버전/build, 패키지, 주요 변화, QA와 제한, commit/tag를 제공한다. 실제 사용자 앱 교체 여부를 명시한다. 저장소가 private이면 링크 접근에는 저장소 권한이 필요하다. default branch 병합·저장소 public 전환·사용자 앱 교체는 Release 등록과 별도다.
 
 실행 앱 교체 후 문제가 있으면 보관한 이전 앱과 **이전 schema의 프로젝트 백업**으로 복구한다. 새 schema 프로젝트를 구버전 앱에 그대로 덮어 열지 않는다. 이미 공개된 tag는 유지하고 수정 버전을 새로 만든다.
+
+## 현재 후보의 명시적 preview 배포
+
+사용자가 현재 후보의 등록을 명시적으로 요청한 경우, 완료 버전과 별도로 `v<version>-preview.N`을 사용한다. 현재 적용은 `v0.30.0-preview.1`이다. `main`에 통합한 commit을 가리키는 annotated tag로 만들고 `--prerelease --latest=false`로 실제 게시한다. 앱 내부 버전은 0.30.0/build158이며 태그와 노트에 preview 배포 상태를 명시한다.
+
+이 경우 상태는 **PREVIEW_PUBLISHED**로 기록하고 0.30.0 마일스톤은 **IN_PROGRESS**를 유지한다. 필수 QA 미완료를 없애거나 정식 `v0.30.0` 태그를 발행하지 않는다. 소스 대응·bundle 내용·서명·압축 복원·한영 노트·원격 SHA·다운로드 checksum 검증은 수행한다. 실제 장치/전체 native 검증의 미완료 범위를 노트에 적는다.
+
+브랜치 역할: `main`은 통합 소스, `release/0.30.0`은 아직 미완료인 버전의 후속 안정화 작업용이다. 기존 `codex/*` 브랜치는 통합 이력을 보존하며, 다른 worktree에서 사용 중인 브랜치를 일괄 삭제하지 않는다. preview tag는 이동하거나 덮어쓰지 않는다.

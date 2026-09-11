@@ -28,12 +28,12 @@ These are implemented development features, not a guarantee of compatibility wit
 
 ## Getting started
 
-Release downloads will be listed on [GitHub Releases](https://github.com/zeztto/circlr/releases) after version QA is complete. There is no completed 0.30.0 release yet. To try the development source, you currently need repository access.
+Download the current **[0.30.0-preview.1](https://github.com/zeztto/circlr/releases/tag/v0.30.0-preview.1)** for Apple Silicon. This is build158 for evaluation with incomplete QA, not the completed 0.30.0 milestone. Repository access is required while the project remains private. Build from `main` to use the integrated development source.
 
 **Requirements:** macOS 14+, Xcode 26+ selected as the active developer directory, and Python 3. Native validation currently covers Apple Silicon. The interface is currently in Korean; this README is available in both languages.
 
 ```sh
-git clone --branch release/0.30.0 https://github.com/zeztto/circlr.git
+git clone --branch main https://github.com/zeztto/circlr.git
 cd circlr
 ./scripts/build-app.sh
 open 'dist/써클러.app'

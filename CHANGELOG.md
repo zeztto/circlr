@@ -1,5 +1,11 @@
 # 변경 이력
 
+## 0.30.0-preview.1 — build158 평가판
+
+- 현재 개발 브랜치를 `main`으로 통합하고 첫 GitHub prerelease를 등록한다. [한영 노트](docs/releases/0.30.0-preview.1-notes.md).
+- Apple Silicon 앱·5개 오디오 helper·에이전트 키트를 ZIP과 SHA256으로 제공한다. 상단 로고 아래에 Info.plist의 버전·build를 표시하며 build158로 패키징했다.
+- 실제 오디오·IME·일부 통합 QA가 남아 있는 평가판이다. 0.30.0 마일스톤과 정식 태그는 미완료 상태로 유지한다.
+
 ## 문서 — 한국어·영어 README 및 GitHub Release 절차
 
 - README를 제품 소개·실제 실행 화면·빌드·기본 조작·기여 안내로 재구성하고 `README.ko.md`를 추가했다. 누적 build 기록은 `docs/history/readme-build157.md`에 보존했다.

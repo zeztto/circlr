@@ -10,3 +10,5 @@
 - 완료하는 제품 버전마다 한국어·영어 릴리스 노트와 검증된 패키지·SHA256을 GitHub Releases에 등록한다. 원격 tag SHA·Release URL·draft/prerelease·자산 검증까지 통과해야 RELEASED다. 상세 명령은 버전 운영 규약을 따른다.
 - 문서만 바뀐 작업은 링크·diff 검증 후 문서 commit/push로 끝내고 제품 버전/build/tag를 올리지 않는다.
 - 범위 밖 기능은 다음 버전 backlog에 기록한다. 사용자 정지와 새로운 우선순위를 존중한다.
+
+- 통합 기준 브랜치는 `main`이다. 명시적인 사용자 요청으로 현재 후보를 배포할 때는 `v<version>-preview.N` 태그와 GitHub prerelease로 구분하고, 미완료 QA 및 마일스톤 IN_PROGRESS를 유지한다. 정식 버전 gate를 통과한 것으로 처리하지 않는다.
