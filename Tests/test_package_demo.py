@@ -25,14 +25,24 @@ class DemoPackagingTests(unittest.TestCase):
         self.inventory()
 
     def inventory(self):
+        (self.root / 'NOTICE').write_text('Test fixture rights')
+        (self.root / 'catalog.json').write_text(json.dumps([{'id':'fixture','project':'f0r-h3r.circlr'}]))
         files = {p.relative_to(self.root).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
-                 for p in self.project.rglob('*') if p.is_file()}
+                 for p in self.root.rglob('*') if p.is_file() and p != self.root / 'manifest.json'}
         (self.root / 'manifest.json').write_text(json.dumps({
             'project': 'f0r-h3r.circlr', 'provenance': 'unit test fixture',
-            'notices': ['fixture'], 'files': files}))
+            'notices': ['NOTICE'], 'files': files}))
 
     def test_complete_portable_inventory(self):
         self.assertEqual(package_app.validate_demo(self.root)['project'], 'f0r-h3r.circlr')
+
+    def test_missing_license_rejected(self):
+        path = self.root / 'manifest.json'
+        manifest = json.loads(path.read_text())
+        manifest['notices'] = ['absent-license']
+        path.write_text(json.dumps(manifest))
+        with self.assertRaisesRegex(ValueError, 'notice is missing'):
+            package_app.validate_demo(self.root)
 
     def test_tampered_media_rejected(self):
         (self.project / 'sample.wav').write_bytes(b'changed')

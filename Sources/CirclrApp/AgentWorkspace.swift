@@ -45,16 +45,17 @@ extension AppStore {
     }
     func json<T:Encodable>(_ value:T)->Any {((try? JSONSerialization.jsonObject(with:JSONEncoder().encode(value),options:[.fragmentsAllowed])) ?? NSNull())}
     func agentState()->[String:Any] {
-        ["projectID":project.id,"revision":project.musicRevision,"layoutRevision":project.portLayout?.revision ?? 0,"name":project.name,"dirty":dirty,"path":projectURL?.path ?? "","global":json(project.global),
+        refreshPlaybackLoopTransition()
+        return ["projectID":project.id,"revision":project.musicRevision,"layoutRevision":project.portLayout?.revision ?? 0,"name":project.name,"dirty":dirty,"path":projectURL?.path ?? "","global":json(project.global),
          "tracks":json(project.tracks),"assets":json(project.assets),"album":json(project.album),"patterns":json(project.patterns),"activeArrangementID":project.activeArrangementID,
          "arrangements":project.arrangements.map{["id":$0.id,"name":$0.name,"uses":$0.uses.map{["id":$0.id,"sectionID":$0.sectionID,"name":$0.name]}]},
          "selection":json(hierarchySelection),"selectedNoteIDs":json(selectedMIDIIDs.sorted()),
          "automationEditor":["visible":automationVisible,"parameter":automationParameter.rawValue,"selectedPointID":json(selectedAutomationPointID),"displayBeats":automationDisplayedBeats,"supportedParameters":automationDescriptors],
          "recording":["midi":midiRecording,"audio":audioRecording,"permissionPending":audioRecordPending && audioCapturePhase != .starting,"format":json(audioInputFormat),"phase":audioRecordPending && !recorder.busy ? "authorizing":audioCapturePhase.rawValue,"busy":audioRecordingBusy,"seconds":audioInputSeconds,"peak":audioInputLevel,"message":audioCaptureMessage,"recoveryPath":audioRecoveryURL?.path ?? ""],"job":json(agentJob),"sequence":activitySequence,
          "playback":capturePlaybackVisualization?() ?? ["playing":playback.playing,"seconds":playback.seconds],"output":json(playback.outputStatus),"audition":json(auditionOutput.status),
-         "view":["zoom":hierarchyZoom,"layout":project.usesOrbits ? "orbit":"freeform","consoleOpen":consoleOpen,"consoleBounds":[consoleBounds.minX,consoleBounds.minY,consoleBounds.width,consoleBounds.height]],
+         "view":["startupOpen":startupOpen,"loopMode":playbackLoopMode.rawValue,"loopTransition":playbackLoopState,"loopIteration":playback.loopIteration,"elapsedSeconds":playback.elapsedSeconds,"viewingMode":viewingMode,"follow":playbackFollow.rawValue,"followSettings":json(playbackFollowSettings),"zoom":hierarchyZoom,"layout":project.usesOrbits ? "orbit":"freeform","consoleOpen":consoleOpen,"consoleBounds":[consoleBounds.minX,consoleBounds.minY,consoleBounds.width,consoleBounds.height]],
          "library":["open":libraryOpen,"folders":library.folders.count,"files":library.entries.count,"selectedFiles":library.chosenIDs.count,"scanning":library.scanning,"searching":library.searching,"previewPreparing":library.previewPreparing,"previewPlaying":library.previewing,"previewPending":library.previewPending,"previewSeconds":library.previewSeconds],
-         "runtime":["version":Bundle.main.object(forInfoDictionaryKey:"CFBundleShortVersionString") as? String ?? "development","build":Bundle.main.object(forInfoDictionaryKey:"CFBundleVersion") as? String ?? "development","capabilities":["soundCatalog":1,"synthCutoffAutomation":1,"synthResonanceAutomation":1,"midiTempoImport":1,"midiPitchBendImport":1,"midiSustainImport":1,"midiSustainEditing":1,"midiPitchBendEditing":1,"sectionLengthEditing":1],"bundleID":Bundle.main.bundleIdentifier ?? "","windows":NSApplication.shared.windows.filter{$0.identifier?.rawValue=="main"}.map{["visible":$0.isVisible,"minimized":$0.isMiniaturized]}]]
+         "runtime":["version":Bundle.main.object(forInfoDictionaryKey:"CFBundleShortVersionString") as? String ?? "development","build":Bundle.main.object(forInfoDictionaryKey:"CFBundleVersion") as? String ?? "development","capabilities":["playbackLoop":1,"playbackLoopLive":1,"workspaceView":1,"soundCatalog":1,"synthCutoffAutomation":1,"synthResonanceAutomation":1,"midiTempoImport":1,"midiPitchBendImport":1,"midiSustainImport":1,"midiSustainEditing":1,"midiPitchBendEditing":1,"sectionLengthEditing":1],"bundleID":Bundle.main.bundleIdentifier ?? "","windows":NSApplication.shared.windows.filter{$0.identifier?.rawValue=="main"}.map{["visible":$0.isVisible,"minimized":$0.isMiniaturized]}]]
     }
     func receiveAgent(_ data:Data,source:String)->[String:Any] {
         do {
@@ -96,6 +97,23 @@ extension AppStore {
         case "job":guard let id=args.jobID,let job=agentJobs[id] else {throw CirclrError("jobID를 찾을 수 없습니다")};return ["job":json(job),"revision":project.musicRevision]
         case "stop":stop();return ["state":"stopped"]
         case "play":guard !preparing else {throw CirclrError("현재 렌더 작업을 정지한 뒤 재생하세요")};if !playback.playing{play()};recordActivity(source,"재생 요청");return ["state":"preparing_or_playing"]
+        case "playback_loop":
+            try AgentProjectEditing.check(request,project:project)
+            guard let mode=args.loopMode else {throw CirclrError("루프 범위를 지정하세요")}
+            guard choosePlaybackLoop(mode) else {throw CirclrError(status)}
+            var state=agentState();state["loopRequestState"]=playbackLoopChangeBusy ? "accepted_pending":"configured";return state
+        case "workspace_view":
+            try AgentProjectEditing.check(request,project:project)
+            guard args.followSettings != nil || args.follow != nil || args.viewingMode != nil else {throw CirclrError("표시 설정을 지정하세요")}
+            if let settings=args.followSettings,settings.target == .pinned {
+                guard let pin=settings.pinned else {throw CirclrError("고정할 서클 주소가 필요합니다")}
+                _ = try StudioNavigation.scene(revealing:pin,in:project)
+            }
+            // Validate the complete request before changing any presentation state.
+            if let enabled=args.viewingMode,!setViewingMode(enabled) {throw CirclrError("편집 중인 입력을 먼저 확정하거나 취소하세요")}
+            if let settings=args.followSettings {setPlaybackFollowSettings(settings)}
+            if let enabled=args.follow {playbackFollow=enabled ? .following:.off}
+            return agentState()
         case "focus":
             if args.node != nil, args.useID != nil || args.nodeID != nil || args.compositionID != nil || args.arrangementID != nil || args.follow != nil || args.minimized != nil {
                 throw CirclrError("node 주소는 다른 focus 대상 없이 사용하세요")
@@ -112,6 +130,8 @@ extension AppStore {
             let address:CircleAddress
             if let node=args.node {address=node}else if let use=args.useID {address=args.nodeID.map{.music(arrangementID:args.arrangementID ?? project.activeArrangementID,useID:use,nodeID:$0)} ?? .section(arrangementID:args.arrangementID ?? project.activeArrangementID,useID:use)}else if let id=args.compositionID {address = .composition(id)}else{address = .album}
             _ = try StudioNavigation.scene(revealing:address,in:project)
+            _=setViewingMode(false)
+            startupOpen=false
             hierarchySettingsOpen=false;focusHierarchy(address,detail:args.detail ?? false);return ["selection":json(address)]
         default:break
         }
@@ -163,10 +183,11 @@ extension AppStore {
             if let expected=args.expectedLayoutRevision {try AgentPortEditing.checkLayout(expected,project:project)}
             guard undoCount>0 else {throw CirclrError("취소할 편집이 없습니다")};undo();return agentState()
         case "save":
+            cancelDemoLoading()
             guard let path=args.path ?? projectURL?.path,path.hasSuffix(".circlr") else {throw CirclrError("저장할 .circlr 절대 경로가 필요합니다")}
             let url=try agentPath(path)
             if FileManager.default.fileExists(atPath:url.path),try ProjectStore.load(url).project.id != project.id {throw CirclrError("다른 프로젝트를 덮어쓸 수 없습니다")}
-            captureViewport();project=try ProjectStore.saveSession(project,to:url,mediaRoot:mediaRoot);projectURL=url;mediaRoot=url;dirty=false;clearSavedRecovery();status="에이전트 저장 완료";return agentState()
+            captureViewport();demoCopyLease=nil;project=try ProjectStore.saveSession(project,to:url,mediaRoot:mediaRoot);projectURL=url;mediaRoot=url;dirty=false;clearSavedRecovery();status="에이전트 저장 완료";return agentState()
         case "open":
             return try beginAgentOpen(request,source:source)
         case "import_midi":return try beginAgentMIDIImport(request,source:source)
@@ -184,6 +205,7 @@ extension AppStore {
         return URL(fileURLWithPath:path).standardizedFileURL
     }
     func beginAgentOpen(_ request:AgentRequest,source:String)throws->[String:Any] {
+        cancelDemoLoading()
         guard !dirty else {throw CirclrError("저장되지 않은 편집이 있습니다. 먼저 save하세요")}
         guard !preparing else {throw CirclrError("현재 작업을 정지한 뒤 프로젝트를 여세요")}
         guard let path=request.arguments?.path else {throw CirclrError("path가 필요합니다")}
@@ -194,7 +216,7 @@ extension AppStore {
         preparing=true;progress=0;status="프로젝트 읽는 중 · macOS 접근 요청이 있으면 확인하세요"
         productionTask=Task { [weak self] in
             guard let self else{return}
-            let worker=Task.detached(priority:.userInitiated){try Task.checkCancellation();let loaded=try ProjectStore.load(url);try Task.checkCancellation();return loaded}
+            let worker=Task.detached(priority:.userInitiated){try Task.checkCancellation();try DemoCopyLease.retainIfManaged(url);let loaded=try ProjectStore.load(url);try Task.checkCancellation();return loaded}
             self.agentOpenWorker=worker
             do {
                 let loaded=try await worker.value
@@ -202,6 +224,7 @@ extension AppStore {
                 try AgentProjectEditing.check(request,project:self.project)
                 guard !self.dirty else {throw CirclrError("읽는 동안 문서가 변경되었습니다")}
                 var p=loaded.project;p.enableAlbum();p=try SectionGraphMigration.migrate(p)
+                self.retireDemoCopy()
                 self.project=p;self.projectURL=p==loaded.project ? loaded.root:nil;self.mediaRoot=loaded.root
                 self.selectedTrackID=p.tracks.first?.id;self.resetSession();self.dirty=p != loaded.project
                 self.preparing=false;self.progress=1;self.agentJob?.state="completed";self.agentJob?.progress=1;self.agentJob?.path=loaded.root.path;self.agentJob?.message="완료"

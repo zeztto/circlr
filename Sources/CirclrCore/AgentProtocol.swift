@@ -45,6 +45,9 @@ public struct AgentArguments:Codable {
     public var detail:Bool?
     public var minimized:Bool?
     public var follow:Bool?
+    public var followSettings:PlaybackFollowSettings?
+    public var viewingMode:Bool?
+    public var loopMode:PlaybackLoopMode?
     public var compositionID:ID?
     public init(){}
 }

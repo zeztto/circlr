@@ -1,6 +1,6 @@
 # circlr operational contract
 
-Discover the actual MCP tool catalog before work. This development adapter has 23 tools; custom specialists use its `--read-only` mode exposing snapshot, inspect, ports, sounds, job and events only. Explicit port tools require a native app whose snapshot includes layoutRevision; sounds requires runtime.capabilities.soundCatalog=1 (build62). The older installed 0.19 app does not implement them. Runtime configuration is inherited; inspect availability instead of assuming the tools are registered in an already open session.
+Discover the actual MCP tool catalog before work. The available tools vary by adapter/app version; custom specialists use its `--read-only` mode exposing snapshot, inspect, ports, sounds, job and events only. Explicit port tools require a native app whose snapshot includes layoutRevision; sounds requires runtime.capabilities.soundCatalog=1 (build62). The older installed 0.19 app does not implement them. Runtime configuration is inherited; inspect availability instead of assuming the tools are registered in an already open session.
 
 ## Time, identity and sound
 
@@ -90,3 +90,10 @@ New synth patches use engineVersion=2: mono bass, velocity-shaped harmonic keys,
 `circlr_job`의 terminal 결과를 확인하고 snapshot/inspect로 실제 lane·clock·revision을 재조회한다. `circlr_stop`은 진행 중 job 취소에 사용하며 취소 뒤 성공을 가정하지 않는다. 파일 읽기/parse만 detached이고 Core preview/apply는 MainActor이므로 전체 계산의 즉시 선점 취소를 약속하지 않는다.
 
 가져온 map을 해제하려면 `circlr_apply`의 `{"kind":"clear_use_tempo_override","arrangementID":"ACTUAL_ID","useID":"ACTUAL_ID"}`를 사용한다. ID는 snapshot의 실제 값으로 대체한다. 해제 전에는 해당 use의 BPM/source 변경이 거절된다. 해제는 보관된 이전 설정으로 돌아가며 다른 use와 node별 tempo를 바꾸지 않는다. 새 map은 schema4를 사용한다. MIDI CC/페달/pitch bend·박자표까지 import했다고 해석하지 않는다.
+
+
+## Workspace presentation and repeat listening
+
+When `snapshot.runtime.capabilities.workspaceView` is present, the coordinator may use `circlr_workspace_view` for text-free viewing and follow settings. Read the live tool schema; choose an explicit pinned circle address. Invalid or composing editor drafts may reject entry. These controls change presentation, not musical content, and should reflect the artist's requested viewing behavior.
+
+When `playbackLoop` is present, discover `circlr_playback_loop` and inspect its current state before changing repeat listening. Song and section loops are different scopes. Selection alone must not silently retarget playing audio. An accepted request is not proof that a scheduled transition has reached the output: inspect pending state and the actual playback clock. Monotonic elapsed time and wrapped musical position are different. Loop tails use a documented circular PCM policy; do not claim native gaplessness, successful listening or video cadence from an MCP response alone.

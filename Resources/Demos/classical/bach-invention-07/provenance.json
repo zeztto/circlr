@@ -1,0 +1,35 @@
+{
+  "composer": "J. S. Bach",
+  "crossBoundaryNotes": 0,
+  "externalAssets": 0,
+  "license": "Public Domain",
+  "licenseURL": "https://www.mutopiaproject.org/legal.html",
+  "maintainer": "Allen Garvin",
+  "noteCounts": [
+    242,
+    231
+  ],
+  "notesPreservedExactly": true,
+  "projectEndBeat": 92.0,
+  "sectionQuarterBeatBoundaries": [
+    0,
+    24.0,
+    48.0,
+    72.0,
+    92.0
+  ],
+  "sourceFiles": {
+    "source.ly": {
+      "sha256": "87b3a05f14adba1d7113d00b06f7634043e00fb2f660c7b1e698d49c73476248",
+      "url": "https://www.mutopiaproject.org/ftp/BachJS/BWV778/bach-invention-07/bach-invention-07.ly"
+    },
+    "source.mid": {
+      "sha256": "ee5e02d6a43cd9a45f6c10e3c6b3905190ed42521b1de7487fee8a98c3735eb6",
+      "url": "https://www.mutopiaproject.org/ftp/BachJS/BWV778/bach-invention-07/bach-invention-07.mid"
+    }
+  },
+  "sourceLastNoteBeat": 92.0,
+  "sourcePage": "https://www.mutopiaproject.org/cgibin/piece-info.cgi?id=73",
+  "title": "Invention 7 · 밤의 대위",
+  "work": "BWV 778"
+}

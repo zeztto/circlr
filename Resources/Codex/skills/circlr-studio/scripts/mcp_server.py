@@ -179,6 +179,13 @@ TOOLS = [
     tool("play", "play", "Prepare and play the album through the Mac audio output."),
     tool("stop", "stop", "Immediately stop playback and cancel the active render job."),
     tool("record", "record", "Start audio recording at the currently selected section/track. Use only when the user requests microphone recording. May require macOS permission. First two input channels (one for mono). Read snapshot.recording until started or failed; circlr_stop cancels or stops and finalizes asynchronously. Do not retry while recording.busy is true.", write=True),
+    tool("playback_loop", "playback_loop", "Choose off/song/section. Requires playbackLoop=1, playbackLoopLive=1 and fresh revision. Stopped or one-shot playback: configure next Play only (no restart); section captures selection at Play. While a loop is playing: capture the current active arrangement and selected use now, render in background without stopping current audio, then schedule replacement at a hardware-acknowledged future boundary. off finishes the current cycle and exit tail before stopping. accepted_pending is acceptance, not completed application: poll snapshot.view.loopTransition until busy=false and verify loopMode. Repeated requests while rendering/scheduled are rejected; Stop cancels. Revision changes during rendering cancel the request; after scheduling they stop output safely. song means active arrangement, not whole album. Linear export PCM is unchanged.", {"loopMode": {"type": "string", "enum": ["off", "song", "section"]}}, ("loopMode",), True),
+    tool("workspace_view", "workspace_view", "Set text-free viewing mode and playback follow without changing musical data. Requires workspaceView=1 and fresh project/revision. follow controls following/off; followSettings selects song/section/pinned, fit/keepZoom, off/subtle/emphasized transition. Pinned requires an explicit stable circle address, never the current selection. Validate and resolve drafts before entering viewing mode; invalid or composing input blocks entry. Follow settings persist in the project workspace. Read snapshot.view for actual settings/state. Native visibility is not certified by this tool.", {
+        "viewingMode": {"type": "boolean"}, "follow": {"type": "boolean"},
+        "followSettings": schema({"target": {"type": "string", "enum": ["song", "section", "pinned"]},
+            "framing": {"type": "string", "enum": ["fit", "keepZoom"]},
+            "transition": {"type": "string", "enum": ["off", "subtle", "emphasized"]},
+            "pinned": {"oneOf": [*PORT_ADDRESS["oneOf"], schema({"album": schema({})}, ["album"]), schema({"sound": schema({})}, ["sound"])]}}, ["target", "framing", "transition"])}, write=True),
     tool("focus", "focus", "Optionally show a circle, including a group via node address (exclusive of other selectors). Omit targets for the album. With minimized=true/false, only minimize/restore the app window. With follow=true/false alone, resume/disable playback camera follow. Editing and rendering never require focus.", {**SCOPE, "node": PORT_ADDRESS, "compositionID": STRING, "nodeID": STRING, "detail": {"type": "boolean"}, "minimized": {"type": "boolean"}, "follow": {"type": "boolean"}}),
 ]
 BY_NAME = {entry["name"]: entry for entry in TOOLS}
@@ -302,6 +309,12 @@ def call_tool(path, name, arguments, read_only=False):
     validate(arguments, entry["inputSchema"])
     if entry["method"] == "apply":
         validate_operation_scopes(arguments["operations"])
+    if entry["method"] == "workspace_view":
+        if not {"viewingMode", "follow", "followSettings"}.intersection(arguments):
+            raise ValueError("workspace_view requires a view setting")
+        settings = arguments.get("followSettings", {})
+        if settings.get("target") == "pinned" and "pinned" not in settings:
+            raise ValueError("pinned follow requires an explicit circle address")
     if entry["method"] == "import_midi":
         if not arguments["path"].startswith("/") or "\0" in arguments["path"]:
             raise ValueError("import_midi.path: absolute local path required")
@@ -314,6 +327,10 @@ def call_tool(path, name, arguments, read_only=False):
             request[key] = arguments[key]
     try:
         required_capabilities = []
+        if entry["method"] == "workspace_view":
+            required_capabilities.append("workspaceView")
+        if entry["method"] == "playback_loop":
+            required_capabilities.extend(["playbackLoop", "playbackLoopLive"])
         if entry["method"] == "apply" and any(op.get("parameter") == "synthCutoff" for op in arguments["operations"]):
             required_capabilities.append("synthCutoffAutomation")
         if entry["method"] == "apply" and any(op.get("parameter") == "synthResonance" for op in arguments["operations"]):
@@ -372,7 +389,7 @@ def serve(path, read_only=False):
             if method == "initialize":
                 negotiated = True
                 requested = request.get("params", {}).get("protocolVersion")
-                result = {"protocolVersion": requested if requested in VERSIONS else "2025-11-25", "capabilities": {"tools": {"listChanged": False}}, "serverInfo": {"name": "circlr", "version": "0.20.0"}, "instructions": ("Read-only specialist session. Return edit proposals to the coordinator. " if read_only else "") + "Read snapshot before mutations. Use stable IDs and expectedRevision. Long jobs return immediately; monitor with circlr_job/events. CUA is unnecessary."}
+                result = {"protocolVersion": requested if requested in VERSIONS else "2025-11-25", "capabilities": {"tools": {"listChanged": False}}, "serverInfo": {"name": "circlr", "version": "0.40.0"}, "instructions": ("Read-only specialist session. Return edit proposals to the coordinator. " if read_only else "") + "Read snapshot before mutations. Use stable IDs and expectedRevision. Long jobs return immediately; monitor with circlr_job/events. CUA is unnecessary."}
             elif method == "ping":
                 result = {}
             elif not initialized:

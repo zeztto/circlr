@@ -23,7 +23,7 @@ struct AudioWaveformHandleLayout {
             let width=min(label.width,max(0,bounds.width-4))
             let left=min(bounds.maxX-2-width,max(bounds.minX+2,x-width/2))
             return Handle(timeX:x,dot:CGPoint(x:x,y:bounds.midY+(isCompact ? (isEnd ? offset:-offset):0)),
-                          label:CGRect(x:left,y:bounds.maxY-15,width:width,height:label.height))
+                          label:CGRect(x:left,y:bounds.maxY-label.height-2,width:width,height:label.height))
         }
         var a=handle(startX,label:startLabel,isEnd:false),b=handle(endX,label:endLabel,isEnd:true)
         if var left=a,var right=b,left.label.maxX+6>right.label.minX {

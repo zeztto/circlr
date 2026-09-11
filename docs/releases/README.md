@@ -1,10 +1,10 @@
 # 버전별 개발·릴리스 운영
 
-상태: 운영 규약 확정. 시작 기준은 `0.20.0 build152`, 현재 **0.30.0 build161** 공개 출고를 진행한다. 출고 여부는 버전 문서의 gate로 판단한다.
+상태: 운영 규약 확정. 시작 기준은 `0.20.0 build152`, 현재 공개 출고 버전은 **0.30.0 build161**이며 **0.40.0**을 개발한다. 출고 여부는 버전 문서의 gate로 판단한다.
 
 ## 문서와 버전의 기준
 
-- 현재 버전 계획: [0.30.0 기본 제작 흐름](0.30.0.md).
+- 현재 버전 계획: [0.40.0 읽기 쉬운 궤도와 재생 감상](0.40.0.md).
 - 이후 버전 순서: [제품 로드맵](roadmap.md).
 - 다음 버전 시작 시 [버전 문서 양식](TEMPLATE.md)을 복사한다. 출고할 때 [한·영 릴리스 노트 양식](RELEASE_NOTES_TEMPLATE.md)을 `<version>-notes.md`로 작성한다.
 - build151/152의 과거 구현·QA는 [인수인계](../178-development-handoff.md), [포커스 검증](../179-pedal-focus-mount.md)에 보존한다. 과거 PASS는 새 후보의 QA를 대체하지 않는다.
@@ -63,7 +63,7 @@ git diff --check
 
 ## Git·문서·배포 완료 절차
 
-현재 `codex/daw-integration`의 검증된 HEAD가 첫 기준이다. 다음 구현 시작 때 이 HEAD에서 `release/0.30.0`을 만들고, 이후에는 직전 릴리스 tag에서 `release/<version>`을 만든다. 기존 커밋·브랜치를 재작성하지 않는다. 버전 중간에는 복구용 로컬 commit 또는 필요시 private WIP push가 가능하지만 릴리스로 세지 않는다.
+현재 `codex/daw-integration`의 검증된 HEAD가 첫 기준이다. 다음 구현 시작 때 이 HEAD에서 `release/0.30.0`을 만들고, 이후에는 직전 릴리스 tag에서 `release/<version>`을 만든다. 기존 커밋·브랜치를 재작성하지 않는다. 버전 중간에는 복구용 로컬 commit 또는 필요시 개발 브랜치 checkpoint push가 가능하지만 릴리스로 세지 않는다.
 
 최종 순서는 **구현 → QA → 독립 검토/수정 → 문서 → 최종 commit → tag → push → GitHub Release 등록 → 원격 검증**이다. 사용자 요청에 따라 앞으로 완료하는 모든 제품 버전(patch 포함)에 GitHub Release를 등록한다. 문서 수정이나 미완료 후보 build는 새 제품 릴리스가 아니다.
 

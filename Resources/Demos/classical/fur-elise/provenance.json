@@ -1,0 +1,36 @@
+{
+  "composer": "L. V. Beethoven",
+  "crossBoundaryNotes": 0,
+  "externalAssets": 0,
+  "license": "Public Domain",
+  "licenseURL": "https://www.mutopiaproject.org/legal.html",
+  "maintainer": "Stelios Samelis",
+  "noteCounts": [
+    517,
+    388
+  ],
+  "notesPreservedExactly": true,
+  "projectEndBeat": 157.5,
+  "sectionQuarterBeatBoundaries": [
+    0,
+    36.0,
+    66.0,
+    96.0,
+    126.0,
+    157.5
+  ],
+  "sourceFiles": {
+    "source.ly": {
+      "sha256": "828a7bd1b42e441fe1b0eb0389ba46f1502dab28bbe488389e635fb446ba7a67",
+      "url": "https://www.mutopiaproject.org/ftp/BeethovenLv/WoO59/fur_Elise_WoO59/fur_Elise_WoO59.ly"
+    },
+    "source.mid": {
+      "sha256": "1c12c21c7bbf4cf163896732672648a69d497636059837abd153c71abe50215a",
+      "url": "https://www.mutopiaproject.org/ftp/BeethovenLv/WoO59/fur_Elise_WoO59/fur_Elise_WoO59.mid"
+    }
+  },
+  "sourceLastNoteBeat": 156.5,
+  "sourcePage": "https://www.mutopiaproject.org/cgibin/piece-info.cgi?id=931",
+  "title": "Für Elise · 돌아오는 빛",
+  "work": "WoO 59"
+}

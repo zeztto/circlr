@@ -92,9 +92,9 @@ struct OrbitMIDIEditor:NSViewRepresentable {
         var occupied:[NSRect]=[]
         for pitch in stride(from:viewport.highest,through:viewport.lowest,by:-1) where pitch%12==0 {
             let p=OrbitDrawing.point(center,radius:radius(pitch),phase:0.75),label=pitchName(pitch)
-            let size=(label as NSString).size(withAttributes:[.font:NSFont.systemFont(ofSize:9)])
-            let rect=NSRect(x:p.x-size.width/2,y:p.y-5,width:size.width,height:12)
-            if !occupied.contains(where:{$0.insetBy(dx:-3,dy:-2).intersects(rect)}) {OrbitDrawing.text(label,at:p,size:9);occupied.append(rect)}
+            let size=(label as NSString).size(withAttributes:[.font:NSFont.systemFont(ofSize:11)])
+            let rect=NSRect(x:p.x-size.width/2,y:p.y-5.5,width:size.width,height:size.height)
+            if !occupied.contains(where:{$0.insetBy(dx:-3,dy:-2).intersects(rect)}) {OrbitDrawing.text(label,at:p,size:11);occupied.append(rect)}
         }
         // Density limits only drawing; the musical snap grid stays unchanged.
         let first=Int(ceil(range.lowerBound*grid)),last=Int(floor(range.upperBound*grid))

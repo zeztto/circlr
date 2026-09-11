@@ -43,7 +43,7 @@ open 'dist/써클러.app'
 
 The build packages the app, its five audio helpers and the agent kit together. Local packages use ad-hoc signing and are not notarized. Keep a separate copy of important projects when trying development builds.
 
-Development continues on `release/0.40.0`, prioritizing canvas readability, viewing and follow controls. See the [0.40 execution plan](docs/releases/0.40.0.md); these changes are not in the 0.30 download.
+Development continues on `release/0.40.0`, prioritizing canvas readability, text-free viewing and follow controls, with song/section loops, startup templates and three additional classical MIDI demos in progress. See the [0.40 execution plan](docs/releases/0.40.0.md); these changes are not in the 0.30 download.
 
 ## First session
 

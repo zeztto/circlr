@@ -126,3 +126,13 @@ Core/MCP 검사와 native 명령/UI 확인을 마쳤으며 저장/재열기·pro
 ### 로컬 라이브러리 상태 (build 31 개발 앱)
 
 `snapshot.library`의 `open`, `folders`, `files`, `scanning`, `searching`은 검색 화면 상태다. `previewPreparing`, `previewPlaying`, `previewSeconds`는 미리 듣기이며 `previewPending`은 아직 종료되지 않은 출력 작업을 나타낸다. 취소 직후 preparing/playing이 false여도 device 호출이 끝날 때까지 pending은 true일 수 있다. `stop`은 미리 듣기도 취소한다. 폴더 경로·bookmark는 응답에 포함하지 않는다. 폴더 등록·검색·가져오기 전용 MCP 명령은 이번 추가 범위가 아니다.
+
+
+## 0.40 개발 브랜치의 workspace 설정
+
+배포 0.30에는 아래 도구가 없다. `workspaceView` / `playbackLoop` capability가 있는 앱에만 전달된다.
+
+- `circlr_workspace_view`: `followSettings`(대상·구도·전환), `follow`, `viewingMode`를 설정한다. 고정 서클은 명시적 주소가 필요하다. 음악 revision을 확인하지만 viewport 변경으로 음악 Undo를 추가하지 않는다. 활성 숫자/이름 초안이 유효하지 않거나 IME 조합 중이면 감상 모드 진입이 거부된다.
+- `circlr_playback_loop`: `loopMode`의 `off` / `song` / `section`을 설정한다. `playbackLoopLive=1`에서는 재생 중 현재 출력을 유지하며 새 범위를 준비하고, 아직 출력에 제출되지 않은 다음 안전한 경계에서 전환한다. `accepted_pending`은 예약 수락이며 적용 완료가 아니다. `view.loopTransition`의 phase와 boundaryElapsedFrame, 실제 재생 시간을 확인한다. 오디오·MIDI 녹음 중 변경은 거부하며 영상 녹화는 동일 경계를 오디오에 등록한다. 일회 재생 중 설정 변경은 다음 Play에 적용한다. `song`은 활성 곡 전체, `section`은 정지 상태에서는 재생 요청 시, 실행 중 범위 변경에서는 변경 요청 시 선택된 section use다. 선택만 바꿔도 실행 중 범위가 바뀌지는 않는다.
+- 상태의 `view`는 `startupOpen`, `viewingMode`, `followSettings`, `loopMode`, `loopIteration`, `elapsedSeconds`를 제공한다. 루프의 `seconds`는 범위 내 위치이고 `elapsedSeconds`는 누적 시간이다. 루프 PCM은 유한 tail을 순환 합산한 첫 주기부터의 steady-state이며 clipping은 오류다.
+- 기존 `circlr_focus`의 `follow`만 설정하는 요청은 계속 호환된다.

@@ -8,20 +8,22 @@ struct RootView: View {
     @ObservedObject var store: AppStore
     var body: some View {
         VStack(spacing:0) {
-            header
-            Rectangle().fill(StudioTheme.line.opacity(0.65)).frame(height:1)
+            if !store.viewingMode {
+                header
+                Rectangle().fill(StudioTheme.line.opacity(0.65)).frame(height:1)
+            }
             AlbumCanvas(store:store)
-                .overlay(alignment:.topLeading){breadcrumbs.padding(20)}
-                .overlay(alignment:.topTrailing){actions.padding(20)}
-                .overlay(alignment:.bottomLeading){AgentConsole(store:store).background(GeometryReader{geometry in Color.clear.preference(key:AgentConsoleBoundsKey.self,value:geometry.frame(in:.named("albumCanvas")))}).padding(.leading,20).padding(.trailing,210).padding(.bottom,18)}
-                .overlay(alignment:.bottomTrailing){navigation.padding(20)}
+                .overlay(alignment:.topLeading){if !store.viewingMode {breadcrumbs.padding(20)}}
+                .overlay(alignment:.topTrailing){if !store.viewingMode {actions.padding(20)}}
+                .overlay(alignment:.bottomLeading){if !store.viewingMode {AgentConsole(store:store).background(GeometryReader{geometry in Color.clear.preference(key:AgentConsoleBoundsKey.self,value:geometry.frame(in:.named("albumCanvas")))}).padding(.leading,20).padding(.trailing,210).padding(.bottom,18)}}
+                .overlay(alignment:.bottomTrailing){if store.viewingMode {ViewingModeControls(store:store).padding(20)} else {navigation.padding(20)}}
                 .coordinateSpace(name:"albumCanvas")
                 .onPreferenceChange(AgentConsoleBoundsKey.self){if store.consoleBounds != $0 {store.consoleBounds=$0}}
         }
         .disabled(store.outputPreferencesOpen)
         .accessibilityHidden(store.outputPreferencesOpen || store.libraryOpen || store.navigationOpen || store.soundPickerRequest != nil || store.arrangementPickerRequest != nil)
         .overlay(alignment:.top) {
-            if let palette=store.commandPalette {
+            if !store.viewingMode,let palette=store.commandPalette {
                 ZStack(alignment:.top) {
                     Color.black.opacity(0.25).contentShape(Rectangle()).onTapGesture{store.commandPalette=nil;store.focusCanvas?()}
                     StudioCommandPalette(store:store,palette:palette).id(palette.id).padding(.top,85)
@@ -29,7 +31,7 @@ struct RootView: View {
             }
         }
         .overlay(alignment:.top) {
-            if store.navigationOpen {
+            if !store.viewingMode,store.navigationOpen {
                 ZStack(alignment:.top) {
                     Color.black.opacity(0.3).contentShape(Rectangle()).onTapGesture{store.navigationOpen=false;store.focusCanvas?()}
                     StudioNavigationView(store:store).id(store.navigationIntent.id).padding(.top,85)
@@ -37,7 +39,7 @@ struct RootView: View {
             }
         }
         .overlay(alignment:.top) {
-            if store.keyboardHelp {
+            if !store.viewingMode,store.keyboardHelp {
                 ZStack(alignment:.top) {
                     Color.black.opacity(0.25).contentShape(Rectangle()).onTapGesture{store.keyboardHelp=false}
                     KeyboardHelpView(store:store).padding(.top,85)
@@ -45,7 +47,7 @@ struct RootView: View {
             }
         }
         .overlay(alignment:.top) {
-            if store.libraryOpen {
+            if !store.viewingMode,store.libraryOpen {
                 ZStack(alignment:.top) {
                     Color.black.opacity(0.3).contentShape(Rectangle()).onTapGesture{store.closeMediaLibrary()}
                     MediaLibraryView(store:store).padding(.top,85)
@@ -53,7 +55,7 @@ struct RootView: View {
             }
         }
         .overlay(alignment:.top) {
-            if let request=store.soundPickerRequest {
+            if !store.viewingMode,let request=store.soundPickerRequest {
                 ZStack(alignment:.top) {
                     Color.black.opacity(0.3).contentShape(Rectangle()).onTapGesture{store.closeSoundPicker()}
                     SoundPickerView(store:store,request:request).id(request.id).padding(.top,85)
@@ -61,7 +63,7 @@ struct RootView: View {
             }
         }
         .overlay(alignment:.top) {
-            if let request=store.arrangementPickerRequest {
+            if !store.viewingMode,let request=store.arrangementPickerRequest {
                 ZStack(alignment:.top) {
                     Color.black.opacity(0.3).contentShape(Rectangle())
                     ArrangementPickerView(store:store,request:request).id(request.id).padding(.top,85)
@@ -69,13 +71,16 @@ struct RootView: View {
             }
         }
         .overlay(alignment:.top) {
-            if store.outputPreferencesOpen {
+            if !store.viewingMode,store.outputPreferencesOpen {
                 ZStack(alignment:.top) {
                     Color.black.opacity(0.3).contentShape(Rectangle()).onTapGesture{store.closeOutputPreferences()}
                     OutputPreferencesView(store:store,preferences:store.outputPreferences).padding(.top,85)
                 }
             }
         }
+        .disabled(store.startupOpen)
+        .accessibilityHidden(store.startupOpen)
+        .overlay {if store.startupOpen {StartupWorkspace(store:store)}}
         .onChange(of:store.navigationOpen){_,open in if open,store.outputPreferencesOpen{store.closeOutputPreferences(returnFocus:false)}}
         .onChange(of:store.libraryOpen){_,open in if open,store.outputPreferencesOpen{store.closeOutputPreferences(returnFocus:false)}}
         .onChange(of:store.keyboardHelp){_,open in if open,store.outputPreferencesOpen{store.closeOutputPreferences(returnFocus:false)}}
@@ -84,7 +89,7 @@ struct RootView: View {
         .frame(minWidth:1024,minHeight:740).background(StudioTheme.canvas)
         .font(.system(size:12)).foregroundStyle(StudioTheme.text).buttonStyle(CanvasButtonStyle())
         .numberEditing(in:store)
-        .onExitCommand{if store.outputPreferencesOpen {store.closeOutputPreferences()} else if store.arrangementPickerRequest != nil {store.closeArrangementPicker()} else if store.soundPickerRequest != nil {store.closeSoundPicker()} else if store.libraryOpen {store.closeMediaLibrary()} else if store.connectionsOpen {store.connectionsOpen=false;store.focusCanvas?()} else if store.navigationOpen {store.navigationOpen=false;store.focusCanvas?()} else if store.commandPalette != nil {store.commandPalette=nil;store.focusCanvas?()} else if store.keyboardHelp {store.keyboardHelp=false} else if let draft=store.midiImportDraft {store.cancelMIDIImport(draft.id)} else {store.hierarchySettingsOpen=false;store.hierarchyParent()}}
+        .onExitCommand{if store.startupOpen {store.closeStartup()} else if store.viewingMode {_ = store.setViewingMode(false)} else if !store.viewingMode,store.outputPreferencesOpen {store.closeOutputPreferences()} else if store.arrangementPickerRequest != nil {store.closeArrangementPicker()} else if store.soundPickerRequest != nil {store.closeSoundPicker()} else if !store.viewingMode,store.libraryOpen {store.closeMediaLibrary()} else if store.connectionsOpen {store.connectionsOpen=false;store.focusCanvas?()} else if !store.viewingMode,store.navigationOpen {store.navigationOpen=false;store.focusCanvas?()} else if store.commandPalette != nil {store.commandPalette=nil;store.focusCanvas?()} else if !store.viewingMode,store.keyboardHelp {store.keyboardHelp=false} else if let draft=store.midiImportDraft {store.cancelMIDIImport(draft.id)} else {store.hierarchySettingsOpen=false;store.hierarchyParent()}}
         .alert("작업을 완료하지 못했습니다",isPresented:Binding(get:{store.errorMessage != nil},set:{if !$0{store.errorMessage=nil}})){Button("확인"){store.errorMessage=nil}}message:{Text(store.errorMessage ?? "")}
     }
     private var header:some View {
@@ -258,7 +263,7 @@ struct TransportControls:View {
                 .background(StudioTheme.raised,in:Circle()).help(store.mediaImportTask != nil ? "파일 가져오기 취소 · Space":store.auditionStatus.pending ? store.auditionDetail:store.agentJob?.kind=="bounce" && store.agentJob?.state=="running" ? "바운스 취소 · Space":"재생 / 정지 · Space")
                 .accessibilityLabel(store.mediaImportTask != nil ? "파일 가져오기 취소":store.agentJob?.kind=="bounce" && store.agentJob?.state=="running" ? "바운스 취소":store.auditionStatus.pending ? (store.auditionPresentation.canCancel ? "미리 듣기 취소":"미리 듣기 정리 중"):store.preparing || store.moviePreparing ? "재생 준비 취소":store.midiRecording || store.audioRecordingBusy ? "녹음 정지":meter.playing ? "재생 정지":"재생")
             TransportStatusReadout(time:time,label:store.mediaImportTask != nil ? "파일 가져오는 중":store.outputLabel,detail:store.mediaImportTask != nil ? store.status:store.outputDetail,
-                footer:store.mediaImportTask != nil ? "Space로 취소":store.auditionStatus.pending ? store.auditionPresentation.footer:store.outputCanCancel ? "Space로 취소":nil,
+                footer:store.mediaImportTask != nil ? "Space로 취소":store.auditionStatus.pending ? store.auditionPresentation.footer:store.outputCanCancel ? "Space로 취소":store.playbackLoopCaption,
                 textColor:StudioTheme.text,secondaryColor:StudioTheme.secondary)
             Button { store.playbackFollow = store.playbackFollow.toggled() } label: {
                 HStack(spacing:6) {
@@ -286,6 +291,18 @@ struct TransportControls:View {
             } label:{Image(systemName:"chevron.down")}
                 .menuStyle(.borderlessButton).menuIndicator(.hidden)
                 .accessibilityLabel("재생 팔로우 대상과 구도").help("곡·섹션·고정 서클과 전환 연출")
+            Menu {
+                Button("루프 끄기"){_ = store.choosePlaybackLoop(.off)}
+                Button("현재 곡 전체"){_ = store.choosePlaybackLoop(.song)}
+                Button("선택 섹션"){_ = store.choosePlaybackLoop(.section)}
+            } label:{
+                HStack(spacing:5){Image(systemName:"repeat");if !compact {Text(store.playbackLoopMode == .off ? "루프 꺼짐":store.playbackLoopMode == .song ? "곡 루프":"섹션 루프")}}
+                    .foregroundStyle(store.playbackLoopMode == .off ? StudioTheme.secondary:StudioTheme.accent)
+            }.menuStyle(.borderlessButton)
+                .disabled(!store.canChoosePlaybackLoop)
+                .accessibilityLabel("루프 재생 범위")
+                .accessibilityValue(store.playbackLoopCaption ?? store.playbackLoopMode.rawValue)
+                .help("재생 중 루프 범위는 다음 경계에서 전환 · 루프 해제 후 잔향 재생")
             if store.audioRecordingBusy {Button(store.audioRecordTitle){store.stop()}.disabled(store.audioRecordingLocked).foregroundStyle(.red)}
             else if store.midiRecording {Button("녹음 정지"){store.stop()}.foregroundStyle(.red)}
         }

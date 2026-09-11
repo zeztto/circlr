@@ -1,0 +1,26 @@
+[
+  {
+    "id": "f0r-h3r",
+    "title": "f0r h3r",
+    "detail": "신스웨이브 · 퓨처 베이스 · 섹션과 악기 역할별 컬러",
+    "project": "f0r-h3r.circlr"
+  },
+  {
+    "id": "bach-invention-08",
+    "title": "Invention 8 · 대화하는 궤도",
+    "detail": "바흐 BWV 779 · 3박자 · 플럭과 건반 · 4섹션",
+    "project": "classical/bach-invention-08/bach-invention-08.circlr"
+  },
+  {
+    "id": "bach-invention-07",
+    "title": "Invention 7 · 밤의 대위",
+    "detail": "바흐 BWV 778 · 오르간과 EP · 4섹션",
+    "project": "classical/bach-invention-07/bach-invention-07.circlr"
+  },
+  {
+    "id": "fur-elise",
+    "title": "Für Elise · 돌아오는 빛",
+    "detail": "베토벤 WoO 59 · 3/8박자 · EP와 건반 · 5섹션",
+    "project": "classical/fur-elise/fur-elise.circlr"
+  }
+]

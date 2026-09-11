@@ -27,9 +27,16 @@ import CirclrCore
     public var canAcceptFrame:Bool {state.read{!$0.pending && !$0.closed && $0.failure == nil}}
     /// Call only when a scheduled capture is skipped because canAcceptFrame is false.
     public func reportSkippedCapture() {state.change{if !$0.closed {$0.dropped+=1;$0.skipped+=1}}}
-    public init(url:URL,size:CGSize,pcm:PCM) throws {
-        worker=try CanvasMovieEncoder(url:url,size:size,pcm:pcm)
+    public init(url:URL,size:CGSize,pcm:PCM,loop:PlaybackLoopPCM? = nil) throws {
+        worker=try CanvasMovieEncoder(url:url,size:size,pcm:loop?.cycle ?? pcm,loops:loop != nil)
         self.url=url;self.width=worker.width;self.height=worker.height
+    }
+    /// Control-path barrier: reject late changes before Playback accepts the callback.
+    /// Only the encoder queue owns the PCM cursor; captured frames remain bounded to one.
+    public func scheduleAudio(loop:PlaybackLoopPCM?,exitTail:PCM?,atFrame:Int64) throws {
+        try checkForFailure()
+        guard atFrame>=0,atFrame<Int64(Int.max/2),!state.read({$0.closed}) else{throw CirclrError("영상 오디오 전환 시간이 올바르지 않습니다")}
+        try queue.sync {try worker.scheduleAudio(pcm:loop?.cycle ?? exitTail,loops:loop != nil,atFrame:Int(atFrame))}
     }
     public func append(_ image:CGImage,seconds:Double) throws {
         guard seconds.isFinite,seconds>=0 else{return}
@@ -123,16 +130,19 @@ private final class CanvasMovieEncoder:@unchecked Sendable {
     private let video:AVAssetWriterInput
     private let audio:AVAssetWriterInput
     private let adaptor:AVAssetWriterInputPixelBufferAdaptor
-    private let pcm:PCM
+    private var pcm:PCM
+    private var loops:Bool
+    private var sourceOrigin=0
+    private var scheduledAudio:(frame:Int,pcm:PCM,loops:Bool)?
     private let audioFormat:CMAudioFormatDescription
     private var audioCursor=0
     private var lastTime=CMTime.invalid
     private var ended=false
 
-    public init(url:URL,size:CGSize,pcm:PCM) throws {
+    public init(url:URL,size:CGSize,pcm:PCM,loops:Bool) throws {
         guard !FileManager.default.fileExists(atPath:url.path),url.pathExtension.lowercased()=="mp4" else{throw CirclrError("기존 파일을 보존하려면 새 MP4 파일 이름을 지정하세요")}
         guard size.width.isFinite,size.height.isFinite,size.width>=64,size.height>=64,pcm.count>0,pcm.right.count==pcm.count,pcm.left.allSatisfy(\.isFinite),pcm.right.allSatisfy(\.isFinite),pcm.peak<=1 else{throw CirclrError("영상 크기와 오디오 출력을 확인하세요")}
-        self.url=url;self.pcm=pcm
+        self.url=url;self.pcm=pcm;self.loops=loops
         let scale=min(1,1920/size.width,1080/size.height)
         width=max(64,Int(size.width*scale)/2*2);height=max(64,Int(size.height*scale)/2*2)
         staging=url.deletingLastPathComponent().appendingPathComponent(".circlr-movie-\(UUID().uuidString).mp4")
@@ -152,9 +162,9 @@ private final class CanvasMovieEncoder:@unchecked Sendable {
     }
     public func append(_ image:CGImage,seconds:Double) throws {
         guard !ended,seconds.isFinite,seconds>=0 else{return}
-        let time=CMTime(seconds:min(seconds,pcm.duration),preferredTimescale:48_000)
+        let time=CMTime(seconds:audioEnd.map{min(seconds,Double($0)/PCM.rate)} ?? seconds,preferredTimescale:48_000)
         guard !lastTime.isValid || time>lastTime else{return}
-        try appendAudio(until:min(pcm.count,Int((seconds+1/30)*PCM.rate)))
+        try appendAudio(until:try frameLimit(seconds:seconds+1/30))
         guard video.isReadyForMoreMediaData else{droppedFrames+=1;return}
         guard let pool=adaptor.pixelBufferPool else{throw CirclrError("영상 프레임 pool을 만들 수 없습니다")}
         var pixel:CVPixelBuffer?
@@ -171,11 +181,35 @@ private final class CanvasMovieEncoder:@unchecked Sendable {
         guard adaptor.append(pixel,withPresentationTime:time) else{throw writer.error ?? CirclrError("영상 프레임 저장 실패")}
         lastTime=time;lastSeconds=time.seconds;frameCount+=1
     }
+    func scheduleAudio(pcm:PCM?,loops:Bool,atFrame:Int) throws {
+        guard !ended,self.loops,scheduledAudio==nil,atFrame>=audioCursor,let pcm,
+              (!loops || pcm.count>0),pcm.left.count==pcm.right.count,
+              pcm.left.allSatisfy(\.isFinite),pcm.right.allSatisfy(\.isFinite),pcm.peak<=1 else{throw CirclrError("영상 오디오 전환을 예약할 수 없습니다. 녹화를 다시 시작하세요")}
+        scheduledAudio=(atFrame,pcm,loops)
+    }
+    private var audioEnd:Int? {
+        if let change=scheduledAudio,!change.loops {return change.frame+change.pcm.count}
+        return loops ? nil:sourceOrigin+pcm.count
+    }
+    private func frameLimit(seconds:Double) throws -> Int {
+        guard seconds.isFinite,seconds>=0,seconds*PCM.rate<Double(Int.max/2) else{throw CirclrError("영상 시간이 올바르지 않습니다")}
+        let frames=Int((seconds*PCM.rate).rounded())
+        return audioEnd.map{min($0,frames)} ?? frames
+    }
     private func appendAudio(until limit:Int) throws {
         while audioCursor<limit,audio.isReadyForMoreMediaData {
-            let count=min(2048,limit-audioCursor)
+            if let change=scheduledAudio,audioCursor>=change.frame {
+                pcm=change.pcm;loops=change.loops;sourceOrigin=change.frame;scheduledAudio=nil
+            }
+            let end=min(limit,audioEnd ?? limit,scheduledAudio?.frame ?? limit)
+            let count=min(2048,end-audioCursor)
+            guard count>0 else{return}
             var samples=[Float](repeating:0,count:count*2)
-            for i in 0..<count {samples[i*2]=pcm.left[audioCursor+i];samples[i*2+1]=pcm.right[audioCursor+i]}
+            for i in 0..<count {
+                let relative=audioCursor+i-sourceOrigin
+                let source=loops ? relative % pcm.count:relative
+                samples[i*2]=pcm.left[source];samples[i*2+1]=pcm.right[source]
+            }
             var block:CMBlockBuffer?
             let bytes=count*8
             guard CMBlockBufferCreateWithMemoryBlock(allocator:kCFAllocatorDefault,memoryBlock:nil,blockLength:bytes,blockAllocator:kCFAllocatorDefault,customBlockSource:nil,offsetToData:0,dataLength:bytes,flags:0,blockBufferOut:&block)==kCMBlockBufferNoErr,let block else{throw CirclrError("영상 오디오 buffer 준비 실패")}
@@ -190,9 +224,10 @@ private final class CanvasMovieEncoder:@unchecked Sendable {
     func finish(seconds:Double,isCancelled:()->Bool,publish:()throws->Void) throws {
         guard !ended else{return};ended=true
         guard frameCount>0 else{cancel();throw CirclrError("녹화된 화면이 없습니다")}
-        let duration=min(pcm.duration,max(lastSeconds+1/30,seconds))
+        let requested=max(lastSeconds+1/30,seconds)
+        let duration=audioEnd.map{min(Double($0)/PCM.rate,requested)} ?? requested
         let end=CMTime(seconds:duration,preferredTimescale:48_000)
-        let limit=min(pcm.count,Int((duration*PCM.rate).rounded()))
+        let limit=try frameLimit(seconds:duration)
         video.markAsFinished()
         let deadline=Date().addingTimeInterval(20)
         do {

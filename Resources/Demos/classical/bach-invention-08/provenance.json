@@ -1,0 +1,35 @@
+{
+  "composer": "J. S. Bach",
+  "crossBoundaryNotes": 0,
+  "externalAssets": 0,
+  "license": "Public Domain",
+  "licenseURL": "https://www.mutopiaproject.org/legal.html",
+  "maintainer": "Allen Garvin",
+  "noteCounts": [
+    297,
+    301
+  ],
+  "notesPreservedExactly": true,
+  "projectEndBeat": 102.0,
+  "sectionQuarterBeatBoundaries": [
+    0,
+    24.0,
+    48.0,
+    72.0,
+    102.0
+  ],
+  "sourceFiles": {
+    "source.ly": {
+      "sha256": "ddc634821a618e9a5e9ffcefbd96005bd02bd1f12573e2fefc4e6e6653d83ebe",
+      "url": "https://www.mutopiaproject.org/ftp/BachJS/BWV779/bach-invention-08/bach-invention-08.ly"
+    },
+    "source.mid": {
+      "sha256": "07238719180171f76283756405ee43a0319226e869283bf29affb9e4c360e6f8",
+      "url": "https://www.mutopiaproject.org/ftp/BachJS/BWV779/bach-invention-08/bach-invention-08.mid"
+    }
+  },
+  "sourceLastNoteBeat": 100.0,
+  "sourcePage": "https://www.mutopiaproject.org/cgibin/piece-info.cgi?id=61",
+  "title": "Invention 8 · 대화하는 궤도",
+  "work": "BWV 779"
+}

@@ -6,11 +6,21 @@ import CirclrCore
 
 @MainActor public final class Playback {
     public private(set) var offset:Double=0
-    public private(set) var prepared:PreparedAudio?
+    private var preparedValue:PreparedAudio?
+    private var loopValue:PlaybackLoopPCM?
+    public var prepared:PreparedAudio? {synchronizeLoopBoundary();return preparedValue}
+    public var loopPCM:PlaybackLoopPCM? {synchronizeLoopBoundary();return loopValue}
+    private var loopEpochSeconds:Double=0
+    private var loopDraining=false
+    private var loopChangePreparing=false
+    private var loopChangeWorker:Task<PlaybackLoopPCM,Error>?
+    private var pendingLoop:(PlaybackLoopChangeStatus,PreparedAudio?,PlaybackLoopPCM?)?
+    public var pendingLoopChange:PlaybackLoopChangeStatus? {synchronizeLoopBoundary();return pendingLoop?.0}
     private let transport:PlaybackTransport
     private let outputWorker:OutputWorkerProcess?
     private var activeID:UUID?
     private var generation=0
+    private var loopPreparation:Task<(PlaybackLoopPCM,PCM),Error>?
     public var onOutputChange:(()->Void)?
     public var outputStatus:PlaybackOutputStatus {
         if let outputWorker {return outputWorker.status}
@@ -25,29 +35,71 @@ import CirclrCore
     public init(){transport=PlaybackTransport();outputWorker=OutputWorkerProcess()}
     init(factory:@escaping @Sendable()->any PlaybackBackend){transport=PlaybackTransport(factory:factory);outputWorker=nil}
     init(outputWorker:OutputWorkerProcess){transport=PlaybackTransport();self.outputWorker=outputWorker}
-    deinit{outputWorker?.cancel();transport.shutdown()}
+    deinit{loopChangeWorker?.cancel();loopPreparation?.cancel();outputWorker?.cancel();transport.shutdown()}
     public var playing:Bool {if let outputWorker {return outputWorker.status.transport.phase == .playing};let state=transport.status;return state.id==activeID && state.phase == .playing}
+    /// Hardware elapsed time remains monotonic while musical position wraps.
+    public var elapsedSeconds:Double {
+        let state=outputWorker?.status.transport ?? transport.status
+        guard state.phase == .playing, outputWorker != nil || state.id == activeID else{return 0}
+        return state.seconds
+    }
+    public var completedElapsedSeconds:Double? {outputStatus.transport.completedSeconds}
+    public var loopIteration:Int {synchronizeLoopBoundary();return loopValue?.iteration(elapsed:max(0,elapsedSeconds-loopEpochSeconds),offset:offset) ?? 0}
+    private func synchronizeLoopBoundary() {
+        guard let pending=pendingLoop,max(elapsedSeconds,completedElapsedSeconds ?? 0)>=pending.0.elapsedSeconds else{return}
+        loopEpochSeconds=pending.0.elapsedSeconds;offset=0;loopDraining=pending.0.exiting
+        if let audio=pending.1,let loop=pending.2 {preparedValue=audio;loopValue=loop}
+        pendingLoop=nil
+    }
     public var seconds:Double {
-        if let outputWorker {let state=outputWorker.status.transport;return state.phase == .playing ? min(prepared?.mix.duration ?? .greatestFiniteMagnitude,offset+state.seconds):0}
-        let state=transport.status
-        guard state.id==activeID,state.phase == .playing else{return 0}
-        return min(prepared?.mix.duration ?? .greatestFiniteMagnitude,offset+state.seconds)
+        guard playing else{return 0}
+        synchronizeLoopBoundary()
+        if let loopValue {
+            let local=max(0,elapsedSeconds-loopEpochSeconds)
+            if loopDraining {return min(loopValue.duration+loopValue.exitTail.duration,loopValue.duration+local)}
+            return loopValue.position(elapsed:local,offset:offset)
+        }
+        return min(prepared?.mix.duration ?? .greatestFiniteMagnitude,offset+elapsedSeconds)
     }
-    public func play(_ audio:PreparedAudio,from:Double=0,selection:OutputDeviceSelection = .systemDefault)async throws {
-        try await start(audio,from:from,timeout:10,selection:selection)
+    public func play(_ audio:PreparedAudio,from:Double=0,selection:OutputDeviceSelection = .systemDefault,loop:Bool=false,onPrepared:(@MainActor (PlaybackLoopPCM?) throws -> Void)?=nil)async throws {
+        try await start(audio,from:from,timeout:10,selection:selection,loop:loop,onPrepared:onPrepared)
     }
-    func start(_ audio:PreparedAudio,from:Double=0,timeout:Double,selection:OutputDeviceSelection = .systemDefault)async throws {
+    func start(_ audio:PreparedAudio,from:Double=0,timeout:Double,selection:OutputDeviceSelection = .systemDefault,loop:Bool=false,onPrepared:(@MainActor (PlaybackLoopPCM?) throws -> Void)?=nil)async throws {
         guard from.isFinite,from>=0,timeout.isFinite,timeout>0 else{throw PlaybackTransportError.invalidPosition}
         try Task.checkCancellation()
-        stop();prepared=audio;offset=min(audio.mix.duration,from)
-        guard Int((offset*PCM.rate).rounded())<audio.mix.count else{return}
-        if let outputWorker {try await outputWorker.play(audio.mix,from:offset,timeout:timeout,selection:selection);return}
+        stop();generation+=1;let ticket=generation
+        let circular:PlaybackLoopPCM?,pcm:PCM
+        if loop {
+            let worker=Task.detached(priority:.userInitiated) {
+                let cycle=try PlaybackLoopPCM(audio:audio)
+                return (cycle,cycle.cycle)
+            }
+            loopPreparation=worker
+            defer {if generation==ticket {loopPreparation=nil}}
+            (circular,pcm)=try await withTaskCancellationHandler {try await worker.value} onCancel:{worker.cancel()}
+        } else {circular=nil;pcm=audio.mix}
+        try Task.checkCancellation()
+        guard generation==ticket else{throw CancellationError()}
+        preparedValue=audio;loopValue=circular;loopEpochSeconds=0;loopDraining=false
+        offset=try circular.map {Double(try $0.frameOffset(from:from))/PCM.rate} ?? min(audio.mix.duration,from)
+        let outputOffset = offset
+        guard Int((outputOffset*PCM.rate).rounded())<pcm.count else{return}
+        // Prepare a recorder from the exact cycle before any audible output starts.
+        // A throwing callback or a callback that stops this run cannot launch it later.
+        do {
+            try onPrepared?(circular)
+            try Task.checkCancellation()
+            guard generation==ticket else{throw CancellationError()}
+        } catch {
+            if generation==ticket {stop()}
+            throw error
+        }
+        if let outputWorker {try await outputWorker.play(pcm,from:outputOffset,timeout:timeout,selection:selection,loop:loop,exitTail:circular?.exitTail);return}
         guard selection == .systemDefault else{throw CirclrError("이 출력 경로는 장치 지정을 지원하지 않습니다") }
-        generation+=1;let ticket=generation
         try await outputConnection.waitUntilReady(timeout:timeout)
         try Task.checkCancellation()
         guard generation==ticket else{throw CancellationError()}
-        let id=try transport.begin(audio.mix,from:offset);activeID=id
+        let id=try transport.begin(pcm,from:outputOffset,loop:loop,exitTail:circular?.exitTail);activeID=id
         let deadline=ProcessInfo.processInfo.systemUptime+timeout
         do {
             while true {
@@ -66,8 +118,40 @@ import CirclrCore
             throw error
         }
     }
+    /// Replacement starts at the next boundary not already submitted to hardware.
+    /// onScheduled lets movie recording install the same future PCM timeline.
+    public func requestLoopChange(to audio:PreparedAudio,onScheduled:(@MainActor (PlaybackLoopChangeStatus,PlaybackLoopPCM?)throws->Void)?=nil)async throws->PlaybackLoopChangeStatus {
+        try await changeLoop(to:audio,onScheduled:onScheduled)
+    }
+    public func finishLoopAtBoundary(onScheduled:(@MainActor (PlaybackLoopChangeStatus,PlaybackLoopPCM?)throws->Void)?=nil)async throws->PlaybackLoopChangeStatus {
+        try await changeLoop(to:nil,onScheduled:onScheduled)
+    }
+    private func changeLoop(to audio:PreparedAudio?,onScheduled:(@MainActor (PlaybackLoopChangeStatus,PlaybackLoopPCM?)throws->Void)?)async throws->PlaybackLoopChangeStatus {
+        synchronizeLoopBoundary()
+        guard playing,let current=loopValue,!loopDraining,pendingLoop==nil,!loopChangePreparing,let outputWorker else{throw PlaybackTransportError.busy}
+        let ticket=generation;loopChangePreparing=true
+        defer {if generation==ticket {loopChangePreparing=false;loopChangeWorker=nil}}
+        do {
+            let replacement:PlaybackLoopPCM?
+            if let audio {
+                let retained=Double(current.cycle.count+current.exitTail.count)*16+Double(preparedValue?.mix.count ?? 0)*8+(preparedValue?.stems.values.reduce(0.0){$0+Double($1.count)*8} ?? 0)
+                let worker=Task.detached(priority:.userInitiated){try PlaybackLoopPCM(audio:audio,additionalRetainedBytes:retained)}
+                loopChangeWorker=worker
+                replacement=try await withTaskCancellationHandler {try await worker.value} onCancel:{worker.cancel()}
+            } else {replacement=nil}
+            try Task.checkCancellation();guard generation==ticket else{throw CancellationError()}
+            let change=try await outputWorker.changeLoop(cycle:replacement?.cycle,tail:replacement?.exitTail)
+            try Task.checkCancellation();guard generation==ticket else{throw CancellationError()}
+            pendingLoop=(change,audio,replacement)
+            do {try onScheduled?(change,replacement)} catch {stop();throw error}
+            return change
+        } catch {
+            if error is CancellationError,generation==ticket {stop()}
+            throw error
+        }
+    }
     public func stop() {
-        generation+=1
+        generation+=1;loopPreparation?.cancel();loopPreparation=nil;pendingLoop=nil;loopChangePreparing=false;loopChangeWorker?.cancel();loopChangeWorker=nil
         if let outputWorker {outputWorker.cancel();activeID=nil;offset=0;return}
         outputConnection.cancelWait()
         if let activeID{transport.cancel(activeID)}

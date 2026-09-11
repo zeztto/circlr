@@ -20,6 +20,15 @@ final class OutputWorkerProcess: @unchecked Sendable {
     private var sequence: UInt64 = 0
     private var stage = Stage.boot
     private var frames = 0
+    private var looping = false
+    private var boundaryChangesSupported=false
+    private var loopCycleFrames=0
+    private var loopStartFrame=0
+    private var loopExitScheduled=false
+    private var pendingChangeID:UUID?
+    private var pendingCycleFrames:Int?
+    private var loopEpochFrame:Int64=0
+    private var changeFailure:(UUID,String)?
     private var helperTraceEvents = 0
     private var outputSelection: OutputDeviceSelection = .systemDefault
     private var deviceSelectionSupported = false
@@ -30,13 +39,16 @@ final class OutputWorkerProcess: @unchecked Sendable {
     // Internal scheduling hooks allow deterministic pipe/termination race tests.
     private let beforeEventDelivery: (@Sendable ([OutputWorkerPacket]) -> Void)?
     private let onTerminationObserved: (@Sendable () -> Void)?
+    private let beforeLoopChangeReturn:(@Sendable () async -> Void)?
 
     init(executable: URL? = Bundle.main.executableURL?.deletingLastPathComponent().appendingPathComponent("circlr-output-worker"),
          beforeEventDelivery: (@Sendable ([OutputWorkerPacket]) -> Void)? = nil,
-         onTerminationObserved: (@Sendable () -> Void)? = nil) {
+         onTerminationObserved: (@Sendable () -> Void)? = nil,
+         beforeLoopChangeReturn:(@Sendable () async -> Void)? = nil) {
         self.executable = executable
         self.beforeEventDelivery = beforeEventDelivery
         self.onTerminationObserved = onTerminationObserved
+        self.beforeLoopChangeReturn=beforeLoopChangeReturn
     }
     var status: PlaybackOutputStatus {
         lock.lock(); defer { lock.unlock() }
@@ -58,16 +70,17 @@ final class OutputWorkerProcess: @unchecked Sendable {
         if workerElapsed != nil { value.trace?.helperReportsStages = true }
     }
 
-    func play(_ pcm: PCM, from: Double, timeout: Double, selection: OutputDeviceSelection = .systemDefault) async throws {
+    func play(_ pcm: PCM, from: Double, timeout: Double, selection: OutputDeviceSelection = .systemDefault, loop: Bool = false, exitTail:PCM? = nil) async throws {
         guard from.isFinite, from >= 0, timeout.isFinite, timeout > 0,
               pcm.left.count == pcm.right.count, pcm.count <= OutputWorkerWire.maximumFrames else { throw PlaybackTransportError.invalidPosition }
         try OutputWorkerPacket.validateSelection(selection)
         let first = Int(min(Double(pcm.count), (from * PCM.rate).rounded()))
         guard first < pcm.count else { return }
+        guard exitTail == nil || (loop && exitTail!.left.count == exitTail!.right.count && pcm.count <= OutputWorkerWire.maximumFrames-exitTail!.count) else {throw PlaybackTransportError.invalidPosition}
         try Task.checkCancellation()
         let id = UUID(), control = MediaPreviewCancellation()
         try begin(id, control: control, selection: selection)
-        queue.async { self.launch(id, control: control, pcm: pcm, first: first, selection: selection) }
+        queue.async { self.launch(id, control: control, pcm: pcm, first: first, selection: selection, loop: loop, exitTail:exitTail) }
         let deadline = ProcessInfo.processInfo.systemUptime + timeout
         do {
             while true {
@@ -86,6 +99,65 @@ final class OutputWorkerProcess: @unchecked Sendable {
         } catch {
             cancel(expectedID: id)
             throw error
+        }
+    }
+    /// The source is staged while the existing output continues. ACK identifies the
+    /// exact future sample frame chosen by the bounded scheduler, not a UI timer.
+    func changeLoop(cycle:PCM?,tail:PCM?=nil)async throws->PlaybackLoopChangeStatus {
+        guard let requestSession=status.transport.id else{throw CancellationError()}
+        return try await withTaskCancellationHandler {try await performLoopChange(cycle:cycle,tail:tail,requestSession:requestSession)} onCancel:{self.cancel(expectedID:requestSession)}
+    }
+    private func performLoopChange(cycle:PCM?,tail:PCM?,requestSession:UUID)async throws->PlaybackLoopChangeStatus {
+        try Task.checkCancellation()
+        let change=UUID()
+        try await withCheckedThrowingContinuation { (reply:CheckedContinuation<Void,Error>) in
+            queue.async {
+                let state=self.status.transport
+                guard self.session==requestSession,self.looping,self.boundaryChangesSupported,!self.loopExitScheduled,self.pendingChangeID==nil,state.phase == .playing,
+                      state.loopChange.map({$0.elapsedSeconds<=state.seconds}) ?? true,
+                      let session=self.session,let directory=self.directory else {reply.resume(throwing:PlaybackTransportError.busy);return}
+                self.lock.lock();let control=self.token;self.lock.unlock()
+                guard let control,!control.isCancelled else{reply.resume(throwing:CancellationError());return}
+                self.pendingChangeID=change;self.pendingCycleFrames=cycle?.count
+                if let cycle {
+                    guard cycle.count>0,cycle.left.count==cycle.right.count,
+                          tail == nil || tail!.left.count==tail!.right.count,
+                          cycle.count<=OutputWorkerWire.maximumFrames-(tail?.count ?? 0) else {
+                        self.pendingChangeID=nil;reply.resume(throwing:PlaybackTransportError.invalidPosition);return
+                    }
+                    let path=directory.appendingPathComponent("loop-"+change.uuidString+".caf")
+                    DispatchQueue(label:"circlr.loop-staging",qos:.userInitiated).async {
+                        do {
+                            try self.write(cycle,first:0,to:path,control:control,tail:tail)
+                            self.queue.async {
+                                guard self.session==session,!control.isCancelled,self.pendingChangeID==change else {reply.resume(throwing:CancellationError());return}
+                                do {try self.send(.queueLoopChange(change:change,frames:cycle.count+(tail?.count ?? 0),cycleFrames:cycle.count));reply.resume()}
+                                catch {self.pendingChangeID=nil;reply.resume(throwing:error)}
+                            }
+                        } catch {self.queue.async {if self.pendingChangeID==change {self.pendingChangeID=nil};reply.resume(throwing:error)}}
+                    }
+                } else {
+                    do {try self.send(.exitLoop(change:change));reply.resume()}
+                    catch {self.pendingChangeID=nil;reply.resume(throwing:error)}
+                }
+            }
+        }
+        let deadline=ProcessInfo.processInfo.systemUptime+10
+        while true {
+            try Task.checkCancellation()
+            let state=status.transport
+            guard state.id==requestSession else{throw CancellationError()}
+            if let applied=state.loopChange,applied.id==change {
+                await beforeLoopChangeReturn?()
+                try Task.checkCancellation()
+                guard status.transport.id==requestSession else{throw CancellationError()}
+                return applied
+            }
+            let failure=lock.withLock {changeFailure}
+            if let failure,failure.0==change {throw PlaybackTransportError.workerFailed(failure.1)}
+            guard state.phase == .playing else{throw CancellationError()}
+            guard ProcessInfo.processInfo.systemUptime<deadline else{cancel(expectedID:requestSession);throw PlaybackTransportError.timedOut}
+            try await Task.sleep(for:.milliseconds(10))
         }
     }
     private func begin(_ id: UUID, control: MediaPreviewCancellation, selection: OutputDeviceSelection) throws {
@@ -114,8 +186,11 @@ final class OutputWorkerProcess: @unchecked Sendable {
         queue.async { self.close(id, graceful: true) }
     }
 
-    private func launch(_ id: UUID, control: MediaPreviewCancellation, pcm: PCM, first: Int, selection: OutputDeviceSelection) {
-        session = id; sequence = 0; stage = .boot; frames = pcm.count - first; helperTraceEvents = 0
+    private func launch(_ id: UUID, control: MediaPreviewCancellation, pcm: PCM, first: Int, selection: OutputDeviceSelection, loop: Bool, exitTail:PCM?) {
+        looping = loop;loopCycleFrames=pcm.count;loopStartFrame=first;loopExitScheduled=false;loopEpochFrame=0
+        boundaryChangesSupported=false;pendingChangeID=nil
+        lock.lock();changeFailure=nil;lock.unlock()
+        session = id; sequence = 0; stage = .boot; frames = loop ? pcm.count+(exitTail?.count ?? 0) : pcm.count-first; helperTraceEvents = 0
         terminationObserved = false; eventsDrained = false
         readerControl = MediaPreviewCancellation()
         outputSelection = selection; deviceSelectionSupported = false; actualDevice = nil
@@ -128,7 +203,7 @@ final class OutputWorkerProcess: @unchecked Sendable {
             try FileManager.default.createDirectory(at: root, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700])
             directory = root
             trace(id, .cafWrite, .entered)
-            try write(pcm, first: first, to: root.appendingPathComponent("audio.caf"), control: control)
+            try write(pcm, first: loop ? 0:first, to: root.appendingPathComponent("audio.caf"), control: control,tail:exitTail)
             trace(id, .cafWrite, .completed)
             guard !control.isCancelled else { throw CancellationError() }
             let process = Process(), incoming = Pipe(), outgoing = Pipe(), diagnostic = Pipe()
@@ -159,7 +234,7 @@ final class OutputWorkerProcess: @unchecked Sendable {
         }
     }
 
-    private func write(_ pcm: PCM, first: Int, to url: URL, control: MediaPreviewCancellation) throws {
+    private func write(_ pcm: PCM, first: Int, to url: URL, control: MediaPreviewCancellation,tail:PCM?=nil) throws {
         guard FileManager.default.createFile(atPath: url.path, contents: nil, attributes: [.posixPermissions: 0o600]),
               let format = AVAudioFormat(standardFormatWithSampleRate: PCM.rate, channels: 2),
               let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 4096), let channels = buffer.floatChannelData else {
@@ -169,17 +244,19 @@ final class OutputWorkerProcess: @unchecked Sendable {
         settings[AVLinearPCMIsNonInterleaved] = false
         let file = try AVAudioFile(forWriting: url, settings: settings, commonFormat: .pcmFormatFloat32, interleaved: false)
         try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
-        var offset = first
-        while offset < pcm.count {
+        for (index,part) in [pcm,tail].compactMap({$0}).enumerated() {
+        var offset = index == 0 ? first:0
+        while offset < part.count {
             if control.isCancelled { throw CancellationError() }
-            let count = min(4096, pcm.count - offset)
+            let count = min(4096, part.count - offset)
             for i in 0..<count {
-                let l = pcm.left[offset+i], r = pcm.right[offset+i]
+                let l = part.left[offset+i], r = part.right[offset+i]
                 guard l.isFinite, r.isFinite else { throw PlaybackTransportError.workerFailed("출력 오디오 값이 올바르지 않습니다") }
                 channels[0][i] = l; channels[1][i] = r
             }
             buffer.frameLength = AVAudioFrameCount(count)
             try file.write(from: buffer); offset += count
+        }
         }
     }
 
@@ -256,6 +333,11 @@ final class OutputWorkerProcess: @unchecked Sendable {
                 try prepare(id, supportsSelection: false)
             case .helloCapabilities(let supported) where stage == .boot:
                 try prepare(id, supportsSelection: supported)
+            case .helloBoundaryLoopCapabilities(let supported) where stage == .boot:
+                boundaryChangesSupported=true
+                try prepare(id,supportsSelection:supported,supportsLoop:true)
+            case .helloLoopCapabilities(let supported) where stage == .boot:
+                try prepare(id, supportsSelection: supported, supportsLoop: true)
             case .outputDevice(let descriptor) where stage == .starting && deviceSelectionSupported && actualDevice == nil:
                 if case .deviceUID(let uid) = outputSelection, descriptor.uid != uid { throw OutputWorkerWireError.invalidPacket }
                 actualDevice = descriptor
@@ -273,11 +355,28 @@ final class OutputWorkerProcess: @unchecked Sendable {
                     guard $0.transport.phase == .starting else { return }
                     $0.phase = .ready; $0.step = .ready; $0.request = .none; $0.transport.phase = .playing; $0.transport.didStart = true
                 }
-            case .clock(let run, let seconds) where run == id && stage == .playing:
+            case .clock(let run, let seconds) where run == id && stage == .playing && !looping:
                 guard seconds <= Double(frames) / PCM.rate else { throw OutputWorkerWireError.invalidPacket }
                 update { if $0.transport.phase == .playing { $0.transport.seconds = max($0.transport.seconds, seconds) } }
-            case .finished(let run) where run == id && stage == .playing:
-                update { $0.transport.phase = .stopping; $0.transport.seconds = 0 }
+            case .loopClock(let run, let seconds) where run == id && stage == .playing && looping:
+                update { if $0.transport.phase == .playing { $0.transport.seconds = max($0.transport.seconds, seconds) } }
+            case .loopChangeScheduled(let change,let elapsed,let count,let exiting) where stage == .playing && boundaryChangesSupported && pendingChangeID==change:
+                let current=status.transport
+                guard exiting == (pendingCycleFrames==nil),count == (pendingCycleFrames ?? loopCycleFrames),
+                      elapsed>=loopEpochFrame,
+                      (elapsed-loopEpochFrame+Int64(loopStartFrame)) % Int64(loopCycleFrames)==0,
+                      Double(elapsed)/PCM.rate+1/PCM.rate>=current.seconds else{throw OutputWorkerWireError.invalidPacket}
+                pendingChangeID=nil;loopExitScheduled=exiting
+                loopEpochFrame=elapsed;loopStartFrame=0;loopCycleFrames=count
+                update {$0.transport.loopChange = .init(id:change,elapsedFrame:elapsed,frames:count,exiting:exiting)}
+            case .loopChangeRejected(let change,let message) where pendingChangeID==change:
+                pendingChangeID=nil;lock.lock();changeFailure=(change,message);lock.unlock()
+            case .loopFinished(let run,let endFrame) where run==id && stage == .playing && looping && loopExitScheduled:
+                guard endFrame>=loopEpochFrame else{throw OutputWorkerWireError.invalidPacket}
+                update {$0.transport.completedSeconds=Double(endFrame)/PCM.rate;$0.transport.phase = .stopping;$0.transport.seconds=0}
+                close(id,graceful:false)
+            case .finished(let run) where run == id && stage == .playing && (!looping || loopExitScheduled):
+                update { $0.transport.completedSeconds=$0.transport.seconds;$0.transport.phase = .stopping; $0.transport.seconds = 0 }
                 close(id, graceful: false)
             case .failure(let run, let message) where run == nil || run == id: fail(id, message: message)
             case .trace(let step, let phase, let elapsed):
@@ -290,15 +389,24 @@ final class OutputWorkerProcess: @unchecked Sendable {
             }
         } catch { fail(id, message: "출력 응답 처리에 실패했습니다. 다시 재생하세요.") }
     }
-    private func prepare(_ id: UUID, supportsSelection: Bool) throws {
+    private func prepare(_ id: UUID, supportsSelection: Bool, supportsLoop: Bool = false) throws {
         trace(id, .helperHello, .completed)
         deviceSelectionSupported = supportsSelection
         if !supportsSelection, case .deviceUID = outputSelection {
             fail(id, message: "출력 helper가 장치 선택을 지원하지 않습니다. 앱 설치를 확인하세요.")
             return
         }
+        if looping && !supportsLoop {
+            fail(id, message: "출력 helper가 연속 루프를 지원하지 않습니다. 앱 설치를 확인하세요.")
+            return
+        }
         stage = .preparing; update { $0.step = .routing }
-        if supportsSelection { try send(.prepareOutput(frames: frames, selection: outputSelection)) }
+        if looping,boundaryChangesSupported {try send(.prepareLoopRange(frames:frames,cycleFrames:loopCycleFrames,startFrame:loopStartFrame,selection:outputSelection))}
+        else if looping {
+            guard loopStartFrame==0,frames==loopCycleFrames else{throw PlaybackTransportError.workerFailed("출력 helper가 루프 시작점과 종료 잔향을 지원하지 않습니다")}
+            try send(.prepareLoop(frames: frames, selection: outputSelection))
+        }
+        else if supportsSelection { try send(.prepareOutput(frames: frames, selection: outputSelection)) }
         else { try send(.prepare(frames: frames)) }
     }
     private func fail(_ id: UUID, message: String) {

@@ -1,0 +1,2 @@
+# Preserve checksum-pinned upstream LilyPond files byte for byte.
+Resources/Demos/classical/**/source.ly -whitespace

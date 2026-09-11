@@ -23,3 +23,7 @@ Resources/Codex/**/__pycache__/
 Resources/Codex/__pycache__/
 qa/__pycache__/
 scripts/__pycache__/
+
+# Python test/runtime caches are local build products.
+__pycache__/
+*.py[cod]

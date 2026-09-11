@@ -22,6 +22,8 @@ struct AlbumCanvas: NSViewRepresentable {
     var animation: Timer?
     var animationDestination: HierarchyCamera?
     var scrollMonitor: Any?
+    var viewingKeyMonitor: Any?
+    var normalTitleVisibility:NSWindow.TitleVisibility?
     private var forwardingAutomationScroll=false
     private var paletteKeyMonitor:Any?
     private var paletteFocusObserver:NSObjectProtocol?
@@ -92,12 +94,11 @@ struct AlbumCanvas: NSViewRepresentable {
         store.captureMovieFrame = { [weak self] in
             guard let self,self.bounds.width>=64,self.bounds.height>=64 else{return nil}
             self.updatePlaybackFrame();self.placeEditor()
-            guard let bitmap=self.bitmapImageRepForCachingDisplay(in:self.bounds) else{return nil}
-            self.cacheDisplay(in:self.bounds,to:bitmap)
-            return bitmap.cgImage
+            return CanvasMovieCapture.image(of:self)
         }
         store.canvasCommands = { [weak self] in self?.availableCommands() ?? [] }
         store.focusCanvas = { [weak self] in guard let self else{return};self.store.editorFocusRequest=nil;self.window?.makeFirstResponder(self) }
+        store.viewingModeDidChange = { [weak self] in self?.applyViewingMode() }
         installCircleColorObserver()
         registerForDraggedTypes([.fileURL])
         wantsLayer = true; clipsToBounds = true; layer?.masksToBounds = true; layer?.backgroundColor = StudioTheme.canvasNS.cgColor
@@ -110,6 +111,7 @@ struct AlbumCanvas: NSViewRepresentable {
     required init?(coder: NSCoder) { fatalError() }
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
+        if let viewingKeyMonitor {NSEvent.removeMonitor(viewingKeyMonitor);self.viewingKeyMonitor=nil}
         if let scrollMonitor { NSEvent.removeMonitor(scrollMonitor); self.scrollMonitor = nil }
         if let paletteKeyMonitor {NSEvent.removeMonitor(paletteKeyMonitor);self.paletteKeyMonitor=nil}
         if let paletteFocusObserver {NotificationCenter.default.removeObserver(paletteFocusObserver);self.paletteFocusObserver=nil}
@@ -118,6 +120,8 @@ struct AlbumCanvas: NSViewRepresentable {
         playbackNotifications.removeAll()
         if window != nil {
             installPlaybackObservers()
+            installViewingKeyMonitor()
+            applyViewingMode()
             paletteKeyMonitor=NSEvent.addLocalMonitorForEvents(matching:.keyDown){[weak self] event in
                 guard let self,event.window===self.window,let owner=self.store.commandPalette?.id else{return event}
                 guard NSApp.isActive,self.window?.isKeyWindow==true else{self.pendingPaletteKeys=[];return nil}
@@ -197,6 +201,7 @@ struct AlbumCanvas: NSViewRepresentable {
         addTrackingArea(area);tracking=area
     }
     override func mouseMoved(with event:NSEvent) {
+        if store.viewingMode {toolTip=nil;NotificationCenter.default.post(name:ViewingModeControls.activity,object:store);return}
         let point=convert(event.locationInWindow,from:nil)
         let port=CirclePortGeometry.hit(Point(point.x,point.y),visibleHandles:visiblePortHandles())
         let node=port.flatMap{scene?.node($0.endpoint.node)} ?? hit(point)
@@ -291,6 +296,8 @@ struct AlbumCanvas: NSViewRepresentable {
         } else { camera = target; placeEditor(); needsDisplay = true; store.hierarchyZoom = camera.zoom; finishConnectionEditorFocus() }
     }
     func placeEditor() {
+        if store.viewingMode {editor?.isHidden=true;cableTools?.isHidden=true;portTools?.isHidden=true;return}
+        editor?.isHidden=false
         defer { refreshCableTools() }
         if store.movieWriter != nil {removePrecisionEditor();return}
         if store.playback.playing, store.playbackFollow == .following {
@@ -393,16 +400,16 @@ struct AlbumCanvas: NSViewRepresentable {
             let radius = node.radius*camera.zoom, center = screen(node)
             guard isVisible(node), NSRect(x: center.x-radius, y: center.y-radius, width: 2*radius, height: 2*radius).intersects(bounds) else { continue }
             if radius<22 {continue}
-            let isEditor = editorAddress == node.id
+            let isEditor = !store.viewingMode && editorAddress == node.id
             if node.role == .music, !isEditor, radius > 65 { drawMusic(node, center: center, radius: radius) }
         }
         for node in scene.nodes where isVisible(node) { drawPlaybackCircle(node) }
         drawReadableLabels()
         drawPortHandles()
-        drawCableEditing()
+        if !store.viewingMode {drawCableEditing()}
         drawPortLabels()
-        drawPlaybackCaption()
-        drawFileDropPreview()
+        if !store.viewingMode {drawPlaybackCaption()}
+        if !store.viewingMode {drawFileDropPreview()}
         if let handle = connecting, let node = scene.node(handle.endpoint.node) {
             let target=CirclePortGeometry.hit(Point(connectionPoint.x,connectionPoint.y),visibleHandles:visiblePortHandles()) ??
                 CirclePortHandle(endpoint:handle.endpoint,octant:PortOctant(rawValue:(handle.octant.rawValue+4)%8)!,point:Point(connectionPoint.x,connectionPoint.y))
@@ -432,7 +439,7 @@ struct AlbumCanvas: NSViewRepresentable {
         return OrbitDrawing.point(center,radius:(orbit.radius+node.outerRadius*1.22)*camera.zoom,phase:seconds/orbit.timeline.duration)
     }
     func drawOrbit(_ node:CircleSceneNode) {
-        guard editorAddress == nil else{return}
+        guard store.viewingMode || editorAddress == nil else{return}
         guard let orbit=node.orbit,let owner=scene?.node(orbit.owner),isVisible(node),owner.radius*camera.zoom>100 else{return}
         guard owner.radius*camera.zoom<max(bounds.width,bounds.height)*4 else{return}
         let center=screen(owner),radius=orbit.radius*camera.zoom
@@ -476,6 +483,7 @@ struct AlbumCanvas: NSViewRepresentable {
         if filled {color.setFill();NSBezierPath(ovalIn:NSRect(x:point.x-2,y:point.y-2,width:4,height:4)).fill()}
     }
     func drawText(_ text:String,x:Double,y:Double,size:Double,color:NSColor,maxWidth:Double) {
+        guard !store.viewingMode else{return}
         let style=NSMutableParagraphStyle();style.alignment = .center;style.lineBreakMode = .byTruncatingTail
         (text as NSString).draw(in:NSRect(x:x-maxWidth/2,y:y,width:maxWidth,height:size*1.6),withAttributes:[.font:NSFont.systemFont(ofSize:size,weight:.medium),.foregroundColor:color,.paragraphStyle:style])
     }
@@ -536,6 +544,11 @@ struct AlbumCanvas: NSViewRepresentable {
         }
     }
     override func mouseDown(with event:NSEvent) {
+        if store.viewingMode {
+            interruptPlaybackFollow();window?.makeFirstResponder(self)
+            animation?.invalidate();animation=nil
+            down=convert(event.locationInWindow,from:nil);panOrigin=camera.pan;panning=true;return
+        }
         var identity=store.numberEditIdentity
         guard store.resolveActiveNumericDraft(),store.nameEditing.resolve() else{return}
         identity.revision=store.project.musicRevision
@@ -584,6 +597,7 @@ struct AlbumCanvas: NSViewRepresentable {
     }
     override func otherMouseDragged(with event:NSEvent){mouseDragged(with:event)}
     override func mouseUp(with event:NSEvent) {
+        if store.viewingMode {panning=false;return}
         if let node=orbitDrag,let orbit=node.orbit,orbitRevision==store.project.musicRevision,abs(orbitSeconds-orbit.anchor)>1e-7 {
             if node.role == .music {let seconds=orbitSeconds,original=store.editOriginal;store.mutate("궤도 시작 이동"){try OrbitEditing.setStart(node.id,seconds:seconds,original:original,in:&$0)}}
             else if node.role == .section {
@@ -662,6 +676,8 @@ struct AlbumCanvas: NSViewRepresentable {
         return window?.contentView.flatMap{find($0)}
     }
     override func keyDown(with event:NSEvent) {
+        if store.startupOpen {return}
+        if store.viewingMode {handleViewingKey(event);return}
         if store.outputPreferencesOpen || store.libraryOpen || store.soundPickerRequest != nil || store.arrangementPickerRequest != nil || store.commandPalette != nil || store.navigationOpen || store.keyboardHelp {return}
         if event.keyCode==53,event.modifierFlags.intersection([.command,.control,.option,.shift]).isEmpty,let draft=store.midiImportDraft {
             store.cancelMIDIImport(draft.id);return
@@ -713,6 +729,7 @@ struct AlbumCanvas: NSViewRepresentable {
         }
     }
     func updateAccessibility() {
+        if store.viewingMode {setAccessibilityChildren([]);return}
         let now = ProcessInfo.processInfo.systemUptime
         if playbackAnimation != nil, now-accessibilityUpdateTime < 0.2 { return }
         accessibilityUpdateTime = now
@@ -740,7 +757,7 @@ struct AlbumCanvas: NSViewRepresentable {
     weak var canvas:AlbumCanvasView?
     let address:CircleAddress
     init(parent:AlbumCanvasView,address:CircleAddress){self.canvas=parent;self.address=address;super.init();setAccessibilityParent(parent);setAccessibilityRole(.button);setAccessibilityEnabled(true)}
-    override func accessibilityPerformPress()->Bool {canvas?.store.focusUserWorkspace(address,detail:true) ?? false}
+    override func accessibilityPerformPress()->Bool {guard let canvas,!canvas.store.viewingMode else{return false};return canvas.store.focusUserWorkspace(address,detail:true)}
 }
 
 @MainActor final class CircleMenuAction: NSObject {
@@ -748,8 +765,9 @@ struct AlbumCanvas: NSViewRepresentable {
     init(_ run: @escaping () -> Void) { self.run=run }
 }
 extension AlbumCanvasView {
-    @objc func runCircleMenu(_ sender: NSMenuItem) { (sender.representedObject as? CircleMenuAction)?.run() }
+    @objc func runCircleMenu(_ sender: NSMenuItem) {guard !store.viewingMode else{return};(sender.representedObject as? CircleMenuAction)?.run() }
     override func rightMouseDown(with event: NSEvent) {
+        guard !store.viewingMode else{return}
         let point=convert(event.locationInWindow,from:nil)
         window?.makeFirstResponder(self)
         NSMenu.popUpContextMenu(circleMenu(at:point),with:event,for:self)

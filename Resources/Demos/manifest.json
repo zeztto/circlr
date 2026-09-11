@@ -7,9 +7,27 @@
     "notices/LICENSE",
     "notices/readme.txt",
     "notices/manifest.json",
-    "DEMO-LICENSE.md"
+    "DEMO-LICENSE.md",
+    "classical/ARRANGEMENT-TERMS.md",
+    "classical/NOTICE.md"
   ],
   "files": {
+    "DEMO-LICENSE.md": "002a7afdae0fb90b820dc6029ecd578f60795653d1eb98d4a2fdae500e4819d0",
+    "catalog.json": "a5b83e6505cd7212117f555084a7d930bb4f75b74ad56b974c277e5255cb3fe8",
+    "classical/ARRANGEMENT-TERMS.md": "c157b2a2082657ca57f1ce3abf0efbeb97a665f31d72239acdbdaf7444bd60c4",
+    "classical/NOTICE.md": "b0ad244171125a93b2ea1150f9065e66ed6ef4fc6c1566e1661559583c3f3e2e",
+    "classical/bach-invention-07/bach-invention-07.circlr/manifest.json": "0d1418d38b8416fe6a5e6366bdbf81f97a2e5d90787fbc6b32f10c6cee724d76",
+    "classical/bach-invention-07/provenance.json": "b32298cd3bc8984f7f716fc5ab11d2c9e14e6f685f0e4329cfa6507dc8397c72",
+    "classical/bach-invention-07/source.ly": "87b3a05f14adba1d7113d00b06f7634043e00fb2f660c7b1e698d49c73476248",
+    "classical/bach-invention-07/source.mid": "ee5e02d6a43cd9a45f6c10e3c6b3905190ed42521b1de7487fee8a98c3735eb6",
+    "classical/bach-invention-08/bach-invention-08.circlr/manifest.json": "a0350b4802b192bf3d7ba207a9a031f166c0c5092e60faf0f82f766da3257c34",
+    "classical/bach-invention-08/provenance.json": "2517fa75230c1ef70410a9c1c6c009f4ac17f92b5aecdc3fe86f0a9b7545faf6",
+    "classical/bach-invention-08/source.ly": "ddc634821a618e9a5e9ffcefbd96005bd02bd1f12573e2fefc4e6e6653d83ebe",
+    "classical/bach-invention-08/source.mid": "07238719180171f76283756405ee43a0319226e869283bf29affb9e4c360e6f8",
+    "classical/fur-elise/fur-elise.circlr/manifest.json": "f619f59f1124ed4dca08aca9b952835265ce7049e367c1130ab89f961a69a7bb",
+    "classical/fur-elise/provenance.json": "0b507d690d029753e056937d4c8baa4fae4578d02dac9a9c60ae0946afa466c3",
+    "classical/fur-elise/source.ly": "828a7bd1b42e441fe1b0eb0389ba46f1502dab28bbe488389e635fb446ba7a67",
+    "classical/fur-elise/source.mid": "1c12c21c7bbf4cf163896732672648a69d497636059837abd153c71abe50215a",
     "f0r-h3r.circlr/manifest.json": "0f879f3b5885730f8687388817cac47cdf84eb27ee82c1cced0fd3835428cf55",
     "f0r-h3r.circlr/media/04908EF4-BA04-4B4A-9364-AEEFB84B52F7.wav": "a427fe3664ebce4dcdc9f4704cb0bc4b83e757e64372999d264ae5452caba321",
     "f0r-h3r.circlr/media/3EE5D32A-33CB-4235-BC30-4735C5DDE44F.wav": "c49715ffd171b6d138e089df1f2513c6fca71ebf32f3b5fea125ddad1c786d52",
@@ -19,7 +37,7 @@
     "f0r-h3r.circlr/media/E0846529-AB20-4BF2-BFEB-DED58300762F.wav": "b79c1a25375310b810fde37f5c40dc41848de31eb9e6678be8f0b97808465509",
     "notices/LICENSE": "a2010f343487d3f7618affe54f789f5487602331c0a8d03f49e9a7c547cf0499",
     "notices/manifest.json": "11275cbfd9d933bb293dc266faf373ea65efa918ca2f6136c2f69ce88e5b804b",
-    "notices/readme.txt": "9c0ad2a7d6cfe266e2194c5a0191cc2f783a524468488580d4d2b2795d3298ec",
-    "DEMO-LICENSE.md": "002a7afdae0fb90b820dc6029ecd578f60795653d1eb98d4a2fdae500e4819d0"
-  }
+    "notices/readme.txt": "9c0ad2a7d6cfe266e2194c5a0191cc2f783a524468488580d4d2b2795d3298ec"
+  },
+  "catalogVersion": 1
 }

@@ -3,13 +3,14 @@ import CirclrCore
 
 extension AlbumCanvasView {
     func visibleTimeHandle(_ node: CircleSceneNode) -> NSPoint? {
-        guard editorAddress == nil, isVisible(node), let orbit = node.orbit, let owner = scene?.node(orbit.owner),
+        guard !store.viewingMode,editorAddress == nil, isVisible(node), let orbit = node.orbit, let owner = scene?.node(orbit.owner),
               owner.radius*camera.zoom > 100, owner.radius*camera.zoom < max(bounds.width,bounds.height)*4,
               let point = timeHandle(node), cablePointAvailable(Point(point.x,point.y), labels: false) else { return nil }
         return point
     }
 
     func portLabelPlacements() -> [PortLabelPlacement] {
+        guard !store.viewingMode else{return []}
         guard let scene else { return [] }
         let endpoints = cableEndpointHandles().map(\.1), handles = visiblePortHandles()
         let all = endpoints + handles

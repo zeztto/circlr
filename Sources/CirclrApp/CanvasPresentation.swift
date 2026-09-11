@@ -23,7 +23,7 @@ struct CanvasLabelText {
 
 extension AlbumCanvasView {
     var workspaceViewport:CGRect {
-        CanvasWorkspaceGeometry.viewport(width:bounds.width,height:bounds.height,console:store.consoleBounds.height>0 ? store.consoleBounds:nil)
+        CanvasWorkspaceGeometry.viewport(width:bounds.width,height:bounds.height,console:!store.viewingMode && store.consoleBounds.height>0 ? store.consoleBounds:nil)
     }
     var labelContext:CircleSceneNode? {
         guard let scene else{return nil}
@@ -59,6 +59,7 @@ extension AlbumCanvasView {
     }
     func drawReadableLabels() {
         labelPlacements=[]
+        guard !store.viewingMode else{return}
         guard let scene,let context=labelContext else{return}
         let ancestors=Set(scene.path(to:context.id).dropLast().map(\.id))
         var requests:[CanvasLabelRequest]=[],texts:[CircleAddress:CanvasLabelText]=[:]

@@ -1,5 +1,6 @@
 import Foundation
 import CoreGraphics
+import AppKit
 
 @main struct AudioHandleGeometryQA {
     static var failures: [String] = []
@@ -18,6 +19,9 @@ import CoreGraphics
     }
     static func main() {
         var scenarios = 0
+        let font: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: 11)]
+        let startLabel = ("시작" as NSString).size(withAttributes: font)
+        let endLabel = ("끝" as NSString).size(withAttributes: font)
         // Full-source zoom spans subpixel clips through roughly 13 pixels here.
         for width: CGFloat in [25, 32, 44, 120, 320, 848] {
             for origin: CGFloat in [0, 37] {
@@ -30,7 +34,7 @@ import CoreGraphics
                         let startX = plot.minX + time/32 * plot.width
                         let endX = plot.minX + (time+duration)/32 * plot.width
                         let layout = AudioWaveformHandleLayout(bounds: bounds, plot: plot,
-                            startX: startX, endX: endX, startLabel: CGSize(width: 20, height: 12), endLabel: CGSize(width: 12, height: 12))
+                            startX: startX, endX: endX, startLabel: startLabel, endLabel: endLabel)
                         guard let a=layout.start, let b=layout.end else { failures.append(label + " missing handle"); continue }
                         expect(layout.compact, label + " expected compact")
                         expect(a.timeX == startX && b.timeX == endX, label + " time mapping moved")

@@ -39,6 +39,12 @@ private final class Worker: @unchecked Sendable {
     private var configurationObserver: NSObjectProtocol?
     private var deviceListeners: [(AudioObjectID, AudioObjectPropertyAddress, AudioObjectPropertyListenerBlock)] = []
     private var didStart = false
+    private var looping = false
+    private var loopBuffer: AVAudioPCMBuffer?
+    private var loopAudio:OutputWorkerLoopScheduler.Audio?
+    private var loopScheduler:OutputWorkerLoopScheduler?
+    private var loopStartFrame=0
+    private var loopCycleFrames:Int?
 
     init(session: UUID, directory: URL) throws {
         self.session = session
@@ -55,7 +61,7 @@ private final class Worker: @unchecked Sendable {
     }
 
     func start() {
-        emit(.helloCapabilities(outputDeviceSelection: true))
+        emit(.helloBoundaryLoopCapabilities(outputDeviceSelection: true))
         let slots = DispatchSemaphore(value: 8)
         DispatchQueue(label: "circlr.output-worker-input").async {
             var wire = OutputWorkerWire(session: self.session, receiving: .commands)
@@ -104,6 +110,25 @@ private final class Worker: @unchecked Sendable {
                 try prepare(frames: frames, selection: .systemDefault)
             case .prepareOutput(let frames, let selection):
                 try prepare(frames: frames, selection: selection)
+            case .prepareLoop(let frames, let selection):
+                looping = true
+                try prepare(frames: frames, selection: selection)
+            case .prepareLoopRange(let frames,let cycleFrames,let startFrame,let selection):
+                looping=true;loopCycleFrames=cycleFrames;loopStartFrame=startFrame
+                try prepare(frames:frames,selection:selection)
+            case .queueLoopChange(let change,let frames,let cycleFrames):
+                do {
+                    guard active != nil,let scheduler=loopScheduler else{throw WorkerError.invalidState}
+                    let path=directory.appendingPathComponent("loop-"+change.uuidString+".caf")
+                    let audio=try readLoopAudio(path,frames:frames,cycleFrames:cycleFrames)
+                    try scheduler.request(id:change,audio:audio)
+                    try? FileManager.default.removeItem(at:path)
+                } catch {emit(.loopChangeRejected(change:change,message:"루프 변경을 준비할 수 없습니다: "+failureMessage(error)))}
+            case .exitLoop(let change):
+                do {
+                    guard active != nil,let scheduler=loopScheduler else{throw WorkerError.invalidState}
+                    try scheduler.request(id:change,audio:nil)
+                } catch {emit(.loopChangeRejected(change:change,message:"루프 종료를 예약할 수 없습니다"))}
             case .play(let run):
                 guard let file, active == nil, !used else { throw WorkerError.invalidState }
                 used = true
@@ -135,12 +160,33 @@ private final class Worker: @unchecked Sendable {
                 try checkCancellation()
                 trace(.scheduling, .entered)
                 player.volume = 0
-                player.scheduleFile(file, at: nil, completionCallbackType: .dataPlayedBack) { [weak self] _ in
+                if looping {
+                    guard let loopAudio else { throw WorkerError.invalidState }
+                    let scheduler=try OutputWorkerLoopScheduler(player:player,audio:loopAudio,fromFrame:loopStartFrame,onBoundary:{[weak self] boundary in
+                        guard let self else{return}
+                        DispatchQueue.main.async {
+                            guard self.active==run else{return}
+                            self.emit(.loopChangeScheduled(change:boundary.change.id,elapsedFrame:boundary.elapsedFrame,frames:boundary.sourceFrames,exiting:boundary.change.replacement==nil))
+                        }
+                    },onFinished:{[weak self] endFrame in
+                        DispatchQueue.main.async {
+                            guard let self,self.active==run else{return}
+                            self.clear();self.emit(.loopFinished(run:run,elapsedFrame:endFrame))
+                        }
+                    },onFailure:{[weak self] message in
+                        DispatchQueue.main.async {
+                            guard let self,self.active==run else{return}
+                            self.emit(.failure(run:run,message:message));self.clear()
+                        }
+                    })
+                    loopScheduler=scheduler;try scheduler.start();self.loopAudio=nil
+                } else { player.scheduleFile(file, at: nil, completionCallbackType: .dataPlayedBack) { [weak self] _ in
                     DispatchQueue.main.async {
                         guard let self, self.active == run else { return }
                         self.clear()
                         self.emit(.finished(run: run))
                     }
+                }
                 }
                 trace(.scheduling, .completed)
                 trace(.engineStart, .entered)
@@ -198,10 +244,32 @@ private final class Worker: @unchecked Sendable {
             }
         }
         input.framePosition = 0
+        if looping {loopAudio=try readLoopAudio(url,frames:frames,cycleFrames:loopCycleFrames ?? frames)}
         file = input
         outputSelection = selection
         trace(.fileValidation, .completed)
         emit(.prepared)
+    }
+
+    private func readLoopAudio(_ url:URL,frames:Int,cycleFrames:Int)throws->OutputWorkerLoopScheduler.Audio {
+        try Self.validateOwned(url,directory:false)
+        guard frames>0,cycleFrames>0,cycleFrames<=frames,
+              Double(frames)*8<=ArrangementRenderer.preparationByteLimit/2 else{throw WorkerError.invalidFile}
+        let input=try AVAudioFile(forReading:url,commonFormat:.pcmFormatFloat32,interleaved:false)
+        guard input.length==frames,input.processingFormat.sampleRate==PCM.rate,input.processingFormat.channelCount==2,
+              input.fileFormat.streamDescription.pointee.mFormatID==kAudioFormatLinearPCM else{throw WorkerError.invalidFile}
+        func read(_ count:Int)throws->AVAudioPCMBuffer {
+            guard let buffer=AVAudioPCMBuffer(pcmFormat:input.processingFormat,frameCapacity:AVAudioFrameCount(count)) else{throw WorkerError.invalidFile}
+            try checkCancellation();try input.read(into:buffer,frameCount:AVAudioFrameCount(count))
+            guard Int(buffer.frameLength)==count,let channels=buffer.floatChannelData else{throw WorkerError.invalidFile}
+            for i in 0..<count {
+                if i%4096==0 {try checkCancellation()}
+                guard channels[0][i].isFinite,channels[1][i].isFinite,abs(channels[0][i])<=1,abs(channels[1][i])<=1 else{throw WorkerError.invalidFile}
+            }
+            return buffer
+        }
+        let cycle=try read(cycleFrames),tail=try frames>cycleFrames ? read(frames-cycleFrames):nil
+        return .init(cycle:cycle,tail:tail)
     }
 
     // All observation state and device revalidation belong to the worker's main queue.
@@ -276,13 +344,15 @@ private final class Worker: @unchecked Sendable {
               played.sampleRate.isFinite, played.sampleRate > 0 else { return }
         let seconds = Double(played.sampleTime) / played.sampleRate
         guard seconds.isFinite, seconds >= 0 else { return }
-        lastSeconds = max(lastSeconds, min(Double(file.length) / 48_000, seconds))
-        emit(.clock(run: run, seconds: lastSeconds))
+        lastSeconds = max(lastSeconds, looping ? seconds : min(Double(file.length) / 48_000, seconds))
+        if looping { emit(.loopClock(run: run, seconds: lastSeconds)) }
+        else { emit(.clock(run: run, seconds: lastSeconds)) }
     }
 
     private func clear() {
         active = nil
         didStart = false
+        loopScheduler?.cancel();loopScheduler=nil;loopAudio=nil;loopBuffer=nil
         timer?.invalidate(); timer = nil
         removeDeviceObservers()
         player?.stop(); engine?.stop()

@@ -2,6 +2,14 @@ import Foundation
 import AVFAudio
 import CirclrCore
 
+public struct PlaybackLoopChangeStatus:Equatable,Codable,Sendable {
+    public let id:UUID
+    public let elapsedFrame:Int64
+    public let frames:Int
+    public let exiting:Bool
+    public var elapsedSeconds:Double {Double(elapsedFrame)/PCM.rate}
+}
+
 public struct PlaybackTransportStatus:Equatable,Codable,Sendable {
     public enum Phase:String,Codable,Sendable {case idle,starting,playing,stopping,failed}
     public var phase:Phase = .idle
@@ -9,6 +17,9 @@ public struct PlaybackTransportStatus:Equatable,Codable,Sendable {
     public var seconds:Double=0
     public var didStart=false
     public var message:String?
+    public var loopChange:PlaybackLoopChangeStatus?
+    /// Exact final clock for natural completion; nil for STOP/cancellation.
+    public var completedSeconds:Double?
     public var pending:Bool {phase == .starting || phase == .stopping}
     public init(){}
 }
@@ -32,9 +43,16 @@ protocol PlaybackBackend:AnyObject {
     func acquireOutput()
     func route()
     func start(_ pcm:PCM,from:Double,control:MediaPreviewCancellation,finished:@escaping @Sendable()->Void)throws
+    func startLoop(_ pcm:PCM,from:Double,tail:PCM?,control:MediaPreviewCancellation)throws
     func stop()
     var seconds:Double{get}
     var running:Bool{get}
+}
+
+extension PlaybackBackend {
+    func startLoop(_ pcm:PCM,from:Double,tail:PCM?,control:MediaPreviewCancellation)throws {
+        throw CirclrError("이 출력 backend는 루프를 지원하지 않습니다")
+    }
 }
 
 final class PlaybackTransport:@unchecked Sendable {
@@ -59,7 +77,7 @@ final class PlaybackTransport:@unchecked Sendable {
         await report(.routing)
         await perform {s in guard !s.closed else{return};s.backend?.route()}
     }
-    func begin(_ pcm:PCM,from:Double)throws->UUID {
+    func begin(_ pcm:PCM,from:Double,loop:Bool=false,exitTail:PCM?=nil)throws->UUID {
         lock.lock()
         guard control==nil else{lock.unlock();throw PlaybackTransportError.busy}
         let id=UUID(),token=MediaPreviewCancellation()
@@ -68,9 +86,10 @@ final class PlaybackTransport:@unchecked Sendable {
         queue.async {
             do {
                 guard !self.closed,let backend=self.backend else{throw CancellationError()}
-                try backend.start(pcm,from:from,control:token){[weak self] in
+                if loop {try backend.startLoop(pcm,from:from,tail:exitTail,control:token)}
+                else {try backend.start(pcm,from:from,control:token){[weak self] in
                     guard let self else{return};self.queue.async{self.finish(id)}
-                }
+                }}
                 guard !token.isCancelled else{throw CancellationError()}
                 self.lock.lock()
                 if self.value.id==id,self.value.phase == .starting {self.value.phase = .playing;self.value.didStart=true}
@@ -119,6 +138,7 @@ final class PlaybackTransport:@unchecked Sendable {
 private final class EnginePlaybackBackend:PlaybackBackend {
     private let engine=AVAudioEngine(),player=AVAudioPlayerNode()
     private var mixer:AVAudioMixerNode?
+    private var loopScheduler:OutputWorkerLoopScheduler?
     func attach(){engine.attach(player)}
     func acquireOutput(){mixer=engine.mainMixerNode}
     func route(){if let mixer{engine.connect(player,to:mixer,format:AVAudioFormat(standardFormatWithSampleRate:PCM.rate,channels:2))}}
@@ -133,7 +153,16 @@ private final class EnginePlaybackBackend:PlaybackBackend {
         player.play();try check()
         player.volume=1;try check()
     }
-    func stop(){player.stop();engine.stop()}
+    func startLoop(_ pcm:PCM,from:Double,tail:PCM?,control:MediaPreviewCancellation)throws {
+        guard !control.isCancelled else{throw CancellationError()}
+        let audio=OutputWorkerLoopScheduler.Audio(cycle:try pcm.buffer(),tail:try tail.flatMap {$0.count>0 ? try $0.buffer():nil})
+        let scheduler=try OutputWorkerLoopScheduler(player:player,audio:audio,fromFrame:Int((from*PCM.rate).rounded()),onBoundary:{_ in},onFinished:{_ in},onFailure:{_ in control.cancel()})
+        loopScheduler=scheduler;player.volume=0;try scheduler.start()
+        try engine.start();guard !control.isCancelled else{throw CancellationError()}
+        player.play();player.volume=1
+        guard !control.isCancelled else{throw CancellationError()}
+    }
+    func stop(){loopScheduler?.cancel();loopScheduler=nil;player.stop();engine.stop()}
     var running:Bool{engine.isRunning && player.isPlaying}
     var seconds:Double {
         guard let time=player.lastRenderTime,let played=player.playerTime(forNodeTime:time) else{return 0}

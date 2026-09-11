@@ -95,7 +95,7 @@ struct OrbitAudioEditor:NSViewRepresentable {
         for (source,isEnd,label) in [(start,false,"시작"),(end,true,"끝")] where visible(source) {
             let p=handle(source,end:isEnd),color=isEnd ? StudioTheme.textNS:StudioTheme.accentNS
             OrbitDrawing.dot(p,radius:6,color:color)
-            OrbitDrawing.text(label,at:NSPoint(x:p.x,y:p.y+(isEnd ? 16:-16)),size:10,color:color)
+            OrbitDrawing.text(label,at:NSPoint(x:p.x,y:p.y+(isEnd ? 16:-16)),size:11,color:color)
         }
         let cut=clip.sourceStart+store.audioCutOffset
         if visible(cut) {let cursor=OrbitDrawing.point(center,radius:waveRadius,phase:viewport.phase(at:cut,assetDuration:asset.duration));OrbitDrawing.dot(cursor,radius:4,color:StudioTheme.textNS)}
@@ -103,7 +103,7 @@ struct OrbitAudioEditor:NSViewRepresentable {
             OrbitDrawing.text("원본 초",at:NSPoint(x:center.x,y:center.y-10),size:11)
             OrbitDrawing.text(String(format:span<1 ? "%.3f–%.3f":"%.2f–%.2f",sourceRange.lowerBound,sourceRange.upperBound),at:NSPoint(x:center.x,y:center.y+8),size:11,color:StudioTheme.textNS)
         }
-        OrbitDrawing.text("바깥 궤도 · 섹션 내 첫 재생",at:NSPoint(x:center.x,y:bounds.maxY-10),size:10)
+        OrbitDrawing.text("바깥 궤도 · 섹션 내 첫 재생",at:NSPoint(x:center.x,y:bounds.maxY-10),size:11)
     }
     func envelopeGain(_ value:AudioClip,_ source:Double)->Double {
         guard source>=value.sourceStart,source<=value.sourceStart+value.duration else{return 1}
@@ -111,7 +111,7 @@ struct OrbitAudioEditor:NSViewRepresentable {
     }
     func linearHandles(_ value:AudioClip)->AudioWaveformHandleLayout {
         let start=value.sourceStart,end=start+value.duration
-        let font:[NSAttributedString.Key:Any]=[.font:NSFont.systemFont(ofSize:10)]
+        let font:[NSAttributedString.Key:Any]=[.font:NSFont.systemFont(ofSize:11)]
         return AudioWaveformHandleLayout(bounds:bounds,plot:plot,
             startX:visible(start) ? handle(start,end:false).x:nil,endX:visible(end) ? handle(end,end:true).x:nil,
             startLabel:("시작" as NSString).size(withAttributes:font),endLabel:("끝" as NSString).size(withAttributes:font))
@@ -124,8 +124,8 @@ struct OrbitAudioEditor:NSViewRepresentable {
             let phase=Double(i)/Double(ticks),x=plot.minX+phase*plot.width
             let line=NSBezierPath();line.move(to:NSPoint(x:x,y:plot.minY));line.line(to:NSPoint(x:x,y:plot.maxY));StudioTheme.lineNS.setStroke();line.stroke()
             let label=String(format:span<1 ? "%.3f":"%.2f",viewport.source(at:phase,assetDuration:asset.duration))
-            let half=(label as NSString).size(withAttributes:[.font:NSFont.monospacedSystemFont(ofSize:10,weight:.regular)]).width/2+2
-            OrbitDrawing.text(label,at:NSPoint(x:min(bounds.maxX-half,max(half,x)),y:10),size:10)
+            let half=(label as NSString).size(withAttributes:[.font:NSFont.systemFont(ofSize:11)]).width/2+2
+            OrbitDrawing.text(label,at:NSPoint(x:min(bounds.maxX-half,max(half,x)),y:10),size:11)
         }
         if let wave=store.waveforms[asset.id] {
             let scale=min(64,1/max(0.001,Double(wave.peaks.max() ?? 0)))
@@ -147,7 +147,7 @@ struct OrbitAudioEditor:NSViewRepresentable {
                 leader.line(to:NSPoint(x:geometry.label.midX,y:geometry.label.minY-1))
                 color.withAlphaComponent(0.65).setStroke();leader.lineWidth=1;leader.stroke()
             }
-            OrbitDrawing.text(label,at:NSPoint(x:geometry.label.midX,y:geometry.label.minY+5),size:10)
+            OrbitDrawing.text(label,at:NSPoint(x:geometry.label.midX,y:geometry.label.minY+5.5),size:11)
         }
         let cut=clip.sourceStart+store.audioCutOffset
         if visible(cut) {

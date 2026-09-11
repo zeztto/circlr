@@ -31,6 +31,9 @@ private final class TestPlaybackBackend:PlaybackBackend {
         if fixture.failStart{throw CirclrError("controlled start failure")}
         fixture.visit("audible");playing=true;fixture.store(finished)
     }
+    func startLoop(_ pcm:PCM,from:Double,tail:PCM?,control:MediaPreviewCancellation)throws {
+        fixture.visit("loop");if control.isCancelled{throw CancellationError()};playing=true
+    }
     func stop(){fixture.visit("stop");playing=false}
     var running:Bool{playing}
     var seconds:Double{fixture.visit("clock");return 0.25}
@@ -47,6 +50,72 @@ private final class TestPlaybackBackend:PlaybackBackend {
     }
     private func cancelled(_ task:Task<Void,Error>)async {
         do{try await task.value;XCTFail("Cancelled start succeeded")}catch{XCTAssertTrue(error is CancellationError)}
+    }
+    func testPreparedCallbackReceivesExactCycleBeforeBackendStarts()async throws {
+        for loop in [false,true] {
+            let fixture=PlaybackFixture(),playback=Playback(factory:{TestPlaybackBackend(fixture)})
+            var input=try audio();input.mix=PCM(frames:Int((input.plan.duration*PCM.rate).rounded()))
+            var calls=0
+            try await playback.play(input,loop:loop,onPrepared:{cycle in
+                calls+=1;fixture.visit("prepared")
+                XCTAssertTrue(Thread.isMainThread)
+                XCTAssertFalse(playback.playing)
+                XCTAssertFalse(fixture.events.contains("start"));XCTAssertFalse(fixture.events.contains("loop"))
+                if loop {
+                    XCTAssertEqual(cycle?.bodyFrames,input.mix.count)
+                    XCTAssertEqual(cycle?.cycle.left,playback.loopPCM?.cycle.left)
+                } else {XCTAssertNil(cycle)}
+            })
+            XCTAssertEqual(calls,1)
+            let before=try XCTUnwrap(fixture.events.firstIndex(of:"prepared.MAIN"))
+            let start=try XCTUnwrap(fixture.events.firstIndex(of:loop ? "loop":"start"))
+            XCTAssertLessThan(before,start)
+            playback.stop();try await eventually{playback.outputStatus.transport.phase == .idle}
+        }
+    }
+    func testThrowingPreparedCallbackPreventsOutput()async throws {
+        struct RecorderFailure:Error {}
+        let fixture=PlaybackFixture(),playback=Playback(factory:{TestPlaybackBackend(fixture)})
+        var calls=0
+        do {
+            try await playback.play(audio(),onPrepared:{_ in calls+=1;throw RecorderFailure()})
+            XCTFail("Recorder failure started output")
+        } catch is RecorderFailure {} catch {throw error}
+        XCTAssertEqual(calls,1);XCTAssertFalse(playback.playing)
+        XCTAssertTrue(fixture.events.isEmpty,"Backend must remain lazy when recorder creation fails")
+        XCTAssertEqual(playback.outputStatus.attempts,0)
+    }
+    func testPreparedCallbackStopAndTaskCancellationCannotLaunchLateOutput()async throws {
+        for cancelTask in [false,true] {
+            let fixture=PlaybackFixture(),playback=Playback(factory:{TestPlaybackBackend(fixture)}),input=try audio()
+            var calls=0
+            let task=Task {
+                try await playback.play(input,onPrepared:{_ in
+                    calls+=1
+                    if cancelTask {withUnsafeCurrentTask{$0?.cancel()}}
+                    else {playback.stop()}
+                })
+            }
+            await cancelled(task)
+            XCTAssertEqual(calls,1);XCTAssertFalse(playback.playing)
+            XCTAssertTrue(fixture.events.isEmpty);XCTAssertEqual(playback.outputStatus.attempts,0)
+            // A fresh request starts exactly once; cancelled preparation left no queued start.
+            try await playback.play(input)
+            XCTAssertEqual(fixture.events.filter{$0=="start"}.count,1)
+            playback.stop();try await eventually{playback.outputStatus.transport.phase == .idle}
+        }
+    }
+    func testLoopUsesSingleBackendRunAndMonotonicClock()async throws {
+        let fixture=PlaybackFixture(), playback=Playback(factory:{TestPlaybackBackend(fixture)})
+        var input=try audio();input.mix=PCM(frames:Int((input.plan.duration*PCM.rate).rounded()))
+        try await playback.play(input,loop:true)
+        try await eventually{playback.elapsedSeconds>0}
+        XCTAssertEqual(playback.elapsedSeconds,0.25)
+        XCTAssertEqual(playback.seconds,0.25)
+        XCTAssertEqual(fixture.events.filter{$0=="loop"}.count,1)
+        XCTAssertFalse(fixture.events.contains("start"))
+        playback.stop();XCTAssertEqual(playback.elapsedSeconds,0)
+        try await eventually{playback.outputStatus.transport.phase == .idle}
     }
     func testBackendIsLazyAndAllOperationsIncludingReleaseAreOffMain()async throws {
         let fixture=PlaybackFixture()

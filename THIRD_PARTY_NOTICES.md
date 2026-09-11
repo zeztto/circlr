@@ -13,3 +13,9 @@
 License references: [OSI MIT](https://opensource.org/license/mit), [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/).
 
 In the packaged app, this file and MIT text are in `Contents/Resources/`; bundled demo terms and CC0 notices are in its `Demos/` subdirectory. Repository links above describe source-tree locations.
+
+## Classical demonstrations / 클래식 데모
+
+Three Mutopia MIDI/LilyPond sources distributed as Public Domain are preserved under `Resources/Demos/classical/`. Their original rights are not restricted by the f0r h3r terms. Each directory contains source provenance, hashes, `NOTICE.md` and separate terms for the new circlr arrangement. See [source and verification record](docs/releases/0.40-demo-sources.md).
+
+원본 MIDI·LilyPond의 Public Domain 표기는 유지합니다. 새 서클러 편곡 조건으로 원본 이용 권리를 제한하지 않습니다.

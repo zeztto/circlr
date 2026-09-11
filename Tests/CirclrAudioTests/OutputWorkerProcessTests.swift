@@ -26,10 +26,18 @@ if mode=='exit':sys.exit(1)
 origin=time.monotonic()
 def trace(stage,phase):
  emit({'trace':dict(stage=stage,phase=phase,elapsedSeconds=time.monotonic()-origin)})
-emit({'helloCapabilities':{'outputDeviceSelection':True}} if mode.startswith('device-') else {'hello':{}})
+emit({'helloBoundaryLoopCapabilities':{'outputDeviceSelection':False}} if mode.startswith('boundary-') else ({'helloLoopCapabilities':{'outputDeviceSelection':False}} if mode.startswith('loop-') else ({'helloCapabilities':{'outputDeviceSelection':True}} if mode.startswith('device-') else {'hello':{}})))
+cycle_frames=480
+first_frame=0
+phase_frame=0
+tail_frames=0
+boundary_frame=48000
 for line in sys.stdin:
  packet=json.loads(line);p=packet['payload']
- if 'prepare' in p or 'prepareOutput' in p:
+ if 'prepare' in p or 'prepareOutput' in p or 'prepareLoop' in p or 'prepareLoopRange' in p:
+  if 'prepareLoopRange' in p:
+   cycle_frames=p['prepareLoopRange']['cycleFrames'];first_frame=p['prepareLoopRange']['startFrame']
+   tail_frames=p['prepareLoopRange']['frames']-cycle_frames
   assert open(os.path.join(directory,'audio.caf'),'rb').read(4)==b'caff'
   if mode=='malformed':
    print('{bad',flush=True);continue
@@ -64,8 +72,30 @@ for line in sys.stdin:
   if mode.startswith('device-') and mode != 'device-missing':
    emit({'outputDevice':{'descriptor':{'uid':'other' if mode=='device-mismatch' else 'selected','name':'Fixture output'}}})
   emit({'started':{'run':run}})
-  emit({'clock':{'run':run,'seconds':0.125}})
+  emit({'loopClock' if mode.startswith('loop-') or mode.startswith('boundary-') else 'clock':{'run':run,'seconds':20000 if mode.startswith('loop-') else 0.125}})
+  if mode=='loop-finish':emit({'finished':{'run':run}})
   if mode=='finished':emit({'finished':{'run':run}})
+ elif 'queueLoopChange' in p or 'exitLoop' in p:
+  exit_loop='exitLoop' in p
+  item=p['exitLoop'] if exit_loop else p['queueLoopChange']
+  change=item['change']
+  if not exit_loop:
+   assert open(os.path.join(directory,'loop-'+change+'.caf'),'rb').read(4)==b'caff'
+  if mode=='boundary-reject':
+   emit({'loopChangeRejected':dict(change=change,message='fixture rejected')});continue
+  if mode=='boundary-stale':change='00000000-0000-0000-0000-000000000000'
+  count=cycle_frames if exit_loop else item['cycleFrames']
+  boundary_frame=phase_frame+((boundary_frame-phase_frame+first_frame+cycle_frames-1)//cycle_frames)*cycle_frames-first_frame
+  emit({'loopChangeScheduled':dict(change=change,elapsedFrame=boundary_frame,frames=count,exiting=exit_loop)})
+  if not exit_loop:tail_frames=item['frames']-count
+  emit({'loopClock':dict(run=run,seconds=boundary_frame/48000+(tail_frames/48000 if exit_loop else .01))})
+  phase_frame=boundary_frame
+  cycle_frames=count;first_frame=0
+  boundary_frame+=48000
+  if exit_loop:
+   end_frame=phase_frame+tail_frames
+   emit({'loopClock':dict(run=run,seconds=end_frame/48000+.02)})
+   emit({'loopFinished':dict(run=run,elapsedFrame=end_frame)})
  elif 'stop' in p:
   emit({'stopped':{'run':p['stop']['run']}})
 """#.replacingOccurrences(of: "MODE", with: mode)
@@ -83,6 +113,119 @@ for line in sys.stdin:
     }
     private func temporary(_ id: UUID) -> URL {
         FileManager.default.temporaryDirectory.appendingPathComponent("circlr-output-" + id.uuidString)
+    }
+    func testCancelledOldBoundaryTaskCannotStopRestartedSession()async throws {
+        let entered=expectation(description:"old change acknowledged")
+        let (stream,continuation)=AsyncStream<Void>.makeStream()
+        let host=OutputWorkerProcess(executable:try fixture("boundary-normal"),beforeLoopChangeReturn:{
+            entered.fulfill()
+            for await _ in stream {break}
+        })
+        try await host.play(PCM(frames:480),from:0,timeout:3,loop:true)
+        let old=Task {try await host.changeLoop(cycle:PCM(frames:960))}
+        await fulfillment(of:[entered],timeout:3)
+        host.cancel();try await wait {host.status.phase == .idle}
+        try await host.play(PCM(frames:480),from:0,timeout:3,loop:true)
+        let newID=host.status.transport.id
+        old.cancel();continuation.finish()
+        do {_=try await old.value;XCTFail("Cancelled old task returned success")}catch {}
+        XCTAssertEqual(host.status.transport.phase,.playing)
+        XCTAssertEqual(host.status.transport.id,newID);XCTAssertEqual(host.status.attempts,2)
+        host.cancel();try await wait {host.status.phase == .idle}
+    }
+    private func loopAudio(frames:Int)throws->PreparedAudio {
+        var project=Project();_=project.addSection(name:"Loop",at:Point(),bars:1)
+        var plan=try ArrangementCompiler.compile(project);plan.duration=Double(frames)/PCM.rate
+        return PreparedAudio(plan:plan,mix:PCM(frames:frames),stems:[:],tailSeconds:0)
+    }
+    func testPlaybackBoundaryAckUpdatesPlanClockAndPreservesOffsetBoundary()async throws {
+        let host=OutputWorkerProcess(executable:try fixture("boundary-normal")),playback=Playback(outputWorker:host)
+        try await playback.play(loopAudio(frames:480),from:0.002,loop:true)
+        var callbacks=0
+        let change=try await playback.requestLoopChange(to:loopAudio(frames:960),onScheduled:{status,source in
+            callbacks+=1;XCTAssertFalse(status.exiting);XCTAssertEqual(source?.bodyFrames,960)
+        })
+        XCTAssertEqual(change.elapsedFrame,48384,"First original musical boundary after the fixture's 48000 already-submitted frames")
+        XCTAssertEqual((change.elapsedFrame+96)%480,0)
+        XCTAssertGreaterThanOrEqual(change.elapsedFrame,48000)
+        XCTAssertLessThan(change.elapsedFrame,48480)
+        try await wait {playback.elapsedSeconds>=change.elapsedSeconds}
+        XCTAssertEqual(playback.prepared?.plan.duration,0.02)
+        XCTAssertEqual(playback.seconds,0.01,accuracy:0.000001)
+        XCTAssertNil(playback.pendingLoopChange);XCTAssertEqual(callbacks,1)
+        XCTAssertEqual(host.status.attempts,1)
+        let exit=try await playback.finishLoopAtBoundary()
+        XCTAssertEqual(exit.elapsedFrame,96384,"Replacement keeps its own absolute phase origin")
+        XCTAssertEqual((exit.elapsedFrame-change.elapsedFrame)%960,0)
+        try await wait {host.status.phase == .idle}
+        XCTAssertEqual(playback.completedElapsedSeconds,exit.elapsedSeconds)
+        XCTAssertNil(playback.pendingLoopChange,"Zero-tail natural completion still applies the ACK")
+        XCTAssertEqual(host.status.attempts,1)
+    }
+    func testBoundaryRecorderCallbackFailureStopsAlreadyScheduledOutput()async throws {
+        struct RecorderFailure:Error {}
+        let host=OutputWorkerProcess(executable:try fixture("boundary-normal")),playback=Playback(outputWorker:host)
+        try await playback.play(loopAudio(frames:480),loop:true)
+        do {
+            _=try await playback.requestLoopChange(to:loopAudio(frames:960),onScheduled:{_,_ in throw RecorderFailure()})
+            XCTFail("Recorder failure ignored")
+        } catch is RecorderFailure {} catch {throw error}
+        XCTAssertFalse(playback.playing)
+        try await wait {host.status.phase == .idle}
+        XCTAssertEqual(host.status.attempts,1)
+    }
+    func testBoundaryReplacementAndFiniteExitKeepSingleOutputAttempt()async throws {
+        let host=OutputWorkerProcess(executable:try fixture("boundary-normal"))
+        try await host.play(PCM(frames:480),from:0,timeout:3,loop:true,exitTail:PCM(frames:96))
+        let run=host.status.transport.id
+        let changed=try await host.changeLoop(cycle:PCM(frames:960),tail:PCM(frames:48))
+        XCTAssertEqual(changed.elapsedFrame,48000);XCTAssertEqual(changed.frames,960);XCTAssertFalse(changed.exiting)
+        try await wait {host.status.transport.seconds>=changed.elapsedSeconds}
+        let exit=try await host.changeLoop(cycle:nil)
+        XCTAssertTrue(exit.exiting);XCTAssertEqual(exit.elapsedFrame,96000)
+        try await wait {host.status.phase == .idle}
+        XCTAssertEqual(host.status.transport.id,run);XCTAssertEqual(host.status.attempts,1)
+        XCTAssertNil(host.status.transport.message)
+        XCTAssertNotNil(host.status.transport.completedSeconds)
+    }
+    func testStaleBoundaryAckCannotChangeRunningSource()async throws {
+        let host=OutputWorkerProcess(executable:try fixture("boundary-stale"))
+        try await host.play(PCM(frames:480),from:0,timeout:3,loop:true)
+        do {_=try await host.changeLoop(cycle:PCM(frames:480));XCTFail("Stale ACK accepted")}catch {}
+        try await wait {host.status.phase == .idle}
+        XCTAssertNil(host.status.transport.loopChange);XCTAssertEqual(host.status.transport.phase,.failed)
+    }
+    func testRejectedBoundaryPreparationPreservesExistingOutput()async throws {
+        let host=OutputWorkerProcess(executable:try fixture("boundary-reject"))
+        try await host.play(PCM(frames:480),from:0,timeout:3,loop:true)
+        do {_=try await host.changeLoop(cycle:PCM(frames:480));XCTFail("Rejected change accepted")}catch {}
+        XCTAssertEqual(host.status.transport.phase,.playing);XCTAssertNil(host.status.transport.loopChange)
+        XCTAssertEqual(host.status.attempts,1)
+        host.cancel();try await wait {host.status.phase == .idle}
+    }
+    func testLoopClockCanExceedSourceAndFourHoursWithoutAnotherRun() async throws {
+        let host=OutputWorkerProcess(executable:try fixture("loop-clock"))
+        try await host.play(PCM(frames:480),from:0,timeout:3,loop:true)
+        try await wait {host.status.transport.seconds == 20000}
+        XCTAssertEqual(host.status.attempts,1)
+        XCTAssertEqual(host.status.transport.phase,.playing)
+        host.cancel();try await wait {host.status.phase == .idle}
+        XCTAssertEqual(host.status.transport.seconds,0)
+        XCTAssertNil(host.status.transport.message)
+    }
+    func testLegacyHelperCannotSilentlyPlayLoopOnce() async throws {
+        let host=OutputWorkerProcess(executable:try fixture("normal"))
+        do {try await host.play(PCM(frames:480),from:0,timeout:3,loop:true);XCTFail("Legacy loop accepted")} catch {}
+        try await wait {host.status.phase == .idle}
+        XCTAssertFalse(host.status.transport.didStart)
+        XCTAssertTrue(host.status.transport.message?.contains("루프") == true)
+    }
+    func testUnexpectedLoopFinishedIsFailure() async throws {
+        let host=OutputWorkerProcess(executable:try fixture("loop-finish"))
+        try? await host.play(PCM(frames:480),from:0,timeout:3,loop:true)
+        try await wait {host.status.phase == .idle}
+        XCTAssertEqual(host.status.transport.phase,.failed)
+        XCTAssertNotNil(host.status.transport.message)
     }
     func testExitedHelperReleasesReadersDespiteInheritedDescendantPipes() async throws {
         for mode in ["inherited-stdout", "inherited-stderr"] {

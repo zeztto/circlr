@@ -31,15 +31,31 @@ def validate_demo(root):
         path = root / name
         if not path.resolve().is_relative_to(root) or hashlib.sha256(path.read_bytes()).hexdigest() != checksum:
             raise ValueError('Demo checksum mismatch: ' + name)
-    project_root = root / manifest['project']
-    project = json.loads((project_root / 'manifest.json').read_text())
-    for asset in project.get('assets', []):
-        relative = Path(asset['path'])
-        path = project_root / relative
-        if relative.is_absolute() or not path.resolve().is_relative_to(project_root) or not path.is_file():
-            raise ValueError('Missing or external demo asset: ' + str(relative))
-        if asset.get('checksum') and hashlib.sha256(path.read_bytes()).hexdigest() != asset['checksum']:
-            raise ValueError('Demo asset checksum mismatch: ' + str(relative))
+    for notice in manifest['notices']:
+        if not isinstance(notice, str) or notice not in files:
+            raise ValueError('Demo rights notice is missing from inventory')
+    catalog = json.loads((root / 'catalog.json').read_text())
+    if not isinstance(catalog, list) or not catalog:
+        raise ValueError('Demo catalog is empty')
+    ids = set()
+    for entry in catalog:
+        identifier, relative = entry.get('id'), entry.get('project')
+        if not isinstance(identifier, str) or not identifier or identifier in ids:
+            raise ValueError('Demo catalog identity is invalid')
+        ids.add(identifier)
+        if not isinstance(relative, str) or not relative.endswith('.circlr'):
+            raise ValueError('Demo catalog project path is invalid')
+        project_root = root / relative
+        if Path(relative).is_absolute() or not project_root.resolve().is_relative_to(root):
+            raise ValueError('Demo catalog project must be inside resources')
+        project = json.loads((project_root / 'manifest.json').read_text())
+        for asset in project.get('assets', []):
+            relative = Path(asset['path'])
+            path = project_root / relative
+            if relative.is_absolute() or not path.resolve().is_relative_to(project_root) or not path.is_file():
+                raise ValueError('Missing or external demo asset: ' + str(relative))
+            if asset.get('checksum') and hashlib.sha256(path.read_bytes()).hexdigest() != asset['checksum']:
+                raise ValueError('Demo asset checksum mismatch: ' + str(relative))
     return manifest
 
 

@@ -11,6 +11,16 @@ struct OutputWorkerPacket: Codable, Equatable {
     enum Payload: Codable, Equatable {
         case hello
         case helloCapabilities(outputDeviceSelection: Bool)
+        case helloLoopCapabilities(outputDeviceSelection: Bool)
+        case helloBoundaryLoopCapabilities(outputDeviceSelection: Bool)
+        case prepareLoop(frames: Int, selection: OutputDeviceSelection)
+        case prepareLoopRange(frames:Int,cycleFrames:Int,startFrame:Int,selection:OutputDeviceSelection)
+        case queueLoopChange(change:UUID,frames:Int,cycleFrames:Int)
+        case exitLoop(change:UUID)
+        case loopChangeScheduled(change:UUID,elapsedFrame:Int64,frames:Int,exiting:Bool)
+        case loopChangeRejected(change:UUID,message:String)
+        case loopClock(run: UUID, seconds: Double)
+        case loopFinished(run:UUID,elapsedFrame:Int64)
         case prepareOutput(frames: Int, selection: OutputDeviceSelection)
         case outputDevice(descriptor: OutputDeviceDescriptor)
         case prepare(frames: Int)
@@ -35,9 +45,18 @@ struct OutputWorkerPacket: Codable, Equatable {
     func validate() throws {
         guard version == Self.version, sequence > 0 else { throw OutputWorkerWireError.invalidPacket }
         switch payload {
-        case .prepareOutput(let frames, let selection):
+        case .prepareOutput(let frames, let selection), .prepareLoop(let frames, let selection):
             try Self.validateSelection(selection)
             guard frames > 0, frames <= OutputWorkerWire.maximumFrames else { throw OutputWorkerWireError.invalidPacket }
+        case .prepareLoopRange(let frames,let cycleFrames,let startFrame,let selection):
+            try Self.validateSelection(selection)
+            guard frames>0,frames<=OutputWorkerWire.maximumFrames,cycleFrames>0,cycleFrames<=frames,startFrame>=0,startFrame<cycleFrames else{throw OutputWorkerWireError.invalidPacket}
+        case .queueLoopChange(_,let frames,let cycleFrames):
+            guard frames>0,frames<=OutputWorkerWire.maximumFrames,cycleFrames>0,cycleFrames<=frames else{throw OutputWorkerWireError.invalidPacket}
+        case .loopChangeScheduled(_,let elapsed,let frames,_):
+            guard elapsed>=0,elapsed<=432_000_000_000_000,frames>0,frames<=OutputWorkerWire.maximumFrames else{throw OutputWorkerWireError.invalidPacket}
+        case .loopChangeRejected(_,let message):
+            guard !message.isEmpty,message.utf8.count<=1024 else{throw OutputWorkerWireError.invalidPacket}
         case .outputDevice(let descriptor):
             try Self.validateSelection(.deviceUID(descriptor.uid))
             guard !descriptor.name.isEmpty, descriptor.name.utf8.count <= 1024, !descriptor.name.contains("\0") else { throw OutputWorkerWireError.invalidPacket }
@@ -46,6 +65,12 @@ struct OutputWorkerPacket: Codable, Equatable {
         case .clock(_, let seconds):
             guard seconds.isFinite, seconds >= 0,
                   seconds <= Double(OutputWorkerWire.maximumFrames) / 48_000 else { throw OutputWorkerWireError.invalidPacket }
+        case .loopFinished(_,let frame):
+            guard frame>=0,frame<=432_000_000_000_000 else{throw OutputWorkerWireError.invalidPacket}
+        case .loopClock(_, let seconds):
+            // Roughly 285 years at sample-frame precision. Bounds numeric conversion,
+            // not the finite source file; loop duration is independent of its length.
+            guard seconds.isFinite, seconds >= 0, seconds <= 9_000_000_000 else { throw OutputWorkerWireError.invalidPacket }
         case .failure(_, let message):
             guard !message.isEmpty, message.utf8.count <= 1024 else { throw OutputWorkerWireError.invalidPacket }
         case .trace(let stage, _, let elapsed):
@@ -123,12 +148,14 @@ struct OutputWorkerWire {
                 guard packet.session == session, lastSequence < UInt64.max, packet.sequence == lastSequence + 1 else { throw OutputWorkerWireError.stalePacket }
                 let command: Bool
                 switch packet.payload {
-                case .prepare, .prepareOutput, .play, .stop: command = true
+                case .prepare, .prepareOutput, .prepareLoop, .prepareLoopRange, .queueLoopChange, .exitLoop, .play, .stop: command = true
                 default: command = false
                 }
                 guard command == (direction == .commands) else { throw OutputWorkerWireError.wrongDirection }
                 if case .hello = packet.payload { selectedTraceStages = Self.legacyTraceStages }
                 if case .helloCapabilities(let supported) = packet.payload { selectedTraceStages = supported ? Self.traceStages : Self.legacyTraceStages }
+                if case .helloBoundaryLoopCapabilities(let supported) = packet.payload { selectedTraceStages = supported ? Self.traceStages : Self.legacyTraceStages }
+                if case .helloLoopCapabilities(let supported) = packet.payload { selectedTraceStages = supported ? Self.traceStages : Self.legacyTraceStages }
                 if case .trace(let stage, let phase, let elapsed) = packet.payload {
                     guard traceIndex < selectedTraceStages.count * 2, stage == selectedTraceStages[traceIndex / 2],
                           phase == (traceIndex % 2 == 0 ? .entered : .completed), elapsed >= traceElapsed else {

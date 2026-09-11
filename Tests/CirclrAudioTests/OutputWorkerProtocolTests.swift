@@ -2,6 +2,19 @@ import XCTest
 @testable import CirclrAudio
 
 final class OutputWorkerProtocolTests: XCTestCase {
+    func testLoopWireHasDistinctBoundedClockAndCommandDirection() throws {
+        let id=UUID()
+        let prepare=OutputWorkerPacket(session:id,sequence:1,payload:.prepareLoop(frames:480,selection:.systemDefault))
+        var command=OutputWorkerWire(session:id,receiving:.commands)
+        XCTAssertEqual(try command.receive(OutputWorkerWire.encode(prepare)),[prepare])
+        var events=OutputWorkerWire(session:id)
+        XCTAssertThrowsError(try events.receive(OutputWorkerWire.encode(prepare)))
+        let clock=OutputWorkerPacket(session:id,sequence:1,payload:.loopClock(run:id,seconds:20000))
+        XCTAssertNoThrow(try OutputWorkerWire.encode(clock))
+        XCTAssertThrowsError(try OutputWorkerWire.encode(.init(session:id,sequence:1,payload:.clock(run:id,seconds:20000))))
+        XCTAssertThrowsError(try OutputWorkerWire.encode(.init(session:id,sequence:1,payload:.loopClock(run:id,seconds:.infinity))))
+        XCTAssertThrowsError(try OutputWorkerWire.encode(.init(session:id,sequence:1,payload:.loopClock(run:id,seconds:9_000_000_001))))
+    }
     func testSelectionWireBoundsAndLegacyDecoding() throws {
         let id = UUID()
         for uid in ["", "   ", "bad\nuid", String(repeating: "x", count: 1025), "bad\0uid"] {

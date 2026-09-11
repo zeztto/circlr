@@ -27,6 +27,7 @@ extension AppStore {
         hierarchyTransitionID=nil;focusHierarchy(address,detail:true);hierarchySettingsOpen=true
     }
     func showCommands() {
+        guard !viewingMode else{return}
         var identity=numberEditIdentity
         guard resolveActiveNumericDraft(),nameEditing.resolve() else{return}
         identity.revision=project.musicRevision
@@ -40,6 +41,7 @@ extension AppStore {
         func add(_ id:String,_ title:String,_ shortcut:String="",_ run:@escaping()->Void) {
             commands.append(StudioCommand(id:id,title:title,shortcut:shortcut,run:run))
         }
+        add("viewing-mode","텍스트 없는 감상 모드","⇧⌘V"){[weak self] in _ = self?.setViewingMode(true)}
         add("output-settings","곡 재생 출력 설정","⌘,"){[weak self] in self?.showOutputPreferences()}
         add("new","새 앨범","⌘N"){[weak self] in self?.newProject()}
         add("open","프로젝트 열기…","⌘O"){[weak self] in self?.open()}
@@ -90,6 +92,11 @@ extension AppStore {
         if let owner=arrangementPickerOwner {add("arrangement-search","편곡안 찾기","⌥⌘J"){[weak self] in self?.showArrangementPicker(compositionID:owner.id)}}
         add("parent","상위 서클로 이동","Esc"){[weak self] in self?.hierarchyParent()}
         add("fit","전체 앨범 보기","F"){[weak self] in self?.hierarchyCommand=HierarchyCommand(action:.fit)}
+        add("follow-song","곡 서클 팔로우"){[weak self] in self?.choosePlaybackFollowTarget(.song)}
+        add("follow-section","섹션 서클 팔로우"){[weak self] in self?.choosePlaybackFollowTarget(.section)}
+        add("follow-pinned","선택 서클 고정 팔로우"){[weak self] in self?.choosePlaybackFollowTarget(.pinned)}
+        add("follow-fit","팔로우 대상 전체 맞춤"){[weak self] in self?.choosePlaybackFollowFraming(.fit)}
+        add("follow-zoom","팔로우 배율 유지"){[weak self] in self?.choosePlaybackFollowFraming(.keepZoom)}
         add("follow","재생 팔로우 켜기 / 끄기"){[weak self] in guard let self else{return};self.playbackFollow=self.playbackFollow.toggled()}
         add("console","콘솔 접기 / 펼치기","⌃`"){[weak self] in self?.consoleOpen.toggle()}
         add("layout","궤도 / 자유 배치 전환"){[weak self] in guard let self else{return};self.setCanvasViewPreferences(layout:self.project.usesOrbits ? .freeform:.orbit)}
@@ -358,6 +365,7 @@ struct KeyboardHelpView:View {
     @State private var focusedRow=0
     private let categories=["전체","공통","캔버스","MIDI","오디오","오토메이션"]
     private let rows:[(String,String)] = [
+        ("⇧⌘V / Esc","감상 모드 전환 / 감상 종료 · Space 재생 · F 팔로우"),
         ("⌥⌘J","이 곡·악장의 편곡안 찾기"),("⌥⌘,","현재 섹션 설정 / 원래 편집으로 돌아가기"),
         ("⌥⌘T","녹음 테이크 찾기 · ↑↓ 선택 · Return 적용 · Esc 취소"),
         ("⌥⌘L","로컬 샘플 라이브러리"),("⌘4","MIDI 스텝 편집"),("⌘J","섹션·트랙 바로 이동"),("⌘1 / ⌘2 / ⌘3","같은 트랙의 MIDI·오디오 / 음색 / 이펙터"),("⇧⌘P","명령·서클 검색"),("⌥⌘0","캔버스로 포커스 이동"),("A / C","서클 생성 / 선택 서클 메뉴"),("L","IN/OUT·대상·8방향 연결 편집"),
