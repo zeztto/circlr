@@ -1,6 +1,6 @@
 # 0.1 단계 제품 로드맵
 
-현재 배포: [0.30.0-preview.1](https://github.com/zeztto/circlr/releases/tag/v0.30.0-preview.1), 앱 0.30.0/build158. 0.30.0 마일스톤은 필수 QA를 진행 중이다. 다음 버전만 상세 실행 대상으로 동결하고 이후 버전은 착수 전에 범위·의존성·QA를 재확인한다. 날짜를 추측해 약속하지 않으며 진행률은 완료 작업과 gate로 판단한다. 버전 번호와 완료 절차는 [운영 규약](README.md)을 따른다.
+현재 배포: [0.30.0-preview.1](https://github.com/zeztto/circlr/releases/tag/v0.30.0-preview.1), 앱 0.30.0/build158. 0.30.0 build160은 사용자 승인으로 남은 native QA를 유예하고 정식 게시를 준비 중이다. 공개 전환·MIT 라이선스를 확인했고 build161 정식 게시의 원격 검증을 진행한다. 다음 버전만 상세 실행 대상으로 동결하고 이후 버전은 착수 전에 범위·의존성·QA를 재확인한다. 날짜를 추측해 약속하지 않으며 진행률은 완료 작업과 gate로 판단한다. 버전 번호와 완료 절차는 [운영 규약](README.md)을 따른다.
 
 | 버전 | 사용자에게 전달할 결과 | 핵심 작업 | 릴리스 필수 증거 |
 |---|---|---|---|
@@ -45,6 +45,8 @@ English: 0.40.0 prioritizes gapless looping of the current song or section and a
 **완료 기준:** 새 실행의 세 진입 경로, 기존 파일 직접 열기, 복구 우선순위, 키보드/작은 창, 로드 실패·취소 후 늦은 문서 교체 방지, 저장·종료·재열기를 실제 앱에서 확인한다. 시작 화면에서 프로젝트가 열릴 때까지 비동작 버튼이나 빈 화면이 없어야 한다.
 
 ### R40-03 · 템플릿·데모 자산과 녹음 통합
+
+- 0.30 build160의 데모 로더가 만드는 작업 사본의 수명을 관리한다. 현재 세션·복구 데이터·사용자 저장에서 참조하지 않는 소유 사본만 안전하게 정리하며, 편집 중인 미디어를 삭제하지 않는다.
 
 - 템플릿과 데모는 새 project ID 및 쓰기 가능한 작업 사본으로 연다. 번들 원본은 불변이며 편집·저장·Undo가 다음 사용자의 템플릿/데모를 바꾸지 않는다. 미디어 참조·버전/schema 호환을 검증한다.
 - 내장 악기로 실제 실행 가능한 템플릿과 재배포 권리가 확인된 데모만 포함한다. 사용자 계정·Splice 로그인·유료 플러그인 없이 로드 가능해야 한다. QA fixture를 제품 데모로 바꾸거나 완료되지 않은 항목을 메뉴에 노출하지 않는다.
@@ -132,3 +134,8 @@ English: R40-07 plans at least three, targeting four, openly reusable MIDI/stem 
 - [전체 기술 과제](../138-current-development-plan.md): realtime clock·PDC, comping/time warp, backend 계약. 큰 엔진 재설계가 필요하면 원인·범위·검증을 별도 명시한다.
 - [기본 DAW](../31-daw-basics-plan.md), [계정 콘솔](../20-codex-account-console-plan.md), [음악 역할](../24-music-agent-kit.md).
 - [Splice](../27-splice-licensing-and-integration.md), [아티스트](../21-artist-universe.md). 외부 API·라이선스는 착수 시 현재 공식 조건을 확인한다.
+
+
+### 0.30 출고 유예 QA 인계
+
+2026-09-11 사용자 승인으로 유예한 실제 한글 IME와 남은 native Q01–Q10 검증은 [최종 QA 기록](0.30.0-final-qa.md)의 남은 조건을 기준으로 0.40에서 다시 수행합니다. compact 키보드/편집기 왕복, 파일 대화상자·접근 대기, 재생 실패 복구·helper 회수, 바운스 별도 청취, 데모/프로젝트 저장·재열기, ZIP 및 이전 앱 복구 실행이 포함됩니다. 유예는 PASS 전환이나 결함 해결을 뜻하지 않습니다.

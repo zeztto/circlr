@@ -1,0 +1,25 @@
+{
+  "project": "f0r-h3r.circlr",
+  "title": "f0r h3r",
+  "version": "v5",
+  "provenance": "써클러 원본 튜토리얼 곡 f0r h3r v4의 음악 데이터를 보존하고 v5에서 서클 색상만 추가했습니다. 외부 샘플 6개는 Roberto의 FreePats synthesizer percussion 2022-07-18 CC0-1.0이며 내장 합성기를 사용합니다. 곡 전체를 CC0로 선언하지 않습니다.",
+  "notices": [
+    "notices/LICENSE",
+    "notices/readme.txt",
+    "notices/manifest.json",
+    "DEMO-LICENSE.md"
+  ],
+  "files": {
+    "f0r-h3r.circlr/manifest.json": "0f879f3b5885730f8687388817cac47cdf84eb27ee82c1cced0fd3835428cf55",
+    "f0r-h3r.circlr/media/04908EF4-BA04-4B4A-9364-AEEFB84B52F7.wav": "a427fe3664ebce4dcdc9f4704cb0bc4b83e757e64372999d264ae5452caba321",
+    "f0r-h3r.circlr/media/3EE5D32A-33CB-4235-BC30-4735C5DDE44F.wav": "c49715ffd171b6d138e089df1f2513c6fca71ebf32f3b5fea125ddad1c786d52",
+    "f0r-h3r.circlr/media/691A59DC-8860-4DE4-890B-0DC8995E0534.wav": "67dcf4e28db83e3126da9bf101bb0b19b5f01f83935d891398296d69bee9c27b",
+    "f0r-h3r.circlr/media/A4366F74-FEB4-4357-8A7F-BCD3DB3A4895.wav": "ac09119a13b9a53fbd38ac44e461c7f46ae9605100b4b002ec2167e29354309e",
+    "f0r-h3r.circlr/media/DD26136F-8B60-4AF3-8727-C77C68D1DA76.wav": "e1f048e2ef248fda51a830ca64c6c8926c76f8faa9f193bbed801d7adf9ba682",
+    "f0r-h3r.circlr/media/E0846529-AB20-4BF2-BFEB-DED58300762F.wav": "b79c1a25375310b810fde37f5c40dc41848de31eb9e6678be8f0b97808465509",
+    "notices/LICENSE": "a2010f343487d3f7618affe54f789f5487602331c0a8d03f49e9a7c547cf0499",
+    "notices/manifest.json": "11275cbfd9d933bb293dc266faf373ea65efa918ca2f6136c2f69ce88e5b804b",
+    "notices/readme.txt": "9c0ad2a7d6cfe266e2194c5a0191cc2f783a524468488580d4d2b2795d3298ec",
+    "DEMO-LICENSE.md": "002a7afdae0fb90b820dc6029ecd578f60795653d1eb98d4a2fdae500e4819d0"
+  }
+}

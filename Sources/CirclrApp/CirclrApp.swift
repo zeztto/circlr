@@ -15,7 +15,7 @@ import OSLog
         }.defaultSize(width:1440,height:900).windowStyle(.titleBar)
         .commands {
             CommandGroup(replacing:.appSettings){Button("출력 설정…"){store.showOutputPreferences()}.keyboardShortcut(",")}
-            CommandGroup(replacing:.newItem){Group {Button("새 앨범"){store.newProject()}.keyboardShortcut("n");Button("열기…"){store.open()}.keyboardShortcut("o");Divider();Button("창 닫기"){NSApplication.shared.keyWindow?.performClose(nil)}.keyboardShortcut("w")}.disabled(store.outputPreferencesOpen)}
+            CommandGroup(replacing:.newItem){Group {Button("새 앨범"){store.newProject()}.keyboardShortcut("n");Button("열기…"){store.open()}.keyboardShortcut("o");Button("데모곡 불러오기…"){store.openBundledDemo()};Divider();Button("창 닫기"){NSApplication.shared.keyWindow?.performClose(nil)}.keyboardShortcut("w")}.disabled(store.outputPreferencesOpen)}
             CommandGroup(replacing:.saveItem){Group {Button("저장"){store.save()}.keyboardShortcut("s");Button("다른 이름으로 저장…"){store.save(as:true)}.keyboardShortcut("s",modifiers:[.command,.shift]);Divider();Button("WAV 내보내기…"){store.export()}.keyboardShortcut("e")}.disabled(store.outputPreferencesOpen)}
             CommandGroup(replacing:.undoRedo){Group {Button("실행 취소"){store.undo()}.keyboardShortcut("z").disabled(store.undoCount==0);Button("다시 실행"){store.redo()}.keyboardShortcut("z",modifiers:[.command,.shift]).disabled(store.redoCount==0)}.disabled(store.outputPreferencesOpen)}
             CommandMenu("보기") {Group {

@@ -12,7 +12,7 @@ In circlr, a circle is a timeline. Build a song from sections, place MIDI, audio
 
 *Actual development app, 0.30.0 build157, using an authored QA project. The screenshot shows editing; it does not demonstrate audio playback. [Capture details](docs/images/README.md).*
 
-> **Development preview.** 0.30.0 is in progress, not a completed release. Physical audio output, Korean IME input and parts of the integration checklist remain unverified. See [current QA](docs/releases/0.30.0-qa.md) before evaluating it for production work.
+> **0.30.0 · build161.** An MIT open-source project. Audible output was confirmed by the user; Korean IME and remaining native QA were waived for this release. [Verification record](docs/releases/0.30.0-final-qa.md).
 
 ## What you can work with
 
@@ -28,9 +28,9 @@ These are implemented development features, not a guarantee of compatibility wit
 
 ## Getting started
 
-Download the current **[0.30.0-preview.1](https://github.com/zeztto/circlr/releases/tag/v0.30.0-preview.1)** for Apple Silicon. This is build158 for evaluation with incomplete QA, not the completed 0.30.0 milestone. Repository access is required while the project remains private. Build from `main` to use the integrated development source.
+Download **[circlr 0.30.0](https://github.com/zeztto/circlr/releases/tag/v0.30.0)** for Apple Silicon. The repository is public; build from `main` for source development.
 
-The development source includes the build159 dark-mode visibility fix for the Add Circle menu; the published preview remains build158.
+The colored **f0r h3r v5** demo is included. Choose **File → 데모곡 불러오기…** to open an editable copy.
 
 **Requirements:** macOS 14+, Xcode 26+ selected as the active developer directory, and Python 3. Native validation currently covers Apple Silicon. The interface is currently in Korean; this README is available in both languages.
 
@@ -68,4 +68,4 @@ The Swift package separates the project model (`CirclrCore`), audio processing (
 
 Each completed version will have a Git tag and a GitHub Release with Korean/English notes, a verified app package and checksums. Development build numbers and documentation edits do not create releases. [Changelog](CHANGELOG.md) · [Release procedure](docs/releases/README.md).
 
-circlr is being prepared for a future open-source release. **An open-source license has not been selected or added yet.** Public availability and reuse permissions should not be assumed. Third-party samples and private music projects are not included in this repository.
+Code, documentation and icons use the [MIT License](LICENSE). Music has [separate demo terms](Resources/Demos/DEMO-LICENSE.md): redistribution with the app and forks is permitted, but standalone music releases are not licensed. Six percussion assets remain CC0. See [licensing scope and credits](THIRD_PARTY_NOTICES.md) and [contributing](CONTRIBUTING.md).

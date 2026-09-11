@@ -1,16 +1,16 @@
 # Contributing · 기여 안내
 
-circlr is being prepared for open-source publication. The repository currently has no open-source license; this guide describes collaboration for people with repository access and does not grant reuse rights.
+circlr is an open-source project under the [MIT License](LICENSE). Contributions to code and documentation are submitted under that license. Keep third-party notices and declare the source and license of contributed assets. Demo music has [separate terms](Resources/Demos/DEMO-LICENSE.md).
 
-써클러는 오픈소스 공개를 준비 중이며 아직 오픈소스 라이선스가 없습니다. 이 문서는 저장소 접근 권한이 있는 참여자의 협업 방법이며 재사용 권한을 부여하지 않습니다.
+써클러 코드·문서는 MIT 오픈소스입니다. 기여한 코드·문서에도 같은 라이선스를 적용합니다. 외부 자산은 출처·라이선스를 명시하고 기존 고지를 보존하세요. 데모 음악에는 별도 이용 조건이 적용됩니다.
 
 ## Before changing code · 변경 전
 
 - Check the [current plan](docs/releases/0.30.0.md) and [roadmap](docs/releases/roadmap.md). Keep a change scoped to one problem; discuss larger features in an issue first.
 - Read [AGENTS.md](AGENTS.md) for repository execution rules. AI coding agents follow the same version, review and verification requirements.
-- Keep music projects, credentials, licensed samples and generated QA packages out of commits.
+- Keep private music projects, credentials, unapproved samples and generated QA packages out of commits. Reviewed redistributable demo assets with license notices are permitted.
 
-현재 계획·로드맵에서 변경 범위를 확인하고 큰 기능은 먼저 issue로 논의합니다. 에이전트도 같은 버전·검토·검증 기준을 따릅니다. 음악 원본·인증정보·라이선스 샘플·QA 앱은 commit하지 않습니다.
+현재 계획·로드맵에서 변경 범위를 확인하고 큰 기능은 먼저 issue로 논의합니다. 에이전트도 같은 버전·검토·검증 기준을 따릅니다. 개인 음악 원본·인증정보·미승인 샘플·QA 앱은 commit하지 않습니다. 출처와 권리를 검토한 재배포 가능 데모 자산은 예외입니다.
 
 ## Verify the change · 검증
 

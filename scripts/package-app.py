@@ -12,11 +12,44 @@ import uuid
 import sys
 
 
+def validate_demo(root):
+    """Require a fully inventoried, portable demo with explicit provenance."""
+    root = root.resolve()
+    manifest = json.loads((root / 'manifest.json').read_text())
+    if manifest.get('project') != 'f0r-h3r.circlr' or not manifest.get('provenance') or not manifest.get('notices'):
+        raise ValueError('Demo requires project, provenance and rights notices')
+    files = manifest.get('files', {})
+    actual = set()
+    for path in root.rglob('*'):
+        if path.is_symlink():
+            raise ValueError('Bundled demo must not contain symlinks')
+        if path.is_file() and path != root / 'manifest.json':
+            actual.add(path.relative_to(root).as_posix())
+    if not files or set(files) != actual:
+        raise ValueError('Demo inventory differs from bundled files')
+    for name, checksum in files.items():
+        path = root / name
+        if not path.resolve().is_relative_to(root) or hashlib.sha256(path.read_bytes()).hexdigest() != checksum:
+            raise ValueError('Demo checksum mismatch: ' + name)
+    project_root = root / manifest['project']
+    project = json.loads((project_root / 'manifest.json').read_text())
+    for asset in project.get('assets', []):
+        relative = Path(asset['path'])
+        path = project_root / relative
+        if relative.is_absolute() or not path.resolve().is_relative_to(project_root) or not path.is_file():
+            raise ValueError('Missing or external demo asset: ' + str(relative))
+        if asset.get('checksum') and hashlib.sha256(path.read_bytes()).hexdigest() != asset['checksum']:
+            raise ValueError('Demo asset checksum mismatch: ' + str(relative))
+    return manifest
+
+
 def main():
     root = Path(__file__).resolve().parents[1]
     parser = argparse.ArgumentParser()
     parser.add_argument('binary', type=Path)
     args = parser.parse_args()
+    demo_source = root / 'Resources/Demos'
+    demo_manifest = validate_demo(demo_source)
     audition_worker = args.binary.with_name("circlr-audition-worker")
     if not audition_worker.is_file():
         raise ValueError("Build circlr-audition-worker beside the app binary before packaging")
@@ -61,6 +94,12 @@ def main():
         shutil.copy2(root / 'Resources/Info.plist', stage / 'Contents/Info.plist')
         shutil.copy2(icon_source, stage / 'Contents/Resources' / icon_name)
         shutil.copy2(catalog_source, stage / 'Contents/Resources/Assets.car')
+        for notice in ('LICENSE', 'THIRD_PARTY_NOTICES.md'):
+            shutil.copy2(root / notice, stage / 'Contents/Resources' / notice)
+        demo_target = stage / 'Contents/Resources/Demos'
+        shutil.copytree(demo_source, demo_target)
+        if validate_demo(demo_target) != demo_manifest:
+            raise ValueError('Bundled demo manifest differs from source')
         kit_source = root / 'Resources/Codex'
         kit_target = stage / 'Contents/Resources/Codex'
         shutil.copytree(kit_source, kit_target, ignore=shutil.ignore_patterns('__pycache__', '*.pyc'))

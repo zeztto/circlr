@@ -1,6 +1,6 @@
 # 버전별 개발·릴리스 운영
 
-상태: 운영 규약 확정. 시작 기준은 `0.20.0 build152`, 현재 `release/0.30.0`에서 **0.30.0** 후보를 구현·검증 중이다. 출고 여부는 버전 문서의 gate로 판단한다.
+상태: 운영 규약 확정. 시작 기준은 `0.20.0 build152`, 현재 **0.30.0 build161** 공개 출고를 진행한다. 출고 여부는 버전 문서의 gate로 판단한다.
 
 ## 문서와 버전의 기준
 
@@ -91,12 +91,12 @@ git ls-remote origin "refs/heads/release/$release_version" "refs/tags/$release_t
 
 두 원격 SHA가 `$release_commit`과 일치해야 한다. 실패하면 등록을 멈추고 원인을 해결한다. 노트에는 최종 SHA를 넣을 수 있지만, commit 자신의 SHA를 기록하려고 추가 commit을 반복하지 않는다. 출고 기록은 tag와 Release URL로 연결한다.
 
-5. GitHub Release를 같은 tag로 등록한다. 현행 0.x는 개발용 **prerelease**로 등록하며, 안정판 전환은 버전 계획에서 정한다. prerelease도 필수 QA를 생략하는 수단이 아니다. 이미 존재하는 Release는 먼저 조회하고 중복 생성하거나 검증된 자산을 임의로 덮어쓰지 않는다. 아래는 기존 비공개 저장소를 유지하는 명령이다.
+5. GitHub Release를 같은 tag로 등록한다. 명시적으로 승인된 완료 버전은 **정식 release**로 등록한다. v0.30.0부터 사용자 요청으로 적용하며, 평가 후보만 prerelease로 구분한다. prerelease도 필수 QA를 생략하는 수단이 아니다. 이미 존재하는 Release는 먼저 조회하고 중복 생성하거나 검증된 자산을 임의로 덮어쓰지 않는다. 현재 저장소는 공개 MIT 프로젝트이며 데모 별도 권리를 보존한다.
 
 ```sh
 gh release create "$release_tag" --repo zeztto/circlr --verify-tag \
   --title "circlr $release_version" --notes-file "$release_notes" \
-  --prerelease --latest=false "$release_asset" dist/SHA256SUMS
+  --latest "$release_asset" dist/SHA256SUMS
 
 gh release view "$release_tag" --repo zeztto/circlr \
   --json url,tagName,isDraft,isPrerelease,assets,body
@@ -119,3 +119,5 @@ shasum -a 256 "$release_asset" "$release_download/circlr-$release_version-macos.
 이 경우 상태는 **PREVIEW_PUBLISHED**로 기록하고 0.30.0 마일스톤은 **IN_PROGRESS**를 유지한다. 필수 QA 미완료를 없애거나 정식 `v0.30.0` 태그를 발행하지 않는다. 소스 대응·bundle 내용·서명·압축 복원·한영 노트·원격 SHA·다운로드 checksum 검증은 수행한다. 실제 장치/전체 native 검증의 미완료 범위를 노트에 적는다.
 
 브랜치 역할: `main`은 통합 소스, `release/0.30.0`은 아직 미완료인 버전의 후속 안정화 작업용이다. 기존 `codex/*` 브랜치는 통합 이력을 보존하며, 다른 worktree에서 사용 중인 브랜치를 일괄 삭제하지 않는다. preview tag는 이동하거나 덮어쓰지 않는다.
+
+2026-09-11 v0.30.0 예외: 사용자가 한글 IME와 남은 native QA를 명시적으로 유예했다. 이 버전은 승인된 유예 기록과 함께 정식 게시하며, 유예를 PASS로 바꾸지 않는다. 이후 버전에 유예가 자동 승계되지는 않는다.
