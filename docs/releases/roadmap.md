@@ -1,6 +1,6 @@
 # 0.1 단계 제품 로드맵
 
-현재 배포 후보: **0.60.0 build170**. 내장 프리셋12개·호환 oversampled Drive·f0r h3r v6. 기술 QA 완료, 아티스트 음악 검토는 OPEN. [계획](0.60.0.md) · [QA](0.60.0-qa.md) · [한영 노트](0.60.0-notes.md). 직전 정식판은 [0.50.1](https://github.com/zeztto/circlr/releases/tag/v0.50.1).
+현재 정식 배포: [**0.60.0 build170**](https://github.com/zeztto/circlr/releases/tag/v0.60.0). 내장 프리셋12개·호환 oversampled Drive·f0r h3r v6. 기술 QA 완료, 아티스트 음악 검토는 OPEN. [계획](0.60.0.md) · [QA](0.60.0-qa.md) · [한영 노트](0.60.0-notes.md). 직전 정식판은 [0.50.1](https://github.com/zeztto/circlr/releases/tag/v0.50.1).
 
 직전0.50.0의 궤도 구조·반응형 변경은 유지한다. 기존 표현·믹스 안정화는 후속 backlog에 보존하며 0.60은 음색 도구와 데모 표현을 개선한다. f0r h3r의 발매 수준 완성·사용자 청취 승인은 미완료이며 후속 음악 검토로 유지한다.
 
