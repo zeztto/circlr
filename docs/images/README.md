@@ -1,5 +1,18 @@
 # Screenshots · 실행 화면
 
+## 0.60.0 build170
+
+Actual isolated native app with the bundled v6 demo: radial song layout, factory EP search and the chorus filter curve. Original CUA JPEG bytes, no image editing. UI is Korean. The portrait-shaped window uses the left half of the current display; a700-pixel-wide window was not rechecked this version.
+
+별도 검증 앱의 실제 v6 화면입니다. 가로 전체 창과 현재 디스플레이 왼쪽 절반의 세로 비율 창을 촬영했습니다. 원본 JPEG를 변경 없이 저장했으며700폭 재검증이나 물리 장치 청취의 증거로 사용하지 않습니다.
+
+| File | Window / JPEG pixels | SHA256 |
+|---|---|---|
+| `circlr-song-build170.jpg` | 2560×1355 / 1451×768 | `87fb6f9ab47c6aba5691d9ca98ce3493a146318df54251274c5888202059e0d4` |
+| `circlr-presets-build170.jpg` | 1281×1355 / 768×813 | `2b3f5d0e4d8b49a8ab6d5a4f4f5d90598cea0fd680b7d2912dfe0f95285af9e5` |
+| `circlr-automation-build170.jpg` | 1281×1355 / 768×813 | `a617fec6812459464653d150fca919bd4473553e67b2f3275e86153c9b7cbffd` |
+
+
 ## 0.50.1 build169
 
 Actual native app showing the bundled f0r h3r project after automatic layout. The hero shows the song’s radial layout; portrait captures show horizontal signal flow and radial section layout. The UI is Korean. These images document layout, not audio playback. JPEG files are copied byte-for-byte from `qa/generated/outward-orbit/build169/`; the landscape capture was delivered at reduced pixel dimensions.

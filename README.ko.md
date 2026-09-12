@@ -8,11 +8,11 @@
 
 써클러에서 원은 타임라인입니다. 섹션으로 곡을 구성하고, 궤도 주변에 MIDI·오디오·악기·이펙터를 배치해 입출력을 연결합니다. 하나의 확대 가능한 캔버스에서 곡 전체 구성과 세부 편집을 오갑니다.
 
-![곡의 시간 궤도 주변으로 섹션이 펼쳐지는 써클러](docs/images/circlr-song-build169.jpg)
+![곡의 시간 궤도 주변으로 섹션이 펼쳐지는 써클러](docs/images/circlr-song-build170.jpg)
 
-*동봉 f0r h3r 프로젝트를 연 실제 0.50.1 build169 앱입니다. [촬영 정보](docs/images/README.md).*
+*동봉 f0r h3r 프로젝트를 연 실제 0.60.0 build170 앱입니다. [촬영 정보](docs/images/README.md).*
 
-> **0.50.1 · build169.** 방사형·가로·세로 자동 정렬을 제공합니다. 실제2560×1355 가로 창과700×1000 세로 창을 확인했습니다. [검증 기록](docs/releases/0.50.1-qa.md).
+> **0.60.0 · build170.** 내장 신스 프리셋12개, oversampling Drive와 f0r h3r v6 데모를 제공합니다. [검증 기록](docs/releases/0.60.0-qa.md).
 
 ## 할 수 있는 작업
 
@@ -22,19 +22,19 @@
 - **음색과 움직임:** 악기·이펙트 연결, 오토메이션, 바운스·원본 복원과 재생 팔로우·시그널 시각화 기능을 다룹니다.
 - **로컬 에이전트:** MCP로 프로젝트 조회·편집, MIDI 생성, 렌더링·저장을 수행하고 콘솔에서 작업을 확인합니다.
 
-| 가로 신호 흐름 | 중심에서 방사형 |
+| 내장 프리셋 검색 | 필터 오토메이션 |
 |---|---|
-| <img src="docs/images/circlr-horizontal-build169.jpg" width="280" alt="가로 신호 흐름"> | <img src="docs/images/circlr-radial-build169.jpg" width="280" alt="중심에서 방사형"> |
+| <img src="docs/images/circlr-presets-build170.jpg" width="280" alt="내장 프리셋 검색"> | <img src="docs/images/circlr-automation-build170.jpg" width="280" alt="필터 오토메이션"> |
 
 구현된 개발 기능의 목록이며 모든 오디오 장치·플러그인의 호환성을 보증하지 않습니다. 아티스트 프로필과 텍스트·이미지·영상을 함께 관리하는 도구는 [장기 목표](docs/21-artist-universe.md)입니다.
 
 ## 시작하기
 
-**0.50.1 build169** Apple Silicon 패키지를 [GitHub Releases](https://github.com/zeztto/circlr/releases/tag/v0.50.1)에서 내려받으세요. 소스는 `main`에서 빌드할 수 있습니다.
+**0.60.0 build170** Apple Silicon 패키지를 [GitHub Releases](https://github.com/zeztto/circlr/releases/tag/v0.60.0)에서 내려받으세요. 소스는 `main`에서 빌드할 수 있습니다.
 
 다운로드한 앱은 ad-hoc 서명이며 Apple 공증을 받지 않았습니다. 첫 실행이 차단되면 다운로드를 확인한 뒤 **시스템 설정 → 개인정보 보호 및 보안 → 그래도 열기**를 사용하세요. [macOS 설치·첫 실행 안내](docs/install-macos.md#한국어).
 
-컬러를 적용한 **f0r h3r v5**가 동봉됩니다. **파일 → 데모곡 불러오기…**에서 편집 가능한 사본을 여세요.
+컬러를 적용한 **f0r h3r v6**가 동봉됩니다. **파일 → 데모곡 불러오기…**에서 편집 가능한 사본을 여세요.
 
 **소스 빌드 환경:** macOS 14 이상, 활성 개발자 디렉터리로 선택된 Xcode 26 이상, Python 3. 현재 native 검증 환경은 Apple Silicon입니다. 앱 UI는 한국어이며 README는 한국어와 영어로 제공합니다.
 
@@ -47,7 +47,7 @@ open 'dist/써클러.app'
 
 빌드는 앱·오디오 helper 5개·에이전트 키트를 함께 패키징합니다. 로컬 패키지는 ad-hoc 서명이며 공증되지 않았습니다. 개발 버전을 시험할 때 중요한 프로젝트는 사본으로 보관하세요.
 
-0.50.1은 시간 궤도 주변의 서클을 자동 정렬합니다. **우클릭 또는 상단 그리드·서클 도구 → 자동 정렬**에서 **중심에서 방사형 / 가로 신호 흐름 / 세로 신호 흐름**을 고르세요. 같은 위치의 서클을 여러 개 선택하면 선택 항목에, 그 외에는 현재 컨테이너 안의 서클에 적용합니다. 음악의 시간은 유지되며 한 번의 Undo로 되돌립니다. [릴리스 노트](docs/releases/0.50.1-notes.md).
+악기 서클에서 **음색·악기 찾기**를 열어 새로운 프리셋을 검색하세요. MCP `sounds`에서도 같은 patch를 조회할 수 있습니다. 기존 저장 음색은 직접 변경하기 전까지 보존됩니다. [릴리스 노트](docs/releases/0.60.0-notes.md).
 
 ## 첫 작업
 

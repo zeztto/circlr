@@ -10,7 +10,7 @@ public struct AudioUnitCatalogEntry: Equatable {
 }
 
 public enum SoundChoice: Hashable {
-    case synth(SynthVoice), soundBank(program:Int,bankLSB:Int,drums:Bool), audioUnit(String)
+    case synth(SynthVoice), synthPreset(String), soundBank(program:Int,bankLSB:Int,drums:Bool), audioUnit(String)
 }
 public enum SoundCategory: String, CaseIterable, Identifiable {
     case synth, soundBank, instrument, effect
@@ -34,6 +34,7 @@ public enum SoundSelection {
     public static let effectType: UInt32 = 0x61756678
     public static func instruments(_ plugins: [AudioUnitCatalogEntry],bank:[SoundBankPreset]=[]) -> [SoundCatalogItem] {
         SynthVoice.allCases.map {SoundCatalogItem(id:.synth($0),category:.synth,title:$0.label,detail:"내장 신스 · "+String(describing:$0),plugin:nil)}
+        + SynthPreset.factory.map{SoundCatalogItem(id:.synthPreset($0.id),category:.synth,title:$0.name,detail:"내장 신스 · "+$0.detail,plugin:nil)}
         + SoundBankPreset.ordered(bank).map{.init(id:$0.id,category:.soundBank,title:$0.name,detail:$0.detail,plugin:nil)}
         + audioUnits(plugins,type:instrumentType,category:.instrument)
     }
@@ -72,7 +73,9 @@ public enum SoundSelection {
         value.folding(options:[.caseInsensitive,.diacriticInsensitive,.widthInsensitive],locale:Locale(identifier:"en_US_POSIX")).precomposedStringWithCanonicalMapping
     }
     public static func choice(in instrument:Instrument)->SoundChoice? {
-        switch instrument.kind {case .synthesizer:return .synth((instrument.synth ?? SynthPatch()).voice)
+        switch instrument.kind {case .synthesizer:
+            let patch=instrument.synth ?? SynthPatch()
+            return SynthPreset.matching(patch).map{.synthPreset($0.id)} ?? .synth(patch.voice)
         case .soundBank:return .soundBank(program:instrument.program,bankLSB:instrument.bankLSB ?? 0,drums:instrument.drums)
         case .audioUnit:return instrument.plugin.map{.audioUnit($0.id)};case .sampler:return nil}
     }
@@ -83,7 +86,12 @@ public enum SoundSelection {
         switch choice {
         case .synth(let voice):
             next.kind = .synthesizer
-            if current.synth?.voice != voice {next.synth=SynthPatch(voice)}
+            // Choosing a base voice from a factory patch explicitly restores that voice's defaults.
+            // Custom and legacy patches keep the existing same-voice preservation contract.
+            if current.synth?.voice != voice || current.synth.flatMap(SynthPreset.matching) != nil {next.synth=SynthPatch(voice)}
+        case .synthPreset(let id):
+            guard let preset=SynthPreset.factory.first(where:{$0.id==id}) else{throw CirclrError("신스 프리셋을 다시 선택하세요")}
+            next.kind = .synthesizer;next.synth=preset.patch
         case .soundBank(let program,let bankLSB,let drums):
             guard (0...127).contains(program),(0...127).contains(bankLSB) else{throw CirclrError("Sound Bank 음색을 다시 선택하세요")}
             next.kind = .soundBank;next.program=program;next.drums=drums;next.bankLSB=bankLSB==0 ? nil:bankLSB

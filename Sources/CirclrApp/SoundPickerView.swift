@@ -14,7 +14,9 @@ struct SoundPickerRequest: Identifiable {
 extension AppStore {
     func instrumentName(_ instrument:Instrument)->String {
         switch instrument.kind {
-        case .synthesizer:return (instrument.synth ?? SynthPatch()).voice.label
+        case .synthesizer:
+            let patch=instrument.synth ?? SynthPatch()
+            return SynthPreset.matching(patch)?.name ?? patch.voice.label
         case .sampler:return instrument.sample.flatMap{s in project.assets.first{$0.id==s.assetID}?.name} ?? "샘플 악기"
         case .soundBank:
             return soundBankPresets.first{$0.id==SoundSelection.choice(in:instrument)}?.selectionName

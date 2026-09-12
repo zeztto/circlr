@@ -11,8 +11,8 @@ final class SoundSelectionTests:XCTestCase {
     func testUnicodeVendorAndKindSearch() {
         let entries=instruments([plugin("Gláss Keys")])
         XCTAssertEqual(SoundSelection.search(entries,query:"ＧＬＡＳＳ 겨울".decomposedStringWithCanonicalMapping).map(\.title),["Gláss Keys"])
-        XCTAssertEqual(SoundSelection.search(entries,query:"베이스".decomposedStringWithCanonicalMapping).map(\.id),[.synth(.bass)])
-        XCTAssertEqual(SoundSelection.search(entries,query:"",category:.synth).count,10)
+        XCTAssertEqual(SoundSelection.search(entries,query:"베이스".decomposedStringWithCanonicalMapping).map(\.id),[.synth(.bass),.synthPreset("round-bass")])
+        XCTAssertEqual(SoundSelection.search(entries,query:"",category:.synth).count,22)
         XCTAssertEqual(SoundSelection.search(entries,query:"sound bank").map(\.id),[.soundBank(program:0,bankLSB:0,drums:false)])
         XCTAssertTrue(SoundSelection.search(entries,query:"없음").isEmpty)
     }
@@ -20,7 +20,7 @@ final class SoundSelectionTests:XCTestCase {
         let instrument=plugin(),effect=plugin(type:SoundSelection.effectType),other=plugin(type:0)
         let all=[instrument,effect,other]
         let instruments=instruments(all),effects=SoundSelection.effects(all)
-        XCTAssertEqual(instruments.count,12);XCTAssertEqual(effects.count,1)
+        XCTAssertEqual(instruments.count,24);XCTAssertEqual(effects.count,1)
         XCTAssertThrowsError(try SoundSelection.instrument(.audioUnit(effect.descriptor.id),current:Instrument(),catalog:effects))
         XCTAssertThrowsError(try SoundSelection.effect(.audioUnit(instrument.descriptor.id),current:Effect(.gain),catalog:instruments))
     }

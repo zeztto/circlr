@@ -28,7 +28,7 @@ final class EffectParameterAudioTests: XCTestCase {
         let pan=try NativeDSP.process(signal,effect:effect(.pan,[-100]))
         XCTAssertEqual(pan.right[0],0);XCTAssertEqual(pan.left[0],Float(0.5*sqrt(2)),accuracy:1e-6)
         let drive=try NativeDSP.process(signal,effect:effect(.drive,[10]))
-        XCTAssertEqual(drive.left[0],Float(tanh(Double(5))/tanh(Double(10))),accuracy:1e-6)
+        XCTAssertEqual(drive.left[24000],Float(tanh(Double(5))/tanh(Double(10))),accuracy:1e-6)
         let dry=try NativeDSP.process(signal,effect:effect(.reverb,[50,0]))
         XCTAssertEqual(dry.left,signal.left);XCTAssertEqual(dry.right,signal.right)
     }

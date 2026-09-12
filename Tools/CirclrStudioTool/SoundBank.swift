@@ -21,6 +21,24 @@ enum SoundBank {
         }
         try JSONSerialization.data(withJSONObject:report,options:[.prettyPrinted,.sortedKeys]).write(to:folder.appendingPathComponent("manifest.json"))
     }
+    /// Render the same selectable factory patches used by the app, without effects or normalization.
+    static func factory(to folder:URL) throws {
+        guard !FileManager.default.fileExists(atPath:folder.path) else {throw CirclrError("새 프리셋 출력 폴더를 지정하세요")}
+        try FileManager.default.createDirectory(at:folder,withIntermediateDirectories:true)
+        var context=MusicContext();context.tempo=120
+        let clock=try MusicClock(bars:2,context:context)
+        var report:[[String:Any]]=[]
+        for preset in SynthPreset.factory {
+            let pitches=preset.patch.voice == .bass ? [42]:[57,61,64,68]
+            let notes=pitches.map{Note(beat:0,length:4,pitch:$0,velocity:90)}
+            let audio=try ProductionInstrument.synth(notes,patch:preset.patch,clock:clock,tail:2)
+            guard audio.peak.isFinite,audio.peak<1 else {throw CirclrError("프리셋 출력 headroom 확인: \(preset.name)")}
+            try audio.writeWAV(folder.appendingPathComponent(preset.id+".wav"))
+            report.append(["id":preset.id,"name":preset.name,"peak":audio.peak,"rms":audio.rms,"normalized":false])
+        }
+        try JSONSerialization.data(withJSONObject:report,options:[.prettyPrinted,.sortedKeys]).write(to:folder.appendingPathComponent("manifest.json"))
+    }
+
     /// Isolated stock presets, no external effects. Pairwise RMS matched for six legacy voices.
     static func write(to folder:URL) throws {
         guard !FileManager.default.fileExists(atPath:folder.path) else {throw CirclrError("음색 비교는 새 출력 폴더를 지정하세요")}

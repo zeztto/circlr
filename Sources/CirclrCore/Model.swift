@@ -129,7 +129,7 @@ public struct Effect: Codable, Equatable {
     public var amount: Double = 0.5
     public var secondary: Double = 0.25
     public var plugin: PluginDescriptor?
-    public init(_ kind: EffectKind = .gain, amount: Double = 0.5, secondary: Double = 0.25) { self.kind = kind; self.amount = amount; self.secondary = secondary; self.renderVersion = kind == .reverb ? 2:nil }
+    public init(_ kind: EffectKind = .gain, amount: Double = 0.5, secondary: Double = 0.25) { self.kind = kind; self.amount = amount; self.secondary = secondary; self.renderVersion = kind == .reverb ? 2 : (kind == .drive ? 3 : nil) }
 }
 public struct Section: Codable, Equatable, Identifiable {
     public var id: ID = newID()

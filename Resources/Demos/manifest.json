@@ -1,8 +1,8 @@
 {
   "project": "f0r-h3r.circlr",
   "title": "f0r h3r",
-  "version": "v5",
-  "provenance": "써클러 원본 튜토리얼 곡 f0r h3r v4의 음악 데이터를 보존하고 v5에서 서클 색상만 추가했습니다. 외부 샘플 6개는 Roberto의 FreePats synthesizer percussion 2022-07-18 CC0-1.0이며 내장 합성기를 사용합니다. 곡 전체를 CC0로 선언하지 않습니다.",
+  "version": "v6",
+  "provenance": "f0r h3r v6: v5의 송폼·ID·컬러·배치를 유지하고 내장 신스 patch, EP/lead articulation, 구간별 cutoff/resonance를 개선했습니다. 외부 샘플 6개는 Roberto FreePats synthesizer percussion 2022-07-18 CC0-1.0입니다. 원곡은 별도 데모 이용 조건을 따릅니다.",
   "notices": [
     "notices/LICENSE",
     "notices/readme.txt",
@@ -13,7 +13,7 @@
   ],
   "files": {
     "DEMO-LICENSE.md": "002a7afdae0fb90b820dc6029ecd578f60795653d1eb98d4a2fdae500e4819d0",
-    "catalog.json": "a5b83e6505cd7212117f555084a7d930bb4f75b74ad56b974c277e5255cb3fe8",
+    "catalog.json": "22b381d1740324960f5ccd292203fc202fbaf582ecf7510fcd5c96c8194c0664",
     "classical/ARRANGEMENT-TERMS.md": "c157b2a2082657ca57f1ce3abf0efbeb97a665f31d72239acdbdaf7444bd60c4",
     "classical/NOTICE.md": "b0ad244171125a93b2ea1150f9065e66ed6ef4fc6c1566e1661559583c3f3e2e",
     "classical/bach-invention-07/bach-invention-07.circlr/manifest.json": "0d1418d38b8416fe6a5e6366bdbf81f97a2e5d90787fbc6b32f10c6cee724d76",
@@ -28,7 +28,7 @@
     "classical/fur-elise/provenance.json": "0b507d690d029753e056937d4c8baa4fae4578d02dac9a9c60ae0946afa466c3",
     "classical/fur-elise/source.ly": "828a7bd1b42e441fe1b0eb0389ba46f1502dab28bbe488389e635fb446ba7a67",
     "classical/fur-elise/source.mid": "1c12c21c7bbf4cf163896732672648a69d497636059837abd153c71abe50215a",
-    "f0r-h3r.circlr/manifest.json": "0f879f3b5885730f8687388817cac47cdf84eb27ee82c1cced0fd3835428cf55",
+    "f0r-h3r.circlr/manifest.json": "a75ea9f2f3917f82184ba94c31e071905c0c6a1bfa2e90259ad554eaa5c794d7",
     "f0r-h3r.circlr/media/04908EF4-BA04-4B4A-9364-AEEFB84B52F7.wav": "a427fe3664ebce4dcdc9f4704cb0bc4b83e757e64372999d264ae5452caba321",
     "f0r-h3r.circlr/media/3EE5D32A-33CB-4235-BC30-4735C5DDE44F.wav": "c49715ffd171b6d138e089df1f2513c6fca71ebf32f3b5fea125ddad1c786d52",
     "f0r-h3r.circlr/media/691A59DC-8860-4DE4-890B-0DC8995E0534.wav": "67dcf4e28db83e3126da9bf101bb0b19b5f01f83935d891398296d69bee9c27b",

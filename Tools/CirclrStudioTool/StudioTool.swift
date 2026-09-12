@@ -62,6 +62,8 @@ import CirclrAudio
                 print("완료: \(wav.path) · \(audio.mix.duration)s · peak \(audio.peak)")
             } else if args[1]=="sound-bank" {
                 try SoundBank.write(to:URL(fileURLWithPath:args[2]))
+            } else if args[1]=="factory-bank",args.count>=3 {
+                try SoundBank.factory(to:URL(fileURLWithPath:args[2]))
             } else if args[1]=="section-stems",args.count>=5,let index=Int(args[4]) {
                 let loaded=try ProjectStore.load(URL(fileURLWithPath:args[2]))
                 try await SoundBank.section(loaded.project,root:loaded.root,index:index,to:URL(fileURLWithPath:args[3]))

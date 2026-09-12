@@ -1,0 +1,122 @@
+[
+  {
+    "file" : "0-클럽 킥.wav",
+    "gain" : 0.83999999999999997,
+    "peak" : 0.55559045076370239,
+    "rms" : 0.071880656307257415,
+    "source" : "post section effects and track gain; before album bus",
+    "track" : "클럽 킥"
+  },
+  {
+    "file" : "1-백비트 스네어.wav",
+    "gain" : 0.46000000000000002,
+    "peak" : 0.30135434865951538,
+    "rms" : 0.021060975349863734,
+    "source" : "post section effects and track gain; before album bus",
+    "track" : "백비트 스네어"
+  },
+  {
+    "file" : "2-엇박 하이햇.wav",
+    "gain" : 0.55000000000000004,
+    "peak" : 0.11398424208164215,
+    "rms" : 0.0057277763249714017,
+    "source" : "post section effects and track gain; before album bus",
+    "track" : "엇박 하이햇"
+  },
+  {
+    "file" : "3-가벼운 셰이커.wav",
+    "gain" : 0.28000000000000003,
+    "peak" : 0.028978824615478516,
+    "rms" : 0.0013765359966068746,
+    "source" : "post section effects and track gain; before album bus",
+    "track" : "가벼운 셰이커"
+  },
+  {
+    "file" : "4-펄스 베이스.wav",
+    "gain" : 1.1000000000000001,
+    "peak" : 0.20435500144958496,
+    "rms" : 0.056333179124019153,
+    "source" : "post section effects and track gain; before album bus",
+    "track" : "펄스 베이스"
+  },
+  {
+    "file" : "5-도시의 벨벳 EP.wav",
+    "gain" : 0.69999999999999996,
+    "peak" : 0.33484470844268799,
+    "rms" : 0.041132609332719249,
+    "source" : "post section effects and track gain; before album bus",
+    "track" : "도시의 벨벳 EP"
+  },
+  {
+    "file" : "6-오로라 패드.wav",
+    "gain" : 0.69999999999999996,
+    "peak" : 0.077357552945613861,
+    "rms" : 0.021048847360791583,
+    "source" : "post section effects and track gain; before album bus",
+    "track" : "오로라 패드"
+  },
+  {
+    "file" : "7-유리빛 응답.wav",
+    "gain" : 0.75,
+    "peak" : 0.10245572030544281,
+    "rms" : 0.010186637263673163,
+    "source" : "post section effects and track gain; before album bus",
+    "track" : "유리빛 응답"
+  },
+  {
+    "file" : "8-그녀의 모티프.wav",
+    "gain" : 1.5,
+    "peak" : 0.24165460467338562,
+    "rms" : 0.040201587998434922,
+    "source" : "post section effects and track gain; before album bus",
+    "track" : "그녀의 모티프"
+  },
+  {
+    "file" : "9-빛의 코드.wav",
+    "gain" : 0.90000000000000002,
+    "peak" : 0.21503683924674988,
+    "rms" : 0.024708699543287305,
+    "source" : "post section effects and track gain; before album bus",
+    "track" : "빛의 코드"
+  },
+  {
+    "file" : "10-얼음 아르페지오.wav",
+    "gain" : 0.59999999999999998,
+    "peak" : 0,
+    "rms" : 0,
+    "source" : "post section effects and track gain; before album bus",
+    "track" : "얼음 아르페지오"
+  },
+  {
+    "file" : "11-드로바 그루브.wav",
+    "gain" : 0.59999999999999998,
+    "peak" : 0.1555696427822113,
+    "rms" : 0.012630114098842023,
+    "source" : "post section effects and track gain; before album bus",
+    "track" : "드로바 그루브"
+  },
+  {
+    "file" : "12-네온 브라스.wav",
+    "gain" : 0.84999999999999998,
+    "peak" : 0.2046593576669693,
+    "rms" : 0.0075867300735560752,
+    "source" : "post section effects and track gain; before album bus",
+    "track" : "네온 브라스"
+  },
+  {
+    "file" : "13-북쪽의 스트링.wav",
+    "gain" : 0.65000000000000002,
+    "peak" : 0,
+    "rms" : 0,
+    "source" : "post section effects and track gain; before album bus",
+    "track" : "북쪽의 스트링"
+  },
+  {
+    "file" : "14-구간의 빛.wav",
+    "gain" : 0.13,
+    "peak" : 0.026000000536441803,
+    "rms" : 0.00052458930583797333,
+    "source" : "post section effects and track gain; before album bus",
+    "track" : "구간의 빛"
+  }
+]

@@ -1,0 +1,54 @@
+{
+  "articulatedNotes": 480,
+  "audioMeasurements": "pending final engine render",
+  "automation": [
+    {
+      "nodeID": "instrument:A3483DFA-6E15-4FA9-933A-F14D5D7F9204",
+      "points": 6,
+      "sectionID": "A862E897-A957-4F43-B9B4-4DAB761E3E22"
+    },
+    {
+      "nodeID": "instrument:6E4FFF1E-83DE-43D0-8D6B-733436B02A71",
+      "points": 6,
+      "sectionID": "DF8A6F1F-D9F9-4B46-BAEC-F62989F8B847"
+    },
+    {
+      "nodeID": "instrument:A3483DFA-6E15-4FA9-933A-F14D5D7F9204",
+      "points": 6,
+      "sectionID": "334406B8-9EA4-4AAA-86F1-BAD8CAF0D68F"
+    },
+    {
+      "nodeID": "instrument:A3483DFA-6E15-4FA9-933A-F14D5D7F9204",
+      "points": 6,
+      "sectionID": "29B1B05F-B892-4FC9-9805-4E61CF65C8F5"
+    },
+    {
+      "nodeID": "instrument:6E4FFF1E-83DE-43D0-8D6B-733436B02A71",
+      "points": 6,
+      "sectionID": "29B1B05F-B892-4FC9-9805-4E61CF65C8F5"
+    }
+  ],
+  "listeningReview": "pending",
+  "modifiedPatchTrackIndices": [
+    4,
+    5,
+    6,
+    8,
+    9,
+    13
+  ],
+  "preserved": [
+    "existing IDs",
+    "layout",
+    "colors",
+    "form",
+    "DJ drums",
+    "note starts/pitches/velocities",
+    "routing",
+    "media"
+  ],
+  "productionVersion": 6,
+  "resultManifestSHA256": "a75ea9f2f3917f82184ba94c31e071905c0c6a1bfa2e90259ad554eaa5c794d7",
+  "sourceManifestSHA256": "0f879f3b5885730f8687388817cac47cdf84eb27ee82c1cced0fd3835428cf55",
+  "sourceVersion": 5
+}

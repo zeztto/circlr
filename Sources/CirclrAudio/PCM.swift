@@ -84,6 +84,7 @@ public enum NativeDSP {
             let pan = min(1, max(-1, effect.amount)); let l = Float(sqrt((1-pan)/2)*sqrt(2.0)), r = Float(sqrt((1+pan)/2)*sqrt(2.0))
             for i in out.left.indices { out.left[i] *= l; out.right[i] *= r }
         case .drive:
+            if effect.renderVersion == 3 {out = try OversampledDrive.process(input, drive: 1 + a * 18); break}
             let drive = Float(1 + a * 18), norm = tanh(drive)
             for i in out.left.indices { out.left[i] = tanh(input.left[i]*drive)/norm; out.right[i] = tanh(input.right[i]*drive)/norm }
         case .lowpass:

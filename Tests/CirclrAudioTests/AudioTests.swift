@@ -65,6 +65,19 @@ final class AudioTests:XCTestCase {
         XCTAssertEqual(playback.seconds,0)
     }
     @MainActor func testArrangementRenderExportAndPlayback() async throws {
+        // This integration test uses SoundBank rendering and a physical output
+        // worker. Production resolves both beside Bundle.main.executableURL;
+        // SwiftPM's xctest host is not the packaged app. Copying helpers into
+        // the test bundle does not satisfy that production lookup contract.
+        let directory = Bundle.main.executableURL?.deletingLastPathComponent()
+        let required = ["circlr-au-instrument-worker", "circlr-output-worker"]
+        let missing = required.filter { name in
+            guard let directory else { return true }
+            return !FileManager.default.isExecutableFile(atPath: directory.appendingPathComponent(name).path)
+        }
+        guard missing.isEmpty else {
+            throw XCTSkip("Packaged native playback integration requires executable helpers beside the main executable (\(directory?.path ?? "unavailable")); missing: \(missing.joined(separator: ", ")). Run packaged native QA separately; this is not a playback pass.")
+        }
         let output=try ProcessInfo.processInfo.environment["CIRCLR_QA_OUTPUT"].map{URL(fileURLWithPath:$0)} ?? root()
         try FileManager.default.createDirectory(at:output,withIntermediateDirectories:true)
         var project=Project();project.name="QA · 송폼 검증";let piano=project.addTrack(name:"QA 피아노"),drums=project.addTrack(name:"QA 드럼",drums:true)

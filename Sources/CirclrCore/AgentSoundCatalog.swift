@@ -7,6 +7,7 @@ public struct AgentSoundItem:Codable,Equatable,Identifiable {
     public let name:String
     public let detail:String
     public var synthVoice:SynthVoice?
+    public var synthPatch:SynthPatch?
     public var program:Int?
     public var bankLSB:Int?
     public var drums:Bool?
@@ -15,6 +16,8 @@ public struct AgentSoundItem:Codable,Equatable,Identifiable {
         category=item.category.rawValue;name=item.title;detail=item.detail
         switch item.id {
         case .synth(let voice):id="synth:\(voice.rawValue)";synthVoice=voice
+        case .synthPreset(let key):
+            id="synth-preset:"+key;synthPatch=SynthPreset.factory.first{$0.id==key}?.patch;synthVoice=synthPatch?.voice
         case .soundBank(let program,let lsb,let drums):
             id="bank:\(drums ? "drums":"melodic"):\(program):\(lsb)"
             self.program=program;bankLSB=lsb;self.drums=drums

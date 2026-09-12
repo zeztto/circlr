@@ -13,13 +13,13 @@ final class AgentSoundCatalogTests:XCTestCase {
         var ids=[String](),pages=0
         repeat {
             let page=try catalog.page(args);pages+=1;XCTAssertLessThanOrEqual(page.items.count,3)
-            XCTAssertEqual(page.total,14);XCTAssertEqual(page.catalogID,catalog.id)
+            XCTAssertEqual(page.total,26);XCTAssertEqual(page.catalogID,catalog.id)
             ids+=page.items.map(\.id);args.offset=page.nextOffset;args.catalogID=page.catalogID
         }while args.offset != nil
-        XCTAssertEqual(pages,5);XCTAssertEqual(Set(ids).count,14)
+        XCTAssertEqual(pages,9);XCTAssertEqual(Set(ids).count,26)
         XCTAssertEqual(ids,try catalog.page(AgentArguments()).items.map(\.id))
         args.offset=1_000_000;let empty=try catalog.page(args)
-        XCTAssertTrue(empty.items.isEmpty);XCTAssertNil(empty.nextOffset);XCTAssertEqual(empty.total,14)
+        XCTAssertTrue(empty.items.isEmpty);XCTAssertNil(empty.nextOffset);XCTAssertEqual(empty.total,26)
     }
     func testNamesNumbersUnicodeAndTypedFiltersMatchGUI()throws {
         let catalog=try fixture();var args=AgentArguments();args.query="피아노".decomposedStringWithCanonicalMapping;args.category="soundBank"

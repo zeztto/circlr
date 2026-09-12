@@ -1,0 +1,86 @@
+[
+  {
+    "id" : "warm-pad",
+    "name" : "따뜻한 패드",
+    "normalized" : false,
+    "peak" : 0.34580358862876892,
+    "rms" : 0.060532804674307494
+  },
+  {
+    "id" : "round-bass",
+    "name" : "둥근 베이스",
+    "normalized" : false,
+    "peak" : 0.14358870685100555,
+    "rms" : 0.031724121378625722
+  },
+  {
+    "id" : "glass-keys",
+    "name" : "유리 건반",
+    "normalized" : false,
+    "peak" : 0.43186315894126892,
+    "rms" : 0.031334400288781754
+  },
+  {
+    "id" : "wide-chorus",
+    "name" : "넓은 후렴",
+    "normalized" : false,
+    "peak" : 0.35458636283874512,
+    "rms" : 0.052666728528169587
+  },
+  {
+    "id" : "soft-saw",
+    "name" : "부드러운 소우",
+    "normalized" : false,
+    "peak" : 0.25975519418716431,
+    "rms" : 0.038719599032712264
+  },
+  {
+    "id" : "crisp-pluck",
+    "name" : "또렷한 플럭",
+    "normalized" : false,
+    "peak" : 0.28881362080574036,
+    "rms" : 0.010372537340235161
+  },
+  {
+    "id" : "singing-lead",
+    "name" : "노래하는 리드",
+    "normalized" : false,
+    "peak" : 0.36617481708526611,
+    "rms" : 0.050598656634442227
+  },
+  {
+    "id" : "velvet-ep",
+    "name" : "벨벳 전자피아노",
+    "normalized" : false,
+    "peak" : 0.43421265482902527,
+    "rms" : 0.049469184422618405
+  },
+  {
+    "id" : "bell-ep",
+    "name" : "벨 전자피아노",
+    "normalized" : false,
+    "peak" : 0.43253958225250244,
+    "rms" : 0.042115505022576334
+  },
+  {
+    "id" : "rotary-organ",
+    "name" : "회전 오르간",
+    "normalized" : false,
+    "peak" : 0.51096200942993164,
+    "rms" : 0.083715680387887861
+  },
+  {
+    "id" : "short-brass",
+    "name" : "짧은 브라스",
+    "normalized" : false,
+    "peak" : 0.33237877488136292,
+    "rms" : 0.03092039332174849
+  },
+  {
+    "id" : "silk-strings",
+    "name" : "실크 스트링",
+    "normalized" : false,
+    "peak" : 0.39750757813453674,
+    "rms" : 0.061770278164857202
+  }
+]

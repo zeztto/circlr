@@ -1,5 +1,13 @@
 # 변경 이력
 
+## 0.60.0 · build170 — 2026-09-12
+
+- 내장 프리셋12개를 기존 음색 검색 및 MCP sounds에 통합. 기존 patch 보존·Undo 지원.
+- 새 Drive4×oversampling, 과거 nil/1/2 렌더 보존, factory→기본 음색 선택 회귀 수정.
+- f0r h3r v6의 patch·articulation·구간별 필터 오토메이션, 클래식3곡 유지.
+- Twelve factory patches, compatible oversampled Drive and the refined v6 demo. [한영 노트](docs/releases/0.60.0-notes.md) · [QA](docs/releases/0.60.0-qa.md).
+
+
 ## 0.50.1 — build169 · 2026-09-11
 
 - 역할별 서클 크기와 방사형 기본 배치, 소스에서 출력까지 넓어진 신호 흐름 간격을 적용했다.

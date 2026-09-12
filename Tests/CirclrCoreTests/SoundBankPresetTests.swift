@@ -16,7 +16,10 @@ final class SoundBankPresetTests:XCTestCase {
         let bank=[preset(),preset(0,8),preset(10,0,false,"Music box"),preset(25,0,true,"TR-808"),preset(127,0,false,"Gunshot")]
         let catalog=SoundSelection.instruments([],bank:bank)
         XCTAssertEqual(SoundSelection.search(catalog,query:"#１").map(\.id),[bank[0].id,bank[1].id])
-        XCTAssertEqual(SoundSelection.search(catalog,query:"피아노".decomposedStringWithCanonicalMapping).count,2)
+        let pianoQuery="피아노".decomposedStringWithCanonicalMapping
+        XCTAssertEqual(SoundSelection.search(catalog,query:pianoQuery,category:.soundBank).map(\.id),[bank[0].id,bank[1].id])
+        XCTAssertEqual(SoundSelection.search(catalog,query:pianoQuery).map(\.id),
+                       [.synthPreset("velvet-ep"),.synthPreset("bell-ep"),bank[0].id,bank[1].id])
         XCTAssertEqual(SoundSelection.search(catalog,query:"#26",bankDrums:true).map(\.id),[bank[3].id])
         XCTAssertTrue(SoundSelection.search(catalog,query:"#26",bankDrums:false).isEmpty)
         XCTAssertEqual(SoundSelection.search(catalog,query:"#128").map(\.id),[bank[4].id])

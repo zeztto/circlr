@@ -12,7 +12,7 @@ struct EffectControls: View {
             StudioChoice("효과", selection: Binding(get: {effect.kind}, set: {kind in
                 guard isCurrent() else {return}
                 if kind == .audioUnit,let chooseAudioUnit {chooseAudioUnit();return}
-                var next=effect; next.kind=kind; effect=next
+                var next=effect; next.kind=kind; next.renderVersion=Effect(kind).renderVersion; effect=next
             }), options: EffectKind.allCases.filter {allowsAU || $0 != .audioUnit}.map {($0,AppStore.effectName($0))})
             EffectParameterFields(effect:$effect) {expected,next in
                 guard isCurrent(),effect==expected else{return false}
