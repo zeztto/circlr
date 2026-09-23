@@ -108,15 +108,16 @@ struct AlbumCanvas: NSViewRepresentable {
             let savedCamera = self.animation?.isValid == true ? (self.animationDestination ?? self.camera) : self.camera
             return HierarchyViewport(camera:savedCamera,width:self.bounds.width,height:self.bounds.height,selection:self.store.hierarchySelection ?? .album,settingsOpen:self.store.hierarchySettingsOpen,midiStepMode:self.store.midiStepMode,workspace:self.store.capturedStudioWorkspace,playbackFollowSettings:self.store.playbackFollowSettings)
         }
-        store.captureMovieFrame = { [weak self] in
+        store.captureMovieFrame = { [weak self] movieElapsedSeconds in
             guard let self,self.bounds.width>=64,self.bounds.height>=64 else{return nil}
             let started=ProcessInfo.processInfo.systemUptime
             defer { self.movieCaptureTiming.record(start:started,end:ProcessInfo.processInfo.systemUptime) }
             self.movieCaptureDepth += 1
             defer { self.movieCaptureDepth -= 1 }
-            // The 60 Hz visual timer already prepares ordinary recording frames.
-            // The opening frame still needs a synchronous update before its first capture.
-            if self.store.movieWriter == nil { self.updatePlaybackFrame() }
+            // The 60 Hz timer owns ordinary playback/follow state. A movie
+            // capture renders its own frame at the same instant as its PTS.
+            if let movieElapsedSeconds { self.updateMoviePlaybackFrame(at:movieElapsedSeconds) }
+            else if self.store.movieWriter == nil { self.updatePlaybackFrame() }
             self.placeEditor()
             let image=CanvasMovieCapture.image(of:self)
             if self.store.movieWriter != nil,self.subviews.allSatisfy(\.isHidden) {

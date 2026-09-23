@@ -51,15 +51,32 @@ import CirclrCore
         if let audio=pending.1,let loop=pending.2 {preparedValue=audio;loopValue=loop}
         pendingLoop=nil
     }
-    public var seconds:Double {
-        guard playing else{return 0}
+    public var seconds:Double {musicalSeconds(atElapsed:elapsedSeconds)}
+    /// Read a visual position for a nearby future hardware sample without
+    /// advancing the transport or committing a scheduled loop transition.
+    /// Movie capture uses this with a bounded interpolation of the output clock.
+    public func musicalSeconds(atElapsed elapsed:Double) -> Double {visualState(atElapsed:elapsed).seconds}
+    /// A pending boundary changes the source as well as the wrapped position.
+    /// Return both from one read so a captured frame never uses the new clock
+    /// against envelopes from the previous song or section loop.
+    public func visualState(atElapsed elapsed:Double) -> (seconds:Double,prepared:PreparedAudio?) {
+        guard playing,elapsed.isFinite,elapsed>=0 else{return (0,nil)}
         synchronizeLoopBoundary()
-        if let loopValue {
-            let local=max(0,elapsedSeconds-loopEpochSeconds)
-            if loopDraining {return min(loopValue.duration+loopValue.exitTail.duration,loopValue.duration+local)}
-            return loopValue.position(elapsed:local,offset:offset)
+        var audio=preparedValue
+        var loop=loopValue,epoch=loopEpochSeconds,draining=loopDraining,positionOffset=offset
+        // The requested capture instant can cross an already scheduled output
+        // boundary before the next 20 ms worker clock report arrives.
+        if let pending=pendingLoop,elapsed>=pending.0.elapsedSeconds {
+            epoch=pending.0.elapsedSeconds;draining=pending.0.exiting;positionOffset=0
+            if let replacement=pending.2 {loop=replacement}
+            if let replacement=pending.1 {audio=replacement}
         }
-        return min(prepared?.mix.duration ?? .greatestFiniteMagnitude,offset+elapsedSeconds)
+        if let loop {
+            let local=max(0,elapsed-epoch)
+            if draining {return (min(loop.duration+loop.exitTail.duration,loop.duration+local),audio)}
+            return (loop.position(elapsed:local,offset:positionOffset),audio)
+        }
+        return (min(audio?.mix.duration ?? .greatestFiniteMagnitude,positionOffset+elapsed),audio)
     }
     public func play(_ audio:PreparedAudio,from:Double=0,selection:OutputDeviceSelection = .systemDefault,loop:Bool=false,onPrepared:(@MainActor (PlaybackLoopPCM?) throws -> Void)?=nil)async throws {
         try await start(audio,from:from,timeout:10,selection:selection,loop:loop,onPrepared:onPrepared)

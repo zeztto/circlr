@@ -96,14 +96,16 @@ for line in sys.stdin:
   boundary_frame=phase_frame+((boundary_frame-phase_frame+first_frame+cycle_frames-1)//cycle_frames)*cycle_frames-first_frame
   emit({'loopChangeScheduled':dict(change=change,elapsedFrame=boundary_frame,frames=count,exiting=exit_loop)})
   if not exit_loop:tail_frames=item['frames']-count
-  emit({'loopClock':dict(run=run,seconds=boundary_frame/48000+(tail_frames/48000 if exit_loop else .01))})
+  if mode!='boundary-pending':
+   emit({'loopClock':dict(run=run,seconds=boundary_frame/48000+(tail_frames/48000 if exit_loop else .01))})
   phase_frame=boundary_frame
   cycle_frames=count;first_frame=0
   boundary_frame+=48000
   if exit_loop:
    end_frame=phase_frame+tail_frames
-   emit({'loopClock':dict(run=run,seconds=end_frame/48000+.02)})
-   emit({'loopFinished':dict(run=run,elapsedFrame=end_frame)})
+   if mode!='boundary-pending':
+    emit({'loopClock':dict(run=run,seconds=end_frame/48000+.02)})
+    emit({'loopFinished':dict(run=run,elapsedFrame=end_frame)})
  elif 'stop' in p:
   emit({'stopped':{'run':p['stop']['run']}})
 """#.replacingOccurrences(of: "MODE", with: mode)
@@ -145,6 +147,34 @@ for line in sys.stdin:
         var project=Project();_=project.addSection(name:"Loop",at:Point(),bars:1)
         var plan=try ArrangementCompiler.compile(project);plan.duration=Double(frames)/PCM.rate
         return PreparedAudio(plan:plan,mix:PCM(frames:frames),stems:[:],tailSeconds:0)
+    }
+    func testMovieVisualClockLooksThroughPendingReplacementAndExitWithoutMovingLiveTransport()async throws {
+        do {
+            let host=OutputWorkerProcess(executable:try fixture("boundary-pending")),playback=Playback(outputWorker:host)
+            let original=try loopAudio(frames:480),replacement=try loopAudio(frames:960)
+            try await playback.play(original,loop:true)
+            let change=try await playback.requestLoopChange(to:replacement)
+            XCTAssertLessThan(playback.elapsedSeconds,change.elapsedSeconds)
+            let visual=playback.visualState(atElapsed:change.elapsedSeconds+0.005)
+            XCTAssertEqual(visual.seconds,0.005,accuracy:0.000001)
+            XCTAssertEqual(visual.prepared?.plan.duration,replacement.plan.duration)
+            XCTAssertEqual(playback.prepared?.plan.duration,original.plan.duration)
+            XCTAssertNotNil(playback.pendingLoopChange)
+            playback.stop();try await wait {host.status.phase == .idle}
+        }
+        do {
+            let host=OutputWorkerProcess(executable:try fixture("boundary-pending")),playback=Playback(outputWorker:host)
+            var original=try loopAudio(frames:480)
+            original.mix=PCM(frames:720) // 5 ms exit tail after the 10 ms body.
+            try await playback.play(original,loop:true)
+            let exit=try await playback.finishLoopAtBoundary()
+            XCTAssertLessThan(playback.elapsedSeconds,exit.elapsedSeconds)
+            let visual=playback.visualState(atElapsed:exit.elapsedSeconds+0.002)
+            XCTAssertEqual(visual.seconds,0.012,accuracy:0.000001)
+            XCTAssertEqual(visual.prepared?.plan.duration,original.plan.duration)
+            XCTAssertNotNil(playback.pendingLoopChange)
+            playback.stop();try await wait {host.status.phase == .idle}
+        }
     }
     func testPlaybackBoundaryAckUpdatesPlanClockAndPreservesOffsetBoundary()async throws {
         let host=OutputWorkerProcess(executable:try fixture("boundary-normal")),playback=Playback(outputWorker:host)

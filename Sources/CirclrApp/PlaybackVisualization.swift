@@ -80,14 +80,33 @@ struct PlaybackVisualFrame {
         let now = ProcessInfo.processInfo.systemUptime
         if lastVisualFrameTime > 0 { maximumFrameGap = max(maximumFrameGap, now-lastVisualFrameTime) }
         lastVisualFrameTime = now; frameCount += 1
+        let frame=makePlaybackVisualFrame(at:store.playback.seconds,scene:scene,prepared:prepared)
+        visualFrame=frame
+        if frame.stale { animation?.invalidate(); animation = nil; needsDisplay = true; return }
+        if store.playbackLocation != frame.caption { store.playbackLocation = frame.caption }
+        followPlaybackSection()
+        needsDisplay = true
+    }
+
+    /// Movie pixels and their PTS use the same estimated hardware instant.
+    /// Leave the normal 60 Hz observer in charge of follow, captions, camera
+    /// transitions and display callback diagnostics.
+    func updateMoviePlaybackFrame(at elapsedSeconds:Double) {
+        guard let scene else{return}
+        let state=store.playback.visualState(atElapsed:elapsedSeconds)
+        guard let prepared=state.prepared else{return}
+        visualFrame=makePlaybackVisualFrame(at:state.seconds,scene:scene,prepared:prepared)
+    }
+
+    private func makePlaybackVisualFrame(at seconds:Double,scene:HierarchyScene,prepared:PreparedAudio)->PlaybackVisualFrame {
         var frame = PlaybackVisualFrame()
-        frame.seconds = store.playback.seconds
+        frame.seconds = seconds
         frame.stale = prepared.plan.revision != store.project.musicRevision
         guard !frame.stale else {
             frame.caption = "편집한 음악은 다시 재생하면 반영됩니다"
-            visualFrame = frame; animation?.invalidate(); animation = nil; needsDisplay = true; return
+            return frame
         }
-        let plan = prepared.plan, seconds = frame.seconds
+        let plan = prepared.plan
         let owners = Dictionary(store.project.arrangements.flatMap { arrangement in arrangement.uses.map { ($0.id, arrangement.id) } }, uniquingKeysWith: { first, _ in first })
         if let current = PlaybackPosition.followOccurrence(in: plan, at: seconds), let arrangement = owners[current.use.id] {
             frame.focus = .section(arrangementID: arrangement, useID: current.use.id)
@@ -142,10 +161,7 @@ struct PlaybackVisualFrame {
                 frame.edgeLevels[edge.id] = (frame.levels[edge.from] ?? 0)*edge.gain
             }
         }
-        visualFrame = frame
-        if store.playbackLocation != frame.caption { store.playbackLocation = frame.caption }
-        followPlaybackSection()
-        needsDisplay = true
+        return frame
     }
 
     func followPlaybackSection() {

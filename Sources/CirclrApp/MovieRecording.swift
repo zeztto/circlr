@@ -24,11 +24,12 @@ extension AppStore {
                     self.playbackFollow=self.playbackFollow.startingPlayback()
                     try await self.playback.play(audio,selection:outputSelection,loop:loopMode != .off,onPrepared:{ loopPCM in
                         guard self.movieGeneration==generation,self.moviePreparing else{throw CancellationError()}
-                        guard let image=self.captureMovieFrame?() else{throw CirclrError("녹화할 캔버스를 찾을 수 없습니다")}
+                        guard let image=self.captureMovieFrame?(nil) else{throw CirclrError("녹화할 캔버스를 찾을 수 없습니다")}
                         let recorder=try CanvasMovieWriter(url:url,size:CGSize(width:image.width,height:image.height),pcm:audio.mix,loop:loopPCM)
                         preparedRecorder=recorder
                         // Capture the opening frame before the output clock starts.
                         try recorder.append(image,seconds:0)
+                        self.movieTickTiming.resetMovieClock()
                         self.movieWriter=recorder;self.movieRevision=self.project.musicRevision;self.movieSeconds=0
                     })
                     guard let recorder=preparedRecorder,self.movieGeneration==generation,self.moviePreparing,self.movieWriter === recorder else{
@@ -63,12 +64,17 @@ extension AppStore {
         defer { movieTickTiming.record(start:started,end:ProcessInfo.processInfo.systemUptime) }
         guard movieRevision==project.musicRevision else{finishMovieRecording();status="음악 변경으로 영상 녹화를 마쳤습니다";return}
         if !playback.playing {finishMovieRecording();return}
-        let seconds=playback.elapsedSeconds
-        guard seconds>movieSeconds || recorder.submittedFrameCount==0 else{return}
+        let workerSeconds=playback.elapsedSeconds
+        // The helper reports hardware time every 20 ms, whereas this capture
+        // callback runs at 30 Hz. Require a fresh hardware sample so a stalled
+        // output never manufactures video frames from wall-clock time.
+        guard workerSeconds>movieTickTiming.lastMovieWorkerSeconds else{return}
         do {
             try recorder.checkForFailure()
             guard recorder.canAcceptFrame else{recorder.reportSkippedCapture();return}
-            guard let frame=captureMovieFrame?() else{throw CirclrError("캔버스 화면을 읽을 수 없습니다")}
+            guard let seconds=movieTickTiming.moviePresentationSeconds(workerSeconds:workerSeconds,
+                captureUptime:ProcessInfo.processInfo.systemUptime) else{return}
+            guard let frame=captureMovieFrame?(seconds) else{throw CirclrError("캔버스 화면을 읽을 수 없습니다")}
             try recorder.append(frame,seconds:seconds);movieSeconds=seconds
         }catch{recorder.cancel();movieWriter=nil;fail(error)}
     }

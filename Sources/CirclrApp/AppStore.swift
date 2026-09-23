@@ -40,7 +40,9 @@ import CirclrAudio
     var movieTickTiming=CanvasFrameTiming()
     var movieRevision=0
     var movieGeneration=0
-    var captureMovieFrame:(()->CGImage?)?
+    /// nil is the opening still before output starts; later captures carry
+    /// their exact movie PTS so the visual frame can use the same instant.
+    var captureMovieFrame:((Double?)->CGImage?)?
     @Published var keyboardHelp=false
     @Published var commandPalette: StudioPalette?
     @Published var soundPickerRequest:SoundPickerRequest?
