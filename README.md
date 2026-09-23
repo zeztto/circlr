@@ -14,7 +14,7 @@ In circlr, a circle is a timeline. Build a song from sections, place MIDI, audio
 
 > **0.70.0 · build180.** Smoother playback canvas and MP4 capture in the verified scenarios, with viewing mode beside Record. [Evidence and limits](docs/releases/0.70.0-qa.md).
 
-**In development:** [0.80.0](docs/releases/0.80.0.md) improves orbit readability and tests the complete playback, recording, editing and export path. The current build keeps a visible MIDI/audio editor open when playback starts, offers job-only cancellation through MCP and lets you select an app-only output device with **⌘,** if the default stalls. Its QA gates remain open; 0.70.0 is the latest release.
+**In development:** [0.80.0](docs/releases/0.80.0.md) improves orbit readability and tests the complete playback, recording, editing and export path. Build204 fits cable controls into a portrait-width window, preserves legacy recovery, and publishes the local MCP socket without replacing another app's connection. It also keeps a visible MIDI/audio editor open during playback, offers job-only MCP cancellation and lets you select an app-only output device with **⌘,** if the default stalls. Its QA gates remain open; 0.70.0 is the latest release.
 
 ## What you can work with
 

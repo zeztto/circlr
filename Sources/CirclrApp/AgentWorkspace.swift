@@ -29,12 +29,24 @@ struct AgentJob:Codable {
     var endWindowHasSignal:Bool?
 }
 extension AppStore {
+    func pauseAgentBridgeForTermination() {agentBridgeShuttingDown=true}
+    func resumeAgentBridgeAfterCancelledTermination() {
+        agentBridgeShuttingDown=false
+        if agentSocket == nil {startAgentBridge()}
+    }
+    func stopAgentBridgeForTermination() {
+        agentBridgeShuttingDown=true
+        agentSocket=nil // AgentSocket.deinit unlinks only its own inode.
+    }
     func recordActivity(_ source:String,_ message:String) {
         activitySequence+=1
         activity.append(ActivityEvent(id:activitySequence,time:Date(),source:source,message:message,revision:project.musicRevision))
         if activity.count>500{activity.removeFirst(activity.count-500)}
     }
     func startAgentBridge() {
+        guard agentStartupReady,agentSocket == nil else { return }
+        let now=ProcessInfo.processInfo.systemUptime
+        guard now >= agentBridgeRetryAt else{return}
         do {
             agentSocket=try AgentSocket(directory:productionMediaRoot.deletingLastPathComponent().appendingPathComponent("Agent")){[weak self] data,reply in
                 guard let self else{return}
@@ -42,8 +54,15 @@ extension AppStore {
                 reply((try? JSONSerialization.data(withJSONObject:result,options:[.sortedKeys])) ?? Data(#"{"ok":false,"error":"encoding"}"#.utf8))
             }
             cleanupAbandonedAgentBounceStages()
+            agentBridgeRetryAt=0
+            agentBridgeLastFailure=nil
             recordActivity("연결","로컬 MCP 연결 준비 · 휠로 확대·축소 · Ctrl `로 콘솔 접기")
-        }catch{recordActivity("연결",error.localizedDescription)}
+        }catch{
+            agentBridgeRetryAt=now+10
+            let message=error.localizedDescription
+            if message != agentBridgeLastFailure {recordActivity("연결",message)}
+            agentBridgeLastFailure=message
+        }
     }
     /// Socket ownership proves no other circlr instance is writing this private
     /// Bounces directory. Arbitrary user export directories are never scanned.
@@ -74,6 +93,7 @@ extension AppStore {
          "runtime":["version":Bundle.main.object(forInfoDictionaryKey:"CFBundleShortVersionString") as? String ?? "development","build":Bundle.main.object(forInfoDictionaryKey:"CFBundleVersion") as? String ?? "development","capabilities":["playbackLoop":1,"playbackLoopLive":1,"workspaceView":1,"soundCatalog":1,"synthCutoffAutomation":1,"synthResonanceAutomation":1,"midiTempoImport":1,"midiPitchBendImport":1,"midiSustainImport":1,"midiSustainEditing":1,"midiPitchBendEditing":1,"sectionLengthEditing":1,"jobCancellation":1],"bundleID":Bundle.main.bundleIdentifier ?? "","windows":NSApplication.shared.windows.filter{$0.identifier?.rawValue=="main"}.map{["visible":$0.isVisible,"minimized":$0.isMiniaturized]}]]
     }
     func receiveAgent(_ data:Data,source:String)->[String:Any] {
+        guard agentStartupReady else {return ["ok":false,"error":"시작 복구 확인이 끝나지 않아 에이전트 요청을 받을 수 없습니다"]}
         do {
             let request=try JSONDecoder().decode(AgentRequest.self,from:data)
             guard !request.id.isEmpty,request.id.count<=128 else {throw CirclrError("request id가 필요합니다")}
@@ -93,6 +113,7 @@ extension AppStore {
     }
     func executeAgent(_ request:AgentRequest,source:String,
                       trustedLease:AgentRunLease?=nil) throws -> [String:Any] {
+        guard agentStartupReady else {throw CirclrError("시작 복구 확인이 끝나지 않아 에이전트 요청을 받을 수 없습니다")}
         let args=request.arguments ?? AgentArguments()
         switch request.method {
         case "snapshot":return agentState()
@@ -208,7 +229,12 @@ extension AppStore {
             guard let path=args.path ?? projectURL?.path,path.hasSuffix(".circlr") else {throw CirclrError("저장할 .circlr 절대 경로가 필요합니다")}
             let url=try agentPath(path)
             if FileManager.default.fileExists(atPath:url.path),try ProjectStore.load(url).project.id != project.id {throw CirclrError("다른 프로젝트를 덮어쓸 수 없습니다")}
-            captureViewport();demoCopyLease=nil;project=try ProjectStore.saveSession(project,to:url,mediaRoot:mediaRoot);projectURL=url;mediaRoot=url;dirty=false;clearSavedRecovery();status="에이전트 저장 완료";return agentState()
+            captureViewport()
+            let saved=try ProjectStore.saveSession(project,to:url,mediaRoot:mediaRoot)
+            if let lease=demoCopyLease,url.standardizedFileURL == lease.root {
+                try? DemoCopyLease.retainIfManaged(lease.root);demoCopyLease=nil
+            } else {retireDemoCopy()}
+            project=saved;projectURL=url;mediaRoot=url;dirty=false;clearSavedRecovery();status="에이전트 저장 완료";return agentState()
         case "open":
             return try beginAgentOpen(request,source:source)
         case "import_midi":return try beginAgentMIDIImport(request,source:source)

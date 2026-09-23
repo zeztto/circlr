@@ -307,7 +307,9 @@ extension AppStore {
         guard waveforms[asset.id] == nil, !waveformLoading.contains(asset.id) else { return }
         let root = mediaRoot, generation = waveformGeneration
         waveformLoading.insert(asset.id)
-        Task { [weak self] in
+        let readerID=UUID()
+        let task=Task { [weak self] in
+            defer {self?.waveformReaderTasks[readerID]=nil}
             do {
                 let result = try await Task.detached(priority: .utility) {
                     let url = try ProjectStore.assetURL(asset, root: root)
@@ -317,6 +319,7 @@ extension AppStore {
                 self.waveforms[asset.id] = result; self.waveformLoading.remove(asset.id)
             } catch { guard let self, generation == self.waveformGeneration else { return }; self.status = "파형 읽기 실패: \(error.localizedDescription)" }
         }
+        waveformReaderTasks[readerID]=task
     }
 }
 

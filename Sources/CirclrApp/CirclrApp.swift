@@ -11,7 +11,7 @@ import OSLog
             RootView(store:store).tint(StudioTheme.accent).accentColor(StudioTheme.accent).preferredColorScheme(.dark)
                 .background(MainWindowBehavior{delegate.mainWindow=$0}.frame(width:0,height:0))
                 .onAppear{NSApplication.shared.appearance=NSAppearance(named:.darkAqua);delegate.store=store;guard !opened else{return};opened=true;NSApplication.shared.activate(ignoringOtherApps:true);if let i=CommandLine.arguments.firstIndex(of:"--open"),CommandLine.arguments.count>i+1{store.open(URL(fileURLWithPath:CommandLine.arguments[i+1]))}else{store.offerRecovery()}}
-                .onOpenURL{store.open($0)}
+                .onOpenURL{opened=true;store.open($0)}
         }.defaultSize(width:1440,height:900).windowStyle(.titleBar)
         .commands {
             CommandGroup(replacing:.appSettings){Button("출력 설정…"){store.showOutputPreferences()}.keyboardShortcut(",").disabled(store.viewingMode || store.startupOpen)}
@@ -59,20 +59,50 @@ import OSLog
     weak var mainWindow:NSWindow?
     func applicationShouldTerminate(_ sender:NSApplication)->NSApplication.TerminateReply {
         guard let store else{return .terminateNow}
+        guard store.hasRecoveryOwnership else{store.stopAgentBridgeForTermination();return .terminateNow}
+        // NSAlert.runModal and terminateLater waits both pump the main loop.
+        // Reject new MCP edits until termination completes or is cancelled.
+        store.pauseAgentBridgeForTermination()
         if store.audioRecordingBusy || store.midiRecording {
             store.stop()
             Task{@MainActor in
                 let deadline=ProcessInfo.processInfo.systemUptime+10
                 while store.recorder.busy && ProcessInfo.processInfo.systemUptime<deadline {try? await Task.sleep(for:.milliseconds(40))}
-                guard !store.recorder.busy else{store.status="녹음 장치가 응답하면 파일 마무리 후 다시 종료하세요";sender.reply(toApplicationShouldTerminate:false);return}
-                guard store.confirmDiscard() else{sender.reply(toApplicationShouldTerminate:false);return}
+                guard !store.recorder.busy else{store.status="녹음 장치가 응답하면 파일 마무리 후 다시 종료하세요";store.resumeAgentBridgeAfterCancelledTermination();sender.reply(toApplicationShouldTerminate:false);return}
+                guard store.confirmDiscard() else{store.resumeAgentBridgeAfterCancelledTermination();sender.reply(toApplicationShouldTerminate:false);return}
+                let approved=store.terminationDocumentSnapshot
                 if let finalizing=store.movieFinalizing {await finalizing.value}
+                guard store.terminationDocumentSnapshot == approved else{
+                    store.status="종료 대기 중 곡이 변경되었습니다. 변경 내용을 확인한 뒤 다시 종료하세요"
+                    store.resumeAgentBridgeAfterCancelledTermination()
+                    sender.reply(toApplicationShouldTerminate:false)
+                    return
+                }
+                store.clearSavedRecovery()
+                store.stopAgentBridgeForTermination()
                 sender.reply(toApplicationShouldTerminate:true)
             }
             return .terminateLater
         }
-        if !store.confirmDiscard(){return .terminateCancel};store.stop()
-        if let finalizing=store.movieFinalizing {Task{@MainActor in await finalizing.value;sender.reply(toApplicationShouldTerminate:true)};return .terminateLater}
+        if !store.confirmDiscard(){store.resumeAgentBridgeAfterCancelledTermination();return .terminateCancel};store.stop()
+        if let finalizing=store.movieFinalizing {
+            let approved=store.terminationDocumentSnapshot
+            Task{@MainActor in
+                await finalizing.value
+                guard store.terminationDocumentSnapshot == approved else{
+                    store.status="종료 대기 중 곡이 변경되었습니다. 변경 내용을 확인한 뒤 다시 종료하세요"
+                    store.resumeAgentBridgeAfterCancelledTermination()
+                    sender.reply(toApplicationShouldTerminate:false)
+                    return
+                }
+                store.clearSavedRecovery()
+                store.stopAgentBridgeForTermination()
+                sender.reply(toApplicationShouldTerminate:true)
+            }
+            return .terminateLater
+        }
+        store.clearSavedRecovery()
+        store.stopAgentBridgeForTermination()
         return .terminateNow
     }
     func applicationShouldTerminateAfterLastWindowClosed(_ sender:NSApplication)->Bool {false}

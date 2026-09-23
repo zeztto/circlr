@@ -4,6 +4,7 @@ import CirclrCore
 
 struct CableToolsView: View {
     let title: String
+    let compact: Bool
     let mode: CircleCableGesture.Mode
     let canReconnect: Bool
     let direction: CirclePortDirection
@@ -13,19 +14,32 @@ struct CableToolsView: View {
     let edit: () -> Void
     let disconnect: () -> Void
     let close: () -> Void
+
+    @ViewBuilder private var modeButtons: some View {
+        if canReconnect { Button("재연결") { chooseMode(.reconnect) }.foregroundStyle(mode == .reconnect ? StudioTheme.accent:StudioTheme.text) }
+        Button("위치 이동") { chooseMode(.placement) }.foregroundStyle(mode == .placement ? StudioTheme.accent:StudioTheme.text)
+    }
+
+    @ViewBuilder private var endpointButtons: some View {
+        Button("OUT · \(placement.from.label)") { chooseEnd(.output) }
+            .foregroundStyle(direction == .output ? StudioTheme.accent : StudioTheme.text).accessibilityLabel("OUT 끝점 선택 · \(placement.from.label)")
+        Button("IN · \(placement.to.label)") { chooseEnd(.input) }
+            .foregroundStyle(direction == .input ? StudioTheme.accent : StudioTheme.text).accessibilityLabel("IN 끝점 선택 · \(placement.to.label)")
+    }
+
+    @ViewBuilder private var editButtons: some View {
+        if canReconnect { Button("편집", action: edit).help("선택 케이블을 바로 편집 · Return") }
+        if canReconnect { Button("해제",action:disconnect) }
+    }
+
     var body: some View {
         VStack(alignment:.leading,spacing:8) {
             HStack { Text(title).lineLimit(1).truncationMode(.middle); Spacer(); Button("닫기",action:close) }
-            HStack(spacing:12) {
-                if canReconnect { Button("재연결") { chooseMode(.reconnect) }.foregroundStyle(mode == .reconnect ? StudioTheme.accent:StudioTheme.text) }
-                Button("위치 이동") { chooseMode(.placement) }.foregroundStyle(mode == .placement ? StudioTheme.accent:StudioTheme.text)
-                Button("OUT · \(placement.from.label)") { chooseEnd(.output) }
-                    .foregroundStyle(direction == .output ? StudioTheme.accent : StudioTheme.text).accessibilityLabel("OUT 끝점 선택 · \(placement.from.label)")
-                Button("IN · \(placement.to.label)") { chooseEnd(.input) }
-                    .foregroundStyle(direction == .input ? StudioTheme.accent : StudioTheme.text).accessibilityLabel("IN 끝점 선택 · \(placement.to.label)")
-                Spacer()
-                if canReconnect { Button("편집", action: edit).help("선택 케이블을 바로 편집 · Return") }
-                if canReconnect { Button("해제",action:disconnect) }
+            if compact {
+                HStack(spacing:12) { modeButtons; Spacer(minLength:8); editButtons }
+                HStack(spacing:12) { endpointButtons; Spacer(minLength:0) }
+            } else {
+                HStack(spacing:12) { modeButtons; endpointButtons; Spacer(); editButtons }
             }
             Text(canReconnect ? "Tab 끝점 · ← → 위치 · ↑ ↓ 케이블 · Return 편집" : "Tab 끝점 · ← → 위치 · ↑ ↓ 케이블")
                 .foregroundStyle(StudioTheme.secondary).fixedSize(horizontal:false,vertical:true)
@@ -78,12 +92,13 @@ extension AlbumCanvasView {
         }
         let title=name(edge.from,edge.fromPortID)+" → "+name(edge.to,edge.toPortID)
         let canReconnect:Bool = {if case .composition = id.from {return false};return true}()
-        let view=CableToolsView(title:title,mode:cableMode,canReconnect:canReconnect,direction:selectedCableEnd,placement:edge.placement,chooseMode:{[weak self] mode in
+        let width=min(650,workspaceViewport.width-16),compact=workspaceViewport.width<900
+        let view=CableToolsView(title:title,compact:compact,mode:cableMode,canReconnect:canReconnect,direction:selectedCableEnd,placement:edge.placement,chooseMode:{[weak self] mode in
             guard let self else{return};self.cableDrag=nil;self.connectionToken=nil;self.cableMode=mode;self.refreshCableTools();self.window?.makeFirstResponder(self);self.needsDisplay=true
         },chooseEnd:{[weak self] in self?.chooseCableEnd($0)},edit:{[weak self] in self?.editConnectionSelection()},
             disconnect:{[weak self] in self?.disconnectSelectedCable()},close:{[weak self] in self?.clearCableSelection()})
         if let cableTools {cableTools.rootView=view} else {let host=NSHostingView(rootView:view);addSubview(host);cableTools=host}
-        let width=min(650,workspaceViewport.width-16),height=width<560 ? 116.0:102.0,middle=(try? curve.point(at:0.5)) ?? curve.from
+        let height=compact ? 136.0:102.0,middle=(try? curve.point(at:0.5)) ?? curve.from
         let x=max(workspaceViewport.minX+8,min(workspaceViewport.maxX-width-8,middle.x-width/2))
         let positions=[middle.y+30,middle.y-height-24,workspaceViewport.minY+8,workspaceViewport.maxY-height-8].map{max(workspaceViewport.minY+8,min(workspaceViewport.maxY-height-8,$0))}
         let y=positions.first {y in

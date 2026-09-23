@@ -87,6 +87,7 @@ import CirclrAudio
     @Published var hierarchyTransitionID: ID?
     @Published var waveforms: [ID: WaveformOverview] = [:]
     var waveformLoading = Set<ID>()
+    var waveformReaderTasks:[UUID:Task<Void,Never>] = [:]
     var waveformGeneration = 0
     @Published var selection = Set<ID>()
     @Published var edgeSelection: ID?
@@ -147,6 +148,9 @@ import CirclrAudio
     var agentJobOrder:[String]=[]
     var activitySequence=0
     var agentSocket:AgentSocket?
+    var agentBridgeShuttingDown=false
+    var agentBridgeRetryAt=0.0
+    var agentBridgeLastFailure:String?
     var agentReplies:[String:(String,[String:Any])]=[:]
     var agentReplyOrder:[String]=[]
     var trustedRun=AgentRunLeaseController()
@@ -167,6 +171,14 @@ import CirclrAudio
     var projectURL: URL? {didSet{if oldValue != projectURL,trustedRun.active != nil{stopTrustedAgentTurn()}}}
     var mediaRoot: URL? {didSet{if oldValue != mediaRoot,trustedRun.active != nil{stopTrustedAgentTurn()}}}
     var demoCopyLease: DemoCopyLease?
+    private struct PendingDemoRetirement {
+        let id:UUID
+        let lease:DemoCopyLease
+        let project:Project
+        var readersFinished=false
+    }
+    private var pendingDemoRetirements:[PendingDemoRetirement]=[]
+    private var lastDemoRetirementCheck=0.0
     @Published var demoLoading=false
     @Published var demoLoadError:String?
     var demoLoadGeneration=0
@@ -241,14 +253,33 @@ import CirclrAudio
     private var contextKey = ""
     private var contexts: [ID:(CirclrCore.Section,MusicContext,MusicClock)] = [:]
     private var recoveryTask: Task<Void,Never>?
-    private let storageRoot = FileManager.default.urls(for:.applicationSupportDirectory,in:.userDomainMask)[0].appendingPathComponent(Bundle.main.bundleIdentifier == "com.circlr.integrationqa" ? "circlr-integration-qa" : Bundle.main.bundleIdentifier == "com.circlr.portsqa" ? "circlr-ports-qa" : Bundle.main.bundleIdentifier == "com.circlr.hierarchyqa" ? "circlr-hierarchy-qa" : "circlr")
-    private var recoveryURL:URL { storageRoot.appendingPathComponent("recovery.json") }
+    private let storageRoot = FileManager.default.urls(for:.applicationSupportDirectory,in:.userDomainMask)[0]
+        .appendingPathComponent(RecoveryFileStore.storageDirectoryName(for:Bundle.main.bundleIdentifier))
+    private var recoveryURL:URL { storageRoot.appendingPathComponent("recovery-v2.json") }
+    private var legacyRecoveryURL:URL { storageRoot.appendingPathComponent("recovery.json") }
+    private var recoveryStore:RecoveryFileStore?
+    var hasRecoveryOwnership:Bool { recoveryStore != nil }
+    private var startupRecoveryHandled=false
+    private var projectOpenDepth=0
+    var agentStartupReady:Bool { !agentBridgeShuttingDown && startupRecoveryHandled && recoveryStore != nil && projectOpenDepth == 0 }
+    struct TerminationDocumentSnapshot:Equatable {
+        let project:Project
+        let dirty:Bool
+        let projectURL:URL?
+        let mediaRoot:URL?
+    }
+    var terminationDocumentSnapshot:TerminationDocumentSnapshot {
+        TerminationDocumentSnapshot(project:project,dirty:dirty,projectURL:projectURL,mediaRoot:mediaRoot)
+    }
+    private var recoveryOwnershipFailureShown=false
     struct Recovery: Codable { var project: Project; var root: URL?; var date: Date }
     init() {
         consoleOpen=consolePreferences.isOpen
         consoleLogHeight=consolePreferences.logHeight
         playback.onOutputChange = {[weak self] in self?.refreshOutputStatus()}
         do { try FileManager.default.createDirectory(at:storageRoot,withIntermediateDirectories:true) } catch { status = "복구 폴더 준비 실패: \(error.localizedDescription)" }
+        do { recoveryStore = try RecoveryFileStore(url:recoveryURL) }
+        catch { status = "자동 복구 파일을 다른 앱이 사용 중이거나 열 수 없습니다: \(error.localizedDescription)" }
         selectedTrackID = project.addTrack(name:"악기 1")
         _ = project.addTrack(name:"드럼",drums:true)
         project.enableAlbum(); project.name = "새 앨범"
@@ -272,7 +303,6 @@ import CirclrAudio
         instrumentChoices=SoundSelection.instruments(instrumentCatalog,bank:soundBankPresets);effectChoices=SoundSelection.effects(effectCatalog)
         agentSoundCatalog=try? AgentSoundCatalog(instruments:instrumentChoices,effects:effectChoices,bankNotice:soundBankNotice.isEmpty && soundBankPresets.isEmpty ? "macOS Sound Bank에 선택 가능한 음색이 없습니다":soundBankNotice)
         recorder.onChange = { [weak self] in self?.recordingStateChanged() }
-        startAgentBridge()
     }
     var selectedUse: SectionUse? { project.active.uses.first { selection.contains($0.id) } }
     var selectedSignal: SignalNode? { project.signal.nodes.first { selection.contains($0.id) } }
@@ -315,6 +345,7 @@ import CirclrAudio
     var hasPendingMusic: Bool { playback.playing && prepared?.plan.revision != project.musicRevision }
     deinit {auditionOutput.shutdown()}
     func tick() {
+        if agentStartupReady && agentSocket == nil {startAgentBridge()}
         refreshAuditionStatus()
         refreshOutputStatus()
         refreshPlaybackLoopTransition()
@@ -327,6 +358,7 @@ import CirclrAudio
         if midiRecording,let clock = recordClock,ProcessInfo.processInfo.systemUptime-recordStart >= clock.seconds*Double(recordRepeats) { stopRecording() }
         if audioRecording,recorder.reachedLimit { stopRecording() }
         if audioRecording,recorder.interrupted || ProcessInfo.processInfo.systemUptime-audioLastInputAt>5 {stopRecording();status="입력 장치가 변경되거나 frame이 중단되어 녹음을 마무리합니다";recordActivity("앱",status)}
+        drainPendingDemoRetirements()
     }
     func mutate(_ name: String, musical: Bool = true, portLayoutOnly: Bool = false, circleColorsOnly: Bool = false, audioHistoryID:UUID? = nil, _ action: (inout Project) throws -> Void) {
         if musical && audioRecordPending {cancelRecordingRequest()}
@@ -635,27 +667,73 @@ import CirclrAudio
         var target = projectURL
         if saveAs || target == nil { let panel = NSSavePanel(); panel.nameFieldStringValue = project.name+".circlr"; panel.title = "앨범 저장"; guard panel.runModal() == .OK else { return }; target = panel.url }
         guard let target else { return }
-        do { demoCopyLease = nil; project = try ProjectStore.saveSession(project,to:target,mediaRoot:mediaRoot); projectURL = target; mediaRoot = target; dirty = false; recoveryTask?.cancel(); recoveryTask = nil; status = "저장 완료 · \(target.lastPathComponent)"; try? FileManager.default.removeItem(at:recoveryURL) }
+        do {
+            let saved=try ProjectStore.saveSession(project,to:target,mediaRoot:mediaRoot)
+            if let lease=demoCopyLease,target.standardizedFileURL == lease.root {
+                try? DemoCopyLease.retainIfManaged(lease.root);demoCopyLease=nil
+            } else {retireDemoCopy()}
+            project=saved;projectURL=target;mediaRoot=target;dirty=false;clearSavedRecovery();status="저장 완료 · \(target.lastPathComponent)"
+        }
         catch { fail(error) }
     }
     /// Reclaims only an untouched, unreferenced copy made in this process.
-    /// A job handle means possible outstanding reads even after cancellation.
+    /// Called only after a confirmed and successfully prepared document switch.
+    /// Tasks are awaited before the copy can be released, even if stop cancels them.
     func retireDemoCopy() {
         guard let lease = demoCopyLease else { return }
+        let retiringProject=project,retiringRoot=mediaRoot
         demoCopyLease = nil
-        guard mediaRoot?.standardizedFileURL == lease.root,
-              !preparing, !playback.playing, !audioRecordingBusy, !midiRecording,
-              renderTask == nil, renderWorker == nil, productionTask == nil,
-              productionWorker == nil, agentOpenWorker == nil,
-              mediaImportTask == nil, mediaImportWorker == nil, auditionStatus.attempts == 0,
-              waveformLoading.isEmpty, !libraryOpen else { return }
-        // Do not erase the shared recovery file to make this copy collectible.
-        // Even a matching project/root may have been written by another session.
-        recoveryTask?.cancel(); recoveryTask=nil
-        _ = lease.releaseIfPristine(project: project,
-            recoveryPresent: FileManager.default.fileExists(atPath: recoveryURL.path))
+        let untrackedReader=retiringRoot?.standardizedFileURL != lease.root
+            || audioRecordingBusy || midiRecording || audioRecordPending || libraryOpen
+            || (preparing && renderTask == nil && productionTask == nil)
+        let renderTask=renderTask,renderWorker=renderWorker
+        let productionTask=productionTask,productionWorker=productionWorker,agentOpenWorker=agentOpenWorker
+        let mediaImportTask=mediaImportTask,mediaImportWorker=mediaImportWorker
+        let demoLoadTask=demoLoadTask,demoLoadWorker=demoLoadWorker
+        let waveformReaders=Array(waveformReaderTasks.values)
+        clearSavedRecovery()
+        if untrackedReader {
+            try? DemoCopyLease.retainIfManaged(lease.root)
+            return
+        }
+        let id=UUID()
+        pendingDemoRetirements.append(PendingDemoRetirement(id:id,lease:lease,project:retiringProject))
+        Task { [weak self] in
+            if let renderTask {await renderTask.value}
+            if let renderWorker {_ = try? await renderWorker.value}
+            if let productionTask {await productionTask.value}
+            if let productionWorker {_ = try? await productionWorker.value}
+            if let agentOpenWorker {_ = try? await agentOpenWorker.value}
+            if let mediaImportTask {await mediaImportTask.value}
+            if let mediaImportWorker {_ = try? await mediaImportWorker.value}
+            if let demoLoadTask {await demoLoadTask.value}
+            if let demoLoadWorker {_ = try? await demoLoadWorker.value}
+            for reader in waveformReaders {await reader.value}
+            guard let self,let i=self.pendingDemoRetirements.firstIndex(where:{$0.id==id}) else{return}
+            self.pendingDemoRetirements[i].readersFinished=true
+            self.drainPendingDemoRetirements(force:true)
+        }
     }
-    func clearSavedRecovery(){recoveryTask?.cancel();recoveryTask=nil;try? FileManager.default.removeItem(at:recoveryURL)}
+    private func drainPendingDemoRetirements(force:Bool=false) {
+        guard !pendingDemoRetirements.isEmpty else{return}
+        let now=ProcessInfo.processInfo.systemUptime
+        guard force || now-lastDemoRetirementCheck>=1 else{return}
+        lastDemoRetirementCheck=now
+        guard !playback.playing,!recorder.busy,!midiRecording,
+              auditionStatus.phase == .idle || auditionStatus.phase == .failed else{return}
+        pendingDemoRetirements.removeAll { candidate in
+            guard candidate.readersFinished else{return false}
+            let root=candidate.lease.root
+            let v2MayReference=recoveryStore?.currentMayReference(root)
+                ?? FileManager.default.fileExists(atPath:recoveryURL.path)
+            let legacyMayReference=recoveryStore?.legacyMayReference(root)
+                ?? FileManager.default.fileExists(atPath:legacyRecoveryURL.path)
+            guard !v2MayReference,!legacyMayReference else{return false}
+            _ = candidate.lease.releaseIfPristine(project:candidate.project,recoveryPresent:false)
+            return true
+        }
+    }
+    func clearSavedRecovery(){recoveryTask?.cancel();recoveryTask=nil;guard startupRecoveryHandled else{return};do{_ = try recoveryStore?.removeOwned()}catch{status="자동 복구 파일 정리 실패: \(error.localizedDescription)"}}
     func confirmDiscard() -> Bool {
         guard nameEditing.resolve() else{return false}
         guard dirty else { return true }; let a = NSAlert(); a.messageText = "저장하지 않은 변경이 있습니다"; a.informativeText = "현재 곡을 저장한 뒤 계속하거나 변경을 버릴 수 있습니다."; a.addButton(withTitle:"저장"); a.addButton(withTitle:"취소"); a.addButton(withTitle:"변경 버리기")
@@ -664,23 +742,137 @@ import CirclrAudio
     func newProject() { cancelDemoLoading(); guard confirmDiscard() else { return }; retireDemoCopy(); stop(); var p = Project(); selectedTrackID = p.addTrack(name:"악기 1"); _ = p.addTrack(name:"드럼",drums:true); p.enableAlbum(); p.name = "새 앨범"; project = p; projectURL = nil; mediaRoot = nil; resetSession(); status = "새 앨범" }
     func open(_ url:URL? = nil) {
         cancelDemoLoading()
+        let startupWasPending = !startupRecoveryHandled
+        projectOpenDepth+=1
+        defer { projectOpenDepth-=1;if startupWasPending { startAgentBridge() } }
+        guard offerRecovery(startBridgeWhenReady:false) else { return }
         guard confirmDiscard() else { return }; var target = url
         if target == nil { let panel = NSOpenPanel(); panel.message = ".circlr 곡 파일 또는 manifest.json이 있는 곡 폴더를 선택하세요"; panel.canChooseDirectories = true; panel.canChooseFiles = true; panel.allowsMultipleSelection = false; guard panel.runModal() == .OK else { return }; target = panel.url }
         guard let target else { return }
         do { try DemoCopyLease.retainIfManaged(target); let loaded = try ProjectStore.load(target); var migrated = loaded.project; migrated.enableAlbum(); migrated = try SectionGraphMigration.migrate(migrated); retireDemoCopy(); stop(); project = migrated; projectURL = migrated == loaded.project ? target : nil; mediaRoot = target; selectedTrackID = project.tracks.first?.id; resetSession(); dirty = migrated != loaded.project; status = dirty ? "앨범으로 확장했습니다 · 새 위치에 저장하세요" : "\(project.name) 열기 완료" }
         catch { fail(error) }
     }
-    func resetSession() { stopTrustedAgentTurn();let wasViewing=viewingMode;startupOpen=false;viewingMode=false;defer{if wasViewing{viewingModeDidChange?()}}; playbackLoopMode = .off; editorFocusRequest=nil; circleEditorWorkspaces=[:]; sectionSettingsReturn=nil; sustainOpen=false;sustainState = .init();sustainViewStates=[:];sustainWorkspaceKey=nil;sustainWorkspaceProjectID=nil;sustainWorkspaceGeneration=nil; pitchBendOpen=false;pitchBendState = .init();pitchBendViewStates=[:];pitchBendWorkspaceKey=nil;pitchBendWorkspaceProjectID=nil;pitchBendWorkspaceGeneration=nil; captureStepCursor=nil;pendingMIDIImportStepCursor=nil;arrangementWorkspaces=[:];outputPreferences.cancel();outputPreferencesOpen=false; bounceTailSeconds=nil;bounceTailEditing=false;bounceTailCache=nil;resettingEditorSelection=true;defer{editorSelectionStates=[:];resettingEditorSelection=false};editorViewStates=[:];automationViewStates=[:];automationWorkspaceKey=nil;automationWorkspaceProjectID=nil;automationWorkspaceGeneration=nil;editOriginal=false;automationParameter = .gain;connectionWorkspaceStates=[:];recentTransitions=[:];arrangementPickerRequest=nil;soundPickerRequest=nil;libraryOpen=false;libraryDestination=nil;cancelMediaImport(); if !recorder.busy && audioRecoveryURL==nil {audioCaptureMessage="";audioInputSeconds=0;audioInputFormat=nil}; connectionEditorIntent=nil;connectionsOpen=false;automationOpen=false;automationViewport.reset();selectedAutomationPointID=nil;cancelRecordingRequest(); audioSplitOffset=nil;midiImportDraft=nil;selectedNoteID=nil; navigationOpen=false; commandPalette=nil; soundView=false; hierarchyTransitionID=nil; hierarchySelection = .album; hierarchySelections = [.album]; hierarchySettingsOpen = false; hierarchyCommand = HierarchyCommand(action: .restore); waveformGeneration += 1; waveforms = [:]; waveformLoading = []; focus = nil; embeddedPlugin = nil; recoveryTask?.cancel(); recoveryTask = nil; try? FileManager.default.removeItem(at:recoveryURL); selection = []; edgeSelection = nil; editPatternID = nil; prepared = nil; preparedKey = ""; dirty = false; undoStack = []; redoStack = []; undoCount = 0; redoCount = 0 }
+    func resetSession() { stopTrustedAgentTurn();let wasViewing=viewingMode;startupOpen=false;viewingMode=false;defer{if wasViewing{viewingModeDidChange?()}}; playbackLoopMode = .off; editorFocusRequest=nil; circleEditorWorkspaces=[:]; sectionSettingsReturn=nil; sustainOpen=false;sustainState = .init();sustainViewStates=[:];sustainWorkspaceKey=nil;sustainWorkspaceProjectID=nil;sustainWorkspaceGeneration=nil; pitchBendOpen=false;pitchBendState = .init();pitchBendViewStates=[:];pitchBendWorkspaceKey=nil;pitchBendWorkspaceProjectID=nil;pitchBendWorkspaceGeneration=nil; captureStepCursor=nil;pendingMIDIImportStepCursor=nil;arrangementWorkspaces=[:];outputPreferences.cancel();outputPreferencesOpen=false; bounceTailSeconds=nil;bounceTailEditing=false;bounceTailCache=nil;resettingEditorSelection=true;defer{editorSelectionStates=[:];resettingEditorSelection=false};editorViewStates=[:];automationViewStates=[:];automationWorkspaceKey=nil;automationWorkspaceProjectID=nil;automationWorkspaceGeneration=nil;editOriginal=false;automationParameter = .gain;connectionWorkspaceStates=[:];recentTransitions=[:];arrangementPickerRequest=nil;soundPickerRequest=nil;libraryOpen=false;libraryDestination=nil;cancelMediaImport(); if !recorder.busy && audioRecoveryURL==nil {audioCaptureMessage="";audioInputSeconds=0;audioInputFormat=nil}; connectionEditorIntent=nil;connectionsOpen=false;automationOpen=false;automationViewport.reset();selectedAutomationPointID=nil;cancelRecordingRequest(); audioSplitOffset=nil;midiImportDraft=nil;selectedNoteID=nil; navigationOpen=false; commandPalette=nil; soundView=false; hierarchyTransitionID=nil; hierarchySelection = .album; hierarchySelections = [.album]; hierarchySettingsOpen = false; hierarchyCommand = HierarchyCommand(action: .restore); waveformGeneration += 1; waveforms = [:]; waveformLoading = []; focus = nil; embeddedPlugin = nil; clearSavedRecovery(); selection = []; edgeSelection = nil; editPatternID = nil; prepared = nil; preparedKey = ""; dirty = false; undoStack = []; redoStack = []; undoCount = 0; redoCount = 0 }
     func scheduleViewportRecovery() { captureViewport(); scheduleRecovery() }
     private func scheduleRecovery() {
-        recoveryTask?.cancel(); let snapshot = project,root = mediaRoot,url = recoveryURL
-        recoveryTask = Task { try? await Task.sleep(nanoseconds:800_000_000); guard !Task.isCancelled else { return }; do { let data = try JSONEncoder().encode(Recovery(project:snapshot,root:root,date:Date())); try data.write(to:url,options:.atomic) } catch { status = "자동 복구 저장 실패: \(error.localizedDescription)" } }
+        recoveryTask?.cancel(); let snapshot = project,root = mediaRoot
+        recoveryTask = Task { try? await Task.sleep(nanoseconds:800_000_000); guard !Task.isCancelled else { return }; do {
+            let data = try JSONEncoder().encode(Recovery(project:snapshot,root:root,date:Date()))
+            guard let recoveryStore else { status = "자동 복구 저장 불가 · 다른 앱이 복구 파일을 사용 중입니다"; return }
+            guard try recoveryStore.write(data) else { status = "자동 복구 저장 중단 · 복구 파일이 다른 앱에서 변경되었습니다"; return }
+        } catch { status = "자동 복구 저장 실패: \(error.localizedDescription)" } }
     }
-    func offerRecovery() {
-        guard let data = try? Data(contentsOf:recoveryURL),let recovery = try? JSONDecoder().decode(Recovery.self,from:data) else { return }
+    private func stopForUnresolvedRecovery(_ detail:String) -> Bool {
+        let alert=NSAlert();alert.messageText="복구 파일을 안전하게 처리하지 못했습니다"
+        alert.informativeText="\(detail)\n복구 파일을 다시 확인해야 합니다. 앱을 종료합니다."
+        alert.addButton(withTitle:"종료");_ = alert.runModal()
+        NSApplication.shared.terminate(nil)
+        return false
+    }
+    private func preserveFailedRecovery(_ data:Data,error:Error,store:RecoveryFileStore) -> Bool {
+        let alert=NSAlert();alert.messageText="복구 파일을 열지 못했습니다"
+        alert.informativeText="\(error.localizedDescription)\n원본을 별도 파일로 보존하고 새 작업을 시작할 수 있습니다."
+        alert.addButton(withTitle:"원본 보존 후 새로 시작")
+        alert.addButton(withTitle:"종료")
+        guard alert.runModal() == .alertFirstButtonReturn else {NSApplication.shared.terminate(nil);return false}
+        do {
+            guard let preserved=try store.quarantineUnchanged(data) else {
+                return stopForUnresolvedRecovery("확인 중 복구 파일이 변경되었습니다.")
+            }
+            status="열지 못한 복구 파일을 보존했습니다 · \(preserved.lastPathComponent)"
+            return true
+        } catch {return stopForUnresolvedRecovery(error.localizedDescription)}
+    }
+    private func continueAfterUnusableLegacy(_ snapshot:RecoveryFileStore.LegacySnapshot,
+                                              error:Error,store:RecoveryFileStore) -> Bool {
+        let alert=NSAlert();alert.messageText="구버전 복구 파일을 열지 못했습니다"
+        alert.informativeText="\(error.localizedDescription)\n구버전 파일은 그대로 두고 이번 내용을 확인한 것으로 표시할 수 있습니다."
+        alert.addButton(withTitle:"원본 보존 후 새로 시작")
+        alert.addButton(withTitle:"종료")
+        guard alert.runModal() == .alertFirstButtonReturn else {NSApplication.shared.terminate(nil);return false}
+        do {
+            guard try store.acknowledgeLegacy(snapshot) else {return stopForUnresolvedRecovery("구버전 앱에서 복구 파일을 다시 변경했습니다.")}
+            startupRecoveryHandled=true
+            status="열지 못한 구버전 복구 파일은 원래 위치에 보존했습니다"
+            return true
+        } catch {return stopForUnresolvedRecovery(error.localizedDescription)}
+    }
+    private func offerLegacyRecovery(_ store:RecoveryFileStore) -> Bool {
+        let snapshot:RecoveryFileStore.LegacySnapshot
+        do {
+            guard let pending=try store.pendingLegacy() else {startupRecoveryHandled=true;return true}
+            snapshot=pending
+        } catch {return stopForUnresolvedRecovery(error.localizedDescription)}
+        let recovery:Recovery
+        do {recovery=try JSONDecoder().decode(Recovery.self,from:snapshot.data)}
+        catch {return continueAfterUnusableLegacy(snapshot,error:error,store:store)}
+        let alert=NSAlert();alert.messageText="구버전의 저장되지 않은 곡을 복구할까요?"
+        alert.informativeText=recovery.project.name+"\n구버전 복구 파일은 읽기 전용으로 보존됩니다."
+        alert.addButton(withTitle:"복구");alert.addButton(withTitle:"새로 시작")
+        if alert.runModal() == .alertFirstButtonReturn {
+            let restored:Project
+            do {if let root=recovery.root {try DemoCopyLease.retainIfManaged(root)};var candidate=recovery.project;candidate.enableAlbum();restored=try SectionGraphMigration.migrate(candidate)}
+            catch {return continueAfterUnusableLegacy(snapshot,error:error,store:store)}
+            do {
+                guard try store.write(snapshot.data) else {return stopForUnresolvedRecovery("현재 앱의 새 복구 파일이 다른 곳에서 변경되었습니다.")}
+                let legacyUnchanged=try store.acknowledgeLegacy(snapshot)
+                stopTrustedAgentTurn();project=restored;mediaRoot=recovery.root;selectedTrackID=project.tracks.first?.id;dirty=true;startupOpen=false;hierarchyCommand=HierarchyCommand(action:.restore)
+                startupRecoveryHandled=true
+                status=legacyUnchanged ? "구버전 곡 복구 완료 · 원본 복구 파일 보존":"곡 복구 완료 · 구버전 앱이 별도 복구 파일을 다시 변경했습니다"
+                return false
+            } catch {return stopForUnresolvedRecovery(error.localizedDescription)}
+        }
+        do {
+            guard try store.acknowledgeLegacy(snapshot) else {return stopForUnresolvedRecovery("구버전 앱에서 복구 파일을 다시 변경했습니다.")}
+            startupRecoveryHandled=true
+            status="구버전 복구 파일은 원래 위치에 보존했습니다"
+            return true
+        } catch {return stopForUnresolvedRecovery(error.localizedDescription)}
+    }
+    /// Returns false when a recovered song (or an unresolved recovery problem)
+    /// must take precedence over a URL passed to open at launch.
+    @discardableResult func offerRecovery(startBridgeWhenReady:Bool=true) -> Bool {
+        defer { if startBridgeWhenReady { startAgentBridge() } }
+        if startupRecoveryHandled { return true }
+        guard let recoveryStore else {
+            if !recoveryOwnershipFailureShown {
+                recoveryOwnershipFailureShown=true
+                let alert=NSAlert();alert.messageText="써클러를 열 수 없습니다"
+                alert.informativeText="다른 써클러 창이 복구 파일을 사용 중이거나 저장 폴더에 접근할 수 없습니다. 기존 앱을 닫거나 저장 폴더를 확인한 뒤 다시 실행하세요."
+                alert.addButton(withTitle:"종료");_ = alert.runModal()
+                NSApplication.shared.terminate(nil)
+            }
+            return false
+        }
+        let data:Data
+        do {
+            guard let saved=try recoveryStore.read() else { return offerLegacyRecovery(recoveryStore) }
+            data=saved
+        } catch { return stopForUnresolvedRecovery(error.localizedDescription) }
+        guard let recovery=try? JSONDecoder().decode(Recovery.self,from:data) else {
+            do {
+                guard let preserved=try recoveryStore.quarantineUnchanged(data) else {return stopForUnresolvedRecovery("확인 중 복구 파일이 변경되었습니다.")}
+                status="이전 복구 파일을 읽을 수 없어 보존했습니다 · \(preserved.lastPathComponent)"
+                return offerLegacyRecovery(recoveryStore)
+            } catch { return stopForUnresolvedRecovery(error.localizedDescription) }
+        }
         let alert = NSAlert(); alert.messageText = "저장되지 않은 곡을 복구할까요?"; alert.informativeText = recovery.project.name; alert.addButton(withTitle:"복구"); alert.addButton(withTitle:"새로 시작")
-        if alert.runModal() == .alertFirstButtonReturn { stopTrustedAgentTurn();do { if let root=recovery.root { try DemoCopyLease.retainIfManaged(root) }; var restored = recovery.project; restored.enableAlbum(); project = try SectionGraphMigration.migrate(restored) } catch { fail(error); return }; mediaRoot = recovery.root; selectedTrackID = project.tracks.first?.id; dirty = true; startupOpen=false;hierarchyCommand=HierarchyCommand(action:.restore);status = "복구 완료 · 새 위치에 저장하세요" }
-        else { try? FileManager.default.removeItem(at:recoveryURL) }
+        if alert.runModal() == .alertFirstButtonReturn {
+            let restored:Project
+            do { if let root=recovery.root { try DemoCopyLease.retainIfManaged(root) }; var candidate = recovery.project; candidate.enableAlbum(); restored = try SectionGraphMigration.migrate(candidate) }
+            catch {
+                guard preserveFailedRecovery(data,error:error,store:recoveryStore) else{return false}
+                return offerLegacyRecovery(recoveryStore)
+            }
+            do { guard try recoveryStore.adopt(data) else { return stopForUnresolvedRecovery("확인 중 복구 파일이 변경되었습니다.") } }
+            catch { return stopForUnresolvedRecovery(error.localizedDescription) }
+            stopTrustedAgentTurn();project = restored; mediaRoot = recovery.root; selectedTrackID = project.tracks.first?.id; dirty = true; startupOpen=false;hierarchyCommand=HierarchyCommand(action:.restore);status = "복구 완료 · 새 위치에 저장하세요";startupRecoveryHandled=true
+            return false
+        } else {
+            do { guard try recoveryStore.removeUnchanged(data) else { return stopForUnresolvedRecovery("확인 중 복구 파일이 변경되었습니다.") } }
+            catch { return stopForUnresolvedRecovery(error.localizedDescription) }
+            return offerLegacyRecovery(recoveryStore)
+        }
     }
     func midi(status:UInt8,pitch:Int,velocity:Int,time:Double) {
         let type = status & 0xF0

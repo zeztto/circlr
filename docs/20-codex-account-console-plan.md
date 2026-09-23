@@ -227,7 +227,7 @@ fixture 검증, 실제 계정 통신, native UI, 실제 오디오, 배포 패키
 ## 12. 이번 계획의 검증 기록과 남은 결정
 
 - 공식 페이지를 2026-09-07에 열어 확인했다. 기존 `developers.openai.com/codex/*` 주소 일부는 위의 `learn.chatgpt.com/docs/*`로 이동한다.
-- 로컬 `codex --version`: **codex-cli 0.149.1**. `app-server --help`와 `generate-json-schema`를 실행했다. 모델 요청·로그인·App Server 상주는 실행하지 않았다.
+- 로컬 `codex --version`: **codex-cli 0.149.1**. `app-server --help`와 `generate-json-schema`를 실행했다. 2026-09-24에는 [bounded stdio 초기화 QA](../qa/0.80-codex-stdio.md)로 실제 자식 프로세스의 `initialize` 응답을 확인하고 종료했다. 모델 요청·로그인·계정 조회는 실행하지 않았다.
 - 생성 schema에서 주요 메서드·필수 인자를 확인했다. 특히 `turn/steer.expectedTurnId`가 필요하고, 외부 토큰 주입 항목에는 내부 사용 제한 설명이 있어 채택하지 않았다. 조사 결과는 [로컬 schema 대조 기록](evidence/codex-app-server-0.149.1.json)에 보관한다.
 - 아직 검증하지 않은 사항: 배포할 런타임의 실제 로그인·격리 동작, clean Mac 실행, 조직별 허용 여부, 생산 환경 지원 상태, 아키텍처별 재배포 의존성과 서명. G0/P2/P5의 통과 항목이다.
 - API key 연결, 일반 shell 터미널, 음성 대화, 오디오/영상의 모델 입력, cloud agent, 샘플 구매 자동화는 후속 범위다. 이 계획의 첫 결과는 **사용자 계정으로 대화하면서 현재 음악 기능을 안전하게 호출하는 circlr 콘솔**이다.
