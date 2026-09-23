@@ -64,7 +64,8 @@ extension AlbumCanvasView {
         }
     }
     func readableLabelText(for node:CircleSceneNode)->CanvasLabelText {
-        let primary=node.id==store.hierarchySelection
+        let primary=node.id==store.hierarchySelection ||
+            (store.playback.playing && !visualFrame.stale && node.id==visualFrame.focus)
         let showsSubtitle=primary || node.radius*camera.zoom>=65
         let width=min(workspaceViewport.width,primary ? 340:248)
         let key=CanvasLabelTextKey(address:node.id,title:node.title,primary:primary,
@@ -90,35 +91,38 @@ extension AlbumCanvasView {
         guard !store.viewingMode else{return}
         guard let scene,let context=labelContext else{return}
         let ancestors=Set(scene.path(to:context.id).dropLast().map(\.id))
+        let activeSection=store.playback.playing && !visualFrame.stale ? visualFrame.focus : nil
         var requests:[CanvasLabelRequest]=[],texts:[CircleAddress:CanvasLabelText]=[:]
         for node in scene.nodes where isVisible(node) && !ancestors.contains(node.id) && editorAddress != node.id {
-            // The transport caption already identifies the active section; keep its contents clear.
-            if store.playback.playing,store.playbackFollow == .following,node.id==visualFrame.focus {continue}
+            let activeFocus=node.id==activeSection
             let radius=node.radius*camera.zoom,p=screen(node),direct=node.parent==context.id
             let primary=node.id==store.hierarchySelection
-            guard bounds.contains(p) || node.id==context.id || (primary && CanvasLabelCircle(id:node.id,center:p,radius:radius).intersects(workspaceViewport)) else{continue}
-            guard node.id==context.id || direct || node.id==hoverAddress || (radius>=40 && node.depth<=context.depth+2) else{continue}
+            let emphasized=primary || activeFocus
+            guard bounds.contains(p) || node.id==context.id || (emphasized && CanvasLabelCircle(id:node.id,center:p,radius:radius).intersects(workspaceViewport)) else{continue}
+            guard activeFocus || node.id==context.id || direct || node.id==hoverAddress || (radius>=40 && node.depth<=context.depth+2) else{continue}
             let text=readableLabelText(for:node);texts[node.id]=text
             let expanded=node.childCount>0 && scene.children(of:node.id).contains(where:isVisible)
-            requests.append(CanvasLabelRequest(id:node.id,anchor:p,size:text.size,radius:radius,expanded:expanded,priority:primary ? 100:node.id==hoverAddress ? 95:direct && ["MIDI","오디오"].contains(node.music?.content.label ?? "") ? 85:direct ? 70:20,allowsViewportAdjustment:primary))
+            // The playing section stays identifiable beside its orbit, ahead of selection and hover labels.
+            requests.append(CanvasLabelRequest(id:node.id,anchor:p,size:text.size,radius:radius,expanded:expanded,priority:activeFocus ? 110:primary ? 100:node.id==hoverAddress ? 95:direct && ["MIDI","오디오"].contains(node.music?.content.label ?? "") ? 85:direct ? 70:20,allowsViewportAdjustment:emphasized))
         }
         labelPlacements=CanvasLabelLayout.place(requests,within:workspaceViewport,avoiding:readableLabelObstacles,circles:labelCircles)
         for placement in labelPlacements {
             guard let node=scene.node(placement.id),let text=texts[placement.id] else{continue}
             let rect=placement.rect,selected=store.hierarchySelections.contains(node.id),hovered=hoverAddress==node.id
+            let activeFocus=node.id==activeSection
             if !rect.insetBy(dx:-8,dy:-8).contains(placement.anchor) {
                 let end=CGPoint(x:max(rect.minX,min(rect.maxX,placement.anchor.x)),y:max(rect.minY,min(rect.maxY,placement.anchor.y)))
                 let leader=NSBezierPath();leader.move(to:placement.anchor);leader.line(to:end)
-                color(node).withAlphaComponent(selected || hovered ? 0.8:0.35).setStroke();leader.lineWidth=1;leader.stroke()
+                color(node).withAlphaComponent(selected || hovered || activeFocus ? 0.8:0.35).setStroke();leader.lineWidth=1;leader.stroke()
             }
             let path=NSBezierPath(roundedRect:rect,xRadius:6,yRadius:6)
             StudioTheme.surfaceNS.withAlphaComponent(0.98).setFill();path.fill()
-            if selected || hovered {
+            if selected || hovered || activeFocus {
                 // Keep black custom accents legible without replacing the user's color.
-                StudioTheme.textNS.withAlphaComponent(selected ? 0.75:0.55).setStroke()
-                path.lineWidth=selected ? 4:3;path.stroke()
+                StudioTheme.textNS.withAlphaComponent(selected ? 0.75:activeFocus ? 0.68:0.55).setStroke()
+                path.lineWidth=selected ? 4:activeFocus ? 3.5:3;path.stroke()
             }
-            (selected || hovered ? color(node):StudioTheme.lineNS).setStroke();path.lineWidth=selected ? 2:1;path.stroke()
+            (selected || hovered || activeFocus ? color(node):StudioTheme.lineNS).setStroke();path.lineWidth=selected ? 2:activeFocus ? 1.8:1;path.stroke()
             text.title.draw(with:NSRect(x:rect.minX+10,y:rect.minY+6,width:max(1,rect.width-20),height:text.titleHeight),options:[.usesLineFragmentOrigin,.usesFontLeading,.truncatesLastVisibleLine])
             if text.showsSubtitle {drawText(node.subtitle+(node.repeatCount>1 ? " · ×\(node.repeatCount)":""),x:rect.midX,y:rect.minY+text.titleHeight+8,size:Double(StudioTheme.canvasSubtitleSize),color:StudioTheme.secondaryNS,maxWidth:rect.width-20)}
         }

@@ -226,6 +226,17 @@ struct PlaybackVisualFrame {
             }
         }
         drawPlayhead(node)
+        if store.viewingMode, node.id == visualFrame.focus {
+            // Four quiet brackets identify the followed section without putting text in the visualizer.
+            let markerRadius = radius+9
+            let halfSpan = max(0.006, min(0.026, 7/(2*Double.pi*markerRadius)))
+            StudioTheme.textNS.withAlphaComponent(0.9).setStroke()
+            for quarter in 0..<4 {
+                let phase = Double(quarter)/4+0.125
+                let bracket = OrbitDrawing.arc(center, radius: markerRadius, from: phase-halfSpan, to: phase+halfSpan)
+                bracket.lineWidth = 2.4; bracket.stroke()
+            }
+        }
     }
 
     func drawPlaybackEdge(_ edge: CircleSceneEdge, curve: CirclePortCurve, tint: NSColor, fade: Double) {

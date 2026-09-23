@@ -399,7 +399,14 @@ import CirclrAudio
         guard project.musicRevision==revision,undoStack.last?.id==id,let after=capturedAudioHistoryContext() else{return}
         undoStack[undoStack.count-1].audio=AudioEditHistory(before:before,after:after)
     }
-    func fail(_ error:Error) { if moviePreparing {movieGeneration+=1;moviePreparing=false}; errorMessage = error.localizedDescription; status = error.localizedDescription }
+    func fail(_ error:Error) {
+        if moviePreparing {
+            movieGeneration+=1;moviePreparing=false
+            movieWriter?.cancel();movieWriter=nil
+            playback.stop()
+        }
+        errorMessage=error.localizedDescription;status=error.localizedDescription
+    }
     func addSection(at point:Point? = nil) {
         let name = "섹션 \(project.active.uses.count+1)"
         let target = point ?? Point(Double(project.active.uses.count%4)*1000,Double(project.active.uses.count/4)*1000)

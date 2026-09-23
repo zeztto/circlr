@@ -14,6 +14,8 @@ In circlr, a circle is a timeline. Build a song from sections, place MIDI, audio
 
 > **0.70.0 · build180.** Smoother playback canvas and MP4 capture in the verified scenarios, with viewing mode beside Record. [Evidence and limits](docs/releases/0.70.0-qa.md).
 
+**In development:** [0.80.0](docs/releases/0.80.0.md) improves orbit readability and tests the complete playback, recording, editing and export path. Its QA gates remain open; 0.70.0 is the latest release.
+
 ## What you can work with
 
 - **Song form:** connected album, song and section timelines; reusable sections, repetitions and arrangement variations.

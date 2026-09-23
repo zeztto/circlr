@@ -31,11 +31,16 @@ extension AppStore {
                         try recorder.append(image,seconds:0)
                         self.movieWriter=recorder;self.movieRevision=self.project.musicRevision;self.movieSeconds=0
                     })
-                    guard let recorder=preparedRecorder,self.movieGeneration==generation,self.moviePreparing,self.movieWriter === recorder else{preparedRecorder?.cancel();return}
+                    guard let recorder=preparedRecorder,self.movieGeneration==generation,self.moviePreparing,self.movieWriter === recorder else{
+                        preparedRecorder?.cancel()
+                        if let preparedRecorder,self.movieWriter === preparedRecorder {self.movieWriter=nil}
+                        return
+                    }
                     self.moviePreparing=false
                     self.status="영상 녹화 중 · 캔버스 + 음악"
                 }catch{
                     preparedRecorder?.cancel()
+                    if let preparedRecorder,self.movieWriter === preparedRecorder {self.movieWriter=nil}
                     guard self.movieGeneration==generation else{return}
                     self.movieWriter=nil;self.moviePreparing=false;self.playback.stop();self.handlePlaybackError(error)
                 }
@@ -68,9 +73,13 @@ extension AppStore {
         }catch{recorder.cancel();movieWriter=nil;fail(error)}
     }
     func finishMovieRecording() {
+        let wasPreparing=moviePreparing
         movieGeneration+=1;moviePreparing=false
         guard let recorder=movieWriter else{return}
         movieWriter=nil
+        // The opening frame is submitted before Playback acknowledges its output.
+        // Stopping in that interval is a cancellation, not a one-frame recording.
+        if wasPreparing {recorder.cancel();status="영상 준비 취소";return}
         guard recorder.submittedFrameCount>0 else{recorder.cancel();status="영상 준비 취소";return}
         let duration=max(movieSeconds,playback.elapsedSeconds,playback.completedElapsedSeconds ?? 0)
         status="영상 저장 중"

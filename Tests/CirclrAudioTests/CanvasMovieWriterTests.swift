@@ -193,6 +193,21 @@ final class CanvasMovieWriterTests:XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath:target.path))
         XCTAssertTrue(try FileManager.default.contentsOfDirectory(atPath:folder.path).isEmpty)
     }
+    @MainActor func testCancelAfterOpeningFrameEncodedNeverPublishesPreparationMovie() async throws {
+        let folder=FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at:folder,withIntermediateDirectories:true)
+        defer{try? FileManager.default.removeItem(at:folder)}
+        let target=folder.appendingPathComponent("cancel-preparation.mp4")
+        let recorder=try CanvasMovieWriter(url:target,size:CGSize(width:320,height:240),pcm:PCM(frames:48_000))
+        let context=CGContext(data:nil,width:320,height:240,bitsPerComponent:8,bytesPerRow:0,space:CGColorSpaceCreateDeviceRGB(),bitmapInfo:CGImageAlphaInfo.premultipliedLast.rawValue)!
+        try recorder.append(context.makeImage()!,seconds:0)
+        await recorder.waitUntilIdle()
+        XCTAssertEqual(recorder.frameCount,1)
+        recorder.cancel()
+        await recorder.waitUntilIdle()
+        XCTAssertFalse(FileManager.default.fileExists(atPath:target.path))
+        XCTAssertTrue(try FileManager.default.contentsOfDirectory(atPath:folder.path).isEmpty)
+    }
     @MainActor func testCancellationLeavesNoFinalMovie() async throws {
         let folder=FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at:folder,withIntermediateDirectories:true)
