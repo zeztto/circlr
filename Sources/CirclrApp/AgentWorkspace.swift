@@ -91,7 +91,8 @@ extension AppStore {
             return result
         }catch{return ["ok":false,"error":error.localizedDescription]}
     }
-    func executeAgent(_ request:AgentRequest,source:String) throws -> [String:Any] {
+    func executeAgent(_ request:AgentRequest,source:String,
+                      trustedLease:AgentRunLease?=nil) throws -> [String:Any] {
         let args=request.arguments ?? AgentArguments()
         switch request.method {
         case "snapshot":return agentState()
@@ -211,7 +212,8 @@ extension AppStore {
         case "open":
             return try beginAgentOpen(request,source:source)
         case "import_midi":return try beginAgentMIDIImport(request,source:source)
-        case "bounce","export":return try beginAgentRender(request,source:source)
+        case "bounce","export":return try beginAgentRender(request,source:source,
+                                                              trustedLease:trustedLease)
         case "restore_bounce":
             guard let use=args.useID,let node=args.nodeID else {throw CirclrError("useID와 nodeID가 필요합니다")}
             var candidate=project;candidate.activeArrangementID=args.arrangementID ?? project.activeArrangementID
@@ -235,10 +237,12 @@ extension AppStore {
     }
     /// Recheck at the MainActor commit boundary after each suspended worker step.
     /// A cancelled/replaced job cannot publish a WAV or mutate the document.
-    func checkAgentJobCommit(_ lease:AgentJobCommitLease)throws {
+    func checkAgentJobCommit(_ lease:AgentJobCommitLease,
+                             trustedLease:AgentRunLease?=nil)throws {
         guard lease.permits(projectID:project.id,revision:project.musicRevision,
                             generation:productionGeneration,jobID:agentJob?.id,
                             jobState:agentJob?.state) else {throw CancellationError()}
+        if let trustedLease {try checkTrustedAgentJobCommit(trustedLease,jobID:lease.jobID)}
     }
     /// Encode on a worker so the MainActor can process cancel_job during long WAV writes.
     /// A cancelled encoder removes its private stage before returning.
@@ -321,7 +325,8 @@ extension AppStore {
         }
         return ["jobID":jobID,"state":"running"]
     }
-    func beginAgentRender(_ request:AgentRequest,source:String)throws->[String:Any] {
+    func beginAgentRender(_ request:AgentRequest,source:String,
+                          trustedLease:AgentRunLease?=nil)throws->[String:Any] {
         guard !preparing else {throw CirclrError("이미 실행 중인 렌더 작업이 있습니다")}
         let args=request.arguments ?? AgentArguments(),snapshot=project,root=mediaRoot
         let isBounce=request.method=="bounce",arrangementID=args.arrangementID ?? project.activeArrangementID
@@ -374,8 +379,10 @@ extension AppStore {
                     worker.cancel()
                 }
                 guard !Task.isCancelled,self.productionGeneration==generation else{return}
-                try self.checkAgentJobCommit(lease)
+                try self.checkAgentJobCommit(lease,trustedLease:trustedLease)
                 try AgentProjectEditing.check(request,project:self.project)
+                try self.checkTrustedAgentDocument(snapshot,mediaRoot:root,
+                                                   trustedLease:trustedLease,jobID:jobID)
                 let endFrames=min(pcm.count,Int(PCM.rate*0.1))
                 var endPeak=0.0,endSquares=0.0
                 if endFrames>0 {
@@ -396,8 +403,10 @@ extension AppStore {
                     var published=false
                     do {
                         try await self.writeAgentWAVStage(pcm,to:stage)
-                        try Task.checkCancellation();try self.checkAgentJobCommit(lease)
+                        try Task.checkCancellation();try self.checkAgentJobCommit(lease,trustedLease:trustedLease)
                         try AgentProjectEditing.check(request,project:self.project)
+                        try self.checkTrustedAgentDocument(snapshot,mediaRoot:root,
+                                                           trustedLease:trustedLease,jobID:jobID)
                         try FileManager.default.moveItem(at:stage,to:url);published=true
                         let name=(snapshot.tracks.first{$0.id==trackID}?.name ?? "트랙")+" 바운스"
                         var candidate=self.project;candidate.activeArrangementID=arrangementID
@@ -421,7 +430,7 @@ extension AppStore {
                     let stage=parent.appendingPathComponent(".circlr-agent-\(jobID).wav")
                     do {
                         try await self.writeAgentWAVStage(pcm,to:stage)
-                        try Task.checkCancellation();try self.checkAgentJobCommit(lease)
+                        try Task.checkCancellation();try self.checkAgentJobCommit(lease,trustedLease:trustedLease)
                         try AgentProjectEditing.check(request,project:self.project)
                         guard !FileManager.default.fileExists(atPath:file.path) else {throw CirclrError("렌더 중 같은 이름의 파일이 생성되었습니다")}
                         try FileManager.default.moveItem(at:stage,to:file)

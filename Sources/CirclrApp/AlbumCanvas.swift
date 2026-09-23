@@ -307,7 +307,9 @@ struct AlbumCanvas: NSViewRepresentable {
     }
     func focus(_ address: CircleAddress, detail: Bool = false) {
         guard let scene=store.hierarchyScene,let node = scene.node(address), bounds.width > 100 else { return }
-        if scene.isOrbit, (!detail || node.role != .music), let target=orbitContextCamera(address,in:scene) {
+        // Explicit editor commands need a precision-scale orbit. Context framing is
+        // for browsing only; fitting satellites can leave the owner below the editor gate.
+        if scene.isOrbit, !detail, let target=orbitContextCamera(address,in:scene) {
             setCamera(target,animated:true);return
         }
         if !detail,node.role == .section,
@@ -323,10 +325,35 @@ struct AlbumCanvas: NSViewRepresentable {
         setCamera(target,animated:true)
     }
     func orbitContextCamera(_ address:CircleAddress,in currentScene:HierarchyScene? = nil)->HierarchyCamera? {
-        guard let scene=currentScene ?? scene,scene.isOrbit,let content=scene.contextBounds(of:address) else{return nil}
+        guard let scene=currentScene ?? scene,scene.isOrbit,let owner=scene.node(address) else{return nil}
+        let content: CGRect
+        if address == .album {
+            // Explicit full-album fit still includes the entire arrangement.
+            guard let all=scene.contextBounds(of:address) else{return nil}
+            content=all
+        } else {
+            // A manually distant satellite remains reachable by pan/navigation, but should
+            // not reduce the selected orbit to a dot on double-click or keyboard focus.
+            let satellites=scene.immediateSatellites(of:address).filter { child in
+                let distance=hypot(child.center.x-owner.center.x,child.center.y-owner.center.y)
+                return distance.isFinite && child.outerRadius.isFinite && child.outerRadius>0 &&
+                    distance <= owner.radius*8+child.outerRadius
+            }
+            var nearby=CGRect(x:owner.center.x-owner.outerRadius,y:owner.center.y-owner.outerRadius,
+                              width:owner.outerRadius*2,height:owner.outerRadius*2)
+            for child in satellites {
+                nearby=nearby.union(CGRect(x:child.center.x-child.outerRadius,y:child.center.y-child.outerRadius,
+                                           width:child.outerRadius*2,height:child.outerRadius*2))
+            }
+            content=nearby
+        }
         let viewport=workspaceViewport
-        let zoom=max(1e-6,min(1e12,min(max(80,viewport.width-100)/max(1,content.width),max(80,viewport.height-100)/max(1,content.height))))
-        return HierarchyCamera(pan:Point(viewport.midX-content.midX*zoom,viewport.midY-content.midY*zoom),zoom:zoom)
+        guard content.minX.isFinite,content.minY.isFinite,content.width.isFinite,content.height.isFinite,
+              owner.radius.isFinite,owner.radius>0 else{return nil}
+        let fitted=min(max(80,viewport.width-100)/max(1,content.width),max(80,viewport.height-100)/max(1,content.height))
+        let zoom=max(1e-6,min(1e12,address == .album ? fitted:max(fitted,62/owner.radius)))
+        let center=address == .album || fitted>=62/owner.radius ? Point(content.midX,content.midY):owner.center
+        return HierarchyCamera(pan:Point(viewport.midX-center.x*zoom,viewport.midY-center.y*zoom),zoom:zoom)
     }
     func isTimelineRing(_ node:CircleSceneNode)->Bool {
         store.project.usesOrbits && node.role != .music && node.signal == nil

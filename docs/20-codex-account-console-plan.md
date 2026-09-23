@@ -1,12 +1,12 @@
 # Codex 계정 기반 대화형 콘솔 구현 계획
 
-작성일: 2026-09-07 · 상태: 향후 구현 계획 · 기준 앱: circlr 0.10.0
+작성일: 2026-09-07 · 갱신: 2026-09-23 · 상태: 단계별 구현 중 · 기준 앱: circlr 0.80 개발 후보
 
 > 2026-09-23 재확인: 공식 [App Server 문서](https://learn.chatgpt.com/docs/app-server)는 현재 `codex app-server` 명령을 experimental·production 미지원으로 표시한다. 공개 0.80 계정 콘솔은 [G0 판단](releases/0.80.0.md)에 따라 보류한다. 아래 설계의 API와 패키징 가정은 지원 상태가 바뀌고 실제 macOS 격리·배포 QA가 끝나기 전까지 제품 계약이 아니다.
 
 **사용자가 자신의 ChatGPT 계정으로 Codex에 로그인하고, circlr의 접이식 콘솔에서 대화하며 곡을 편집한다.** circlr가 로컬 Codex App Server를 관리하고, Codex는 circlr MCP를 통해 기존 음악 명령을 실행한다. 로그인 과정의 공식 브라우저를 제외하면 별도의 Codex 앱·터미널을 열 필요가 없는 경험을 목표로 한다.
 
-이 문서는 아키텍처 결정과 구현 순서다. 계정 연결·모델 호출·런타임 설치는 수행하지 않았으며 0.10.0에 자연어 대화 기능이 추가된 것은 아니다. 문서의 새 타입·파일·정책은 모두 구현 예정이다.
+이 문서는 아키텍처 결정과 구현 순서다. 0.80 개발 후보에는 앱 실행 파일과 분리된 `CirclrCodex` 프로토콜 코어와, 현재 앱 내부에서만 호출할 수 있는 범위 제한 `AgentRunLease` 후보가 있다. 계정 연결·모델 호출·런타임 설치·자연어 대화 UI와 인증된 호출자는 구현·검증되지 않았다. 아래의 파일·정책은 항목별 실제 코드와 QA가 확인될 때까지 완료로 보지 않는다.
 
 ## 1. 공식 근거와 선택
 
@@ -17,10 +17,13 @@
 | SDK는 자동화에 사용할 수 있고, 풍부한 사용자 클라이언트에는 App Server가 안내된다. Python SDK의 배포본은 pinned CLI runtime을 포함하지만 내부에서 App Server를 제어한다. `codex mcp-server`는 제거됐다. | SDK의 stable 패키지 상태를 App Server의 production 지원으로 오해하지 않는다. SDK/TUI 임베딩을 주 대화 경로로 삼지 않고 기존 **circlr MCP server**는 계속 사용한다. | [Codex SDK](https://learn.chatgpt.com/docs/codex-sdk) |
 | Codex는 로컬 stdio MCP와 도구별 설정을 지원한다. | 원격 MCP 서버를 운영하지 않고 음악 도구만 제공한다. | [MCP](https://learn.chatgpt.com/docs/extend/mcp?surface=cli) |
 | Codex CLI와 App Server 소스가 공개되어 있다. | 배포 시 선택 릴리스의 라이선스·NOTICE·의존 실행 파일을 별도로 확인한다. | [Open Source](https://learn.chatgpt.com/docs/open-source) |
+| `codex exec`는 stable 비대화형 명령이며 JSONL 출력과 session resume을 지원한다. | 사용자가 설치·로그인한 CLI로 사전 허용 범위의 짧은 백그라운드 작업을 시험한다. 중간 승인·steering이 필요한 대화형 콘솔의 대체 경로로 표기하지 않는다. | [Developer commands](https://learn.chatgpt.com/docs/developer-commands), [Non-interactive mode](https://learn.chatgpt.com/docs/non-interactive-mode) |
 
 선택 근거와 제품 설계는 구분한다. 위 문서가 circlr의 상용 배포 승인, 모든 계정의 이용 자격, 모든 Codex 도구의 자동 제공을 보장하지는 않는다. 현재 Codex 대화의 기억·도구·계정 세션이 circlr로 자동 이전되는 것도 아니다. circlr용 새 대화와 음악 도구를 구성한다.
 
 App Server 문서는 실험적 기능과 WebSocket의 production 제한을 명시하며, 설치된 CLI도 명령을 experimental로 표시한다. **stdio와 비실험 API를 선택하더라도 서비스 안정성 보장이 되는 것은 아니다.** 호환 버전을 고정하고 재배포·인증·지원 상태를 확인하는 G0를 통과한 뒤 출시를 판단한다. 엔터프라이즈 대상은 공식 문서의 알려진 클라이언트 등록 안내도 확인한다. [App Server의 연결·초기화·실험 API 안내](https://learn.chatgpt.com/docs/app-server)
+
+`codex exec --json`/`codex exec resume` 파일럿은 사용자 CLI 설치와 기존 로그인을 전제로 한 **비대화형 작업**으로만 평가한다. 실행 중 새 승인이 필요하거나 사용자가 문장을 추가해 진행 방향을 바꾸는 작업은 이 경로의 인수 기준에서 제외한다. 이 명령의 stable 표기가 circlr 앱에 CLI를 동봉할 권리나 깨끗한 Mac의 계정 격리를 증명하지 않는다. 내부 `RunLease`·typed MCP·실제 작업 로그는 런타임 선택과 분리해 구현하고, 완전한 앱 내 계정 대화의 G0는 계속 열어 둔다.
 
 ## 2. 현재 구현에서 이어받을 것
 
@@ -31,7 +34,7 @@ App Server 문서는 실험적 기능과 WebSocket의 production 제한을 명�
 | `Sources/CirclrApp/AgentSocket.swift` | 현재 사용자만 접근하는 Unix socket | 기존 외부 MCP 호환성을 유지하면서 내장 세션의 전용 연결을 추가 |
 | `Sources/CirclrCore/AgentProtocol.swift` | typed 편집 명령, 원자적 적용 | 음악 명령의 원본 계약 유지 |
 | `Sources/CirclrApp/AppStore.swift` | 문서·Undo·녹음·렌더 generation | 세션과 문서의 연결, 작업별 취소 경계 |
-| `mcp/server.py` | 14개 도구를 가진 Python stdio adapter | 외부 개발용으로 유지. 배포용 Swift helper와 계약을 공유 |
+| `mcp/server.py` | Python stdio adapter와 typed 음악 도구 | 외부 개발용으로 유지. 배포용 Swift helper와 계약을 공유 |
 | `Package.swift`, `scripts/package-app.py` | Swift target와 로컬 앱 패키징 | 런타임·helper·서명·호환성 manifest 포함 |
 
 현재 콘솔은 shell이나 LLM이 아니다. `AppStore.stop()`은 음악 재생·녹음·렌더를 함께 중단한다. snapshot에는 경로와 asset metadata가 포함되고, 현재 socket은 로그인한 OS 사용자 범위만 확인한다. 이 상태를 그대로 인터넷 모델에 연결하면 세션별 권한과 데이터 범위가 부족하다.

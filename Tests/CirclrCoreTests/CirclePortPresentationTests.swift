@@ -27,12 +27,70 @@ final class CirclePortPresentationTests: XCTestCase {
         let port = CirclePort.ports(for:.effect(Effect(.compressor))).first{$0.isSidechain}!
         XCTAssertEqual(CirclePortPresentation.octants(for:port,radius:60,engaged:false,expanded:false,connected:[.north,.southeast]),[.north,.southeast])
         XCTAssertEqual(CirclePortPresentation.octants(for:port,radius:60,engaged:true,expanded:true,connected:[.north]),[.north,.west])
-        for radius in [Double.nan,Double.infinity,0,45] {
+        for radius in [Double.nan,Double.infinity,0] {
             XCTAssertTrue(CirclePortPresentation.octants(for:port,radius:radius,engaged:true,expanded:true,connected:Set(PortOctant.allCases)).isEmpty)
+            XCTAssertTrue(CirclePortPresentation.octants(for:port,radius:radius,engaged:true,expanded:true,connected:[],selected:true).isEmpty)
         }
+        for radius in [44.0,45.0] {
+            XCTAssertTrue(CirclePortPresentation.octants(for:port,radius:radius,engaged:true,expanded:true,connected:Set(PortOctant.allCases)).isEmpty)
+            XCTAssertEqual(CirclePortPresentation.octants(for:port,radius:radius,engaged:true,expanded:true,connected:[.north],selected:true),[port.defaultOctant])
+        }
+        XCTAssertEqual(CirclePortPresentation.octants(for:port,radius:46,engaged:true,expanded:true,connected:[.north],selected:true),[.north,port.defaultOctant].sorted{$0.rawValue<$1.rawValue})
         for port in CirclePort.flowPorts + CirclePort.ports(for:.instrument(trackID:"synth")) {
             XCTAssertEqual(CirclePortPresentation.octants(for:port,radius:100,engaged:true,expanded:false,connected:[]),[port.defaultOctant])
         }
+    }
+
+    func testOnlySelectedRouterPortRemainsAtTinyOverviewScale() throws {
+        let ports = CirclePort.ports(for:.router(AudioRouter()))
+        let selected = ports[2]
+        let handles = try ports.flatMap { port in
+            try CirclePortPresentation.octants(for:port,radius:44,engaged:true,expanded:true,
+                                               connected:Set(PortOctant.allCases),selected:port.id == selected.id).map { octant in
+                CirclePortHandle(endpoint:.init(node:.signal("router"),portID:port.id),octant:octant,
+                                 point:try CirclePortGeometry.anchor(center:Point(350,260),radius:44,port:port,octant:octant))
+            }
+        }
+        XCTAssertEqual(handles.count,1)
+        XCTAssertEqual(handles.first?.endpoint.portID,selected.id)
+        XCTAssertEqual(handles.first?.octant,selected.defaultOctant)
+        XCTAssertEqual(CirclePortGeometry.hit(try XCTUnwrap(handles.first).point,visibleHandles:handles),handles.first)
+        for port in ports {
+            XCTAssertEqual(CirclePortPresentation.octants(for:port,radius:100,engaged:true,expanded:port.id == selected.id,
+                                                          connected:[port.defaultOctant],selected:port.id == selected.id).count,
+                           port.id == selected.id ? 8:1)
+        }
+    }
+
+    func testSelectedPortCameraKeepsAnchorOnScreenWithoutMovingNormalOverview() throws {
+        let (_, fixture) = try PlaybackFramingTests().fixture()
+        var node = fixture; node.center = Point(500,360); node.radius = 100; node.scale = 1; node.repeatCount = 1
+        let port = CirclePort.ports(for:.router(AudioRouter()))[3]
+        let viewport = CGRect(x:24,y:180,width:680,height:400)
+        for radius in [44.0,45.0,46.0] {
+            let zoom = radius/node.radius
+            let current = HierarchyCamera(pan:Point(viewport.midX-node.center.x*zoom,viewport.midY-node.center.y*zoom),zoom:zoom)
+            let target = CirclePortPresentation.cameraRevealingSelected(port,on:node,current:current,within:viewport) ?? current
+            let center = target.screen(node.center)
+            let anchor = try CirclePortGeometry.anchor(center:center,radius:node.outerRadius*target.zoom,port:port,octant:port.defaultOctant)
+            XCTAssertTrue(viewport.contains(CGPoint(x:anchor.x,y:anchor.y)))
+            if radius <= 45 { XCTAssertGreaterThanOrEqual(node.radius*target.zoom,62) }
+            else { XCTAssertEqual(target,current) }
+        }
+        let current = HierarchyCamera(pan:Point(-1000,-700),zoom:0.46)
+        let moved = try XCTUnwrap(CirclePortPresentation.cameraRevealingSelected(port,on:node,current:current,within:viewport))
+        let center = moved.screen(node.center)
+        let anchor = try CirclePortGeometry.anchor(center:center,radius:node.outerRadius*moved.zoom,port:port,octant:port.defaultOctant)
+        XCTAssertTrue(viewport.contains(CGPoint(x:anchor.x,y:anchor.y)))
+        XCTAssertEqual(moved.zoom,current.zoom)
+        var exposed = port; exposed.bindingIndex = 10
+        let normal = HierarchyCamera(pan:Point(viewport.midX-node.center.x*0.46,viewport.midY-node.center.y*0.46),zoom:0.46)
+        let shifted = try XCTUnwrap(CirclePortPresentation.cameraRevealingSelected(exposed,on:node,current:normal,within:viewport))
+        let shiftedCenter = shifted.screen(node.center)
+        let farAnchor = try CirclePortGeometry.anchor(center:shiftedCenter,radius:node.outerRadius*shifted.zoom,
+                                                       port:exposed,octant:exposed.defaultOctant)
+        XCTAssertTrue(viewport.insetBy(dx:11,dy:11).contains(CGPoint(x:farAnchor.x,y:farAnchor.y)))
+        XCTAssertEqual(shifted.zoom,normal.zoom)
     }
 
     func testRouterLabelsDoNotCoverPortsTimeHandlesOrEachOther() throws {

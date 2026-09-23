@@ -81,13 +81,31 @@ extension AlbumCanvasView {
     }
 
     func selectCanvasPort(_ endpoint: CirclePortEndpoint) {
-        guard let node = scene?.node(endpoint.node), node.ports.contains(where: { $0.id == endpoint.portID }) else { return }
+        guard let node = scene?.node(endpoint.node), let port = node.ports.first(where: { $0.id == endpoint.portID }) else { return }
         clearCableSelection(); interruptPlaybackFollow()
         if store.hierarchySelection != endpoint.node { store.selectHierarchy(endpoint.node) }
         prepareConnectionNavigation()
         selectedCanvasPort = endpoint; selectedCableProjectID = store.project.id
-        if node.radius*camera.zoom <= 45 || !workspaceViewport.contains(screen(node)) { focus(node.id) }
+        let viewport = workspaceViewport
+        let bottomClearance = portToolsCanFit(in: viewport) ? portToolsHeight(in: viewport) + 20 : 20
+        let safe = CGRect(x: viewport.minX + 24, y: viewport.minY + bottomClearance,
+                          width: viewport.width - 48, height: viewport.height - bottomClearance - 24)
+        if let target = CirclePortPresentation.cameraRevealingSelected(port, on: node, current: camera, within: safe) {
+            // Keyboard selection must remain actionable immediately, including while the
+            // orbit is tiny. Animated focus could leave the selected control hidden mid-flight.
+            setCamera(target)
+        } else if animation != nil {
+            setCamera(camera)
+        }
         refreshPortTools(); window?.makeFirstResponder(self); needsDisplay = true; announceConnectionSelection()
+    }
+
+    func portToolsHeight(in viewport: CGRect) -> CGFloat {
+        min(650, viewport.width - 16) < 560 ? 86 : 72
+    }
+
+    func portToolsCanFit(in viewport: CGRect) -> Bool {
+        viewport.width > 320 && viewport.height > portToolsHeight(in: viewport) + 84
     }
 
     func prepareConnectionNavigation() {
@@ -147,7 +165,7 @@ extension AlbumCanvasView {
         }
         guard selectedCableProjectID == store.project.id, let endpoint = selectedCanvasPort,
               let node = scene?.node(endpoint.node), endpoint.node == store.hierarchySelection,
-              let port = node.ports.first(where: { $0.id == endpoint.portID }), workspaceViewport.width > 320,
+              let port = node.ports.first(where: { $0.id == endpoint.portID }), portToolsCanFit(in: workspaceViewport),
               store.movieWriter == nil, !store.connectionsOpen else {
             portTools?.removeFromSuperview(); portTools = nil
             if selectedCableProjectID != store.project.id || selectedCanvasPort?.node != store.hierarchySelection { selectedCanvasPort = nil }
@@ -155,7 +173,7 @@ extension AlbumCanvasView {
         }
         let view = PortToolsView(title: node.title+" · "+port.name, edit: { [weak self] in self?.editConnectionSelection() }, close: { [weak self] in self?.clearCableSelection() })
         if let portTools { portTools.rootView = view } else { let host = NSHostingView(rootView: view); addSubview(host); portTools = host }
-        let width = min(650, workspaceViewport.width-16), height = width < 560 ? 86.0 : 72.0
+        let width = min(650, workspaceViewport.width-16), height = portToolsHeight(in: workspaceViewport)
         portTools?.frame = NSRect(x: workspaceViewport.midX-width/2, y: workspaceViewport.minY+8, width: width, height: height)
         portTools?.isHidden = connecting != nil || cableDrag != nil
     }

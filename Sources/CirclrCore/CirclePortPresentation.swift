@@ -19,12 +19,50 @@ public struct PortLabelPlacement {
 /// Presentation only: every persisted connection keeps its original geometric anchor.
 public enum CirclePortPresentation {
     public static func octants(for port: CirclePort, radius: Double, engaged: Bool, expanded: Bool,
-                               connected: Set<PortOctant>) -> [PortOctant] {
-        guard radius.isFinite, radius > 45 else { return [] }
+                               connected: Set<PortOctant>, selected: Bool = false) -> [PortOctant] {
+        guard radius.isFinite, radius > 0 else { return [] }
+        // Keep one selected control available at overview scale. Eight octants would
+        // overlap here and obscure neighbouring circles; saved edge anchors are not changed.
+        if radius <= 45 { return selected ? [port.defaultOctant] : [] }
         var result = connected
         if engaged || expanded { result.insert(port.defaultOctant) }
         if expanded, radius >= 90 { result.formUnion(PortOctant.allCases) }
         return result.sorted { $0.rawValue < $1.rawValue }
+    }
+
+    /// Preserve overview scale unless a selected endpoint is too small or outside the
+    /// available canvas. The anchor uses screen-space offsets, as the renderer does.
+    public static func cameraRevealingSelected(_ port: CirclePort, on node: CircleSceneNode,
+                                               current: HierarchyCamera, within viewport: CGRect,
+                                               minimumRadius: Double = 62) -> HierarchyCamera? {
+        guard current.zoom.isFinite, current.zoom > 0, node.radius.isFinite, node.radius > 0,
+              node.outerRadius.isFinite, node.outerRadius > 0,
+              node.center.x.isFinite, node.center.y.isFinite,
+              viewport.minX.isFinite, viewport.minY.isFinite,
+              viewport.width.isFinite, viewport.height.isFinite,
+              viewport.width > 40, viewport.height > 40,
+              minimumRadius.isFinite, minimumRadius > 45 else { return nil }
+        let radius = node.radius * current.zoom
+        guard radius.isFinite else { return nil }
+        let zoom = radius <= 45 ? min(1e12, max(current.zoom, minimumRadius / node.radius)) : current.zoom
+        let original = current.screen(node.center)
+        var pan = current.pan
+        if radius <= 45 || !viewport.contains(CGPoint(x: original.x, y: original.y)) {
+            pan = Point(viewport.midX - node.center.x * zoom, viewport.midY - node.center.y * zoom)
+        }
+        var candidate = HierarchyCamera(pan: pan, zoom: zoom)
+        func anchor(_ camera: HierarchyCamera) -> Point? {
+            let center = camera.screen(node.center)
+            return try? CirclePortGeometry.anchor(center: center, radius: node.outerRadius * camera.zoom,
+                                                  port: port, octant: port.defaultOctant)
+        }
+        guard let point = anchor(candidate), point.x.isFinite, point.y.isFinite else { return nil }
+        let interior = viewport.insetBy(dx: 12, dy: 12)
+        let x = min(max(point.x, interior.minX), interior.maxX)
+        let y = min(max(point.y, interior.minY), interior.maxY)
+        candidate.pan.x += x - point.x
+        candidate.pan.y += y - point.y
+        return candidate == current ? nil : candidate
     }
 
     /// One label per logical port, with the active endpoint placed before background ports.

@@ -16,12 +16,13 @@ extension AlbumCanvasView {
         let fixed = cableDrag?.mode == .reconnect ? cableDrag?.fixed : connecting?.endpoint
         let fixedPort = fixed.flatMap { endpoint in (try? CirclePortCatalog.ports(at:endpoint.node,in:store.project))?.first { $0.id == endpoint.portID } }
         let time = store.selectedCircle.flatMap { visibleTimeHandle($0) }
-        for node in scene.nodes where isVisible(node) && node.radius*camera.zoom > 45 && !node.ports.isEmpty {
+        for node in scene.nodes where isVisible(node) && (node.radius*camera.zoom > 45 || selectedCanvasPort?.node == node.id) && !node.ports.isEmpty {
             let center = screen(node)
             for port in node.ports {
                 let endpoint = CirclePortEndpoint(node:node.id,portID:port.id)
+                let selected = endpoint == selectedCanvasPort
                 var engaged = node.id == store.hierarchySelection || node.id == hoverAddress
-                var expanded = endpoint == selectedCanvasPort
+                var expanded = selected
                 if let fixed, let fixedPort {
                     if endpoint != fixed {
                         guard port.direction != fixedPort.direction, port.signal == fixedPort.signal,
@@ -32,12 +33,12 @@ extension AlbumCanvasView {
                 } else if let gesture = cableDrag, gesture.mode == .placement {
                     engaged = (try? GroupPortEditing.resolve(endpoint,in:store.project)) == gesture.moving; expanded = engaged
                 }
-                let directions = CirclePortPresentation.octants(for:port,radius:node.radius*camera.zoom,engaged:engaged,expanded:expanded,connected:connectedByPort[endpoint] ?? [])
+                let directions = CirclePortPresentation.octants(for:port,radius:node.radius*camera.zoom,engaged:engaged,expanded:expanded,connected:connectedByPort[endpoint] ?? [],selected:selected)
                 for direction in directions {
                     guard let point = try? CirclePortGeometry.anchor(center:Point(center.x,center.y),radius:node.outerRadius*camera.zoom,port:port,octant:direction),
                           cablePointAvailable(point, labels:false),
-                          time.map({ hypot($0.x-point.x,$0.y-point.y) > 23 }) ?? true,
-                          !labelPlacements.contains(where: { $0.rect.insetBy(dx:-9,dy:-9).contains(NSPoint(x:point.x,y:point.y)) }) else { continue }
+                          selected || (time.map({ hypot($0.x-point.x,$0.y-point.y) > 23 }) ?? true),
+                          selected || !labelPlacements.contains(where: { $0.rect.insetBy(dx:-9,dy:-9).contains(NSPoint(x:point.x,y:point.y)) }) else { continue }
                     result.append(.init(endpoint:endpoint,octant:direction,point:point))
                 }
             }
