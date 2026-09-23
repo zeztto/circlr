@@ -1,0 +1,31 @@
+{
+  "schema": "circlr-auhal-creation-probe-v1",
+  "sourceSHA256": "2e1f97362d86cd828ac6afb558d4d2faf4ac35c2744564c037fb5db52e14ef90",
+  "timeoutSeconds": 10,
+  "results": [
+    {
+      "device": "built-in",
+      "status": "timeout",
+      "exitCode": null,
+      "elapsedSeconds": 10.013,
+      "stages": [
+        "before resolveUID",
+        "resolved deviceID=76",
+        "before findComponent",
+        "before instanceNew"
+      ]
+    },
+    {
+      "device": "Scarlett",
+      "status": "timeout",
+      "exitCode": null,
+      "elapsedSeconds": 10.015,
+      "stages": [
+        "before resolveUID",
+        "resolved deviceID=111",
+        "before findComponent",
+        "before instanceNew"
+      ]
+    }
+  ]
+}

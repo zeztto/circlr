@@ -265,6 +265,57 @@ extension AlbumCanvasView {
         let current=store.selectedCircle
         var candidates=scene.nodes.filter{$0.parent==current?.parent && $0.id != .album}
         if current?.id == .album || candidates.isEmpty {candidates=scene.nodes.filter{$0.parent==current?.id}}
+        let scope=current?.id == .album ? CircleAddress.album : (candidates.first?.parent ?? current?.id)
+        let song:CircleAddress?
+        switch scope {
+        case .composition: song=scope
+        case .group(let parent, _):
+            if case .composition = parent {song=parent} else {song=nil}
+        default: song=nil
+        }
+        if scene.isOrbit,let song {
+            // A group changes scene order without changing its sections' musical time.
+            // An expanded group uses the earliest section on this song orbit. A collapsed
+            // group uses the same start time from the compiled arrangement.
+            var hiddenGroupAnchors:[ID:Double]=[:]
+            if candidates.contains(where:{$0.role == .group && scene.children(of:$0.id).isEmpty}),
+               case .composition(let compositionID)=song,
+               let id=store.project.album?.composition(compositionID)?.selectedArrangementID,
+               let layout=try? HierarchyEditing.layout(for:song,in:store.project),
+               let plan=try? ArrangementCompiler.compile(store.project,arrangementID:id) {
+                var starts:[ID:Double]=[:]
+                for occurrence in plan.occurrences {
+                    starts[occurrence.use.id]=min(starts[occurrence.use.id] ?? occurrence.start,occurrence.start)
+                }
+                for group in layout.groups {
+                    hiddenGroupAnchors[group.id]=group.members.compactMap{starts[$0]}.min()
+                }
+            }
+            func anchor(_ node:CircleSceneNode)->Double? {
+                if node.role == .section,let orbit=node.orbit,orbit.owner == song {return orbit.anchor}
+                guard node.role == .group else{return nil}
+                let visible=scene.children(of:node.id).compactMap(anchor).min()
+                if let visible {return visible}
+                guard case .group(_,let id)=node.id else{return nil}
+                return hiddenGroupAnchors[id]
+            }
+            let anchors=candidates.map(anchor)
+            let timed=candidates.enumerated().compactMap { index,node -> (index:Int,anchor:Double,node:CircleSceneNode)? in
+                guard let anchor=anchors[index] else{return nil}
+                return (index,anchor,node)
+            }
+            if timed.count>1 {
+                let ordered=timed.sorted { lhs,rhs in
+                    lhs.anchor == rhs.anchor ? lhs.index<rhs.index : lhs.anchor<rhs.anchor
+                }
+                var cursor=0
+                candidates=candidates.enumerated().map { index,node in
+                    guard anchors[index] != nil else{return node}
+                    defer {cursor+=1}
+                    return ordered[cursor].node
+                }
+            }
+        }
         guard !candidates.isEmpty else{return}
         clearCableSelection()
         let index=candidates.firstIndex(where:{$0.id==current?.id}) ?? (forward ? -1:0)
@@ -277,7 +328,18 @@ extension AlbumCanvasView {
     }
     func enterSelectedCircle() {
         guard let address=store.hierarchySelection else{return}
-        if let child=scene?.nodes.first(where:{$0.parent==address}),store.selectedMusic==nil,!store.hierarchySettingsOpen {
+        if case .group=address,store.selectedHierarchyGroup?.collapsed == true {
+            store.updateHierarchyGroup{$0.collapsed=false}
+            guard store.selectedHierarchyGroup?.collapsed == false else{return}
+            update()
+        }
+        let children=scene?.children(of:address) ?? []
+        let child:CircleSceneNode?
+        if case .group(let parent,_)=address,case .composition=parent {
+            child=children.filter{$0.role == .section && $0.orbit?.owner == parent}
+                .min{($0.orbit?.anchor ?? 0)<($1.orbit?.anchor ?? 0)} ?? children.first
+        }else {child=children.first}
+        if let child,store.selectedMusic==nil,!store.hierarchySettingsOpen {
             guard store.selectUserWorkspace(child.id) else{return};focus(child.id,detail:child.role == .music)
         }else {guard store.selectUserWorkspace(address) else{return};focus(address,detail:true)}
         store.requestEditorNavigationFocus()

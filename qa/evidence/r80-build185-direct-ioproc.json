@@ -1,0 +1,37 @@
+{
+  "schema": "circlr-direct-ioproc-probe-v1",
+  "sourceSHA256": "1dc1ca85a89f0cd7af5eda8a79e807d7017359416819d92282a97ca7469cb92a",
+  "timeoutSeconds": 10.0,
+  "results": [
+    {
+      "device": "built-in",
+      "status": "completed",
+      "exitCode": 0,
+      "elapsedSeconds": 0.74,
+      "stages": [
+        "before resolveUID",
+        "resolved deviceID=76",
+        "before createIOProc",
+        "created",
+        "before startIOProc",
+        "started",
+        "before stopIOProc",
+        "stopIOProc status=0",
+        "before destroyIOProc",
+        "destroyIOProc status=0",
+        "done"
+      ]
+    },
+    {
+      "device": "Scarlett",
+      "status": "timeout",
+      "exitCode": null,
+      "elapsedSeconds": 10.014,
+      "stages": [
+        "before resolveUID",
+        "resolved deviceID=111",
+        "before createIOProc"
+      ]
+    }
+  ]
+}

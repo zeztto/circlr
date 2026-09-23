@@ -1,0 +1,164 @@
+{
+  "schema": "circlr-offline-daw-build185-v1",
+  "status": "PASS_BOUNDED_OFFLINE_DAW",
+  "app": {
+    "bundleID": "com.circlr.integrationqa",
+    "build": "185"
+  },
+  "projectID": "6E6D17A0-CE9A-5680-9A74-61392F2A0C82",
+  "fixture": "r80-offline-build185-bach.circlr",
+  "initialRevision": 4,
+  "initialManifestSHA256": "d6989888b2ed2cacfa9b21ae7d39729989fdd7ff81b52802081fa123a382b79f",
+  "firstTrackBounceNodeID": "E1077712-EEC3-450E-BF27-9072B6EFEFA3",
+  "secondTrackID": "384344EC-E95A-5777-ADC1-3E2474C668D3",
+  "secondTrackInstrumentID": "instrument:384344EC-E95A-5777-ADC1-3E2474C668D3",
+  "stages": {
+    "preFX": {
+      "jobID": "4622C0FE-4A7E-4BD5-BE68-DFBCC39FF9DE",
+      "revision": 4,
+      "channels": 2,
+      "sampleRate": 48000,
+      "bitsPerSample": 24,
+      "frames": 3360000,
+      "peak": 2092075,
+      "rms": 412111.2800652797,
+      "sha256": "306580a6bc47e4d9032ba65780adfbef8eee2f99a5c3bc0640b9e2c2ec85d2b1"
+    },
+    "FX": {
+      "jobID": "D5B5E2A2-8D43-4593-9A2E-FBC1DC0466FC",
+      "revision": 5,
+      "channels": 2,
+      "sampleRate": 48000,
+      "bitsPerSample": 24,
+      "frames": 3360000,
+      "peak": 2092075,
+      "rms": 392707.6388026011,
+      "sha256": "f5e11beb17fb0eff65c654b7e4086a5817daeb60c0ebed5ca745945ac39a0ddc"
+    },
+    "automation": {
+      "jobID": "3247650B-6FB9-4D0D-87A1-13E52A82F90F",
+      "revision": 6,
+      "channels": 2,
+      "sampleRate": 48000,
+      "bitsPerSample": 24,
+      "frames": 3360000,
+      "peak": 2092075,
+      "rms": 392707.6388026011,
+      "sha256": "f5e11beb17fb0eff65c654b7e4086a5817daeb60c0ebed5ca745945ac39a0ddc"
+    },
+    "automationActive": {
+      "jobID": "13A67990-087B-45D5-B3FF-1F60947BCB44",
+      "revision": 7,
+      "channels": 2,
+      "sampleRate": 48000,
+      "bitsPerSample": 24,
+      "frames": 3360000,
+      "peak": 2092075,
+      "rms": 380031.6575686408,
+      "sha256": "740403a1716166d5622bdb9f5becd4292ee97364a08caa13239b385ab50b83d3"
+    },
+    "postBounce": {
+      "jobID": "7A39C108-8899-4E52-9179-D337B82D2C2C",
+      "revision": 8,
+      "channels": 2,
+      "sampleRate": 48000,
+      "bitsPerSample": 24,
+      "frames": 3360000,
+      "peak": 2092075,
+      "rms": 380031.65776430076,
+      "sha256": "4ba1c1359fb93bd7b04075872753ead36d2191d0d0855ec53d5552200b4aeecd"
+    },
+    "audioFade": {
+      "jobID": "C045EF86-7FC8-4016-9B5E-CA7D184B9D6B",
+      "revision": 9,
+      "channels": 2,
+      "sampleRate": 48000,
+      "bitsPerSample": 24,
+      "frames": 3360000,
+      "peak": 2092075,
+      "rms": 380031.65776430076,
+      "sha256": "4ba1c1359fb93bd7b04075872753ead36d2191d0d0855ec53d5552200b4aeecd"
+    },
+    "audioFadeActive": {
+      "jobID": "70C554B2-4FBD-429A-AB6B-E187D05F9E50",
+      "revision": 10,
+      "channels": 2,
+      "sampleRate": 48000,
+      "bitsPerSample": 24,
+      "frames": 3360000,
+      "peak": 2092075,
+      "rms": 379898.79956994497,
+      "sha256": "4a6b17690053d8e3de8bec7857c4f8fa3ae930a3bbef99c4d524e203a6bcf201"
+    }
+  },
+  "checks": [
+    "inserted second-track gain effect changes exported PCM",
+    "active gain automation stored and changes exported PCM",
+    "FX and automation survive native save and reopen",
+    "second track bounce creates nonzero audio clip and asset",
+    "bounced audio clip active fades stored and change exported PCM",
+    "bounce and edited audio persist after save/reopen",
+    "fresh QA app process reopens saved project ID/revision and bounced clip fades"
+  ],
+  "effectNodeID": "FB970FCA-AB89-41A7-BF5E-C3A3972A8AD8",
+  "fxPeakDifference24Bit": 445872,
+  "preRollCurveObservation": {
+    "firstSecondTrackNoteBeat": 3.5,
+    "neutralReachedBeat": 2,
+    "identicalToFXWAV": true
+  },
+  "activeAutomationPoints": [
+    {
+      "id": "r80-gain-point-0",
+      "beat": 0,
+      "value": 0.2,
+      "shape": "linear"
+    },
+    {
+      "id": "r80-gain-point-1",
+      "beat": 24,
+      "value": 0.5,
+      "shape": "linear"
+    }
+  ],
+  "automationActivePeakDifference24Bit": 588281,
+  "afterFXAutomationSaveManifestSHA256": "0b043fc05697c2d806e98f8dee88b5031fffa2cb2be894af5abfa619aba5158d",
+  "secondTrackBounce": {
+    "jobID": "6491875B-F26C-4638-BDFF-0D88095FEFF4",
+    "nodeID": "AC78CC25-5F76-4A1F-B11D-A86B4C1A43FE",
+    "assetID": "69BDD65F-FAC6-4C3E-99E5-A4C9E30077E3",
+    "assetPath": "Bounces/22C6018B-6E65-4C1A-AFC3-057EA97B6EA3.wav",
+    "asset": {
+      "channels": 2,
+      "sampleRate": 48000,
+      "bitsPerSample": 24,
+      "frames": 864000,
+      "peak": 828662,
+      "rms": 185984.1765629317,
+      "sha256": "20f546b5cc5b8bb297ec486c73d22c1b5d06b291532a33d32d3f2c43669b77bb"
+    },
+    "clipID": "643B9E96-6903-4E90-A574-8CE7D10A6B9B",
+    "laneID": "19305199-27CD-404E-99EA-BFEBEB4F6331",
+    "revision": 8
+  },
+  "bounceRoundtripPeakDifference24Bit": 1,
+  "bounceRoundtripRMSDifference24Bit": 0.14588961498991201,
+  "quietFadeObservation": {
+    "firstPointSevenSecondsPeak": 0,
+    "lastPointSevenSecondsPeak": 0,
+    "identicalToPostBounce": true
+  },
+  "audioFadeActivePeakDifference24Bit": 86313,
+  "finalRevision": 10,
+  "finalManifestSHA256": "07bb7fb038f944c3033ddf68ede116165ac6a88eed44cb19571b6ee2d5e38d86",
+  "bundledOriginalManifestSHA256": "a0350b4802b192bf3d7ba207a9a031f166c0c5092e60faf0f82f766da3257c34",
+  "freshProcessReopen": {
+    "verified": true,
+    "projectID": "6E6D17A0-CE9A-5680-9A74-61392F2A0C82",
+    "revision": 10,
+    "dirty": false,
+    "bounceClipFadeInSeconds": 5,
+    "bounceClipFadeOutSeconds": 3
+  },
+  "allMediaHashesRechecked": true
+}

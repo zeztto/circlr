@@ -69,7 +69,10 @@ extension AppStore {
         let expressionPolicy=args.expressionPolicy ?? .preserve
         guard beat.isFinite,beat>=0,beat<=131072 else{throw CirclrError("MIDI 시작 박을 확인하세요")}
         if let ids=args.trackIDs {guard !ids.isEmpty,ids.count<=256,Set(ids).count==ids.count else{throw CirclrError("중복 없는 MIDI trackIDs 1–256개를 지정하세요")}}
+        let snapshot=project
         productionGeneration+=1;let generation=productionGeneration,jobID=newID()
+        let lease=AgentJobCommitLease(projectID:project.id,revision:project.musicRevision,
+                                      generation:generation,jobID:jobID)
         preparing=true;progress=0
         agentJob=AgentJob(id:jobID,kind:"import_midi",state:"running",message:preview ? "MIDI 파일 미리 읽는 중":"MIDI 파일 가져오는 중")
         productionTask=Task { [weak self] in
@@ -91,19 +94,13 @@ extension AppStore {
                     }
                 }
                 try Task.checkCancellation()
-                return (document,summaries,sustainSummaries)
-            }
-            do {
-                let (document,summaries,sustainSummaries)=try await withTaskCancellationHandler {try await worker.value} onCancel:{worker.cancel()}
-                guard !Task.isCancelled,self.productionGeneration==generation else{return}
-                try AgentProjectEditing.check(request,project:self.project)
-                let currentActive=self.project.activeArrangementID
+                let currentActive=snapshot.activeArrangementID
                 let ids=args.trackIDs ?? document.tracks.map(\.id)
                 guard Set(ids).isSubset(of:Set(document.tracks.map(\.id))) else{throw CirclrError("파일에 없는 MIDI trackID가 있습니다. previewOnly로 다시 확인하세요")}
                 let selectedIDs=Set(ids)
                 let selectedIssues=document.issues(selectedIDs:selectedIDs).map{AgentMIDIImportResult.Issue(channel:$0.channel,beat:$0.beat,code:$0.code,message:$0.message)}
                 let map=document.tempoChanges.first.map{first in MIDIImportTempoMap(initialBPM:first.bpm,changes:Array(document.tempoChanges.dropFirst()))}
-                var candidate=self.project;candidate.activeArrangementID=arrangementID
+                var candidate=snapshot;candidate.activeArrangementID=arrangementID
                 guard let use=candidate.active.uses.first(where:{$0.id==useID}) else{throw CirclrError("대상 섹션이 변경되었습니다")}
                 let before=try ArrangementCompiler.context(project:candidate,use:use,arrangementID:arrangementID).2.seconds
                 var after:Double?,previewIssue:String?,laneIDs:[ID]=[]
@@ -122,8 +119,18 @@ extension AppStore {
                 candidate.activeArrangementID=currentActive
                 try Task.checkCancellation()
                 let result=AgentMIDIImportResult(tracks:document.tracks.map{.init(id:$0.id,name:$0.name,channel:$0.channel,noteCount:$0.notes.count,beats:$0.notes.map{$0.beat+$0.length}.max() ?? 0,pitchBend:$0.pitchBend == nil ? nil:summaries[$0.channel],sustain:$0.sustain == nil ? nil:sustainSummaries[$0.channel])},selectedTrackIDs:ids,laneIDs:preview ? []:laneIDs,tempoChanges:document.tempoChanges,tempoImportIssue:document.tempoImportIssue,ignoredPerformanceEvents:document.ignoredPerformanceEvents,previewOnly:preview,expressionPolicy:expressionPolicy,selectedIssues:selectedIssues,tempoPolicy:policy,previousSectionSeconds:before,sectionSeconds:after,previewIssue:previewIssue)
+                if !preview {try UseTempoOverrideEditing.validateChanges(from:snapshot,to:candidate)}
+                try Task.checkCancellation()
+                return (candidate,result)
+            }
+            do {
+                let (candidate,result)=try await withTaskCancellationHandler {try await worker.value} onCancel:{worker.cancel()}
+                guard !Task.isCancelled,self.productionGeneration==generation else{return}
+                try self.checkAgentJobCommit(lease)
+                try AgentProjectEditing.check(request,project:self.project)
+                try AgentJobCommitLease.requireUnchanged(current:self.project,snapshot:snapshot)
                 if !preview {
-                    try UseTempoOverrideEditing.validateChanges(from:self.project,to:candidate)
+                    try Task.checkCancellation();try self.checkAgentJobCommit(lease)
                     let revision=self.project.musicRevision
                     self.mutate("\(source) MIDI 가져오기"){$0=candidate}
                     var expected=candidate;expected.musicRevision=revision+1

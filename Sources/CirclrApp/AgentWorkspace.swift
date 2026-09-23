@@ -1,5 +1,6 @@
 import Foundation
 import AppKit
+import AVFAudio
 import CryptoKit
 import CirclrCore
 import CirclrAudio
@@ -40,8 +41,23 @@ extension AppStore {
                 let result=self.receiveAgent(data,source:"에이전트")
                 reply((try? JSONSerialization.data(withJSONObject:result,options:[.sortedKeys])) ?? Data(#"{"ok":false,"error":"encoding"}"#.utf8))
             }
+            cleanupAbandonedAgentBounceStages()
             recordActivity("연결","로컬 MCP 연결 준비 · 휠로 확대·축소 · Ctrl `로 콘솔 접기")
         }catch{recordActivity("연결",error.localizedDescription)}
+    }
+    /// Socket ownership proves no other circlr instance is writing this private
+    /// Bounces directory. Arbitrary user export directories are never scanned.
+    func cleanupAbandonedAgentBounceStages() {
+        guard agentSocket != nil,agentJob == nil,!preparing else{return}
+        let root=productionMediaRoot,manager=FileManager.default
+        guard let properties=try? root.resourceValues(forKeys:[.isDirectoryKey,.isSymbolicLinkKey]),
+              properties.isDirectory==true,properties.isSymbolicLink != true,
+              let files=try? manager.contentsOfDirectory(at:root,includingPropertiesForKeys:[.isRegularFileKey,.isSymbolicLinkKey]) else{return}
+        for file in files where AgentStageChunks.isPrivateBounceStageName(file.lastPathComponent) {
+            guard let values=try? file.resourceValues(forKeys:[.isRegularFileKey,.isSymbolicLinkKey]),
+                  values.isRegularFile==true,values.isSymbolicLink != true else{continue}
+            try? manager.removeItem(at:file)
+        }
     }
     func json<T:Encodable>(_ value:T)->Any {((try? JSONSerialization.jsonObject(with:JSONEncoder().encode(value),options:[.fragmentsAllowed])) ?? NSNull())}
     func agentState()->[String:Any] {
@@ -217,6 +233,54 @@ extension AppStore {
         recordActivity(source,"취소 · \(current.kind) · \(id)")
         return ["job":json(current),"revision":project.musicRevision]
     }
+    /// Recheck at the MainActor commit boundary after each suspended worker step.
+    /// A cancelled/replaced job cannot publish a WAV or mutate the document.
+    func checkAgentJobCommit(_ lease:AgentJobCommitLease)throws {
+        guard lease.permits(projectID:project.id,revision:project.musicRevision,
+                            generation:productionGeneration,jobID:agentJob?.id,
+                            jobState:agentJob?.state) else {throw CancellationError()}
+    }
+    /// Encode on a worker so the MainActor can process cancel_job during long WAV writes.
+    /// A cancelled encoder removes its private stage before returning.
+    func writeAgentWAVStage(_ pcm:PCM,to stage:URL) async throws {
+        let writer=Task.detached(priority:.userInitiated) {
+            do {
+                try Task.checkCancellation()
+                guard pcm.left.count==pcm.right.count,
+                      let format=AVAudioFormat(standardFormatWithSampleRate:PCM.rate,channels:2),
+                      let buffer=AVAudioPCMBuffer(pcmFormat:format,frameCapacity:4096),
+                      let channels=buffer.floatChannelData else {throw CirclrError("WAV 인코딩 buffer를 준비하지 못했습니다")}
+                try FileManager.default.createDirectory(at:stage.deletingLastPathComponent(),withIntermediateDirectories:true)
+                let file=try AVAudioFile(forWriting:stage,settings:[
+                    AVFormatIDKey:kAudioFormatLinearPCM,AVSampleRateKey:PCM.rate,
+                    AVNumberOfChannelsKey:2,AVLinearPCMBitDepthKey:24,
+                    AVLinearPCMIsFloatKey:false,AVLinearPCMIsBigEndianKey:false
+                ],commonFormat:.pcmFormatFloat32,interleaved:false)
+                try AgentStageChunks.process(totalFrames:pcm.count,chunkFrames:4096,
+                                             check:{try Task.checkCancellation()}) {range in
+                    for i in range {
+                        let local=i-range.lowerBound
+                        channels[0][local]=pcm.left[i];channels[1][local]=pcm.right[i]
+                    }
+                    buffer.frameLength=AVAudioFrameCount(range.count)
+                    try file.write(from:buffer)
+                }
+            }catch{
+                try? FileManager.default.removeItem(at:stage)
+                throw error
+            }
+        }
+        try await withTaskCancellationHandler {
+            try await writer.value
+        } onCancel: {
+            writer.cancel()
+        }
+    }
+    nonisolated private static func checkedAgentPCM(_ pcm:PCM)throws->PCM {
+        try AgentStageChunks.requireSafePCM(left:pcm.left,right:pcm.right,chunkFrames:4096,
+                                            check:{try Task.checkCancellation()})
+        return pcm
+    }
     func agentPath(_ path:String)throws->URL {
         guard path.hasPrefix("/"),!path.contains("\0") else {throw CirclrError("절대 경로를 사용하세요")}
         return URL(fileURLWithPath:path).standardizedFileURL
@@ -229,6 +293,8 @@ extension AppStore {
         let url=try agentPath(path)
         stop();productionGeneration+=1
         let generation=productionGeneration,jobID=newID()
+        let lease=AgentJobCommitLease(projectID:project.id,revision:project.musicRevision,
+                                      generation:generation,jobID:jobID)
         agentJob=AgentJob(id:jobID,kind:"open",state:"running",message:"프로젝트 읽는 중")
         preparing=true;progress=0;status="프로젝트 읽는 중 · macOS 접근 요청이 있으면 확인하세요"
         productionTask=Task { [weak self] in
@@ -238,6 +304,7 @@ extension AppStore {
             do {
                 let loaded=try await worker.value
                 guard !Task.isCancelled,self.productionGeneration==generation else{return}
+                try self.checkAgentJobCommit(lease)
                 try AgentProjectEditing.check(request,project:self.project)
                 guard !self.dirty else {throw CirclrError("읽는 동안 문서가 변경되었습니다")}
                 var p=loaded.project;p.enableAlbum();p=try SectionGraphMigration.migrate(p)
@@ -285,6 +352,8 @@ extension AppStore {
             sectionRender=nil;albumRender=plan
         }
         productionGeneration+=1;let generation=productionGeneration,jobID=newID()
+        let lease=AgentJobCommitLease(projectID:snapshot.id,revision:snapshot.musicRevision,
+                                      generation:generation,jobID:jobID)
         let renderTitle=(isBounce ? "이펙트 포함 바운스":"앨범 WAV 렌더")+String(format:" · 여운 %.2f초",tail.effectiveSeconds)
         agentJob=AgentJob(id:jobID,kind:request.method,state:"running",message:([renderTitle]+tail.notices).joined(separator:" · "),tail:tail)
         preparing=true;progress=0;status=agentJob!.message
@@ -294,9 +363,9 @@ extension AppStore {
                 let body=sectionRender?.clock.seconds ?? 0
                 let worker:Task<PCM,Error>
                 if let sectionRender,let trackID=args.trackID {
-                    worker=Task.detached(priority:.userInitiated){let buffers=try await SectionGraphRenderer.render(sectionRender.plan,project:snapshot,root:root,clock:sectionRender.clock,tail:tail.effectiveSeconds,applyOutputGain:false);guard let pcm=buffers[trackID] else {throw CirclrError("트랙 출력을 찾을 수 없습니다")};return pcm}
+                    worker=Task.detached(priority:.userInitiated){let buffers=try await SectionGraphRenderer.render(sectionRender.plan,project:snapshot,root:root,clock:sectionRender.clock,tail:tail.effectiveSeconds,applyOutputGain:false);guard let pcm=buffers[trackID] else {throw CirclrError("트랙 출력을 찾을 수 없습니다")};return try Self.checkedAgentPCM(pcm)}
                 }else if let plan=albumRender {
-                    worker=Task.detached(priority:.userInitiated){try await ArrangementRenderer.render(project:snapshot,root:root,plan:plan,tailSeconds:tail.effectiveSeconds,includeStems:false){message,value in DispatchQueue.main.async{[weak self] in guard let self,self.productionGeneration==generation else{return};self.progress=value;self.agentJob?.progress=value;self.agentJob?.message=message;self.status=message}}.mix}
+                    worker=Task.detached(priority:.userInitiated){let pcm=try await ArrangementRenderer.render(project:snapshot,root:root,plan:plan,tailSeconds:tail.effectiveSeconds,includeStems:false){message,value in DispatchQueue.main.async{[weak self] in guard let self,self.productionGeneration==generation else{return};self.progress=value;self.agentJob?.progress=value;self.agentJob?.message=message;self.status=message}}.mix;return try Self.checkedAgentPCM(pcm)}
                 }else{throw CirclrError("렌더 계획이 없습니다")}
                 self.productionWorker=worker
                 let pcm=try await withTaskCancellationHandler {
@@ -305,8 +374,8 @@ extension AppStore {
                     worker.cancel()
                 }
                 guard !Task.isCancelled,self.productionGeneration==generation else{return}
+                try self.checkAgentJobCommit(lease)
                 try AgentProjectEditing.check(request,project:self.project)
-                guard pcm.peak<=1 else {throw CirclrError("출력이 0 dBFS를 넘습니다. Gain을 낮추세요")}
                 let endFrames=min(pcm.count,Int(PCM.rate*0.1))
                 var endPeak=0.0,endSquares=0.0
                 if endFrames>0 {
@@ -322,20 +391,41 @@ extension AppStore {
                 }
                 self.agentJob?.renderedSeconds=pcm.duration
                 if isBounce,let use,let trackID=args.trackID {
-                    let url=self.productionMediaRoot.appendingPathComponent(newID()+".wav");try pcm.writeWAV(url)
+                    let url=self.productionMediaRoot.appendingPathComponent(newID()+".wav")
+                    let stage=url.deletingLastPathComponent().appendingPathComponent(".circlr-agent-\(jobID).wav")
+                    var published=false
                     do {
+                        try await self.writeAgentWAVStage(pcm,to:stage)
+                        try Task.checkCancellation();try self.checkAgentJobCommit(lease)
+                        try AgentProjectEditing.check(request,project:self.project)
+                        try FileManager.default.moveItem(at:stage,to:url);published=true
                         let name=(snapshot.tracks.first{$0.id==trackID}?.name ?? "트랙")+" 바운스"
                         var candidate=self.project;candidate.activeArrangementID=arrangementID
                         let id=try BounceEditing.apply(asset:Asset(name:name,path:url.path,duration:pcm.duration,sampleRate:PCM.rate),trackID:trackID,useID:use.id,bodySeconds:body,tailSeconds:tail.effectiveSeconds,in:&candidate)
                         candidate.activeArrangementID=self.project.activeArrangementID
-                        self.mutate("\(source) 오디오 바운스"){$0=candidate};self.agentJob?.nodeID=id
+                        let expectedRevision=self.project.musicRevision+1
+                        self.mutate("\(source) 오디오 바운스"){$0=candidate}
+                        guard self.project.musicRevision==expectedRevision,
+                              self.project.assets.contains(where:{$0.path==url.path}) else {
+                            throw CirclrError("바운스 결과를 문서에 적용하지 못했습니다")
+                        }
+                        self.agentJob?.nodeID=id
                         if source=="콘솔" || source=="사용자" {self.focusHierarchy(.music(arrangementID:arrangementID,useID:use.id,nodeID:id),detail:true)}
-                    }catch{try? FileManager.default.removeItem(at:url);throw error}
+                    }catch{
+                        try? FileManager.default.removeItem(at:stage)
+                        if published {try? FileManager.default.removeItem(at:url)}
+                        throw error
+                    }
                 }else if let file{
-                    guard !FileManager.default.fileExists(atPath:file.path) else {throw CirclrError("렌더 중 같은 이름의 파일이 생성되었습니다")}
                     let parent=file.deletingLastPathComponent();try FileManager.default.createDirectory(at:parent,withIntermediateDirectories:true)
                     let stage=parent.appendingPathComponent(".circlr-agent-\(jobID).wav")
-                    do {try pcm.writeWAV(stage);try FileManager.default.moveItem(at:stage,to:file)}catch{try? FileManager.default.removeItem(at:stage);throw error}
+                    do {
+                        try await self.writeAgentWAVStage(pcm,to:stage)
+                        try Task.checkCancellation();try self.checkAgentJobCommit(lease)
+                        try AgentProjectEditing.check(request,project:self.project)
+                        guard !FileManager.default.fileExists(atPath:file.path) else {throw CirclrError("렌더 중 같은 이름의 파일이 생성되었습니다")}
+                        try FileManager.default.moveItem(at:stage,to:file)
+                    }catch{try? FileManager.default.removeItem(at:stage);throw error}
                     self.agentJob?.path=file.path
                 }
                 self.preparing=false;self.progress=1;self.agentJob?.state="completed";self.agentJob?.progress=1;self.agentJob?.message=self.agentJob?.endWindowHasSignal == true ? "완료 · 마지막 0.1초에 신호가 남아 있습니다. 여운 길이를 확인하세요":"완료"

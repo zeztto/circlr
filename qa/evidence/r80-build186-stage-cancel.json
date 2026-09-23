@@ -1,0 +1,119 @@
+{
+  "schema": "circlr-agent-stage-cancel-qa-v1",
+  "status": "PASS_BOUNDED_NATIVE_STAGE_CANCEL",
+  "build": "186",
+  "project": "/Users/sungwoonjeon/Library/Application Support/circlr-integration-qa/fixtures/r80-build186-stage-bach.circlr",
+  "socket": "/Users/sungwoonjeon/Library/Application Support/circlr-integration-qa/Agent/agent.sock",
+  "checks": [
+    "exact isolated build and saved QA fixture",
+    "data-bearing private WAV stage observed with exact job running",
+    "exact job cancelled and repeated cancellation is idempotent",
+    "no late WAV or document/transport mutation",
+    "new export succeeds as 48 kHz stereo 24-bit nonzero WAV"
+  ],
+  "limitations": [
+    "Only native export staging is covered; bounce staging is not exercised.",
+    "Physical audio output and GUI behavior are not observed."
+  ],
+  "projectID": "4EFAD665-B90C-5A5E-830D-884EF444526D",
+  "initialRevision": 0,
+  "initialLayoutRevision": 0,
+  "beforeManifestSHA256": "baf5a5f7628b55e67ef63bcf11555282aefb9304e6d12feabe7f0387e6721c55",
+  "beforeTransport": {
+    "playing": false,
+    "audioRecording": false,
+    "midiRecording": false,
+    "recordingBusy": false,
+    "recordingPhase": "idle"
+  },
+  "jobID": "6623BC2B-D647-4A2A-9961-2F352CABB7B8",
+  "exportPath": "/Users/sungwoonjeon/Library/Application Support/circlr-integration-qa/fixtures/.circlr-stage-cancel-7f4cf4c8c28e43dc882f23ff0c16fade.wav",
+  "stagingPath": "/Users/sungwoonjeon/Library/Application Support/circlr-integration-qa/fixtures/.circlr-agent-6623BC2B-D647-4A2A-9961-2F352CABB7B8.wav",
+  "stageBytesAtDecision": 14602240,
+  "jobAtStageDecision": {
+    "endWindowHasSignal": false,
+    "endWindowPeak": 0,
+    "endWindowRMS": 0,
+    "endWindowSeconds": 0.1,
+    "id": "6623BC2B-D647-4A2A-9961-2F352CABB7B8",
+    "kind": "export",
+    "message": "재생 준비 완료",
+    "progress": 1,
+    "renderedSeconds": 70,
+    "state": "running",
+    "tail": {
+      "effectiveSeconds": 2,
+      "estimatedSeconds": 2,
+      "notices": []
+    }
+  },
+  "cancelResponse": {
+    "endWindowHasSignal": false,
+    "endWindowPeak": 0,
+    "endWindowRMS": 0,
+    "endWindowSeconds": 0.1,
+    "id": "6623BC2B-D647-4A2A-9961-2F352CABB7B8",
+    "kind": "export",
+    "message": "에이전트 작업 취소",
+    "progress": 1,
+    "renderedSeconds": 70,
+    "state": "cancelled",
+    "tail": {
+      "effectiveSeconds": 2,
+      "estimatedSeconds": 2,
+      "notices": []
+    }
+  },
+  "settleSeconds": 2,
+  "terminalJob": {
+    "endWindowHasSignal": false,
+    "endWindowPeak": 0,
+    "endWindowRMS": 0,
+    "endWindowSeconds": 0.1,
+    "id": "6623BC2B-D647-4A2A-9961-2F352CABB7B8",
+    "kind": "export",
+    "message": "에이전트 작업 취소",
+    "progress": 1,
+    "renderedSeconds": 70,
+    "state": "cancelled",
+    "tail": {
+      "effectiveSeconds": 2,
+      "estimatedSeconds": 2,
+      "notices": []
+    }
+  },
+  "retryJob": {
+    "endWindowHasSignal": false,
+    "endWindowPeak": 0,
+    "endWindowRMS": 0,
+    "endWindowSeconds": 0.1,
+    "id": "EBB83090-F4FA-4700-98A6-C468C4D732DE",
+    "kind": "export",
+    "message": "완료",
+    "path": "/Users/sungwoonjeon/Library/Application Support/circlr-integration-qa/fixtures/.circlr-stage-cancel-7f4cf4c8c28e43dc882f23ff0c16fade-retry.wav",
+    "progress": 1,
+    "renderedSeconds": 70,
+    "state": "completed",
+    "tail": {
+      "effectiveSeconds": 2,
+      "estimatedSeconds": 2,
+      "notices": []
+    }
+  },
+  "retryPath": "/Users/sungwoonjeon/Library/Application Support/circlr-integration-qa/fixtures/.circlr-stage-cancel-7f4cf4c8c28e43dc882f23ff0c16fade-retry.wav",
+  "retrySHA256": "bee5082440b740282b4c33718aa2058b48c736bde213ecb7ff6acf25d122e9d0",
+  "retryFormat": {
+    "channels": 2,
+    "sampleRate": 48000,
+    "bitsPerSample": 24,
+    "frames": 3360000
+  },
+  "afterManifestSHA256": "baf5a5f7628b55e67ef63bcf11555282aefb9304e6d12feabe7f0387e6721c55",
+  "afterTransport": {
+    "playing": false,
+    "audioRecording": false,
+    "midiRecording": false,
+    "recordingBusy": false,
+    "recordingPhase": "idle"
+  }
+}
