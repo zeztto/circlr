@@ -12,13 +12,31 @@ struct AgentConsole:View {
     @State private var command=""
     @State private var resizeStart:Double?
     @FocusState private var inputFocused:Bool
+    private var connectionStatus:String {
+        if store.agentSocket != nil {
+            return store.agentBridgeDefaultSelected ? "MCP 연결 가능 · 기본 선택":"MCP 연결 가능 · 기본 미선택"
+        }
+        if store.agentBridgeNeedsManualRecovery {return "기존 연결 감지"}
+        return store.agentBridgeLastFailure == nil ? "연결 없음":"연결 실패"
+    }
+    private var connectionDetail:String {
+        if store.agentSocket != nil {
+            let endpoint=store.agentBridgeEndpointName
+            let selection=store.agentBridgeDefaultSelected ? "기본 연결로 선택됨":"소켓은 열렸지만 기본 연결로 선택되지 않음"
+            return endpoint.isEmpty ? "로컬 MCP 소켓 열림 · \(selection)":"로컬 MCP 소켓 열림 · \(endpoint) · \(selection)"
+        }
+        return store.agentBridgeLastFailure ?? "로컬 MCP 연결을 준비하고 있습니다"
+    }
     var body:some View {
         VStack(alignment:.leading,spacing:0) {
             HStack(spacing:8) {
                 Button{withAnimation(.easeOut(duration:0.18)){store.consoleOpen.toggle()}}label:{Image(systemName:"terminal");Text("콘솔");Image(systemName:store.consoleOpen ? "chevron.down":"chevron.up").font(.system(size:9))}
                     .keyboardShortcut("`",modifiers:.control).help("콘솔 접기·펼치기 · Ctrl `")
-                Circle().fill(store.agentSocket == nil ? StudioTheme.secondary:StudioTheme.accent).frame(width:5,height:5)
-                Text(store.agentSocket == nil ? "연결 없음":"MCP 연결 가능").font(.system(size:11)).foregroundStyle(StudioTheme.secondary)
+                Circle().fill(store.agentSocket != nil && store.agentBridgeDefaultSelected ? StudioTheme.accent:StudioTheme.secondary).frame(width:5,height:5)
+                Text(connectionStatus).font(.system(size:11)).foregroundStyle(StudioTheme.secondary)
+                    .lineLimit(1).minimumScaleFactor(0.85).help(connectionDetail)
+                    .accessibilityLabel("에이전트 연결 상태 · \(connectionStatus)")
+                    .accessibilityValue(connectionDetail)
                 if store.consoleOpen {
                     Menu("로그 높이") {
                         Button("작게 · 40pt"){store.setConsoleLogHeight(40)}
@@ -64,6 +82,32 @@ struct AgentConsole:View {
                 }.padding(.horizontal,12).padding(.bottom,8)
             }
             if store.consoleOpen {
+                if store.agentBridgeNeedsManualRecovery && store.agentSocket == nil {
+                    HStack(spacing:8) {
+                        Text("기존 연결 경로는 유지됩니다").font(.system(size:11))
+                            .foregroundStyle(StudioTheme.secondary).lineLimit(1)
+                        Spacer(minLength:4)
+                        Button("이 앱에 새 연결"){store.recoverAgentBridgeWithNewEndpoint()}
+                            .buttonStyle(.bordered).controlSize(.small)
+                            .disabled(store.agentBridgeShuttingDown)
+                            .help("기존 연결을 건드리지 않고 이 앱의 새 로컬 MCP 연결 경로를 만듭니다. 새 경로는 연결 상태 도움말에서 확인할 수 있습니다.")
+                            .accessibilityLabel("이 앱에 새 MCP 연결 만들기")
+                            .accessibilityHint("기존 연결 경로를 유지하고 새 연결 경로를 사용합니다")
+                    }.padding(.horizontal,12).padding(.bottom,8)
+                }
+                if store.agentSocket != nil && !store.agentBridgeDefaultSelected {
+                    HStack(spacing:8) {
+                        Text("이 앱의 MCP 소켓은 열려 있습니다").font(.system(size:11))
+                            .foregroundStyle(StudioTheme.secondary).lineLimit(1)
+                        Spacer(minLength:4)
+                        Button("이 앱을 기본 연결로 선택"){store.selectAgentBridgeAsDefault()}
+                            .buttonStyle(.bordered).controlSize(.small)
+                            .disabled(store.agentBridgeShuttingDown)
+                            .help("기존 소켓은 건드리지 않고, 현재 이 앱의 열린 MCP 소켓을 기본 연결로 가리키는 선택 정보만 다시 게시합니다.")
+                            .accessibilityLabel("이 앱의 MCP 소켓을 기본 연결로 선택")
+                            .accessibilityHint("기존 소켓을 유지하고 기본 연결 선택 정보만 다시 게시합니다")
+                    }.padding(.horizontal,12).padding(.bottom,8)
+                }
                 Rectangle().fill(StudioTheme.line).frame(height:1)
                 ScrollViewReader { proxy in
                     ScrollView {

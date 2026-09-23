@@ -60,13 +60,14 @@ public struct AgentRequest:Codable {
     public var method:String
     public var projectID:ID?
     public var expectedRevision:Int?
+    public var expectedRunID:String?
     public var arguments:AgentArguments?
     // JSONDecoder normally drops unknown argument keys. Preserve their names
     // for the trusted gateway so an unrecognized or null field cannot bypass
     // its exact allowlist. External MCP decoding keeps its existing behavior.
     var decodedArgumentKeys:Set<String>?
     private var decodedCanonicalWire:Data?
-    private enum CodingKeys:String,CodingKey {case id,method,projectID,expectedRevision,arguments}
+    private enum CodingKeys:String,CodingKey {case id,method,projectID,expectedRevision,expectedRunID,arguments}
     private struct RawKey:CodingKey {
         var stringValue:String
         var intValue:Int? {nil}
@@ -82,6 +83,7 @@ public struct AgentRequest:Codable {
         method=try c.decode(String.self,forKey:.method)
         projectID=try c.decodeIfPresent(ID.self,forKey:.projectID)
         expectedRevision=try c.decodeIfPresent(Int.self,forKey:.expectedRevision)
+        expectedRunID=try c.decodeIfPresent(String.self,forKey:.expectedRunID)
         if c.contains(.arguments),try !c.decodeNil(forKey:.arguments) {
             let raw=try c.nestedContainer(keyedBy:RawKey.self,forKey:.arguments)
             decodedArgumentKeys=Set(raw.allKeys.map(\.stringValue))

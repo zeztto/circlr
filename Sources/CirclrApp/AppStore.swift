@@ -148,6 +148,11 @@ import CirclrAudio
     var agentJobOrder:[String]=[]
     var activitySequence=0
     var agentSocket:AgentSocket?
+    let agentRunID=UUID().uuidString
+    @Published var agentBridgeNeedsManualRecovery=false
+    @Published var agentBridgeDefaultSelected=false
+    @Published var agentBridgeEndpointName=""
+    var agentBridgeDefaultCheckAt=0.0
     var agentBridgeShuttingDown=false
     var agentBridgeRetryAt=0.0
     var agentBridgeLastFailure:String?
@@ -346,6 +351,11 @@ import CirclrAudio
     deinit {auditionOutput.shutdown()}
     func tick() {
         if agentStartupReady && agentSocket == nil {startAgentBridge()}
+        let now=ProcessInfo.processInfo.systemUptime
+        if now>=agentBridgeDefaultCheckAt {
+            agentBridgeDefaultCheckAt=now+1
+            refreshAgentBridgeDefaultSelection()
+        }
         refreshAuditionStatus()
         refreshOutputStatus()
         refreshPlaybackLoopTransition()

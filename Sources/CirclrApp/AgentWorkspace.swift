@@ -37,6 +37,8 @@ extension AppStore {
     func stopAgentBridgeForTermination() {
         agentBridgeShuttingDown=true
         agentSocket=nil // AgentSocket.deinit unlinks only its own inode.
+        agentBridgeEndpointName=""
+        agentBridgeDefaultSelected=false
     }
     func recordActivity(_ source:String,_ message:String) {
         activitySequence+=1
@@ -48,36 +50,90 @@ extension AppStore {
         let now=ProcessInfo.processInfo.systemUptime
         guard now >= agentBridgeRetryAt else{return}
         do {
-            agentSocket=try AgentSocket(directory:productionMediaRoot.deletingLastPathComponent().appendingPathComponent("Agent")){[weak self] data,reply in
-                guard let self else{return}
-                let result=self.receiveAgent(data,source:"에이전트")
-                reply((try? JSONSerialization.data(withJSONObject:result,options:[.sortedKeys])) ?? Data(#"{"ok":false,"error":"encoding"}"#.utf8))
-            }
-            cleanupAbandonedAgentBounceStages()
+            try openAgentBridge(name:"agent.sock")
             agentBridgeRetryAt=0
             agentBridgeLastFailure=nil
+            agentBridgeNeedsManualRecovery=false
             recordActivity("연결","로컬 MCP 연결 준비 · 휠로 확대·축소 · Ctrl `로 콘솔 접기")
         }catch{
             agentBridgeRetryAt=now+10
             let message=error.localizedDescription
             if message != agentBridgeLastFailure {recordActivity("연결",message)}
             agentBridgeLastFailure=message
+            let failure=error as NSError
+            agentBridgeNeedsManualRecovery=(failure.domain=="CirclrAgent" && (failure.code==4 || failure.code==6)) ||
+                (failure.domain==NSPOSIXErrorDomain && failure.code==EEXIST)
         }
     }
-    /// Socket ownership proves no other circlr instance is writing this private
-    /// Bounces directory. Arbitrary user export directories are never scanned.
-    func cleanupAbandonedAgentBounceStages() {
-        guard agentSocket != nil,agentJob == nil,!preparing else{return}
-        let root=productionMediaRoot,manager=FileManager.default
-        guard let properties=try? root.resourceValues(forKeys:[.isDirectoryKey,.isSymbolicLinkKey]),
-              properties.isDirectory==true,properties.isSymbolicLink != true,
-              let files=try? manager.contentsOfDirectory(at:root,includingPropertiesForKeys:[.isRegularFileKey,.isSymbolicLinkKey]) else{return}
-        for file in files where AgentStageChunks.isPrivateBounceStageName(file.lastPathComponent) {
-            guard let values=try? file.resourceValues(forKeys:[.isRegularFileKey,.isSymbolicLinkKey]),
-                  values.isRegularFile==true,values.isSymbolicLink != true else{continue}
-            try? manager.removeItem(at:file)
+    private func openAgentBridge(name:String) throws {
+        let directory=productionMediaRoot.deletingLastPathComponent().appendingPathComponent("Agent")
+        let expectedPath=directory.appendingPathComponent(name).path
+        let socket=try AgentSocket(directory:directory,name:name){[weak self] data,reply in
+            guard let self else{return}
+            let result:[String:Any]
+            if self.agentSocket?.path==expectedPath {result=self.receiveAgent(data,source:"에이전트")}
+            else {result=["ok":false,"error":"agent_target_changed: 연결이 교체됐습니다"]}
+            reply((try? JSONSerialization.data(withJSONObject:result,options:[.sortedKeys])) ?? Data(#"{"ok":false,"error":"encoding"}"#.utf8))
+        }
+        try AgentEndpointSelection.publish(.init(endpoint:name,runID:agentRunID,
+            bundleID:Bundle.main.bundleIdentifier ?? "com.circlr.desktop"),in:directory)
+        agentBridgeEndpointName=name
+        agentSocket=socket
+        agentBridgeDefaultSelected=true
+    }
+    func refreshAgentBridgeDefaultSelection() {
+        guard let socket=agentSocket,socket.ownsPublishedPath else {
+            agentBridgeDefaultSelected=false
+            return
+        }
+        let directory=productionMediaRoot.deletingLastPathComponent().appendingPathComponent("Agent")
+        let selected=AgentEndpointSelection.current(in:directory)
+        agentBridgeDefaultSelected=selected?.runID==agentRunID && selected?.endpoint==agentBridgeEndpointName
+    }
+    func selectAgentBridgeAsDefault() {
+        guard agentStartupReady,!agentBridgeShuttingDown,
+              let socket=agentSocket,socket.ownsPublishedPath else {
+            status="이 앱의 Agent 연결을 확인할 수 없습니다"
+            agentBridgeDefaultSelected=false
+            return
+        }
+        let directory=productionMediaRoot.deletingLastPathComponent().appendingPathComponent("Agent")
+        do {
+            try AgentEndpointSelection.publish(.init(endpoint:agentBridgeEndpointName,runID:agentRunID,
+                bundleID:Bundle.main.bundleIdentifier ?? "com.circlr.desktop"),in:directory)
+            agentBridgeDefaultSelected=true
+            status="이 앱을 기본 MCP 연결로 선택했습니다 · 사용 중인 MCP 세션은 다시 시작하세요"
+            recordActivity("연결","이 앱의 기본 MCP 연결 선택 · 기존 socket 보존")
+        }catch {
+            agentBridgeDefaultSelected=false
+            status="기본 MCP 연결 선택 실패 · \(error.localizedDescription)"
         }
     }
+    func recoverAgentBridgeWithNewEndpoint() {
+        guard agentStartupReady,agentSocket == nil,agentBridgeNeedsManualRecovery else{return}
+        for _ in 0..<4 {
+            let name=".r"+String(UUID().uuidString.replacingOccurrences(of:"-",with:"").lowercased().prefix(8))
+            do {
+                try openAgentBridge(name:name)
+                agentBridgeNeedsManualRecovery=false
+                agentBridgeLastFailure=nil
+                agentBridgeRetryAt=0
+                recordActivity("연결","이 앱의 새 MCP 연결 준비 · 기존 경로는 보존했습니다")
+                status="이 앱의 새 MCP 연결이 준비됐습니다 · 사용 중인 MCP 세션은 다시 시작하세요"
+                return
+            }catch {
+                let failure=error as NSError
+                if failure.domain==NSPOSIXErrorDomain && failure.code==EADDRINUSE {continue}
+                agentBridgeLastFailure=error.localizedDescription
+                status="새 MCP 연결 실패 · \(error.localizedDescription)"
+                return
+            }
+        }
+        status="새 MCP 연결 위치를 확보하지 못했습니다 · 다시 시도하세요"
+    }
+    // Multiple endpoints may coexist with older app instances. Stage cleanup
+    // must wait for per-run ownership metadata; a socket path is not a lease
+    // over the shared Bounces directory.
     func json<T:Encodable>(_ value:T)->Any {((try? JSONSerialization.jsonObject(with:JSONEncoder().encode(value),options:[.fragmentsAllowed])) ?? NSNull())}
     func agentState()->[String:Any] {
         refreshPlaybackLoopTransition()
@@ -90,12 +146,30 @@ extension AppStore {
          "playback":capturePlaybackVisualization?() ?? ["playing":playback.playing,"seconds":playback.seconds],"output":json(playback.outputStatus),"audition":json(auditionOutput.status),
          "view":["startupOpen":startupOpen,"loopMode":playbackLoopMode.rawValue,"loopTransition":playbackLoopState,"loopIteration":playback.loopIteration,"elapsedSeconds":playback.elapsedSeconds,"viewingMode":viewingMode,"follow":playbackFollow.rawValue,"followSettings":json(playbackFollowSettings),"zoom":hierarchyZoom,"layout":project.usesOrbits ? "orbit":"freeform","consoleOpen":consoleOpen,"consoleBounds":[consoleBounds.minX,consoleBounds.minY,consoleBounds.width,consoleBounds.height]],
          "library":["open":libraryOpen,"folders":library.folders.count,"files":library.entries.count,"selectedFiles":library.chosenIDs.count,"scanning":library.scanning,"searching":library.searching,"previewPreparing":library.previewPreparing,"previewPlaying":library.previewing,"previewPending":library.previewPending,"previewSeconds":library.previewSeconds],
-         "runtime":["version":Bundle.main.object(forInfoDictionaryKey:"CFBundleShortVersionString") as? String ?? "development","build":Bundle.main.object(forInfoDictionaryKey:"CFBundleVersion") as? String ?? "development","capabilities":["playbackLoop":1,"playbackLoopLive":1,"workspaceView":1,"soundCatalog":1,"synthCutoffAutomation":1,"synthResonanceAutomation":1,"midiTempoImport":1,"midiPitchBendImport":1,"midiSustainImport":1,"midiSustainEditing":1,"midiPitchBendEditing":1,"sectionLengthEditing":1,"jobCancellation":1],"bundleID":Bundle.main.bundleIdentifier ?? "","windows":NSApplication.shared.windows.filter{$0.identifier?.rawValue=="main"}.map{["visible":$0.isVisible,"minimized":$0.isMiniaturized]}]]
+         "runtime":["version":Bundle.main.object(forInfoDictionaryKey:"CFBundleShortVersionString") as? String ?? "development","build":Bundle.main.object(forInfoDictionaryKey:"CFBundleVersion") as? String ?? "development","runID":agentRunID,"agentEndpoint":agentBridgeEndpointName,"capabilities":["playbackLoop":1,"playbackLoopLive":1,"workspaceView":1,"soundCatalog":1,"synthCutoffAutomation":1,"synthResonanceAutomation":1,"midiTempoImport":1,"midiPitchBendImport":1,"midiSustainImport":1,"midiSustainEditing":1,"midiPitchBendEditing":1,"sectionLengthEditing":1,"jobCancellation":1],"bundleID":Bundle.main.bundleIdentifier ?? "","windows":NSApplication.shared.windows.filter{$0.identifier?.rawValue=="main"}.map{["visible":$0.isVisible,"minimized":$0.isMiniaturized]}]]
     }
     func receiveAgent(_ data:Data,source:String)->[String:Any] {
         guard agentStartupReady else {return ["ok":false,"error":"시작 복구 확인이 끝나지 않아 에이전트 요청을 받을 수 없습니다"]}
         do {
-            let request=try JSONDecoder().decode(AgentRequest.self,from:data)
+            // Dynamic endpoint calls use a non-JSON envelope. An older app
+            // cannot ignore its run binding and accidentally accept a write.
+            var requestData=data
+            let prefix=Data("CIRCLR/2 ".utf8)
+            if data.starts(with:prefix) {
+                let remainder=data.dropFirst(prefix.count)
+                guard let separator=remainder.firstIndex(of:32),
+                      let runID=String(data:remainder[..<separator],encoding:.utf8),
+                      runID==agentRunID else {
+                    return ["ok":false,"error":"agent_target_changed: 실행 연결이 일치하지 않습니다"]
+                }
+                requestData=Data(remainder[remainder.index(after:separator)...])
+            } else if agentBridgeEndpointName != "agent.sock" {
+                return ["ok":false,"error":"agent_target_changed: 새 연결에는 실행 ID가 필요합니다"]
+            }
+            let request=try JSONDecoder().decode(AgentRequest.self,from:requestData)
+            guard request.expectedRunID == nil || request.expectedRunID==agentRunID else {
+                return ["ok":false,"requestID":request.id,"error":"agent_target_changed: 실행 연결이 일치하지 않습니다"]
+            }
             guard !request.id.isEmpty,request.id.count<=128 else {throw CirclrError("request id가 필요합니다")}
             let fingerprint=SHA256.hash(data:data).map{String(format:"%02x",$0)}.joined()
             if let previous=agentReplies[request.id] {

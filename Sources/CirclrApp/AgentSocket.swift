@@ -34,28 +34,29 @@ final class AgentSocket {
     private let fd:Int32
     private let boundIdentity:SocketIdentity
     let path:String
+    var ownsPublishedPath:Bool { (try? Self.socketIdentity(at:path)) == boundIdentity }
     private let queue=DispatchQueue(label:"com.circlr.agent.ipc",qos:.utility)
     private var source:DispatchSourceRead?
-    init(directory:URL,onRequest:@escaping(Data,@escaping(Data)->Void)->Void) throws {
+    init(directory:URL,name:String="agent.sock",onRequest:@escaping(Data,@escaping(Data)->Void)->Void) throws {
+        let alternate=name.count==10 && name.hasPrefix(".r") && name.dropFirst(2).allSatisfy{("0"..."9").contains(String($0)) || ("a"..."f").contains(String($0))}
+        guard name=="agent.sock" || alternate else {
+            throw NSError(domain:"CirclrAgent",code:7,userInfo:[NSLocalizedDescriptionKey:"Agent 연결 이름이 올바르지 않습니다"])
+        }
         let fm=FileManager.default
         try fm.createDirectory(at:directory,withIntermediateDirectories:true,attributes:[.posixPermissions:0o700])
-        let attrs=try fm.attributesOfItem(atPath:directory.path)
-        guard (attrs[.ownerAccountID] as? NSNumber)?.uint32Value==getuid(),attrs[.type] as? FileAttributeType == .typeDirectory else {throw NSError(domain:"CirclrAgent",code:1,userInfo:[NSLocalizedDescriptionKey:"Agent 폴더의 소유자를 확인하세요"])}
+        var directoryInfo=stat()
+        guard Darwin.lstat(directory.path,&directoryInfo)==0,
+              directoryInfo.st_mode & mode_t(S_IFMT)==mode_t(S_IFDIR),directoryInfo.st_uid==getuid() else {
+            throw NSError(domain:"CirclrAgent",code:1,userInfo:[NSLocalizedDescriptionKey:"Agent 폴더의 소유자를 확인하세요"])
+        }
         try fm.setAttributes([.posixPermissions:0o700],ofItemAtPath:directory.path)
-        path=directory.appendingPathComponent("agent.sock").path
-        var address=try Self.socketAddress(for:path)
+        path=directory.appendingPathComponent(name).path
+        _=try Self.socketAddress(for:path)
         if try Self.socketIdentity(at:path) != nil {
-            let probe=socket(AF_UNIX,SOCK_STREAM,0)
-            guard probe>=0 else {throw NSError(domain:NSPOSIXErrorDomain,code:Int(errno))}
-            let connected=withUnsafePointer(to:&address){$0.withMemoryRebound(to:sockaddr.self,capacity:1){Darwin.connect(probe,$0,socklen_t(MemoryLayout<sockaddr_un>.size))}}==0
-            let connectionError=errno
-            Darwin.close(probe)
-            guard !connected else {throw NSError(domain:"CirclrAgent",code:4,userInfo:[NSLocalizedDescriptionKey:"이미 실행 중인 Agent 연결이 있습니다"])}
-            // A live older process can have bound the path but not reached
-            // listen() yet. Even ECONNREFUSED cannot prove it is stale.
+            // A live older process can be between bind() and listen(). A
+            // connect probe would block the UI and cannot prove staleness.
             throw NSError(domain:"CirclrAgent",code:6,userInfo:[
-                NSLocalizedDescriptionKey:"기존 Agent socket이 응답하지 않습니다. 이전 앱 종료 후 다시 연결합니다",
-                NSUnderlyingErrorKey:NSError(domain:NSPOSIXErrorDomain,code:Int(connectionError))
+                NSLocalizedDescriptionKey:"기존 Agent 연결 경로가 있습니다. 다른 앱을 확인하거나 이 앱에 새 연결을 선택하세요"
             ])
         }
         let descriptor=socket(AF_UNIX,SOCK_STREAM,0);fd=descriptor

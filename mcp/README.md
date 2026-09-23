@@ -21,7 +21,9 @@ Run circlr, then register this stdio server in your MCP client. Replace `/absolu
 
 Agent sequence: `circlr_snapshot` → `circlr_inspect` → revision-checked `circlr_apply` → `circlr_job` for asynchronous work → `circlr_save`. Inspect capabilities from the running app; never infer them from this README alone.
 
-기본 소켓은 `~/Library/Application Support/circlr/Agent/agent.sock`이다. 검증 앱에는 `--socket` 또는 `CIRCLR_SOCKET`으로 `~/Library/Application Support/circlr-hierarchy-qa/Agent/agent.sock`을 지정한다. 폴더 권한은 0700, 소켓 권한은 0600이고 앱은 연결한 프로세스의 UID도 확인한다.
+기본 연결은 `~/Library/Application Support/circlr/Agent/selected.json`이 선택한 socket으로 간다. 선택 정보가 없는 구버전 앱에만 `agent.sock`을 사용한다. 한 MCP 세션은 첫 응답의 실행 경로·socket inode에 고정된다. 앱을 재시작하거나 콘솔의 **이 앱에 새 연결**을 선택한 뒤에는 MCP 세션도 다시 시작한다. 선택 정보가 남았는데 socket이 없거나 바뀐 경우에는 구버전 경로로 자동 전환하지 않는다. 이때 다른 써클러 앱의 소켓이 열려 있으면 그 앱 콘솔에서 **이 앱을 기본 연결로 선택**하고 MCP 세션을 다시 시작한다. 폴더 권한은 0700, 선택 정보·socket 권한은 0600이고 앱은 연결한 프로세스의 UID도 확인한다.
+
+검증 앱은 `--socket` 또는 `CIRCLR_SOCKET`으로 격리된 표준 `agent.sock` 경로를 지정할 수 있다. 이 명시적 경로는 구버전 호환을 위한 raw JSON 방식이며 실행 ID·세션 고정을 제공하지 않는다. 격리 앱의 새 `.r` 연결 검증에는 그 QA 폴더의 `agent.sock`을 기준으로 `EndpointResolver`를 사용한다. `--socket`으로 `.r` 경로를 직접 지정해도 버전 2 연결은 만들어지지 않는다.
 
 ## 에이전트 작업 흐름
 

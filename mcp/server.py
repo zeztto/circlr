@@ -5,12 +5,16 @@ import json
 import math
 import os
 from pathlib import Path
+import re
 import socket
+import stat
 import sys
 import uuid
 
 MAX_MESSAGE = 8 * 1024 * 1024
+MAX_ENDPOINT_MANIFEST = 4096
 VERSIONS = {"2025-11-25", "2025-06-18", "2025-03-26"}
+ENDPOINT_BASENAME = re.compile(r"(?:agent\.sock|\.r[0-9a-f]{8})\Z")
 
 
 def schema(properties, required=()):
@@ -234,13 +238,123 @@ def validate(value, spec, path="arguments"):
             raise ValueError(f"{path}: number out of range")
 
 
+def _unique_json_fields(pairs):
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError("Invalid endpoint manifest: duplicate field")
+        result[key] = value
+    return result
+
+
+class EndpointResolver:
+    """Resolve the default socket afresh; pin a successful session to one socket."""
+
+    def __init__(self, legacy_socket):
+        self.legacy_socket = str(legacy_socket)
+        self.manifest = Path(self.legacy_socket).parent / "selected.json"
+        self.pinned = None
+        self.pinned_identity = None
+
+    def __str__(self):
+        return self.legacy_socket
+
+    def _manifest_target(self):
+        try:
+            before = os.lstat(self.manifest)
+        except FileNotFoundError:
+            return None
+        if not stat.S_ISREG(before.st_mode) or before.st_uid != os.getuid() or stat.S_IMODE(before.st_mode) != 0o600 or before.st_size > MAX_ENDPOINT_MANIFEST:
+            raise ValueError("Invalid endpoint manifest: owner, type, mode or size")
+        flags = os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK
+        fd = os.open(self.manifest, flags)
+        try:
+            opened = os.fstat(fd)
+            if (opened.st_dev, opened.st_ino) != (before.st_dev, before.st_ino) or not stat.S_ISREG(opened.st_mode) or opened.st_uid != os.getuid() or stat.S_IMODE(opened.st_mode) != 0o600 or opened.st_size > MAX_ENDPOINT_MANIFEST:
+                raise ValueError("Invalid endpoint manifest: changed or unsafe file")
+            content = bytearray()
+            while len(content) <= MAX_ENDPOINT_MANIFEST:
+                chunk = os.read(fd, MAX_ENDPOINT_MANIFEST + 1 - len(content))
+                if not chunk:
+                    break
+                content.extend(chunk)
+            if len(content) > MAX_ENDPOINT_MANIFEST:
+                raise ValueError("Invalid endpoint manifest: exceeds 4096 bytes")
+        finally:
+            os.close(fd)
+        try:
+            manifest = json.loads(content.decode("utf-8"), object_pairs_hook=_unique_json_fields)
+        except (UnicodeError, json.JSONDecodeError) as error:
+            raise ValueError("Invalid endpoint manifest: malformed JSON") from error
+        if not isinstance(manifest, dict) or set(manifest) != {"schema", "endpoint", "runID", "bundleID"} or manifest["schema"] != "circlr-agent-endpoint-v1":
+            raise ValueError("Invalid endpoint manifest: unsupported schema")
+        basename, run_id, bundle_id = manifest["endpoint"], manifest["runID"], manifest["bundleID"]
+        if not isinstance(basename, str) or ENDPOINT_BASENAME.fullmatch(basename) is None:
+            raise ValueError("Invalid endpoint manifest: unsafe endpoint")
+        if not isinstance(run_id, str) or len(run_id) != 36:
+            raise ValueError("Invalid endpoint manifest: invalid runID")
+        try:
+            parsed = uuid.UUID(run_id)
+        except ValueError as error:
+            raise ValueError("Invalid endpoint manifest: invalid runID") from error
+        if str(parsed).casefold() != run_id.casefold():
+            raise ValueError("Invalid endpoint manifest: invalid runID")
+        if not isinstance(bundle_id, str) or not bundle_id or len(bundle_id) > 256 or "\0" in bundle_id:
+            raise ValueError("Invalid endpoint manifest: invalid bundleID")
+        return (str(self.manifest.parent / basename), run_id)
+
+    @staticmethod
+    def _socket_identity(path):
+        info = os.lstat(path)
+        if not stat.S_ISSOCK(info.st_mode) or info.st_uid != os.getuid():
+            raise ValueError("Selected endpoint is not a same-user socket")
+        return (info.st_dev, info.st_ino, info.st_uid)
+
+    def resolve(self):
+        try:
+            target = self._manifest_target()
+        except (OSError, ValueError) as error:
+            if self.pinned is not None:
+                raise ValueError("target_changed: restart the MCP session for the new circlr app") from error
+            raise
+        effective_target = target if target is not None else (self.legacy_socket, None)
+        if self.pinned is not None and effective_target != self.pinned:
+            raise ValueError("target_changed: restart the MCP session for the new circlr app")
+        if target is None:
+            path, run_id = self.legacy_socket, None
+        else:
+            path, run_id = target
+        try:
+            identity = self._socket_identity(path)
+        except (OSError, ValueError) as error:
+            if self.pinned is not None:
+                raise ValueError("target_changed: pinned circlr socket is unavailable or replaced") from error
+            raise
+        if self.pinned_identity is not None and identity != self.pinned_identity:
+            raise ValueError("target_changed: pinned circlr socket was replaced")
+        return path, run_id, identity
+
+    def mark_success(self, path, run_id, identity):
+        if self.pinned is None:
+            self.pinned = (path, run_id)
+            self.pinned_identity = identity
+
+
 def rpc(path, request):
+    resolver = path if isinstance(path, EndpointResolver) else None
+    selected_path, run_id, identity = resolver.resolve() if resolver is not None else (path, None, None)
+    if run_id is not None:
+        request = {**request, "expectedRunID": run_id}
     packet = json.dumps(request, ensure_ascii=False, allow_nan=False, separators=(",", ":"), sort_keys=True).encode() + b"\n"
+    if run_id is not None:
+        packet = b"CIRCLR/2 " + run_id.encode("ascii") + b" " + packet
     if len(packet) > MAX_MESSAGE:
         raise ValueError("Request exceeds 8 MiB")
     with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:
         client.settimeout(15)
-        client.connect(path)
+        client.connect(selected_path)
+        if resolver is not None and resolver._socket_identity(selected_path) != identity:
+            raise ValueError("target_changed: circlr socket was replaced during connection")
         client.sendall(packet)
         data = bytearray()
         while len(data) <= MAX_MESSAGE:
@@ -251,7 +365,10 @@ def rpc(path, request):
             if len(data) > MAX_MESSAGE:
                 raise ValueError("Reply exceeds 8 MiB")
             if b"\n" in chunk:
-                return json.loads(bytes(data).split(b"\n", 1)[0])
+                reply = json.loads(bytes(data).split(b"\n", 1)[0])
+                if resolver is not None:
+                    resolver.mark_success(selected_path, run_id, identity)
+                return reply
     raise ValueError("Reply exceeds 8 MiB")
 
 
@@ -373,7 +490,7 @@ def call_tool(path, name, arguments, read_only=False):
                 raise ValueError("stale_revision: snapshot differs from projectID/expectedRevision")
         result = rpc(path, request)
     except (OSError, ValueError) as error:
-        result = {"ok": False, "requestID": request["id"], "error": str(error), "socket": path}
+        result = {"ok": False, "requestID": request["id"], "error": str(error), "socket": str(path)}
     return {"content": [{"type": "text", "text": json.dumps(result, ensure_ascii=False, allow_nan=False)}], "structuredContent": result, "isError": not result.get("ok", False)}
 
 
@@ -424,18 +541,21 @@ def serve(path, read_only=False):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--socket", default=os.environ.get("CIRCLR_SOCKET", str(Path.home() / "Library/Application Support/circlr/Agent/agent.sock")))
+    parser.add_argument("--socket", help="Explicit socket path; uses the legacy JSON wire protocol.")
     parser.add_argument("--request", help="Send one native JSON request file and exit; omit to run MCP stdio.")
     parser.add_argument("--read-only", action="store_true", help="Expose and accept only snapshot, inspect, ports, sounds, job and events.")
     args = parser.parse_args()
+    path = args.socket if args.socket is not None else os.environ.get("CIRCLR_SOCKET")
+    if path is None:
+        path = EndpointResolver(Path.home() / "Library/Application Support/circlr/Agent/agent.sock")
     if args.request:
         request = json.loads(Path(args.request).read_text())
         if args.read_only and request.get("method") not in READ_METHODS:
             parser.error("This circlr session is read-only")
-        result = rpc(args.socket, request)
+        result = rpc(path, request)
         print(json.dumps(result, ensure_ascii=False, indent=2))
     else:
-        serve(args.socket, read_only=args.read_only)
+        serve(path, read_only=args.read_only)
 
 
 if __name__ == "__main__":

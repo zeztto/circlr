@@ -360,6 +360,15 @@ final class AgentRunLeaseTests: XCTestCase {
         }
     }
 
+    func testAgentRequestRunIDRoundTrip() throws {
+        var request=AgentRequest(method:"snapshot",id:"run-bound")
+        request.expectedRunID="12345678-1234-1234-1234-123456789ABC"
+        let decoded=try JSONDecoder().decode(AgentRequest.self,from:JSONEncoder().encode(request))
+        XCTAssertEqual(decoded.expectedRunID,request.expectedRunID)
+        let malformed=Data(#"{"id":"run-bound","method":"snapshot","expectedRunID":123}"#.utf8)
+        XCTAssertThrowsError(try JSONDecoder().decode(AgentRequest.self,from:malformed))
+    }
+
     func testAgentRequestEncodingStillUsesOriginalWireFields() throws {
         let project=inspectFixture()
         let original=inspectRequest(project,laneID:project.sections[0].lanes[0].id,
