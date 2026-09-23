@@ -35,8 +35,10 @@ struct AlbumCanvas: NSViewRepresentable {
     // Only during draw: visibility is a property of the current scene/camera, not each paint pass.
     var drawingLabelContext:CircleSceneNode?
     var drawingVisibleIDs:Set<CircleAddress>?
+    var drawingConnectionCurves:[String:CirclePortCurve]?
     var drawingPortHandles:[CirclePortHandle]?
     var isDrawingFrame=false
+    var densePlaybackFade=0.0
     var fileDropPreview:CanvasFileDropPreview?
     var hoverAddress:CircleAddress?
     var colorTarget: (projectID: ID, address: CircleAddress)?
@@ -426,11 +428,13 @@ struct AlbumCanvas: NSViewRepresentable {
         }
         if store.movieWriter == nil { moviePreview=nil }
         StudioTheme.canvasNS.setFill(); bounds.fill()
-        guard let scene else { return }
+        guard let scene else { densePlaybackFade=0; return }
         drawingLabelContext=labelContext
         isDrawingFrame=true
         drawingVisibleIDs=Set(scene.nodes.filter(isVisible).map(\.id))
-        defer { drawingPortHandles=nil;drawingVisibleIDs=nil;drawingLabelContext=nil;isDrawingFrame=false }
+        drawingConnectionCurves=visibleConnectionCurves(in:scene)
+        densePlaybackFade=playbackConnectionDensityFade(visibleConnectionCount:drawingConnectionCurves?.count ?? 0)
+        defer { drawingPortHandles=nil;drawingConnectionCurves=nil;drawingVisibleIDs=nil;drawingLabelContext=nil;isDrawingFrame=false }
         if store.project.album?.layout.grid != false { drawGrid() }
         for node in scene.nodes {
             let radius = node.radius*camera.zoom, center = screen(node)
@@ -462,7 +466,7 @@ struct AlbumCanvas: NSViewRepresentable {
             }
         }
         if store.project.usesOrbits {for node in scene.nodes {drawOrbit(node)}}
-        for edge in scene.edges { drawEdge(edge, scene: scene) }
+        for edge in scene.edges { drawEdge(edge) }
         for node in scene.nodes {
             let radius = node.radius*camera.zoom, center = screen(node)
             guard isVisible(node), NSRect(x: center.x-radius, y: center.y-radius, width: 2*radius, height: 2*radius).intersects(bounds) else { continue }
@@ -539,18 +543,17 @@ struct AlbumCanvas: NSViewRepresentable {
         let point=OrbitDrawing.point(screen(node),radius:node.radius*camera.zoom,phase:phase)
         OrbitDrawing.dot(point,radius:4,color:StudioTheme.textNS)
     }
-    func drawEdge(_ edge: CircleSceneEdge, scene: HierarchyScene) {
-        guard let a=scene.node(edge.from), let b=scene.node(edge.to), isVisible(a), isVisible(b) else { return }
-        guard let curve = connectionCurve(edge) else { return }
+    func drawEdge(_ edge: CircleSceneEdge) {
+        guard let curve=drawingConnectionCurves?[edge.id] else { return }
         let tint: NSColor = edge.kind == .midi ? StudioTheme.accentNS : edge.kind == .flow ? StudioTheme.secondaryNS : NSColor(srgbRed:0.62,green:0.75,blue:0.94,alpha:1)
-        let fade = connectionIsFocused(edge) ? 0 : connectionOverviewFade
+        let fade = connectionFade(edge)
         wire(curve,color:tint.withAlphaComponent(0.78-0.58*fade),dashed:edge.kind == .sidechain)
         if let before = try? curve.point(at: 0.48), let tip = try? curve.point(at: 0.52) {
             let angle = atan2(tip.y-before.y, tip.x-before.x), path = NSBezierPath()
             for offset in [-0.5, 0.5] { path.move(to: NSPoint(x: tip.x-7*cos(angle+offset), y: tip.y-7*sin(angle+offset))); path.line(to: NSPoint(x:tip.x,y:tip.y)) }
             tint.withAlphaComponent(1-0.75*fade).setStroke(); path.lineWidth=1.5-0.5*fade; path.stroke()
         }
-        drawPlaybackEdge(edge, curve: curve, tint: tint)
+        drawPlaybackEdge(edge, curve: curve, tint: tint, fade: fade)
     }
     // An overview still shows every connection and keeps the full hit geometry.
     // Active editing restores the ordinary ports and labels immediately.
@@ -561,12 +564,45 @@ struct AlbumCanvas: NSViewRepresentable {
         guard editorAddress == nil && connecting == nil && cableDrag == nil else {return 0}
         return min(1,max(0,(0.9-camera.zoom)/0.35))
     }
+    func visibleConnectionCurves(in scene: HierarchyScene) -> [String:CirclePortCurve] {
+        guard let visible=drawingVisibleIDs else{return [:]}
+        var curves:[String:CirclePortCurve]=[:]
+        for edge in scene.edges where visible.contains(edge.from) && visible.contains(edge.to) {
+            guard let curve=connectionCurve(edge) else{continue}
+            let minX=min(min(curve.from.x,curve.control1.x),min(curve.control2.x,curve.to.x))
+            let maxX=max(max(curve.from.x,curve.control1.x),max(curve.control2.x,curve.to.x))
+            let minY=min(min(curve.from.y,curve.control1.y),min(curve.control2.y,curve.to.y))
+            let maxY=max(max(curve.from.y,curve.control1.y),max(curve.control2.y,curve.to.y))
+            guard [minX,maxX,minY,maxY].allSatisfy(\.isFinite) else{continue}
+            // A cubic lies inside its control-point hull. Keep a small stroke/pulse margin.
+            let hull=NSRect(x:minX-8,y:minY-8,width:maxX-minX+16,height:maxY-minY+16)
+            if hull.intersects(bounds) {curves[edge.id]=curve}
+        }
+        return curves
+    }
+    func playbackConnectionDensityFade(visibleConnectionCount: Int) -> Double {
+        guard store.playback.playing,!visualFrame.stale,editorAddress == nil,
+              connecting == nil,cableDrag == nil else{return 0}
+        // Use scene density rather than changing audio levels to avoid brightness flicker.
+        // The cables remain drawn and hittable; motion on each active route stays visible.
+        return min(0.7,Double(max(0,visibleConnectionCount-8))*0.7/20)
+    }
+    func connectionFade(_ edge: CircleSceneEdge) -> Double {
+        let ambient=max(connectionOverviewFade,densePlaybackFade)
+        if let selectedCable {
+            if edge.connectionID == selectedCable {return 0}
+            // A selected cable must remain brighter than unrelated selected/hovered routes.
+            // Those routes still respond to focus, but at a secondary brightness tier.
+            return connectionIsFocused(edge) ? min(0.6,max(0.4,ambient)) : max(0.8,ambient)
+        }
+        return connectionIsFocused(edge) ? 0:ambient
+    }
     func connectionIsFocused(_ edge: CircleSceneEdge) -> Bool {
         (selectedCable != nil && edge.connectionID == selectedCable) ||
         store.hierarchySelections.contains(edge.from) || store.hierarchySelections.contains(edge.to) ||
         hoverAddress == edge.from || hoverAddress == edge.to ||
         selectedCanvasPort?.node == edge.from || selectedCanvasPort?.node == edge.to ||
-        (store.playback.playing && !visualFrame.stale && (visualFrame.edgeLevels[edge.id] ?? 0) > 0.0001)
+        (edge.kind == .flow && store.playback.playing && !visualFrame.stale && (visualFrame.edgeLevels[edge.id] ?? 0) > 0.0001)
     }
     func overviewPortIsFocused(_ endpoint: CirclePortEndpoint, selectedEdge: CircleSceneEdge?) -> Bool {
         store.hierarchySelections.contains(endpoint.node) || hoverAddress == endpoint.node ||

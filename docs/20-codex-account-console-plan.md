@@ -2,6 +2,8 @@
 
 작성일: 2026-09-07 · 상태: 향후 구현 계획 · 기준 앱: circlr 0.10.0
 
+> 2026-09-23 재확인: 공식 [App Server 문서](https://learn.chatgpt.com/docs/app-server)는 현재 `codex app-server` 명령을 experimental·production 미지원으로 표시한다. 공개 0.80 계정 콘솔은 [G0 판단](releases/0.80.0.md)에 따라 보류한다. 아래 설계의 API와 패키징 가정은 지원 상태가 바뀌고 실제 macOS 격리·배포 QA가 끝나기 전까지 제품 계약이 아니다.
+
 **사용자가 자신의 ChatGPT 계정으로 Codex에 로그인하고, circlr의 접이식 콘솔에서 대화하며 곡을 편집한다.** circlr가 로컬 Codex App Server를 관리하고, Codex는 circlr MCP를 통해 기존 음악 명령을 실행한다. 로그인 과정의 공식 브라우저를 제외하면 별도의 Codex 앱·터미널을 열 필요가 없는 경험을 목표로 한다.
 
 이 문서는 아키텍처 결정과 구현 순서다. 계정 연결·모델 호출·런타임 설치는 수행하지 않았으며 0.10.0에 자연어 대화 기능이 추가된 것은 아니다. 문서의 새 타입·파일·정책은 모두 구현 예정이다.

@@ -118,9 +118,8 @@ struct RootView: View {
                     addCircleMenu
                 }.frame(height:58)
                 HStack(spacing:10) {
-                    TransportControls(store:store,meter:store.meter,compact:true)
-                    movieButton
-                    viewingModeButton
+                    TransportControls(store:store,meter:store.meter,compact:true).layoutPriority(1)
+                    recordingAndViewingControls
                     Spacer(minLength:8)
                     utilityMenu
                 }.frame(height:58)
@@ -130,8 +129,7 @@ struct RootView: View {
                     projectMenu.frame(width:160)
                     Rectangle().fill(StudioTheme.line).frame(width:1,height:24)
                     TransportControls(store:store,meter:store.meter,compact:chrome.compactTransport)
-                    movieButton
-                    viewingModeButton
+                    recordingAndViewingControls
                     Spacer(minLength:8)
                     utilityMenu
                     globalSettings(compact:chrome.compactTransport)
@@ -157,12 +155,34 @@ struct RootView: View {
             }label:{HStack(spacing:7){Text(store.project.name).lineLimit(1);if store.dirty{Circle().fill(StudioTheme.accent).frame(width:4,height:4)}}.frame(maxWidth:.infinity,alignment:.leading)}
     }
     private var movieButton:some View {
-            Button{store.toggleMovieRecording()}label:{
-                Image(systemName:store.movieWriter != nil ? "stop.circle.fill":"record.circle")
-                    .foregroundStyle(store.movieWriter != nil ? Color.red:StudioTheme.secondary)
-            }.help(store.movieWriter != nil ? "영상 녹화 마치기":"캔버스와 음악을 MP4로 녹화")
-                .accessibilityLabel(store.movieWriter != nil ? "영상 녹화 마치기":"영상 녹화 시작")
-                .disabled(store.movieFinalizing != nil)
+        let recording=store.movieWriter != nil && !store.moviePreparing
+        let finalizing=store.movieFinalizing != nil
+        return Button{store.toggleMovieRecording()}label:{
+            HStack(spacing:6) {
+                if store.moviePreparing || finalizing {
+                    ProgressView().controlSize(.mini)
+                } else {
+                    Image(systemName:recording ? "stop.circle.fill":"record.circle")
+                        .font(.system(size:15,weight:.medium))
+                }
+                Text(finalizing ? "저장 중":store.moviePreparing ? "준비 중":recording ? "녹화 중":"녹화")
+                    .font(.system(size:11,weight:.semibold))
+                    .fixedSize(horizontal:true,vertical:false)
+            }
+            .foregroundStyle(recording ? Color.red:StudioTheme.text)
+            .frame(minHeight:26)
+            .padding(.horizontal,7)
+            .background(recording ? Color.red.opacity(0.12):StudioTheme.raised,in:RoundedRectangle(cornerRadius:6))
+        }
+        .help(finalizing ? "영상 파일을 저장하고 있습니다":store.moviePreparing ? "녹화 준비 중 · 누르면 취소":recording ? "영상 녹화 마치기":"캔버스와 음악을 MP4로 녹화")
+        .accessibilityLabel(finalizing ? "영상 저장 중":store.moviePreparing ? "영상 녹화 준비 취소":recording ? "영상 녹화 마치기":"영상 녹화 시작")
+        .disabled(finalizing)
+    }
+    private var recordingAndViewingControls:some View {
+        HStack(spacing:2) {
+            movieButton
+            viewingModeButton
+        }.fixedSize(horizontal:true,vertical:false)
     }
     private var viewingModeButton:some View {
             Button{_ = store.setViewingMode(true)}label:{

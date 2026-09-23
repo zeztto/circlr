@@ -228,24 +228,25 @@ struct PlaybackVisualFrame {
         drawPlayhead(node)
     }
 
-    func drawPlaybackEdge(_ edge: CircleSceneEdge, curve: CirclePortCurve, tint: NSColor) {
+    func drawPlaybackEdge(_ edge: CircleSceneEdge, curve: CirclePortCurve, tint: NSColor, fade: Double) {
         let strength = displayStrength(visualFrame.edgeLevels[edge.id] ?? 0)
         guard strength > 0, !visualFrame.stale, store.playback.playing else { return }
-        wire(curve, color: tint.withAlphaComponent(0.3+strength*0.55), dashed: edge.kind == .sidechain)
+        wire(curve, color: tint.withAlphaComponent((0.3+strength*0.55)*(1-0.82*fade)), dashed: edge.kind == .sidechain)
         guard !reducePlaybackMotion else { return }
         func point(_ t: Double) -> NSPoint {
             let p = (try? curve.point(at: t)) ?? curve.from
             return NSPoint(x: p.x, y: p.y)
         }
-        for index in 0..<3 {
-            let phase = (visualFrame.seconds*0.65+Double(index)/3).truncatingRemainder(dividingBy: 1)
+        let pulseCount = fade >= 0.5 ? 1 : 3
+        for index in 0..<pulseCount {
+            let phase = (visualFrame.seconds*0.65+Double(index)/Double(pulseCount)).truncatingRemainder(dividingBy: 1)
             let path = NSBezierPath()
             for step in 0...6 {
                 let p = point(max(0, phase-0.05+Double(step)*0.05/6))
                 if step == 0 { path.move(to: p) } else { path.line(to: p) }
             }
-            tint.withAlphaComponent(0.45+strength*0.5).setStroke(); path.lineWidth = 1.5+strength*2; path.lineCapStyle = .round; path.stroke()
-            OrbitDrawing.dot(point(phase), radius: 1.4+strength*1.8, color: StudioTheme.textNS.withAlphaComponent(0.4+strength*0.6))
+            tint.withAlphaComponent((0.45+strength*0.5)*(1-0.3*fade)).setStroke(); path.lineWidth = 1.5+strength*2; path.lineCapStyle = .round; path.stroke()
+            OrbitDrawing.dot(point(phase), radius: 1.4+strength*1.8, color: StudioTheme.textNS.withAlphaComponent((0.4+strength*0.6)*(1-0.25*fade)))
         }
     }
 
@@ -263,6 +264,7 @@ struct PlaybackVisualFrame {
          "windowOccluded": !(window?.occlusionState.contains(.visible) ?? false),
          "meterPlaying": store.meter.playing,
          "frameCount": frameCount, "maximumFrameGap": maximumFrameGap, "reduceMotion": reducePlaybackMotion,
+         "connectionDensityFade":densePlaybackFade,
          "timing": ["visualUpdate":visualUpdateTiming.diagnostics, "screenDraw":screenDrawTiming.diagnostics,
                     "movieDraw":movieDrawTiming.diagnostics, "movieCapture":movieCaptureTiming.diagnostics,
                     "movieTick":store.movieTickTiming.diagnostics],
