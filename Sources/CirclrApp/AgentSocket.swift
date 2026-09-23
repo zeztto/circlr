@@ -37,9 +37,14 @@ final class AgentSocket {
     var ownsPublishedPath:Bool { (try? Self.socketIdentity(at:path)) == boundIdentity }
     private let queue=DispatchQueue(label:"com.circlr.agent.ipc",qos:.utility)
     private var source:DispatchSourceRead?
-    init(directory:URL,name:String="agent.sock",onRequest:@escaping(Data,@escaping(Data)->Void)->Void) throws {
-        let alternate=name.count==10 && name.hasPrefix(".r") && name.dropFirst(2).allSatisfy{("0"..."9").contains(String($0)) || ("a"..."f").contains(String($0))}
-        guard name=="agent.sock" || alternate else {
+    init(directory:URL,name:String="agent.sock",maximumRequestBytes:Int=8_388_608,
+         preflight:(@Sendable (Data)->Bool)?=nil,
+         onRequest:@escaping(Data,@escaping(Data)->Void)->Void) throws {
+        guard (1...8_388_608).contains(maximumRequestBytes) else {
+            throw NSError(domain:"CirclrAgent",code:8,userInfo:[NSLocalizedDescriptionKey:"Agent 요청 크기 제한이 올바르지 않습니다"])
+        }
+        let privateName=name.count==10 && (name.hasPrefix(".r") || name.hasPrefix(".t")) && name.dropFirst(2).allSatisfy{("0"..."9").contains(String($0)) || ("a"..."f").contains(String($0))}
+        guard name=="agent.sock" || privateName else {
             throw NSError(domain:"CirclrAgent",code:7,userInfo:[NSLocalizedDescriptionKey:"Agent 연결 이름이 올바르지 않습니다"])
         }
         let fm=FileManager.default
@@ -104,13 +109,15 @@ final class AgentSocket {
             var timeout=timeval(tv_sec:3,tv_usec:0),one:Int32=1
             setsockopt(client,SOL_SOCKET,SO_RCVTIMEO,&timeout,socklen_t(MemoryLayout<timeval>.size));setsockopt(client,SOL_SOCKET,SO_SNDTIMEO,&timeout,socklen_t(MemoryLayout<timeval>.size));setsockopt(client,SOL_SOCKET,SO_NOSIGPIPE,&one,socklen_t(MemoryLayout<Int32>.size))
             var data=Data(),buffer=[UInt8](repeating:0,count:8192)
-            while data.count<=8_388_608 {
+            while data.count<=maximumRequestBytes {
                 let count=Darwin.read(client,&buffer,buffer.count)
                 if count<=0 {Darwin.close(client);return}
                 data.append(contentsOf:buffer.prefix(count))
-                guard data.count<=8_388_608 else {Darwin.close(client);return}
+                guard data.count<=maximumRequestBytes else {Darwin.close(client);return}
                 if let newline=data.firstIndex(of:10) {
                     let request=Data(data[..<newline])
+                    // Keep optional authentication work off the main queue.
+                    guard preflight?(request) ?? true else {Darwin.close(client);return}
                     DispatchQueue.main.async {onRequest(request){response in
                         DispatchQueue.global(qos:.utility).async {
                             let packet=response+Data([10]);packet.withUnsafeBytes{raw in var offset=0;while offset<raw.count {let n=Darwin.write(client,raw.baseAddress!+offset,raw.count-offset);if n<=0{break};offset+=n}}

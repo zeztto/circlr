@@ -8,13 +8,13 @@ English · [한국어](README.ko.md)
 
 In circlr, a circle is a timeline. Build a song from sections, place MIDI, audio, instruments and effects on and around their orbits, and connect their inputs and outputs. Move between the whole arrangement and detailed editing on one zoomable canvas.
 
-![f0r h3r song orbit with colored sections and connected paths in circlr](docs/images/circlr-song-build195.png)
+![circlr build209 playing f0r h3r with the full song orbit and active section](docs/images/circlr-song-build209.png)
 
-*0.80.0 build195 development preview: the first frame of a native-app MP4. The latest public release is still 0.70.0. [Capture provenance](docs/images/README.md).*
+*0.80.0 build209 development preview from an isolated native app. The latest public release is still 0.70.0. [Capture provenance](docs/images/README.md).*
 
 > **0.70.0 · build180.** Smoother playback canvas and MP4 capture in the verified scenarios, with viewing mode beside Record. [Evidence and limits](docs/releases/0.70.0-qa.md).
 
-**In development:** [0.80.0](docs/releases/0.80.0.md) improves orbit readability and tests the complete playback, recording, editing and export path. Build207 keeps legacy recovery intact, lets a blocked MCP connection use a new endpoint, and lets an open app explicitly become the default MCP target again. It also keeps a visible MIDI/audio editor open during playback, offers job-only MCP cancellation and lets you select an app-only output device with **⌘,** if the default stalls. Its QA gates remain open; 0.70.0 is the latest release.
+**In development:** [0.80.0](docs/releases/0.80.0.md) opens playback on the full song orbit, reduces label clutter in dense sections, and tests playback, recording, editing and export. Its QA gates remain open; 0.70.0 is the latest release.
 
 ## What you can work with
 
@@ -24,9 +24,9 @@ In circlr, a circle is a timeline. Build a song from sections, place MIDI, audio
 - **Sound and motion:** instrument/effect routing, automation, bounce and source restoration; playback-follow and signal visualization controls.
 - **Local agents:** an MCP interface for inspecting and editing projects, generating MIDI, rendering and saving, with activity visible in the console.
 
-<img src="docs/images/circlr-song-portrait-build180.jpg" width="280" alt="Song orbit on a portrait display during playback">
+<img src="docs/images/circlr-song-portrait-build209.png" width="280" alt="circlr build209 playing the song orbit in a portrait window">
 
-*A separate build180 f0r h3r portrait capture from the latest public release. The MP4 contains the canvas, so its frame does not show the toolbar. [Capture details](docs/images/README.md).*
+*The same build209 demo in a 720×900 portrait window, showing the responsive toolbar. [Capture details](docs/images/README.md).*
 
 These are implemented development features, not a guarantee of compatibility with every audio device or plug-in. Artist profiles and a combined text, image and video workspace are the [longer-term direction](docs/21-artist-universe.md).
 

@@ -11,16 +11,16 @@ final class PlaybackFollowSettingsTests: XCTestCase {
     }
     func testDefaultsAndCodablePin() throws {
         let defaults=PlaybackFollowSettings()
-        XCTAssertEqual(defaults.target,.section);XCTAssertEqual(defaults.framing,.fit);XCTAssertEqual(defaults.transition,.subtle)
+        XCTAssertEqual(defaults.target,.song);XCTAssertEqual(defaults.framing,.fit);XCTAssertEqual(defaults.transition,.subtle)
         let setting=PlaybackFollowSettings(target:.pinned,framing:.keepZoom,transition:.emphasized,pinned:.group(parent:.section(arrangementID:"a",useID:"u"),id:"g"))
         XCTAssertEqual(try JSONDecoder().decode(PlaybackFollowSettings.self,from:JSONEncoder().encode(setting)),setting)
     }
     func testCurrentUseAndSongResolution() throws {
         let (scene,first,second)=try fixture()
-        XCTAssertEqual(PlaybackFollowResolver.resolve(.init(),currentSection:second,activeCircles:[],in:scene),.target(second))
+        XCTAssertEqual(PlaybackFollowResolver.resolve(.init(target:.section),currentSection:second,activeCircles:[],in:scene),.target(second))
         let song=try XCTUnwrap(scene.path(to:first).last(where:{$0.role == .song}))
         for section in [first,second] {
-            XCTAssertEqual(PlaybackFollowResolver.resolve(.init(target:.song),currentSection:section,activeCircles:[],in:scene),.target(song.id))
+            XCTAssertEqual(PlaybackFollowResolver.resolve(.init(),currentSection:section,activeCircles:[],in:scene),.target(song.id))
         }
         XCTAssertEqual(PlaybackFollowResolver.resolve(.init(),currentSection:nil,activeCircles:[],in:scene),.inactive)
     }

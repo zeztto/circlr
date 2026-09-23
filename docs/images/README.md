@@ -1,5 +1,11 @@
 # Screenshots · 실행 화면
 
+## 0.80.0 build209 development preview
+
+`circlr-song-build209.png` (1440×900, SHA-256 `5da43cd7c6500bd2ed7f628db58798b459d8c986892456f290a5315753451ca3`) and `circlr-song-portrait-build209.png` (720×900, SHA-256 `c71ee707adf8dffdf780c0d9a1ccc3ff94d45ecdf3891aae1618af809c369557`) are uncomposited full-window screenshots from an isolated, ad-hoc-signed build209 macOS app. The bundled **f0r h3r** demo was playing through the app-selected Mac Studio speakers with the default **song** follow; the portrait capture shows the two-row responsive toolbar. The system default Scarlett was unchanged. These images verify the displayed layout, not physical listening, long-recording quality or final 0.80 release readiness. [Native QA and MP4 limits](../../qa/0.80-build209-native.md).
+
+두 PNG는 별도 build209 실제 macOS 앱에서 동봉 **f0r h3r**를 재생하며 찍은 합성 없는 전체 창 원본입니다. 앱에서만 내장 스피커를 선택했고 기본 곡 팔로우와 720×900 창의 두 줄 상단 UI가 보입니다. 실제 청취·장시간 녹화·0.80 정식 출고의 증거는 아닙니다.
+
 ## 0.80.0 build195 development preview
 
 `circlr-song-build195.png` is the uncomposited first decoded frame of the isolated build195 native-app MP4 `r80-build195-song-preview.mp4`. It shows the bundled **f0r h3r** song orbit and section paths on a 702×750 canvas. SHA-256: `680e48c34c784740f443429880d4895752e82dfed648fd6b97c4443b873ec051`. The local source MP4 (SHA-256 `79d97776b078420d9b1ca46b14528305af046b15413b0167b6e8693013f6130c`) remains outside Git. The clip is 9.363 seconds with 282 decoded frames and nonzero AAC, but it does not verify physical listening, compositor FPS or the final 0.80 release. [Native QA](../../qa/0.80-build195.md).

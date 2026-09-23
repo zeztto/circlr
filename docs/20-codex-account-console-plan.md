@@ -6,7 +6,7 @@
 
 **사용자가 자신의 ChatGPT 계정으로 Codex에 로그인하고, circlr의 접이식 콘솔에서 대화하며 곡을 편집한다.** circlr가 로컬 Codex App Server를 관리하고, Codex는 circlr MCP를 통해 기존 음악 명령을 실행한다. 로그인 과정의 공식 브라우저를 제외하면 별도의 Codex 앱·터미널을 열 필요가 없는 경험을 목표로 한다.
 
-이 문서는 아키텍처 결정과 구현 순서다. 0.80 개발 후보에는 앱 실행 파일과 분리된 `CirclrCodex` 프로토콜 코어와, 현재 앱 내부에서만 호출할 수 있는 범위 제한 `AgentRunLease` 후보가 있다. 계정 연결·모델 호출·런타임 설치·자연어 대화 UI와 인증된 호출자는 구현·검증되지 않았다. 아래의 파일·정책은 항목별 실제 코드와 QA가 확인될 때까지 완료로 보지 않는다.
+이 문서는 아키텍처 결정과 구현 순서다. 0.80 개발 후보에는 앱 실행 파일과 분리된 `CirclrCodex` 프로토콜 코어, 범위 제한 `AgentRunLease`, 그리고 한 turn에만 묶이는 앱 내부 `TrustedAgentIngress` socket이 있다. 실제 Unix socket에서 편집·중단·완료 후 늦은 요청을 검증했지만, 이 ingress는 앱의 Codex 세션이나 MCP helper에 아직 연결되지 않았다. 계정 연결·모델 호출·런타임 설치·자연어 대화 UI와 인증된 운영 호출자는 구현·검증되지 않았다. 아래의 파일·정책은 항목별 실제 코드와 QA가 확인될 때까지 완료로 보지 않는다.
 
 ## 1. 공식 근거와 선택
 
@@ -33,6 +33,7 @@ App Server 문서는 실험적 기능과 WebSocket의 production 제한을 명�
 | `Sources/CirclrApp/AgentConsole.swift` | 명령 입력, 실제 activity 표시, 접이식 overlay | 자연어 대화·계정·작업 상태를 같은 overlay에 추가 |
 | `Sources/CirclrApp/AgentWorkspace.swift` | native dispatcher, revision 확인, batch·job·이벤트·재전송 처리 | 내부 Codex 호출의 실행 범위와 출처 확인을 앞단에 추가 |
 | `Sources/CirclrApp/AgentSocket.swift` | 현재 사용자만 접근하는 Unix socket | 기존 외부 MCP 호환성을 유지하면서 내장 세션의 전용 연결을 추가 |
+| `Sources/CirclrApp/TrustedAgentIngress.swift` | turn 전용 socket·capability 사전 검사·고정 lease를 통한 내부 gateway 호출 | 앱이 소유한 helper의 프로세스 신원 및 credential 전달을 검증한 뒤 연결 |
 | `Sources/CirclrCore/AgentProtocol.swift` | typed 편집 명령, 원자적 적용 | 음악 명령의 원본 계약 유지 |
 | `Sources/CirclrApp/AppStore.swift` | 문서·Undo·녹음·렌더 generation | 세션과 문서의 연결, 작업별 취소 경계 |
 | `mcp/server.py` | Python stdio adapter와 typed 음악 도구 | 외부 개발용으로 유지. 배포용 Swift helper와 계약을 공유 |
@@ -134,16 +135,18 @@ OpenAI와의 계정·모델 통신은 Codex 런타임이 담당한다. circlr �
 
 App Server wire에서는 `jsonrpc` 필드를 생략하며 MCP JSON-RPC envelope와 혼용하지 않는다. 전송은 JSONL 증분 decoder로 처리한다. 줄·UTF-8 문자가 pipe read 사이에서 나뉘거나 여러 메시지가 합쳐져도 복원해야 한다. 요청·서버 요청의 ID 공간을 구분하고 unknown notification은 안전하게 기록하되 필수 계약 불일치는 연결 오류로 표시한다. payload와 queue는 상한을 두고 overflow를 조용히 누락하지 않는다.
 
+로컬 0.149.1 schema에서 `thread/start`·`thread/resume`에는 `config` 객체가 있지만 `turn/start`에는 없다. 따라서 같은 thread에서 다음 turn을 시작할 때 MCP helper가 자동으로 교체된다고 가정할 수 없다. 한 turn의 socket/capability를 새 turn에 재사용하지 않도록 helper 종료·재기동과 late-call 차단을 pinned-runtime fixture로 증명해야 한다. `mcp_servers.<id>.env_vars`는 [공식 MCP 설정](https://learn.chatgpt.com/docs/config-file/config-reference)의 전달 항목일 뿐, 그 값이 모델·shell에 비노출된다는 보증이 아니므로 실제 자식 환경·프로세스 신원을 검사하기 전에는 credential 전달 경로로 확정하지 않는다.
+
 연결 상태는 `stopped → starting → initializing → needsLogin/ready → reconnecting/failed`로 모델링한다. `ready`는 인증·정책·필수 MCP가 모두 준비됐다는 뜻이다. turn 상태는 `idle/running/waitingForInput/cancelling/completed/failed/interrupted`로 별도 관리한다. 인증돼도 정책이나 MCP가 준비되지 않으면 읽기 설명만 가능하고 쓰기는 닫는다.
 
 ## 7. 음악 명령의 실행 권한과 충돌
 
 MCP의 설명·annotation이나 모델의 약속만으로 편집 권한을 보장하지 않는다. `AgentSessionGateway`가 다음 계약을 집행한다.
 
-**현재 연결 상태:** `CirclrCodex`는 앱 target의 dependency가 아니며, gateway의 `beginTrustedAgentTurn`/`executeTrustedAgent`에는 호출자가 없다. 기존 `mcp/server.py`의 일반 socket은 같은 macOS 사용자와 앱 runID를 확인하지만 AI turn의 lease를 확인하지 않는다. 그 socket을 내장 Codex helper에 그대로 연결하면 AI STOP 뒤 늦은 `apply`가 일반 MCP 경로로 들어올 수 있다. 전용 helper와 app-owned ingress가 연결·검증되기 전에는 일반 socket을 신뢰된 계정 세션으로 승격하지 않는다.
+**현재 연결 상태:** `CirclrCodex`는 앱 target의 dependency가 아니며, gateway를 실제 Codex 계정 turn에 연결하는 호출자는 없다. `TrustedAgentIngress`는 내부 테스트에서 매 turn 새 socket과 256-bit capability를 만들고, MainActor 진입 전에 capability를 검사한 뒤 고정 lease로 gateway를 호출한다. STOP 뒤 대기 요청은 거절하고, 완료된 turn의 늦은 요청은 이미 수락된 bounce를 취소하지 않는다. 이는 앱 소유 helper의 신원과 capability 비노출을 검증한 운영 연결이 아니다. 기존 `mcp/server.py`의 일반 socket은 같은 macOS 사용자와 앱 runID를 확인하지만 AI turn의 lease를 확인하지 않는다. 그 경로를 내장 Codex helper에 그대로 연결하면 AI STOP 뒤 늦은 `apply`가 일반 MCP로 들어올 수 있으므로 승격하지 않는다.
 
 1. 사용자 요청에 대해 앱이 프로젝트·허용 도구·대상 ID·파일 목적지·유효기간을 가진 실행권한 `RunLease`를 발급한다. 모델이 lease나 허용 범위를 만들 수 없다.
-2. helper마다 앱이 생성한 세션 전용 IPC를 연결한다. 비밀 값은 모델 arguments·명령줄·로그로 전달하지 않는다. gateway가 신뢰한 연결과 lease를 결합한다. MCP tool call에 Codex turnID가 자동 포함된다고 가정하지 않는다.
+2. helper마다 앱이 생성한 **turn 전용** IPC를 연결한다. 기존 helper/channel을 다음 turn의 lease에 재결합하면 늦은 호출이 새 권한을 얻으므로 금지한다. 비밀 값은 모델 arguments·명령줄·로그·모델이 실행할 수 있는 shell 환경으로 전달하지 않는다. 앱이 시작한 전용 helper의 프로세스 신원과 credential 전달 경계를 실증한 다음 연결과 lease를 결합한다. MCP tool call에 Codex turnID가 자동 포함된다고 가정하지 않는다.
 3. 한 helper 세션에 하나의 활성 turn만 매핑한다. turn 시작 응답과 결합하기 전에는 쓰기를 실행하지 않는다. 대화·계정·문서가 바뀌면 연결 generation과 lease를 갱신한다.
 4. 기존 `projectID`·`expectedRevision`을 검증한다. MCP가 보낸 오래된 revision을 gateway가 현재 값으로 바꿔 통과시키지 않는다. 충돌하면 새 snapshot을 읽고 의도를 재평가한다.
 5. 쓰기는 공통 dispatcher와 Core 검증을 거쳐 한 batch당 한 Undo로 적용한다. 한 대화 turn이 여러 batch를 실행할 수 있으므로 “대화 전체 취소 = Undo 한 번”이라고 표시하지 않는다.

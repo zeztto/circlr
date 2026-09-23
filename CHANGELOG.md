@@ -1,5 +1,11 @@
 # 변경 이력
 
+## 0.80.0 · build209 — 개발 중
+
+- 재생 기본 팔로우를 곡 전체 궤도로 바꿨다. 명시적으로 저장한 섹션·고정 서클 팔로우는 유지한다. 고밀도 섹션의 재생 화면에서는 작은 FX·믹스·라우터·출력 라벨을 접고 선택·hover·정지·확대 시 복원한다.
+- Codex 계정 콘솔을 위한 내부 turn 전용 socket 후보를 추가했다. capability 사전 검사와 STOP 뒤 늦은 쓰기 차단, 완료 turn의 기존 bounce 권한 보존을 실제 Unix socket 테스트로 확인했다. **계정·모델·helper와 연결된 출시 기능은 아니다.**
+- 전체 Swift 1121개·11 skip·실패0, MCP Python 39개·agent kit 9개, arm64 앱/다섯 helper 패키지와 strict deep 서명 통과. 격리 build209 실제 앱에서 기본 곡 팔로우·섹션 라벨 복원과 7.805초 MP4의 234개 디코드 프레임·nonzero 오디오를 확인하고 한영 README의 가로·세로 화면을 갱신했다. 물리 청취·장시간 영상·완전한 제작 QA는 남아 있어 0.80 출고하지 않는다. [build209 QA](qa/0.80-build209.md) · [native 화면/영상](qa/0.80-build209-native.md).
+
 ## 0.80.0 · build208 — 개발 중
 
 - 사용자 파일과 분리된 저장 루트를 주입해 실제 AppStore의 AI 권한 경계를 통합 검증했다. `snapshot → inspect → MIDI 편집 → Undo`, AI STOP 뒤 늦은 쓰기·이미 수락된 bounce commit 거절, 새 turn 재개를 확인했다. 앱 안의 Codex 계정 대화와 전용 trusted ingress는 아직 연결되지 않았다. 구형 Scarlett는 필수 출력 기준에서 제외하고 Mac 내장 출력의 native 재생 경계를 다시 검사했다. [QA](qa/0.80-build208.md).

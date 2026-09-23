@@ -11,7 +11,7 @@ public struct PlaybackFollowSettings: Codable, Equatable, Sendable {
     public var framing: PlaybackFollowFraming
     public var transition: PlaybackFollowTransition
     public var pinned: CircleAddress?
-    public init(target: PlaybackFollowTarget = .section, framing: PlaybackFollowFraming = .fit,
+    public init(target: PlaybackFollowTarget = .song, framing: PlaybackFollowFraming = .fit,
                 transition: PlaybackFollowTransition = .subtle, pinned: CircleAddress? = nil) {
         self.target=target; self.framing=framing; self.transition=transition; self.pinned=pinned
     }

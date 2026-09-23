@@ -29,6 +29,29 @@ struct CanvasLabelTextKey: Hashable {
     let availableWidth:Double
 }
 
+/// Small processing satellites remain visible as circles during dense playback;
+/// their labels return as soon as playback stops, the view zooms in, or editing begins.
+enum CanvasPlaybackLabelLOD {
+    static let denseProcessingCount=6
+
+    static func isProcessing(_ content:MusicCircleContent?)->Bool {
+        switch content {
+        case .effect, .mix, .router, .output:return true
+        default:return false
+        }
+    }
+
+    static func compactPlayback(playing:Bool,stale:Bool,processingChildCount:Int,editing:Bool)->Bool {
+        playing && !stale && !editing && processingChildCount>=denseProcessingCount
+    }
+
+    static func shows(_ content:MusicCircleContent?, screenRadius:Double,
+                      direct:Bool, compactPlayback:Bool, emphasized:Bool)->Bool {
+        guard compactPlayback,direct,screenRadius<32,!emphasized else{return true}
+        return !isProcessing(content)
+    }
+}
+
 extension AlbumCanvasView {
     var workspaceViewport:CGRect {
         CanvasWorkspaceGeometry.viewport(width:bounds.width,height:bounds.height,console:!store.viewingMode && store.consoleBounds.height>0 ? store.consoleBounds:nil)
@@ -92,14 +115,30 @@ extension AlbumCanvasView {
         guard let scene,let context=labelContext else{return}
         let ancestors=Set(scene.path(to:context.id).dropLast().map(\.id))
         let activeSection=store.playback.playing && !visualFrame.stale ? visualFrame.focus : nil
+        // Count the context's own processing circles, not currently visible cables:
+        // follow-camera movement must not flip every badge at a viewport edge.
+        let processingChildCount=scene.children(of:context.id).reduce(0) {
+            $0 + (CanvasPlaybackLabelLOD.isProcessing($1.music?.content) ? 1 : 0)
+        }
+        let compactPlayback=CanvasPlaybackLabelLOD.compactPlayback(
+            playing:store.playback.playing,stale:visualFrame.stale,
+            processingChildCount:processingChildCount,
+            editing:editorAddress != nil || connecting != nil || cableDrag != nil ||
+                dragNode != nil || orbitDrag != nil)
+        let selectedEdge=selectedSceneCable
         var requests:[CanvasLabelRequest]=[],texts:[CircleAddress:CanvasLabelText]=[:]
         for node in scene.nodes where isVisible(node) && !ancestors.contains(node.id) && editorAddress != node.id {
             let activeFocus=node.id==activeSection
             let radius=node.radius*camera.zoom,p=screen(node),direct=node.parent==context.id
             let primary=node.id==store.hierarchySelection
-            let emphasized=primary || activeFocus
+            let selected=store.hierarchySelections.contains(node.id)
+            let emphasized=primary || selected || activeFocus
             guard bounds.contains(p) || node.id==context.id || (emphasized && CanvasLabelCircle(id:node.id,center:p,radius:radius).intersects(workspaceViewport)) else{continue}
             guard activeFocus || node.id==context.id || direct || node.id==hoverAddress || (radius>=40 && node.depth<=context.depth+2) else{continue}
+            let editingFocus=emphasized || node.id==hoverAddress || selectedCanvasPort?.node==node.id ||
+                selectedEdge?.from==node.id || selectedEdge?.to==node.id
+            guard CanvasPlaybackLabelLOD.shows(node.music?.content,screenRadius:radius,
+                direct:direct,compactPlayback:compactPlayback,emphasized:editingFocus) else{continue}
             let text=readableLabelText(for:node);texts[node.id]=text
             let expanded=node.childCount>0 && scene.children(of:node.id).contains(where:isVisible)
             // The playing section stays identifiable beside its orbit, ahead of selection and hover labels.
