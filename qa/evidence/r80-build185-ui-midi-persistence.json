@@ -1,0 +1,16 @@
+{
+  "build": "185",
+  "projectID": "BA933F2C-D772-5EF4-8F6E-180ACFE87DC0",
+  "revision": 3,
+  "dirty": false,
+  "manifestSHA256": "2dee403e0bc5a0879a49e9dafc66abed01f29f9bacf286db90c00dacdba8b048",
+  "firstNote": {
+    "beat": 0.5,
+    "id": "0167053F-23A0-5A1B-85E8-F6C9D4FAC6F2",
+    "length": 0.5,
+    "pitch": 65,
+    "velocity": 100
+  },
+  "noteCount": 76,
+  "reopenJob": "completed"
+}
