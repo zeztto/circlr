@@ -2,6 +2,37 @@ import XCTest
 @testable import CirclrCore
 
 final class PlaybackFramingTests:XCTestCase {
+    func testActualDemoSoundOrbitRevealsItsFullNearbySignalChain()throws {
+        let root=URL(fileURLWithPath:#filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let project=try JSONDecoder().decode(Project.self,from:Data(contentsOf:root.appendingPathComponent("Resources/Demos/f0r-h3r.circlr/manifest.json")))
+        let scene=try HierarchySceneBuilder.build(project),sound=try XCTUnwrap(scene.node(.sound))
+        let children=scene.immediateSatellites(of:.sound)
+        XCTAssertEqual(children.count,18)
+        let viewport=CanvasWorkspaceGeometry.viewport(width:1659,height:1387)
+        let usable=viewport.insetBy(dx:20,dy:20)
+        let zoom=0.52
+        let current=HierarchyCamera(pan:Point(viewport.midX-sound.center.x*zoom,
+                                               900-sound.center.y*zoom),zoom:zoom)
+        let orbitCenter=current.screen(sound.center),orbitRadius=sound.outerRadius*zoom
+        XCTAssertTrue(usable.contains(CGRect(x:orbitCenter.x-orbitRadius,y:orbitCenter.y-orbitRadius,
+                                             width:orbitRadius*2,height:orbitRadius*2)))
+        XCTAssertTrue(children.contains { child in
+            current.screen(child.center).y+child.outerRadius*zoom>usable.maxY
+        })
+        let target=try XCTUnwrap(current.revealing(sound,including:children,in:viewport))
+        XCTAssertLessThanOrEqual(target.zoom,current.zoom)
+        for node in [sound]+children {
+            let center=target.screen(node.center),radius=node.outerRadius*target.zoom
+            XCTAssertGreaterThanOrEqual(center.x-radius,usable.minX-1e-8,node.title)
+            XCTAssertLessThanOrEqual(center.x+radius,usable.maxX+1e-8,node.title)
+            XCTAssertGreaterThanOrEqual(center.y-radius,usable.minY-1e-8,node.title)
+            XCTAssertLessThanOrEqual(center.y+radius,usable.maxY+1e-8,node.title)
+        }
+        var remote=try XCTUnwrap(children.first)
+        remote.id = .signal("manually-remote")
+        remote.center=Point(sound.center.x,sound.center.y+12_000)
+        XCTAssertEqual(current.revealing(sound,including:children+[remote],in:viewport),target)
+    }
     func fixture()throws->(HierarchyScene,CircleSceneNode) {
         var p=Project();p.circleLayout = .freeform
         _=p.addTrack(name:"신스");_=p.addTrack(name:"드럼");let use=p.addSection(name:"후렴",at:Point(),bars:8)
@@ -87,5 +118,93 @@ final class PlaybackFramingTests:XCTestCase {
         XCTAssertTrue(viewport.insetBy(dx:20,dy:20).contains(
             CGRect(x:center.x-radius,y:center.y-radius,width:radius*2,height:radius*2)))
         XCTAssertNil(HierarchyCamera().revealing(node,in:.zero))
+    }
+    func testKeyboardSelectionIncludesPartlyVisibleSatelliteBelowOrbit()throws {
+        let (_,fixture)=try fixture()
+        var orbit=fixture;orbit.center=Point(500,330);orbit.radius=100;orbit.scale=1;orbit.repeatCount=1
+        var satellite=fixture;satellite.id = .signal("visible-satellite")
+        satellite.parent=orbit.id;satellite.center=Point(500,550)
+        satellite.radius=45;satellite.scale=1;satellite.repeatCount=1
+        var remote=satellite;remote.id = .signal("remote-satellite");remote.center=Point(500,5000)
+        let viewport=CGRect(x:24,y:78,width:976,height:498),current=HierarchyCamera()
+        XCTAssertNil(current.revealing(orbit,in:viewport))
+        XCTAssertNil(current.revealing(orbit,including:[remote],in:viewport))
+        let target=try XCTUnwrap(current.revealing(orbit,including:[satellite,remote],in:viewport))
+        let usable=viewport.insetBy(dx:20,dy:20)
+        XCTAssertEqual(target.zoom,current.zoom)
+        XCTAssertEqual(target.pan.x,0)
+        XCTAssertLessThan(target.pan.y,0)
+        for node in [orbit,satellite] {
+            let center=target.screen(node.center),radius=node.outerRadius*target.zoom
+            XCTAssertTrue(usable.contains(CGRect(x:center.x-radius,y:center.y-radius,
+                                                width:radius*2,height:radius*2)))
+        }
+        XCTAssertNil(target.revealing(orbit,including:[satellite],in:viewport))
+    }
+    func testKeyboardSelectionFitsOrbitAndVisibleSatelliteWithoutZoomingIn()throws {
+        let (_,fixture)=try fixture()
+        var orbit=fixture;orbit.center=Point(500,300);orbit.radius=190;orbit.scale=1;orbit.repeatCount=1
+        var satellite=fixture;satellite.id = .signal("lower-satellite")
+        satellite.parent=orbit.id;satellite.center=Point(500,545)
+        satellite.radius=90;satellite.scale=1;satellite.repeatCount=1
+        let viewport=CGRect(x:24,y:78,width:976,height:498),current=HierarchyCamera()
+        let target=try XCTUnwrap(current.revealing(orbit,including:[satellite],in:viewport))
+        XCTAssertLessThan(target.zoom,current.zoom)
+        let usable=viewport.insetBy(dx:20,dy:20)
+        for node in [orbit,satellite] {
+            let center=target.screen(node.center),radius=node.outerRadius*target.zoom
+            XCTAssertGreaterThanOrEqual(center.y-radius,usable.minY-1e-8)
+            XCTAssertLessThanOrEqual(center.y+radius,usable.maxY+1e-8)
+        }
+        XCTAssertNil(target.revealing(orbit,including:[satellite],in:viewport))
+    }
+    func testOffscreenOrbitRevealsSatelliteVisibleAfterInitialPan()throws {
+        let (_,fixture)=try fixture()
+        var orbit=fixture;orbit.center=Point(1200,800);orbit.radius=100;orbit.scale=1;orbit.repeatCount=1
+        var satellite=fixture;satellite.id = .signal("following-satellite")
+        satellite.parent=orbit.id;satellite.center=Point(1200,920)
+        satellite.radius=45;satellite.scale=1;satellite.repeatCount=1
+        let viewport=CGRect(x:24,y:78,width:976,height:498),current=HierarchyCamera()
+        let orbitOnly=try XCTUnwrap(current.revealing(orbit,in:viewport))
+        let onlyCenter=orbitOnly.screen(satellite.center)
+        XCTAssertGreaterThan(onlyCenter.y+satellite.outerRadius*orbitOnly.zoom,
+                             viewport.insetBy(dx:20,dy:20).maxY)
+        let target=try XCTUnwrap(current.revealing(orbit,including:[satellite],in:viewport))
+        let usable=viewport.insetBy(dx:20,dy:20)
+        for node in [orbit,satellite] {
+            let center=target.screen(node.center),radius=node.outerRadius*target.zoom
+            XCTAssertTrue(usable.contains(CGRect(x:center.x-radius,y:center.y-radius,
+                                                width:radius*2,height:radius*2)))
+        }
+    }
+    func testImmediateSatellitesExpandVisualGroupsOnly()throws {
+        let (_,fixture)=try fixture()
+        var orbit=fixture;orbit.childCount=2
+        var expanded=fixture;expanded.id = .group(parent:orbit.id,id:"expanded")
+        expanded.parent=orbit.id;expanded.role = .group;expanded.childCount=1
+        var child=fixture;child.id = .signal("group-member");child.parent=expanded.id
+        var collapsed=fixture;collapsed.id = .group(parent:orbit.id,id:"collapsed")
+        collapsed.parent=orbit.id;collapsed.role = .group;collapsed.childCount=0
+        let scene=HierarchyScene(nodes:[orbit,expanded,child,collapsed],edges:[],isOrbit:true)
+        XCTAssertEqual(Set(scene.immediateSatellites(of:orbit.id).map(\.id)),Set([child.id,collapsed.id]))
+    }
+    func testCollapsedProjectGroupIsOneVisibleSatelliteWithoutHiddenMembers()throws {
+        let helper=HierarchyEditingTests()
+        var project=try helper.fixture();project.circleLayout = .orbit
+        let members=helper.addresses(project)
+        let address=try HierarchyEditing.group(members,name:"접힘 테스트",in:&project)
+        guard case .group(let parent,let id)=address else {return XCTFail("그룹 주소가 아닙니다")}
+        let expanded=try HierarchySceneBuilder.build(project)
+        XCTAssertTrue(members.isSubset(of:Set(expanded.immediateSatellites(of:parent).map(\.id))))
+        try HierarchyEditing.editLayout(parent,in:&project) { layout in
+            guard let index=layout.groups.firstIndex(where:{$0.id == id}) else {return}
+            layout.groups[index].collapsed=true
+        }
+        let collapsed=try HierarchySceneBuilder.build(project)
+        let group=try XCTUnwrap(collapsed.node(address))
+        XCTAssertEqual(group.childCount,0)
+        XCTAssertTrue(collapsed.children(of:address).isEmpty)
+        XCTAssertTrue(collapsed.immediateSatellites(of:parent).contains(where:{$0.id == address}))
+        XCTAssertTrue(members.isDisjoint(with:Set(collapsed.immediateSatellites(of:parent).map(\.id))))
     }
 }

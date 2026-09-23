@@ -327,7 +327,10 @@ extension AlbumCanvasView {
         NSAccessibility.post(element:self,notification:.selectedChildrenChanged)
     }
     func revealKeyboardSelection(_ node:CircleSceneNode) {
-        if let target=camera.revealing(node,in:workspaceViewport) {setCamera(target,animated:true)}
+        let satellites=scene?.isOrbit == true ? scene?.immediateSatellites(of:node.id) ?? [] : []
+        if let target=camera.revealing(node,including:satellites,in:workspaceViewport) {
+            setCamera(target,animated:true)
+        }
     }
     func enterSelectedCircle() {
         guard let address=store.hierarchySelection else{return}

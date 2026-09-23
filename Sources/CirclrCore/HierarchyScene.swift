@@ -82,6 +82,19 @@ public struct HierarchyScene {
     }
     public func node(_ address: CircleAddress) -> CircleSceneNode? { nodesByID[address] }
     public func children(of address: CircleAddress) -> [CircleSceneNode] { childrenByParent[address] ?? [] }
+    /// Expanded visual groups do not add a musical level; expose their displayed members.
+    public func immediateSatellites(of address: CircleAddress) -> [CircleSceneNode] {
+        var result: [CircleSceneNode] = []
+        var pending = children(of: address)
+        while let child = pending.popLast() {
+            if child.role == .group && child.childCount > 0 {
+                pending.append(contentsOf: children(of: child.id))
+            } else {
+                result.append(child)
+            }
+        }
+        return result
+    }
     /// World units per saved local layout unit; visual groups do not shrink members.
     public func childScale(of address: CircleAddress) -> Double {
         guard let parent = node(address) else { return 1 }
@@ -432,29 +445,56 @@ public struct HierarchyCamera: Codable, Equatable, Sendable {
     }
     /// Reveal a keyboard-selected orbit within the usable canvas without moving a visible orbit.
     public func revealing(_ node: CircleSceneNode, in viewport: CGRect, margin: Double = 20) -> HierarchyCamera? {
+        revealing(node, including: [], in: viewport, margin: margin)
+    }
+    /// Include the nearby direct satellite cluster, even when some members begin offscreen.
+    /// The orbit-relative reach covers several connected signal stages without letting a
+    /// manually remote branch force the entire canvas into a tiny zoom.
+    public func revealing(_ node: CircleSceneNode, including satellites: [CircleSceneNode], in viewport: CGRect, margin: Double = 20) -> HierarchyCamera? {
         guard viewport.minX.isFinite, viewport.minY.isFinite, viewport.width.isFinite,
               viewport.height.isFinite, margin.isFinite, margin >= 0,
               viewport.width > margin * 2, viewport.height > margin * 2,
               zoom.isFinite, zoom > 0, node.outerRadius.isFinite, node.outerRadius > 0,
               node.center.x.isFinite, node.center.y.isFinite else { return nil }
         let usable = viewport.insetBy(dx: margin, dy: margin)
-        let center = screen(node.center), radius = node.outerRadius * zoom
-        guard center.x.isFinite, center.y.isFinite, radius.isFinite else { return nil }
-        let frame = CGRect(x: center.x-radius, y: center.y-radius,
-                           width: radius*2, height: radius*2)
-        if usable.contains(frame) { return nil }
-        if radius*2 > usable.width || radius*2 > usable.height {
-            let fit = min(zoom, usable.width/(node.outerRadius*2),
-                          usable.height/(node.outerRadius*2))
-            let z = max(1e-6, fit)
-            return HierarchyCamera(pan: Point(usable.midX-node.center.x*z,
-                                              usable.midY-node.center.y*z), zoom: z)
+        func frame(_ item: CircleSceneNode, through camera: HierarchyCamera) -> CGRect? {
+            let center = camera.screen(item.center), radius = item.outerRadius * camera.zoom
+            guard center.x.isFinite, center.y.isFinite, radius.isFinite,
+                  radius > 0, (radius*2).isFinite else { return nil }
+            return CGRect(x: center.x-radius, y: center.y-radius,
+                          width: radius*2, height: radius*2)
         }
-        let dx = frame.minX < usable.minX ? usable.minX-frame.minX
-                 : frame.maxX > usable.maxX ? usable.maxX-frame.maxX : 0
-        let dy = frame.minY < usable.minY ? usable.minY-frame.minY
-                 : frame.maxY > usable.maxY ? usable.maxY-frame.maxY : 0
-        return HierarchyCamera(pan: Point(pan.x+dx, pan.y+dy), zoom: zoom)
+        func adjusted(_ camera: HierarchyCamera, for bounds: CGRect) -> HierarchyCamera? {
+            guard bounds.minX.isFinite, bounds.minY.isFinite,
+                  bounds.width.isFinite, bounds.height.isFinite else { return nil }
+            if usable.contains(bounds) { return nil }
+            if bounds.width > usable.width || bounds.height > usable.height {
+                let fit = min(camera.zoom, camera.zoom * usable.width / bounds.width,
+                              camera.zoom * usable.height / bounds.height)
+                let z = min(camera.zoom, max(1e-6, fit))
+                let worldCenter = camera.world(Point(bounds.midX, bounds.midY))
+                guard z.isFinite, worldCenter.x.isFinite, worldCenter.y.isFinite else { return nil }
+                return HierarchyCamera(pan: Point(usable.midX-worldCenter.x*z,
+                                                  usable.midY-worldCenter.y*z), zoom: z)
+            }
+            let dx = bounds.minX < usable.minX ? usable.minX-bounds.minX
+                     : bounds.maxX > usable.maxX ? usable.maxX-bounds.maxX : 0
+            let dy = bounds.minY < usable.minY ? usable.minY-bounds.minY
+                     : bounds.maxY > usable.maxY ? usable.maxY-bounds.maxY : 0
+            return HierarchyCamera(pan: Point(camera.pan.x+dx, camera.pan.y+dy), zoom: camera.zoom)
+        }
+        guard let orbitFrame = frame(node, through: self) else { return nil }
+        let primary = adjusted(self, for: orbitFrame) ?? self
+        guard var bounds = frame(node, through: primary) else { return primary == self ? nil : primary }
+        for satellite in satellites {
+            let distance = hypot(satellite.center.x-node.center.x,satellite.center.y-node.center.y)
+            guard satellite.outerRadius.isFinite, satellite.outerRadius > 0,
+                  distance.isFinite, distance <= node.radius*8+satellite.outerRadius,
+                  let candidate = frame(satellite, through: primary) else { continue }
+            bounds = bounds.union(candidate)
+        }
+        let final = adjusted(primary, for: bounds) ?? primary
+        return final == self ? nil : final
     }
     public func interpolated(to target: HierarchyCamera, progress: Double) -> HierarchyCamera {
         let p = min(1, max(0, progress)), t = p*p*(3-2*p)

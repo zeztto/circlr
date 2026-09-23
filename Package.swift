@@ -9,6 +9,7 @@ let package = Package(
         .target(name: "CirclrCore"),
         .target(name: "CirclrRealtime", publicHeadersPath: "include"),
         .target(name: "CirclrAudio", dependencies: ["CirclrCore", "CirclrRealtime"]),
+        .target(name: "CirclrCodex"),
         .executableTarget(name: "CirclrApp", dependencies: ["CirclrCore", "CirclrAudio"]),
         .executableTarget(name: "CirclrStudioTool", dependencies: ["CirclrCore", "CirclrAudio"], path: "Tools/CirclrStudioTool"),
         .executableTarget(name: "CirclrAuditionWorker", dependencies: ["CirclrAudio"], path: "Tools/CirclrAuditionWorker"),
@@ -17,6 +18,7 @@ let package = Package(
         .executableTarget(name: "CirclrAUInstrumentWorker", dependencies: ["CirclrAudio"], path: "Tools/CirclrAUInstrumentWorker"),
         .executableTarget(name: "CirclrOutputDeviceCatalog", dependencies: ["CirclrAudio"], path: "Tools/CirclrOutputDeviceCatalog"),
         .testTarget(name: "CirclrCoreTests", dependencies: ["CirclrCore"]),
-        .testTarget(name: "CirclrAudioTests", dependencies: ["CirclrAudio"])
+        .testTarget(name: "CirclrAudioTests", dependencies: ["CirclrAudio"]),
+        .testTarget(name: "CirclrCodexTests", dependencies: ["CirclrCodex"])
     ]
 )

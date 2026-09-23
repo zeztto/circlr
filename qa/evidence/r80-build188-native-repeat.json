@@ -1,0 +1,90 @@
+{
+  "schema": "circlr-native-repeat-qa-v1",
+  "scope": "Five consecutive opt-in native AudioQueue test runs with explicit built-in speaker and silent PCM; not physical listening or final app GUI QA",
+  "gitHead": "725255f028cb80556debdd14e524360c582770b0",
+  "workerSHA256": "749b8d1c8f1ae3063583c0225dafc8b6ce2307edbcb06b7b10a746371d222432",
+  "runnerSHA256": "07b8c7e7dcc884a8466508847e5ce47bea4c2bae493dc0d4504f5be580c2cc34",
+  "defaultBefore": {
+    "id": 111,
+    "uidSHA256": "d4bc96d8fc82c68ec973b2af8dca79a5f5ceb89e121c740e29c661043c3e5eed"
+  },
+  "workerPIDsBefore": [],
+  "runs": [
+    {
+      "exit": 0,
+      "seconds": 8.396,
+      "logSHA256": "5e2b3511eb40e39709bf45c45af4de149655b5a6a46fd21873a5f09d1af69fd0",
+      "iteration": 1,
+      "nativeLogSHA256": "84913aed2f8691eef1c6db930a20e3004fa05bcbdcf9b6fc89246eb6dd6646a5",
+      "suiteCounts": [
+        "5",
+        "0"
+      ],
+      "timeoutMarker": false,
+      "workerPIDsAfter": []
+    },
+    {
+      "exit": 0,
+      "seconds": 7.424,
+      "logSHA256": "81cc20853688fefc70076acfb166a7491db29a0211363cf90d537b50e2b8e69a",
+      "iteration": 2,
+      "nativeLogSHA256": "ac7e8e1230263430a9f1fdb9289777f1740f8288a630b7f0d211ecc43cbbad88",
+      "suiteCounts": [
+        "5",
+        "0"
+      ],
+      "timeoutMarker": false,
+      "workerPIDsAfter": []
+    },
+    {
+      "exit": 0,
+      "seconds": 9.002,
+      "logSHA256": "41b172183f485f3c47d245314b4e475eed4c01882bcecdfb548fd07ecfe7f4f4",
+      "iteration": 3,
+      "nativeLogSHA256": "b5824356b382ceecfe0a0e96d79313211606089dc437292437e3ce2875ed9349",
+      "suiteCounts": [
+        "5",
+        "0"
+      ],
+      "timeoutMarker": false,
+      "workerPIDsAfter": []
+    },
+    {
+      "exit": 0,
+      "seconds": 8.316,
+      "logSHA256": "857d91338b56f0951665b4e2b89c8db3a78ae668e017918f79e2a5b9fc8d19c8",
+      "iteration": 4,
+      "nativeLogSHA256": "0b88ab45258d8bbb61168a0e8dd247cc1286102ab167d773ac44483598eae000",
+      "suiteCounts": [
+        "5",
+        "0"
+      ],
+      "timeoutMarker": false,
+      "workerPIDsAfter": []
+    },
+    {
+      "exit": 0,
+      "seconds": 7.445,
+      "logSHA256": "a462ada22ed0e59e89deae682cba103793740b060e5925fd5022c773a50778ea",
+      "iteration": 5,
+      "nativeLogSHA256": "2a648f3c115d74173a6365b76ab23fb02a91c57299d09bd7c9b60e2d13fb1977",
+      "suiteCounts": [
+        "5",
+        "0"
+      ],
+      "timeoutMarker": false,
+      "workerPIDsAfter": []
+    }
+  ],
+  "prebuild": {
+    "exit": 0,
+    "seconds": 17.175,
+    "logSHA256": "8dfd50487edc33ceae0cb9e6a058f0c8ebc9204ecfef6265616f3276122f839a"
+  },
+  "defaultAfter": {
+    "id": 111,
+    "uidSHA256": "d4bc96d8fc82c68ec973b2af8dca79a5f5ceb89e121c740e29c661043c3e5eed"
+  },
+  "workerPIDsFinal": [],
+  "result": "25 tests passed, 0 failures, 0 timeouts, 0 worker processes remaining; release gate remains partial"
+}

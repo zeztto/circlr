@@ -14,7 +14,7 @@
 |---|---|---|
 | App Server는 자체 클라이언트의 인증·대화·승인·이벤트 연결을 위한 인터페이스다. | 네이티브 Swift 클라이언트와 로컬 자식 프로세스를 사용한다. | [App Server](https://learn.chatgpt.com/docs/app-server) |
 | ChatGPT 로그인은 구독 접근, API key 로그인은 사용량 과금 경로다. | 첫 범위는 개인의 ChatGPT/Codex 계정. API 결제 방식으로 자동 전환하지 않는다. | [Authentication](https://learn.chatgpt.com/docs/auth) |
-| SDK는 자동화에 사용할 수 있고, 풍부한 사용자 클라이언트에는 App Server가 안내된다. `codex mcp-server`는 deprecated다. | SDK/TUI 임베딩을 주 대화 경로로 삼지 않는다. 기존 **circlr MCP server**는 계속 사용한다. | [Codex SDK](https://learn.chatgpt.com/docs/codex-sdk) |
+| SDK는 자동화에 사용할 수 있고, 풍부한 사용자 클라이언트에는 App Server가 안내된다. Python SDK의 배포본은 pinned CLI runtime을 포함하지만 내부에서 App Server를 제어한다. `codex mcp-server`는 제거됐다. | SDK의 stable 패키지 상태를 App Server의 production 지원으로 오해하지 않는다. SDK/TUI 임베딩을 주 대화 경로로 삼지 않고 기존 **circlr MCP server**는 계속 사용한다. | [Codex SDK](https://learn.chatgpt.com/docs/codex-sdk) |
 | Codex는 로컬 stdio MCP와 도구별 설정을 지원한다. | 원격 MCP 서버를 운영하지 않고 음악 도구만 제공한다. | [MCP](https://learn.chatgpt.com/docs/extend/mcp?surface=cli) |
 | Codex CLI와 App Server 소스가 공개되어 있다. | 배포 시 선택 릴리스의 라이선스·NOTICE·의존 실행 파일을 별도로 확인한다. | [Open Source](https://learn.chatgpt.com/docs/open-source) |
 
@@ -198,7 +198,7 @@ Codex 설정의 MCP allowlist, `features.shell_tool`, `features.unified_exec`, `
 | P4 · UI/UX → native UI | `Sources/CirclrApp/AgentConsole.swift`, `CodexApprovalView.swift`, `CodexConversationView.swift`, `RootView.swift` | 한 overlay에서 대화·진행·질문·중단·사용량. 기존 canvas gesture와 명령 유지. Korean IME·VoiceOver·키보드·최소화 검증 |
 | P5 · infra/QA/review | `scripts/package-app.py`, `scripts/build-app.sh`, `Resources/Info.plist`, 향후 `qa/codex-console-review.md`, `README.md`, `CHANGELOG.md` | 깨끗한 Mac의 앱 단독 설치·로그인·편집·복원. 서명·notarization·runtime 교체/rollback. 실제 음악 E2E 증거 후 버전 갱신 |
 
-P1 protocol 작업과 P3의 gateway 설계는 G0 계약 확정 후 독립적으로 진행할 수 있다. P4는 상태·오류·승인 계약을 소비한다. 코드 수정 뒤 native/code/security 검토와 QA를 거친다. `.circlr` 음악 schema 변경은 이 기능의 전제 조건이 아니다.
+P1의 Foundation codec·상태기계는 build189에서 착수하고 build190에서 내부 테스트 대상으로 보강했다. 분할 UTF-8 JSONL, 요청 ID·세대, 초기화·turn·중단, 응답보다 먼저 도착한 이벤트와 승인 요청, 늦은 이벤트와 연결 교체를 fixture로 검사한다. turn ID가 없어 소유 대화를 확정할 수 없는 MCP elicitation은 거절한다. 앱 실행 파일과 연결하거나 계정/모델을 호출하지 않았다. P2·P3·P4는 G0가 확정된 뒤 계약을 소비하며, 지원되는 요청에 대한 신뢰된 승인 UI·RunLease·재배포 런타임이 아직 필요하다. 코드 수정 뒤 native/code/security 검토와 QA를 거친다. `.circlr` 음악 schema 변경은 이 기능의 전제 조건이 아니다.
 
 ## 11. 인수 검증
 
