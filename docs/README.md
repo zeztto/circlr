@@ -16,7 +16,7 @@ Start with [English](../README.md) or [한국어](../README.ko.md). The current 
 | Music agents / 음악 작업 에이전트 | [MCP](../mcp/README.md) · [Studio kit](24-music-agent-kit.md) |
 | Contributing / 기여 | [CONTRIBUTING](../CONTRIBUTING.md) · [AGENTS](../AGENTS.md) |
 | Architecture / 구조 | [Hierarchy](15-hierarchy-canvas-architecture.md) · [Agent interface](17-agent-interface.md) |
-| Current version / 현재 버전 | [0.60.0](releases/0.60.0.md) · [Release notes](releases/0.60.0-notes.md) · [QA evidence](releases/0.60.0-qa.md) |
+| Current version / 현재 버전 | [0.70.0](releases/0.70.0.md) · [Release notes](releases/0.70.0-notes.md) · [QA evidence and limits](releases/0.70.0-qa.md) |
 | Demo library / 데모곡 후보·편곡 | [Sources and plan](releases/demo-library-plan.md) |
 | Next versions / 다음 버전 | [Roadmap](releases/roadmap.md) |
 | Release publishing / 릴리스 등록 | [Process](releases/README.md) · [Bilingual notes template](releases/RELEASE_NOTES_TEMPLATE.md) |

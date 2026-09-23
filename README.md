@@ -8,13 +8,11 @@ English · [한국어](README.ko.md)
 
 In circlr, a circle is a timeline. Build a song from sections, place MIDI, audio, instruments and effects inside them, and connect their inputs and outputs. Move between the whole arrangement and detailed editing on one zoomable canvas.
 
-![Song sections unfolding around the song orbit in circlr](docs/images/circlr-song-build170.jpg)
+![Song sections unfolding around the song orbit in circlr](docs/images/circlr-song-build180.jpg)
 
-*Actual 0.60.0 build170 app showing the bundled f0r h3r project. [Capture details](docs/images/README.md).*
+*A frame from an actual 0.70.0 build180 recording of the bundled f0r h3r canvas. [Capture details](docs/images/README.md).*
 
-> **0.60.0 · build170.** Twelve factory synth presets, oversampled Drive and the refined f0r h3r v6 demo. [Verification record](docs/releases/0.60.0-qa.md).
-
-**In development:** 0.70.0 prioritizes playback canvas performance. The first same-canvas callback comparison and remaining release gates are in the [0.70.0 work record](docs/releases/0.70.0.md). The screenshot and download above still refer to the released 0.60.0 app.
+> **0.70.0 · build180.** Smoother playback canvas and MP4 capture in the verified scenarios, with viewing mode beside Record. [Evidence and limits](docs/releases/0.70.0-qa.md).
 
 ## What you can work with
 
@@ -24,15 +22,15 @@ In circlr, a circle is a timeline. Build a song from sections, place MIDI, audio
 - **Sound and motion:** instrument/effect routing, automation, bounce and source restoration; playback-follow and signal visualization controls.
 - **Local agents:** an MCP interface for inspecting and editing projects, generating MIDI, rendering and saving, with activity visible in the console.
 
-| Factory preset search | Filter automation |
-|---|---|
-| <img src="docs/images/circlr-presets-build170.jpg" width="280" alt="Factory preset search"> | <img src="docs/images/circlr-automation-build170.jpg" width="280" alt="Filter automation"> |
+<img src="docs/images/circlr-song-portrait-build180.jpg" width="280" alt="Song orbit on a portrait display during playback">
+
+*The same build180 canvas on a portrait display. The MP4 contains the canvas, so its frame does not show the toolbar. [Capture details](docs/images/README.md).*
 
 These are implemented development features, not a guarantee of compatibility with every audio device or plug-in. Artist profiles and a combined text, image and video workspace are the [longer-term direction](docs/21-artist-universe.md).
 
 ## Getting started
 
-Download **0.60.0 build170** for Apple Silicon from [GitHub Releases](https://github.com/zeztto/circlr/releases/tag/v0.60.0), or build from `main` for source development.
+Download **0.70.0 build180** for Apple Silicon from [GitHub Releases](https://github.com/zeztto/circlr/releases/tag/v0.70.0), or build from `main` for source development.
 
 The downloaded app is ad-hoc signed and not notarized by Apple. If macOS blocks its first launch, verify the download, then use **System Settings → Privacy & Security → Open Anyway**. [macOS installation and first launch](docs/install-macos.md#english).
 
@@ -49,7 +47,7 @@ open 'dist/써클러.app'
 
 The build packages the app, its five audio helpers and the agent kit together. Local packages use ad-hoc signing and are not notarized. Keep a separate copy of important projects when trying development builds.
 
-Choose a synth circle, then **음색·악기 찾기** to search the new factory patches. The same patches are available through MCP `sounds`; apply the returned `synthPatch` to `instrument.synth`. Existing saved sounds are preserved until explicitly changed. [Release notes](docs/releases/0.60.0-notes.md).
+Choose a synth circle, then **음색·악기 찾기** to search the built-in patches. The same patches are available through MCP `sounds`; apply the returned `synthPatch` to `instrument.synth`. Existing saved sounds are preserved until explicitly changed. [Release notes](docs/releases/0.70.0-notes.md).
 
 ## First session
 
@@ -61,6 +59,7 @@ Choose a synth circle, then **음색·악기 찾기** to search the new factory 
 | Shortcut | Action |
 |---|---|
 | ⇧⌘P | Search commands and shortcuts |
+| ⇧⌘V | Enter text-free viewing mode; press Esc to leave |
 | ⌘J | Jump to a section, track, instrument or effect |
 | Tab / ⇧Tab | Move through editor controls |
 | Ctrl + ` | Show or hide the console |

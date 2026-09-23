@@ -1,5 +1,16 @@
 # Screenshots · 실행 화면
 
+## 0.70.0 build180
+
+Frames extracted at 8 seconds from two actual build180 native-app MP4 recordings of the bundled f0r h3r song with song-level playback follow. The files show the **canvas**, not the app chrome or a simulated interface. JPEG encoding was applied once to the decoded frame; no layout or visual element was composited. The source recordings stay in the local ignored `.build/` QA directory and are not redistributed with the app. These frames document landscape/portrait orbital song form and playback graphics, not compositor FPS or physical listening.
+
+동봉 f0r h3r를 실제 build180 앱에서 곡 단위 팔로우로 재생·녹화한 MP4의 8초 프레임입니다. **캔버스만** 담겨 있고 메인 컨트롤바는 보이지 않습니다. 디코딩 프레임을 JPEG로 한 번 인코딩했으며 화면 요소를 합성하지 않았습니다. 원본 MP4는 Git 제외 로컬 `.build/` QA 자료입니다. 가로·세로 궤도 화면의 증거이며 실제 표시 FPS·청취 성공을 의미하지 않습니다.
+
+| File | Source MP4 | JPEG pixels | SHA256 |
+|---|---|---:|---|
+| `circlr-song-build180.jpg` | `r70-build180-song-overview.mp4` | 1912×1080 | `949b98a2ed6613cd625e5436ec675e65173a079f55f770d55b5a4f2b9141caba` |
+| `circlr-song-portrait-build180.jpg` | `r70-build180-song-portrait.mp4` | 670×1080 | `ba25c232ace9f365ae007b63878a163f4cff47153c8cbb5e26bd25387268cf5a` |
+
 ## 0.60.0 build170
 
 Actual isolated native app with the bundled v6 demo: radial song layout, factory EP search and the chorus filter curve. Original CUA JPEG bytes, no image editing. UI is Korean. The portrait-shaped window uses the left half of the current display; a700-pixel-wide window was not rechecked this version.
