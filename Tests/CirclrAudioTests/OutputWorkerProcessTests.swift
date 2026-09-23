@@ -26,7 +26,7 @@ if mode=='exit':sys.exit(1)
 origin=time.monotonic()
 def trace(stage,phase):
  emit({'trace':dict(stage=stage,phase=phase,elapsedSeconds=time.monotonic()-origin)})
-emit({'helloBoundaryLoopCapabilities':{'outputDeviceSelection':False}} if mode.startswith('boundary-') else ({'helloLoopCapabilities':{'outputDeviceSelection':False}} if mode.startswith('loop-') else ({'helloCapabilities':{'outputDeviceSelection':True}} if mode.startswith('device-') or mode=='trace-output-delay' else {'hello':{}})))
+emit({'helloBoundaryLoopCapabilities':{'outputDeviceSelection':mode=='device-queue-loop'}} if mode.startswith('boundary-') or mode=='device-queue-loop' else ({'helloLoopCapabilities':{'outputDeviceSelection':False}} if mode.startswith('loop-') else ({'helloCapabilities':{'outputDeviceSelection':True}} if mode.startswith('device-') or mode=='trace-output-delay' else {'hello':{}})))
 cycle_frames=480
 first_frame=0
 phase_frame=0
@@ -41,8 +41,9 @@ for line in sys.stdin:
   assert open(os.path.join(directory,'audio.caf'),'rb').read(4)==b'caff'
   if mode=='malformed':
    print('{bad',flush=True);continue
-  if mode.startswith('trace') or mode=='device-trace':
+  if mode.startswith('trace') or mode=='device-trace' or mode.startswith('device-queue'):
    trace('fileValidation','entered');trace('fileValidation','completed')
+  if mode=='device-queue-early':emit({'audioQueueBackend':{}})
   emit({'prepared':{}})
  elif 'play' in p:
   run=p['play']['run']
@@ -61,7 +62,12 @@ for line in sys.stdin:
     os._exit(0)
    with open(sys.argv[0]+'.descendant','w') as marker:marker.write(str(pid))
    os._exit(2)
-  if mode.startswith('trace') or mode=='device-trace':
+  if mode.startswith('device-queue'):
+   emit({'audioQueueBackend':{}})
+   for stage in ['queueCreation','queueAudible','queueStart']:
+    if mode=='device-queue-incomplete' and stage=='queueStart':break
+    trace(stage,'entered');trace(stage,'completed')
+  elif mode.startswith('trace') or mode=='device-trace':
    stages=['engineCreation']+(['outputNodeAcquisition','deviceSelection'] if mode in ['device-trace','trace-output-delay'] else [])+['mixerAcquisition','routing','scheduling','engineStart','playerPlay']
    for stage in stages:
     trace(stage,'entered')
@@ -74,7 +80,7 @@ for line in sys.stdin:
   if (mode.startswith('device-') and mode != 'device-missing') or mode=='trace-output-delay':
    emit({'outputDevice':{'descriptor':{'uid':'other' if mode=='device-mismatch' else 'selected','name':'Fixture output'}}})
   emit({'started':{'run':run}})
-  emit({'loopClock' if mode.startswith('loop-') or mode.startswith('boundary-') else 'clock':{'run':run,'seconds':20000 if mode.startswith('loop-') else 0.125}})
+  emit({'loopClock' if mode.startswith('loop-') or mode.startswith('boundary-') or mode=='device-queue-loop' else 'clock':{'run':run,'seconds':20000 if mode.startswith('loop-') else 0.125}})
   if mode=='loop-finish':emit({'finished':{'run':run}})
   if mode=='finished':emit({'finished':{'run':run}})
  elif 'queueLoopChange' in p or 'exitLoop' in p:
@@ -297,6 +303,47 @@ for line in sys.stdin:
             host.cancel(); try await wait { host.status.transport.phase == .idle }
             XCTAssertEqual(host.status.trace, trace)
         }
+    }
+    func testAudioQueueBackendRequiresStartTraceBeforeStarted() async throws {
+        let complete = OutputWorkerProcess(executable: try fixture("device-queue-trace"))
+        try await complete.play(PCM(frames: 48000), from: 0, timeout: 2)
+        let status = complete.status
+        XCTAssertTrue(status.transport.didStart)
+        XCTAssertTrue(status.trace?.helperReportsStages == true)
+        XCTAssertEqual(status.trace?.events.count, 12)
+        XCTAssertEqual(status.trace?.events.last?.stage, .queueStart)
+        XCTAssertEqual(status.trace?.events.last?.phase, .completed)
+        complete.cancel()
+        try await wait { complete.status.phase == .idle }
+
+        for mode in ["device-queue-incomplete", "device-queue-early"] {
+            let host = OutputWorkerProcess(executable: try fixture(mode))
+            do { try await host.play(PCM(frames: 48000), from: 0, timeout: 2); XCTFail("\(mode) started without a complete handshake") }
+            catch { XCTAssertFalse(host.status.transport.didStart) }
+            try await wait { host.status.phase == .idle }
+        }
+    }
+    func testAudioQueueLoopWithExplicitDeviceAcceptsBoundaryReplacementAndFiniteExit() async throws {
+        let host = OutputWorkerProcess(executable: try fixture("device-queue-loop"))
+        try await host.play(PCM(frames: 480), from: 0, timeout: 3, selection: .deviceUID("selected"),
+                            loop: true, exitTail: PCM(frames: 96))
+        let run = try XCTUnwrap(host.status.transport.id)
+        XCTAssertEqual(host.status.actualOutputDeviceName, "Fixture output")
+        XCTAssertEqual(host.status.trace?.events.last?.stage, .queueStart)
+        XCTAssertEqual(host.status.trace?.events.last?.phase, .completed)
+        let changed = try await host.changeLoop(cycle: PCM(frames: 960), tail: PCM(frames: 48))
+        XCTAssertEqual(changed.elapsedFrame, 48000)
+        XCTAssertEqual(changed.frames, 960)
+        XCTAssertFalse(changed.exiting)
+        try await wait { host.status.transport.seconds >= changed.elapsedSeconds }
+        let exit = try await host.changeLoop(cycle: nil)
+        XCTAssertTrue(exit.exiting)
+        XCTAssertEqual(exit.elapsedFrame, 96000)
+        try await wait { host.status.phase == .idle }
+        XCTAssertEqual(host.status.transport.id, run)
+        XCTAssertEqual(host.status.attempts, 1)
+        XCTAssertNil(host.status.transport.message)
+        XCTAssertNotNil(host.status.transport.completedSeconds)
     }
     func testDelayedMixerTraceSurvivesTimeoutCancellationAndEOF() async throws {
         for mode in ["timeout", "cancel", "eof"] {

@@ -1,0 +1,63 @@
+{
+  "schema": "circlr-audioqueue-device-probe-v1",
+  "sourceSHA256": "77343e9ad37777e8b02b2f80a1e679bcad0de99aba7ac7acb9929e6875cb6bad",
+  "timeoutSeconds": 8.0,
+  "results": [
+    {
+      "device": "system-default",
+      "status": "timeout",
+      "exitCode": null,
+      "elapsedSeconds": 8.012,
+      "stages": [
+        "before NewOutput",
+        "NewOutput status=0",
+        "bindDevice skipped (system default)",
+        "before allocateBuffer",
+        "allocateBuffer status=0",
+        "before enqueueBuffer",
+        "enqueueBuffer status=0",
+        "before start"
+      ]
+    },
+    {
+      "device": "built-in",
+      "status": "completed",
+      "exitCode": 0,
+      "elapsedSeconds": 0.373,
+      "stages": [
+        "before NewOutput",
+        "NewOutput status=0",
+        "before bindDevice",
+        "bindDevice status=0",
+        "before allocateBuffer",
+        "allocateBuffer status=0",
+        "before enqueueBuffer",
+        "enqueueBuffer status=0",
+        "before start",
+        "start status=0",
+        "before stop",
+        "stop status=0",
+        "before dispose",
+        "dispose status=0",
+        "done"
+      ]
+    },
+    {
+      "device": "scarlett",
+      "status": "timeout",
+      "exitCode": null,
+      "elapsedSeconds": 8.01,
+      "stages": [
+        "before NewOutput",
+        "NewOutput status=0",
+        "before bindDevice",
+        "bindDevice status=0",
+        "before allocateBuffer",
+        "allocateBuffer status=0",
+        "before enqueueBuffer",
+        "enqueueBuffer status=0",
+        "before start"
+      ]
+    }
+  ]
+}

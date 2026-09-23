@@ -28,6 +28,8 @@ private final class Worker: @unchecked Sendable {
     private var file: AVAudioFile?
     private var engine: AVAudioEngine?
     private var player: AVAudioPlayerNode?
+    private var audioQueueBackend: AudioQueuePlaybackBackend?
+    private var lastQueueRevalidation = 0.0
     private var active: UUID?
     private var used = false
     private var timer: Timer?
@@ -118,22 +120,32 @@ private final class Worker: @unchecked Sendable {
                 try prepare(frames:frames,selection:selection)
             case .queueLoopChange(let change,let frames,let cycleFrames):
                 do {
-                    guard active != nil,let scheduler=loopScheduler else{throw WorkerError.invalidState}
+                    guard active != nil else{throw WorkerError.invalidState}
                     let path=directory.appendingPathComponent("loop-"+change.uuidString+".caf")
                     let audio=try readLoopAudio(path,frames:frames,cycleFrames:cycleFrames)
-                    try scheduler.request(id:change,audio:audio)
+                    if let scheduler=loopScheduler {try scheduler.request(id:change,audio:audio)}
+                    else if let output=audioQueueBackend {try output.requestLoopChange(id:change,audio:audio)}
+                    else {throw WorkerError.invalidState}
                     try? FileManager.default.removeItem(at:path)
                 } catch {emit(.loopChangeRejected(change:change,message:"루프 변경을 준비할 수 없습니다: "+failureMessage(error)))}
             case .exitLoop(let change):
                 do {
-                    guard active != nil,let scheduler=loopScheduler else{throw WorkerError.invalidState}
-                    try scheduler.request(id:change,audio:nil)
+                    guard active != nil else{throw WorkerError.invalidState}
+                    if let scheduler=loopScheduler {try scheduler.request(id:change,audio:nil)}
+                    else if let output=audioQueueBackend {try output.requestLoopChange(id:change,audio:nil)}
+                    else {throw WorkerError.invalidState}
                 } catch {emit(.loopChangeRejected(change:change,message:"루프 종료를 예약할 수 없습니다"))}
             case .play(let run):
                 guard let file, active == nil, !used else { throw WorkerError.invalidState }
                 used = true
                 active = run
                 try checkCancellation()
+                // AudioQueue can bind a specific device before its output starts.
+                // AVAudioEngine acquires the system-default HAL path before binding.
+                if case .deviceUID = outputSelection {
+                    try startAudioQueue(file: file, run: run)
+                    return
+                }
                 trace(.engineCreation, .entered)
                 let engine = AVAudioEngine(), player = AVAudioPlayerNode()
                 self.engine = engine; self.player = player
@@ -334,11 +346,89 @@ private final class Worker: @unchecked Sendable {
     private func checkCancellation() throws {
         if control.isCancelled { throw CancellationError() }
     }
+    private func startAudioQueue(file: AVAudioFile, run: UUID) throws {
+        emit(.audioQueueBackend)
+        trace(.queueCreation, .entered)
+        let onFailure: @Sendable (Error) -> Void = { [weak self] error in
+                guard let self, self.active == run else { return }
+                self.emit(.failure(run: run, message: self.failureMessage(error)))
+                self.clear()
+                exit(70)
+            }
+        let output: AudioQueuePlaybackBackend
+        if looping {
+            guard let loopAudio else {throw WorkerError.invalidState}
+            output = try AudioQueuePlaybackBackend(loopAudio: loopAudio, fromFrame: loopStartFrame,
+                selection: outputSelection, onBoundary: { [weak self] boundary in
+                    guard let self, self.active == run else { return }
+                    self.emit(.loopChangeScheduled(change: boundary.change.id,
+                        elapsedFrame: boundary.elapsedFrame, frames: boundary.sourceFrames,
+                        exiting: boundary.change.replacement == nil))
+                }, onFinished: { [weak self] endFrame in
+                    guard let self, self.active == run else { return }
+                    self.clear()
+                    self.emit(.loopFinished(run: run, elapsedFrame: endFrame))
+                }, onFailure: onFailure)
+            self.loopAudio = nil
+        } else {
+            output = try AudioQueuePlaybackBackend(file: file, selection: outputSelection,
+                onFinished: { [weak self] in
+                    guard let self, self.active == run else { return }
+                    self.emit(.clock(run: run, seconds: Double(file.length) / 48_000))
+                    self.clear()
+                    self.emit(.finished(run: run))
+                }, onFailure: onFailure)
+        }
+        audioQueueBackend = output
+        trace(.queueCreation, .completed)
+        try checkCancellation()
+        trace(.queueAudible, .entered)
+        let descriptor = try output.revalidate()
+        try output.prepareAudible()
+        trace(.queueAudible, .completed)
+        try checkCancellation()
+        trace(.queueStart, .entered)
+        try output.startPrepared()
+        trace(.queueStart, .completed)
+        try checkCancellation()
+        emit(.outputDevice(descriptor: descriptor))
+        didStart = true
+        emit(.started(run: run))
+        lastQueueRevalidation = ProcessInfo.processInfo.systemUptime
+        timer = Timer.scheduledTimer(withTimeInterval: 0.02, repeats: true) { [weak self] _ in self?.tick(run) }
+    }
     private func trace(_ stage: PlaybackOutputTraceEvent.Stage, _ phase: PlaybackOutputTraceEvent.Phase) {
         emit(.trace(stage: stage, phase: phase, elapsedSeconds: max(0, ProcessInfo.processInfo.systemUptime - traceOrigin)))
     }
 
     private func tick(_ run: UUID) {
+        if active == run, let output = audioQueueBackend {
+            do {
+                if output.hasCompletedPlayback { return }
+                let now = ProcessInfo.processInfo.systemUptime
+                if now - lastQueueRevalidation >= 0.5 {
+                    _ = try output.revalidate()
+                    lastQueueRevalidation = now
+                }
+                let seconds = try output.checkedSeconds()
+                guard seconds.isFinite, seconds >= 0 else { throw WorkerError.invalidState }
+                if looping {
+                    lastSeconds = max(lastSeconds, seconds)
+                    emit(.loopClock(run: run, seconds: lastSeconds))
+                } else {
+                    lastSeconds = max(lastSeconds, min(Double(file?.length ?? 0) / 48_000, seconds))
+                    emit(.clock(run: run, seconds: lastSeconds))
+                }
+            } catch {
+                // The queue posts its terminal callback to main after disposing
+                // the last buffer. A timer tick can land in that short interval.
+                if output.hasCompletedPlayback { return }
+                emit(.failure(run: run, message: failureMessage(error)))
+                clear()
+                exit(70)
+            }
+            return
+        }
         guard active == run, let player, let file,
               let time = player.lastRenderTime, let played = player.playerTime(forNodeTime: time),
               played.sampleRate.isFinite, played.sampleRate > 0 else { return }
@@ -355,6 +445,7 @@ private final class Worker: @unchecked Sendable {
         loopScheduler?.cancel();loopScheduler=nil;loopAudio=nil;loopBuffer=nil
         timer?.invalidate(); timer = nil
         removeDeviceObservers()
+        audioQueueBackend?.stop(); audioQueueBackend = nil
         player?.stop(); engine?.stop()
         player = nil; engine = nil
         file = nil

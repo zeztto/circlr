@@ -3,6 +3,7 @@ import Foundation
 public struct PlaybackOutputTraceEvent: Equatable, Codable, Sendable {
     public enum Stage: String, Codable, Sendable, CaseIterable {
         case cafWrite, helperHello, fileValidation, engineCreation, outputNodeAcquisition, deviceSelection, mixerAcquisition, routing, scheduling, engineStart, playerPlay
+        case queueCreation, queueAudible, queueStart
     }
     public enum Phase: String, Codable, Sendable { case entered, completed }
     public let stage: Stage

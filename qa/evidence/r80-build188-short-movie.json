@@ -1,0 +1,81 @@
+{
+  "schema": "circlr-build188-short-movie-evidence-v1",
+  "build": 188,
+  "sourceAppSHA256": "9b77aa5cc2e41647dba7e55920842e3a15df3289c05c82d875404771270c5312",
+  "qaAppSHA256": "a369f4de4ced822b89b1f6efbd09c9304c7d4e55c93aa5abff1cdbab3f51bdfd",
+  "movieSHA256": "51e2cae3c59c6412f87a2416094a250542f4b24500010a07654bb443be0cf487",
+  "timingInspectorSHA256": "7440ecac5c5f823a9b71527846315d94716ce2ee316fc05884c0dcc948417183",
+  "audioInspectorSHA256": "261e2edb4cb599a70cb06521729ad8e848fe6c014e10f8fb72ae0294d5fb5561",
+  "video": {
+    "audioFirstPTS": 0,
+    "audioLastPTS": 14.859020833333334,
+    "audioPackets": 32,
+    "durationSeconds": 14.859020833333334,
+    "startAVOffsetMilliseconds": 0,
+    "videoAverageFPS": 29.6962879640045,
+    "videoContentFramesChecked": 441,
+    "videoContentIdenticalAdjacentFrames": 0,
+    "videoContentIdenticalFirstPTS": [],
+    "videoContentIdenticalLongestRun": 0,
+    "videoDeltaP50Milliseconds": 38.33333333333311,
+    "videoDeltaP95Milliseconds": 51.66666666666764,
+    "videoDeltaP99Milliseconds": 58.33333333333357,
+    "videoDuplicatePTS": 0,
+    "videoFirstPTS": 0,
+    "videoFrames": 441,
+    "videoGapsOverTwoFrames": 0,
+    "videoHeight": 1080,
+    "videoLastPTS": 14.816666666666666,
+    "videoLongestGaps": [
+      {
+        "atSeconds": 9.92,
+        "gapMilliseconds": 63.333333333332575
+      },
+      {
+        "atSeconds": 9.678333333333333,
+        "gapMilliseconds": 61.666666666667425
+      },
+      {
+        "atSeconds": 11.978333333333333,
+        "gapMilliseconds": 61.66666666666565
+      },
+      {
+        "atSeconds": 2.756666666666667,
+        "gapMilliseconds": 60.00000000000006
+      },
+      {
+        "atSeconds": 3.098333333333333,
+        "gapMilliseconds": 58.33333333333357
+      }
+    ],
+    "videoMaximumGapMilliseconds": 63.333333333332575,
+    "videoWidth": 1426
+  },
+  "audio": {
+    "schema": "circlr-movie-audio-qa-v1",
+    "movieSHA256": "51e2cae3c59c6412f87a2416094a250542f4b24500010a07654bb443be0cf487",
+    "channels": 2,
+    "sampleRate": 48000,
+    "frames": 713233,
+    "durationSeconds": 14.859020833333334,
+    "peak": 0.60772705078125,
+    "rms": 0.0746111002194148,
+    "windows": [
+      {
+        "atSeconds": 0.0,
+        "peak": 0.60736083984375,
+        "rms": 0.07367854545273446
+      },
+      {
+        "atSeconds": 7.429,
+        "peak": 0.60760498046875,
+        "rms": 0.0736759806050466
+      },
+      {
+        "atSeconds": 13.373,
+        "peak": 0.60772705078125,
+        "rms": 0.07557708014423019
+      }
+    ]
+  }
+}

@@ -30,6 +30,7 @@ final class OutputWorkerProcess: @unchecked Sendable {
     private var loopEpochFrame:Int64=0
     private var changeFailure:(UUID,String)?
     private var helperTraceEvents = 0
+    private var usesAudioQueueBackend = false
     private var outputSelection: OutputDeviceSelection = .systemDefault
     private var deviceSelectionSupported = false
     private var actualDevice: OutputDeviceDescriptor?
@@ -190,7 +191,7 @@ final class OutputWorkerProcess: @unchecked Sendable {
         looping = loop;loopCycleFrames=pcm.count;loopStartFrame=first;loopExitScheduled=false;loopEpochFrame=0
         boundaryChangesSupported=false;pendingChangeID=nil
         lock.lock();changeFailure=nil;lock.unlock()
-        session = id; sequence = 0; stage = .boot; frames = loop ? pcm.count+(exitTail?.count ?? 0) : pcm.count-first; helperTraceEvents = 0
+        session = id; sequence = 0; stage = .boot; frames = loop ? pcm.count+(exitTail?.count ?? 0) : pcm.count-first; helperTraceEvents = 0; usesAudioQueueBackend = false
         terminationObserved = false; eventsDrained = false
         readerControl = MediaPreviewCancellation()
         outputSelection = selection; deviceSelectionSupported = false; actualDevice = nil
@@ -346,10 +347,17 @@ final class OutputWorkerProcess: @unchecked Sendable {
                 guard helperTraceEvents == 0 || helperTraceEvents == 2 else { throw OutputWorkerWireError.invalidPacket }
                 stage = .starting; update { $0.step = .device }
                 try send(.play(run: id))
+            case .audioQueueBackend where stage == .starting && !usesAudioQueueBackend:
+                guard helperTraceEvents == 2 else { throw OutputWorkerWireError.invalidPacket }
+                usesAudioQueueBackend = true
             case .started(let run) where run == id && stage == .starting:
                 guard !deviceSelectionSupported || actualDevice != nil else { throw OutputWorkerWireError.invalidPacket }
-                let traceCount = deviceSelectionSupported ? OutputWorkerWire.traceStages.count : OutputWorkerWire.legacyTraceStages.count
-                guard helperTraceEvents == 0 || helperTraceEvents == traceCount * 2 else { throw OutputWorkerWireError.invalidPacket }
+                if usesAudioQueueBackend {
+                    guard helperTraceEvents == OutputWorkerWire.audioQueueTraceStages.count * 2 else { throw OutputWorkerWireError.invalidPacket }
+                } else {
+                    let traceCount = deviceSelectionSupported ? OutputWorkerWire.traceStages.count : OutputWorkerWire.legacyTraceStages.count
+                    guard helperTraceEvents == 0 || helperTraceEvents == traceCount * 2 else { throw OutputWorkerWireError.invalidPacket }
+                }
                 stage = .playing
                 update {
                     guard $0.transport.phase == .starting else { return }

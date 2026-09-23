@@ -323,8 +323,11 @@ extension AlbumCanvasView {
         if additive {store.selectHierarchy(next.id,additive:true)}
         else {guard store.selectUserWorkspace(next.id) else{return}}
         interruptPlaybackFollow();needsDisplay=true
-        if !bounds.contains(screen(next)) {focus(next.id)}
+        revealKeyboardSelection(next)
         NSAccessibility.post(element:self,notification:.selectedChildrenChanged)
+    }
+    func revealKeyboardSelection(_ node:CircleSceneNode) {
+        if let target=camera.revealing(node,in:workspaceViewport) {setCamera(target,animated:true)}
     }
     func enterSelectedCircle() {
         guard let address=store.hierarchySelection else{return}

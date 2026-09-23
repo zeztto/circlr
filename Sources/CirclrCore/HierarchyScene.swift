@@ -430,6 +430,32 @@ public struct HierarchyCamera: Codable, Equatable, Sendable {
         let z = min(1e12, max(1e-6, desired / max(detail ? node.radius : node.outerRadius, 1e-12)))
         return HierarchyCamera(pan: Point(width/2-node.center.x*z, height/2+10-node.center.y*z), zoom: z)
     }
+    /// Reveal a keyboard-selected orbit within the usable canvas without moving a visible orbit.
+    public func revealing(_ node: CircleSceneNode, in viewport: CGRect, margin: Double = 20) -> HierarchyCamera? {
+        guard viewport.minX.isFinite, viewport.minY.isFinite, viewport.width.isFinite,
+              viewport.height.isFinite, margin.isFinite, margin >= 0,
+              viewport.width > margin * 2, viewport.height > margin * 2,
+              zoom.isFinite, zoom > 0, node.outerRadius.isFinite, node.outerRadius > 0,
+              node.center.x.isFinite, node.center.y.isFinite else { return nil }
+        let usable = viewport.insetBy(dx: margin, dy: margin)
+        let center = screen(node.center), radius = node.outerRadius * zoom
+        guard center.x.isFinite, center.y.isFinite, radius.isFinite else { return nil }
+        let frame = CGRect(x: center.x-radius, y: center.y-radius,
+                           width: radius*2, height: radius*2)
+        if usable.contains(frame) { return nil }
+        if radius*2 > usable.width || radius*2 > usable.height {
+            let fit = min(zoom, usable.width/(node.outerRadius*2),
+                          usable.height/(node.outerRadius*2))
+            let z = max(1e-6, fit)
+            return HierarchyCamera(pan: Point(usable.midX-node.center.x*z,
+                                              usable.midY-node.center.y*z), zoom: z)
+        }
+        let dx = frame.minX < usable.minX ? usable.minX-frame.minX
+                 : frame.maxX > usable.maxX ? usable.maxX-frame.maxX : 0
+        let dy = frame.minY < usable.minY ? usable.minY-frame.minY
+                 : frame.maxY > usable.maxY ? usable.maxY-frame.maxY : 0
+        return HierarchyCamera(pan: Point(pan.x+dx, pan.y+dy), zoom: zoom)
+    }
     public func interpolated(to target: HierarchyCamera, progress: Double) -> HierarchyCamera {
         let p = min(1, max(0, progress)), t = p*p*(3-2*p)
         // Log interpolation keeps large changes of scale from spending most frames at the wrong depth.

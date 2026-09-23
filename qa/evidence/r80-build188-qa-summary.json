@@ -1,0 +1,43 @@
+{
+  "schema": "circlr-build188-qa-summary-v1",
+  "version": "0.80.0",
+  "build": 188,
+  "date": "2026-09-23",
+  "branch": "release/0.80.0",
+  "releaseDecision": "NO_GO",
+  "package": {
+    "sourceAppTreeSHA256": "9b77aa5cc2e41647dba7e55920842e3a15df3289c05c82d875404771270c5312",
+    "isolatedQAAppTreeSHA256": "a369f4de4ced822b89b1f6efbd09c9304c7d4e55c93aa5abff1cdbab3f51bdfd",
+    "sourceDemoSHA256": "b15252dbe5d4d4f79b6935449fa7238cf30fe90d783af20544b71ba83fcdf085",
+    "isolatedDemoSHA256": "3252b1478c2840faf75164ac4e7dcee0a0162cf7ec62733912e52551f834ea98",
+    "codesignVerifyDeepStrict": "passed for source and isolated QA apps"
+  },
+  "swiftSuite": {
+    "executed": 1036,
+    "skipped": 11,
+    "failures": 0,
+    "localLogSHA256": "f461d766ecf402cd1a0c32859bf5a4c72c48129f7cb8706a5ba88599806e5e20"
+  },
+  "nativeExplicitBuiltInAudioQueue": {
+    "executed": 5,
+    "failures": 0,
+    "timeoutSeconds": 60,
+    "runnerSHA256": "07b8c7e7dcc884a8466508847e5ce47bea4c2bae493dc0d4504f5be580c2cc34",
+    "localLogSHA256": "45f805eca3f8845d4ea6bc0b39e1165b46c0f50e34bb182eb8226e3039c57ba2"
+  },
+  "isolatedAppObservations": {
+    "systemDefaultOutput": "Scarlett 6i6 USB",
+    "appSelectedOutput": "Mac Studio built-in speakers",
+    "finiteSection": "UI start, clock progression and manual stop observed",
+    "sectionLoop": "second cycle, queued exit at next boundary, tail and natural idle observed without error",
+    "movie": "short recording saved and independently decoded; see r80-build188-short-movie.json",
+    "physicalListening": "not verified",
+    "workerProcessesAfterQuit": 0
+  },
+  "movieEvidenceSHA256": "3a3ebf26551f5e11d187b42b724a03fe66dc4d3efff7abf5fd4c1d74a7da4280",
+  "outstanding": [
+    "System-default Scarlett AVAudioEngine path and explicit Scarlett AudioQueue startup can stall; exact cause unconfirmed",
+    "Repeat cold-start, unplug/recovery, real listening, exact 1080p and long-duration movie, recording and full production workflow QA remain"
+  ],
+  "artifactPolicy": "Logs, isolated app and movie are local ignored QA artifacts; only sanitized evidence is committed"
+}

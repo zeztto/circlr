@@ -1,0 +1,237 @@
+{
+  "schema": "circlr-default-output-qa-v1",
+  "sourceSHA256": {
+    "default-output-control.swift": "73699767c63bc9e193e0a2403b89e436f69401cce7bbb216b4cc9f262dfd7b7e",
+    "avaudioengine-output-probe.swift": "5bf6d0c63e99e0a7d3e6a3dff8e1ff1b8fa22969c29bbc35d25dd313408fd2f2"
+  },
+  "originalDefault": {
+    "id": 111,
+    "uidSHA256": "d4bc96d8fc82c68ec973b2af8dca79a5f5ceb89e121c740e29c661043c3e5eed"
+  },
+  "temporaryUIDSHA256": "fe8f9fe212905612d16f9b20d87261c1471dc80d4aef10afd5a8bb4fa9e8ad22",
+  "timeoutSeconds": 10.0,
+  "beforeSwitch": {
+    "status": "timeout",
+    "exitCode": null,
+    "stages": [
+      "before engine",
+      "before outputNode"
+    ],
+    "elapsedSeconds": 10.014
+  },
+  "temporaryDefault": {
+    "id": 76,
+    "uidSHA256": "fe8f9fe212905612d16f9b20d87261c1471dc80d4aef10afd5a8bb4fa9e8ad22"
+  },
+  "afterSwitch": {
+    "status": "completed",
+    "exitCode": 0,
+    "stages": [
+      "before engine",
+      "before outputNode",
+      "outputNode acquired",
+      "before engine.start",
+      "engine started",
+      "player started",
+      "stopped"
+    ],
+    "elapsedSeconds": 0.331
+  },
+  "workerPlayback": {
+    "status": "started",
+    "events": [
+      {
+        "helloBoundaryLoopCapabilities": {
+          "outputDeviceSelection": true
+        }
+      },
+      {
+        "trace": {
+          "phase": "entered",
+          "elapsedSeconds": 0.001741083338856697,
+          "stage": "fileValidation"
+        }
+      },
+      {
+        "trace": {
+          "stage": "fileValidation",
+          "elapsedSeconds": 0.015129583334783092,
+          "phase": "completed"
+        }
+      },
+      {
+        "prepared": {}
+      },
+      {
+        "trace": {
+          "stage": "engineCreation",
+          "elapsedSeconds": 0.01540462500997819,
+          "phase": "entered"
+        }
+      },
+      {
+        "trace": {
+          "elapsedSeconds": 0.016211000009207055,
+          "stage": "engineCreation",
+          "phase": "completed"
+        }
+      },
+      {
+        "trace": {
+          "stage": "outputNodeAcquisition",
+          "elapsedSeconds": 0.01623474998632446,
+          "phase": "entered"
+        }
+      },
+      {
+        "trace": {
+          "elapsedSeconds": 0.07886229167343117,
+          "stage": "outputNodeAcquisition",
+          "phase": "completed"
+        }
+      },
+      {
+        "trace": {
+          "stage": "deviceSelection",
+          "elapsedSeconds": 0.07890200000838377,
+          "phase": "entered"
+        }
+      },
+      {
+        "trace": {
+          "elapsedSeconds": 0.0791894166613929,
+          "stage": "deviceSelection",
+          "phase": "completed"
+        }
+      },
+      {
+        "trace": {
+          "stage": "mixerAcquisition",
+          "elapsedSeconds": 0.07920716668013483,
+          "phase": "entered"
+        }
+      },
+      {
+        "trace": {
+          "elapsedSeconds": 0.08001025000703521,
+          "stage": "mixerAcquisition",
+          "phase": "completed"
+        }
+      },
+      {
+        "trace": {
+          "stage": "routing",
+          "elapsedSeconds": 0.08002266666153446,
+          "phase": "entered"
+        }
+      },
+      {
+        "trace": {
+          "elapsedSeconds": 0.08005449999473058,
+          "stage": "routing",
+          "phase": "completed"
+        }
+      },
+      {
+        "trace": {
+          "stage": "scheduling",
+          "elapsedSeconds": 0.08006249999743886,
+          "phase": "entered"
+        }
+      },
+      {
+        "trace": {
+          "phase": "completed",
+          "elapsedSeconds": 0.08010275001288392,
+          "stage": "scheduling"
+        }
+      },
+      {
+        "trace": {
+          "elapsedSeconds": 0.0801099166565109,
+          "stage": "engineStart",
+          "phase": "entered"
+        }
+      },
+      {
+        "trace": {
+          "phase": "completed",
+          "elapsedSeconds": 0.08432145832921378,
+          "stage": "engineStart"
+        }
+      },
+      {
+        "trace": {
+          "elapsedSeconds": 0.08434812500490807,
+          "stage": "playerPlay",
+          "phase": "entered"
+        }
+      },
+      {
+        "trace": {
+          "phase": "completed",
+          "elapsedSeconds": 0.09485262501402758,
+          "stage": "playerPlay"
+        }
+      },
+      {
+        "outputDevice": {
+          "descriptor": {
+            "uid": "BuiltInSpeakerDevice",
+            "name": "Mac Studio 스피커"
+          }
+        }
+      },
+      {
+        "started": {
+          "run": "3CC887F6-3910-4DAF-A7C4-01E256B69E02"
+        }
+      },
+      {
+        "clock": {
+          "run": "3CC887F6-3910-4DAF-A7C4-01E256B69E02",
+          "seconds": 0
+        }
+      },
+      {
+        "clock": {
+          "run": "3CC887F6-3910-4DAF-A7C4-01E256B69E02",
+          "seconds": 0.011625
+        }
+      },
+      {
+        "clock": {
+          "run": "3CC887F6-3910-4DAF-A7C4-01E256B69E02",
+          "seconds": 0.034833333333333334
+        }
+      },
+      {
+        "clock": {
+          "run": "3CC887F6-3910-4DAF-A7C4-01E256B69E02",
+          "seconds": 0.0580625
+        }
+      },
+      {
+        "clock": {
+          "run": "3CC887F6-3910-4DAF-A7C4-01E256B69E02",
+          "seconds": 0.08127083333333333
+        }
+      },
+      {
+        "stopped": {
+          "run": "3CC887F6-3910-4DAF-A7C4-01E256B69E02"
+        }
+      }
+    ],
+    "clockObserved": true,
+    "progressSeconds": 0.08127083333333333,
+    "stopped": true,
+    "exitCode": 0,
+    "success": true
+  },
+  "restoredDefault": {
+    "id": 111,
+    "uidSHA256": "d4bc96d8fc82c68ec973b2af8dca79a5f5ceb89e121c740e29c661043c3e5eed"
+  },
+  "changedTemporarily": true
+}

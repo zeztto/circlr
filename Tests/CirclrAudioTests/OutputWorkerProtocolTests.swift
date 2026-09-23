@@ -148,4 +148,89 @@ final class OutputWorkerProtocolTests: XCTestCase {
         XCTAssertThrowsError(try commands.receive(packet(1, .fileValidation, .entered, 0)))
     }
 
+    func testAudioQueueTraceHandshakeIsOrderedAndRequiresCompletedValidation() throws {
+        let id = UUID()
+        func packet(_ sequence: UInt64, _ payload: OutputWorkerPacket.Payload) throws -> Data {
+            try OutputWorkerWire.encode(.init(session: id, sequence: sequence, payload: payload))
+        }
+        let hello = try packet(1, .helloCapabilities(outputDeviceSelection: true))
+        let validationEntered = try packet(2, .trace(stage: .fileValidation, phase: .entered, elapsedSeconds: 0.1))
+        let validationCompleted = try packet(3, .trace(stage: .fileValidation, phase: .completed, elapsedSeconds: 0.2))
+        let backend = try packet(4, .audioQueueBackend)
+        var wire = OutputWorkerWire(session: id)
+        XCTAssertEqual(try wire.receive(hello + validationEntered + validationCompleted + backend).count, 4)
+        var sequence: UInt64 = 5
+        for stage in [PlaybackOutputTraceEvent.Stage.queueCreation, .queueAudible, .queueStart] {
+            for phase in [PlaybackOutputTraceEvent.Phase.entered, .completed] {
+                XCTAssertEqual(try wire.receive(packet(sequence, .trace(stage: stage, phase: phase,
+                    elapsedSeconds: Double(sequence) / 10))).count, 1)
+                sequence += 1
+            }
+        }
+        try wire.finish()
+
+        for prefix in [hello, hello + validationEntered] {
+            var invalid = OutputWorkerWire(session: id)
+            _ = try invalid.receive(prefix)
+            XCTAssertThrowsError(try invalid.receive(try packet(prefix == hello ? 2 : 3, .audioQueueBackend))) {
+                XCTAssertEqual($0 as? OutputWorkerWireError, .invalidPacket)
+            }
+        }
+        var duplicate = OutputWorkerWire(session: id)
+        _ = try duplicate.receive(hello + validationEntered + validationCompleted + backend)
+        XCTAssertThrowsError(try duplicate.receive(try packet(5, .audioQueueBackend))) {
+            XCTAssertEqual($0 as? OutputWorkerWireError, .invalidPacket)
+        }
+        var outOfOrder = OutputWorkerWire(session: id)
+        _ = try outOfOrder.receive(hello + validationEntered + validationCompleted + backend)
+        XCTAssertThrowsError(try outOfOrder.receive(try packet(5, .trace(stage: .queueStart, phase: .entered, elapsedSeconds: 0.5)))) {
+            XCTAssertEqual($0 as? OutputWorkerWireError, .invalidPacket)
+        }
+        var command = OutputWorkerWire(session: id, receiving: .commands)
+        XCTAssertThrowsError(try command.receive(try packet(1, .audioQueueBackend))) {
+            XCTAssertEqual($0 as? OutputWorkerWireError, .wrongDirection)
+        }
+    }
+
+    func testAudioQueueTraceAlsoAllowsLoopCommandsAndEvents() throws {
+        let session = UUID(), run = UUID(), change = UUID()
+        var events = OutputWorkerWire(session: session)
+        var eventSequence: UInt64 = 0
+        func receiveEvent(_ payload: OutputWorkerPacket.Payload) throws {
+            eventSequence += 1
+            let packet = OutputWorkerPacket(session: session, sequence: eventSequence, payload: payload)
+            XCTAssertEqual(try events.receive(OutputWorkerWire.encode(packet)), [packet])
+        }
+        try receiveEvent(.helloBoundaryLoopCapabilities(outputDeviceSelection: true))
+        for phase in [PlaybackOutputTraceEvent.Phase.entered, .completed] {
+            try receiveEvent(.trace(stage: .fileValidation, phase: phase, elapsedSeconds: Double(eventSequence) / 10))
+        }
+        try receiveEvent(.prepared)
+        try receiveEvent(.audioQueueBackend)
+        for stage in [PlaybackOutputTraceEvent.Stage.queueCreation, .queueAudible, .queueStart] {
+            for phase in [PlaybackOutputTraceEvent.Phase.entered, .completed] {
+                try receiveEvent(.trace(stage: stage, phase: phase, elapsedSeconds: Double(eventSequence) / 10))
+            }
+        }
+        try receiveEvent(.outputDevice(descriptor: .init(uid: "selected", name: "Output")))
+        try receiveEvent(.started(run: run))
+        try receiveEvent(.loopClock(run: run, seconds: 1))
+        try receiveEvent(.loopChangeScheduled(change: change, elapsedFrame: 48_000, frames: 960, exiting: false))
+        try receiveEvent(.loopFinished(run: run, elapsedFrame: 48_960))
+        try events.finish()
+
+        var commands = OutputWorkerWire(session: session, receiving: .commands)
+        var commandSequence: UInt64 = 0
+        func receiveCommand(_ payload: OutputWorkerPacket.Payload) throws {
+            commandSequence += 1
+            let packet = OutputWorkerPacket(session: session, sequence: commandSequence, payload: payload)
+            XCTAssertEqual(try commands.receive(OutputWorkerWire.encode(packet)), [packet])
+        }
+        try receiveCommand(.prepareLoopRange(frames: 576, cycleFrames: 480, startFrame: 0, selection: .deviceUID("selected")))
+        try receiveCommand(.play(run: run))
+        try receiveCommand(.queueLoopChange(change: change, frames: 1008, cycleFrames: 960))
+        try receiveCommand(.exitLoop(change: UUID()))
+        try commands.finish()
+    }
+
 }

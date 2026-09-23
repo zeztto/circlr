@@ -63,4 +63,29 @@ final class PlaybackFramingTests:XCTestCase {
         XCTAssertFalse(circle.intersects(CGRect(x:136,y:136,width:20,height:20)))
         XCTAssertTrue(circle.intersects(CGRect(x:130,y:100,width:20,height:20)))
     }
+    func testKeyboardSelectionRevealsOrbitEdgeWithOnlyNecessaryPan()throws {
+        let (_,fixture)=try fixture()
+        var node=fixture;node.center=Point(950,250);node.radius=80;node.scale=1
+        let viewport=CGRect(x:24,y:78,width:976,height:498)
+        let current=HierarchyCamera()
+        let target=try XCTUnwrap(current.revealing(node,in:viewport))
+        let center=target.screen(node.center),radius=node.outerRadius*target.zoom
+        XCTAssertEqual(target.zoom,1)
+        XCTAssertTrue(viewport.insetBy(dx:20,dy:20).contains(
+            CGRect(x:center.x-radius,y:center.y-radius,width:radius*2,height:radius*2)))
+        XCTAssertEqual(target.pan.y,0)
+        XCTAssertNil(target.revealing(node,in:viewport))
+    }
+    func testKeyboardSelectionFitsLargeOrbitAboveConsole()throws {
+        let (_,fixture)=try fixture()
+        var node=fixture;node.center=Point(1200,1100);node.radius=700;node.scale=1
+        let viewport=CanvasWorkspaceGeometry.viewport(width:1024,height:700,
+            console:CGRect(x:20,y:440,width:600,height:220))
+        let target=try XCTUnwrap(HierarchyCamera().revealing(node,in:viewport))
+        let center=target.screen(node.center),radius=node.outerRadius*target.zoom
+        XCTAssertLessThan(target.zoom,1)
+        XCTAssertTrue(viewport.insetBy(dx:20,dy:20).contains(
+            CGRect(x:center.x-radius,y:center.y-radius,width:radius*2,height:radius*2)))
+        XCTAssertNil(HierarchyCamera().revealing(node,in:.zero))
+    }
 }

@@ -25,6 +25,8 @@ struct OutputWorkerPacket: Codable, Equatable {
         case outputDevice(descriptor: OutputDeviceDescriptor)
         case prepare(frames: Int)
         case prepared
+        /// Optional AudioQueue route selected after file validation and preparation.
+        case audioQueueBackend
         case play(run: UUID)
         case started(run: UUID)
         case clock(run: UUID, seconds: Double)
@@ -74,7 +76,7 @@ struct OutputWorkerPacket: Codable, Equatable {
         case .failure(_, let message):
             guard !message.isEmpty, message.utf8.count <= 1024 else { throw OutputWorkerWireError.invalidPacket }
         case .trace(let stage, _, let elapsed):
-            guard OutputWorkerWire.traceStages.contains(stage), elapsed.isFinite, elapsed >= 0,
+            guard (OutputWorkerWire.traceStages.contains(stage) || OutputWorkerWire.audioQueueTraceStages.contains(stage)), elapsed.isFinite, elapsed >= 0,
                   elapsed <= Double(OutputWorkerWire.maximumFrames) / 48_000 else { throw OutputWorkerWireError.invalidPacket }
         default: break
         }
@@ -98,6 +100,7 @@ struct OutputWorkerWire {
     static let maximumFrames = 48_000 * 60 * 60 * 4
     static let legacyTraceStages: [PlaybackOutputTraceEvent.Stage] = [.fileValidation, .engineCreation, .mixerAcquisition, .routing, .scheduling, .engineStart, .playerPlay]
     static let traceStages: [PlaybackOutputTraceEvent.Stage] = [.fileValidation, .engineCreation, .outputNodeAcquisition, .deviceSelection, .mixerAcquisition, .routing, .scheduling, .engineStart, .playerPlay]
+    static let audioQueueTraceStages: [PlaybackOutputTraceEvent.Stage] = [.fileValidation, .queueCreation, .queueAudible, .queueStart]
     private let session: UUID
     private let direction: Direction
     private var lastSequence: UInt64 = 0
@@ -156,6 +159,14 @@ struct OutputWorkerWire {
                 if case .helloCapabilities(let supported) = packet.payload { selectedTraceStages = supported ? Self.traceStages : Self.legacyTraceStages }
                 if case .helloBoundaryLoopCapabilities(let supported) = packet.payload { selectedTraceStages = supported ? Self.traceStages : Self.legacyTraceStages }
                 if case .helloLoopCapabilities(let supported) = packet.payload { selectedTraceStages = supported ? Self.traceStages : Self.legacyTraceStages }
+                if case .audioQueueBackend = packet.payload {
+                    // The helper may switch routes only after the validated CAF was
+                    // prepared; the host also checks its own prepare/play state.
+                    guard traceIndex == 2, selectedTraceStages != Self.audioQueueTraceStages else {
+                        throw OutputWorkerWireError.invalidPacket
+                    }
+                    selectedTraceStages = Self.audioQueueTraceStages
+                }
                 if case .trace(let stage, let phase, let elapsed) = packet.payload {
                     guard traceIndex < selectedTraceStages.count * 2, stage == selectedTraceStages[traceIndex / 2],
                           phase == (traceIndex % 2 == 0 ? .entered : .completed), elapsed >= traceElapsed else {

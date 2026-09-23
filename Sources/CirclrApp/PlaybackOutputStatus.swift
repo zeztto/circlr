@@ -35,6 +35,9 @@ extension AppStore {
         case .scheduling:return "재생 배치"
         case .engineStart:return "장치 시작"
         case .playerPlay:return "재생 시작"
+        case .queueCreation:return "출력 큐 준비"
+        case .queueStart:return "출력 장치 시작"
+        case .queueAudible:return "음량 적용"
         }
     }
     private var outputLastStageDetail:String {
