@@ -26,7 +26,7 @@ if mode=='exit':sys.exit(1)
 origin=time.monotonic()
 def trace(stage,phase):
  emit({'trace':dict(stage=stage,phase=phase,elapsedSeconds=time.monotonic()-origin)})
-emit({'helloBoundaryLoopCapabilities':{'outputDeviceSelection':False}} if mode.startswith('boundary-') else ({'helloLoopCapabilities':{'outputDeviceSelection':False}} if mode.startswith('loop-') else ({'helloCapabilities':{'outputDeviceSelection':True}} if mode.startswith('device-') else {'hello':{}})))
+emit({'helloBoundaryLoopCapabilities':{'outputDeviceSelection':False}} if mode.startswith('boundary-') else ({'helloLoopCapabilities':{'outputDeviceSelection':False}} if mode.startswith('loop-') else ({'helloCapabilities':{'outputDeviceSelection':True}} if mode.startswith('device-') or mode=='trace-output-delay' else {'hello':{}})))
 cycle_frames=480
 first_frame=0
 phase_frame=0
@@ -62,14 +62,16 @@ for line in sys.stdin:
    with open(sys.argv[0]+'.descendant','w') as marker:marker.write(str(pid))
    os._exit(2)
   if mode.startswith('trace') or mode=='device-trace':
-   stages=['engineCreation']+(['outputNodeAcquisition','deviceSelection'] if mode=='device-trace' else [])+['mixerAcquisition','routing','scheduling','engineStart','playerPlay']
+   stages=['engineCreation']+(['outputNodeAcquisition','deviceSelection'] if mode in ['device-trace','trace-output-delay'] else [])+['mixerAcquisition','routing','scheduling','engineStart','playerPlay']
    for stage in stages:
     trace(stage,'entered')
+    if stage=='outputNodeAcquisition' and mode=='trace-output-delay' and not os.path.exists(sys.argv[0]+'.retry'):
+     time.sleep(2)
     if stage=='mixerAcquisition' and mode in ['trace-delay','trace-eof']:
      if mode=='trace-eof':sys.exit(2)
      time.sleep(2)
     trace(stage,'completed')
-  if mode.startswith('device-') and mode != 'device-missing':
+  if (mode.startswith('device-') and mode != 'device-missing') or mode=='trace-output-delay':
    emit({'outputDevice':{'descriptor':{'uid':'other' if mode=='device-mismatch' else 'selected','name':'Fixture output'}}})
   emit({'started':{'run':run}})
   emit({'loopClock' if mode.startswith('loop-') or mode.startswith('boundary-') else 'clock':{'run':run,'seconds':20000 if mode.startswith('loop-') else 0.125}})
@@ -313,6 +315,32 @@ for line in sys.stdin:
             try await Task.sleep(for: .milliseconds(550))
             XCTAssertEqual(host.status.trace, trace)
         }
+    }
+    func testOutputNodeAcquisitionTimeoutCleansUpAndRetryStarts() async throws {
+        let executable = try fixture("trace-output-delay")
+        let host = OutputWorkerProcess(executable: executable)
+        let attempt = Task { try await host.play(PCM(frames: 48000), from: 0, timeout: 1) }
+        try await wait { host.status.trace?.events.last?.stage == .outputNodeAcquisition }
+        do { try await attempt.value; XCTFail("stalled output node started") } catch {}
+        try await wait { host.status.phase == .idle }
+        let stalledID = try XCTUnwrap(host.status.attemptID)
+        XCTAssertEqual(host.status.request, .timedOut)
+        XCTAssertFalse(host.status.transport.didStart)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: temporary(stalledID).path))
+        let trace = try XCTUnwrap(host.status.trace)
+        XCTAssertTrue(trace.helperReportsStages)
+        XCTAssertEqual(trace.events.last?.stage, .outputNodeAcquisition)
+        XCTAssertEqual(trace.events.last?.phase, .entered)
+
+        let retryMarker = URL(fileURLWithPath: executable.path + ".retry")
+        try Data().write(to: retryMarker)
+        scripts.append(retryMarker)
+        try await host.play(PCM(frames: 48000), from: 0, timeout: 2)
+        XCTAssertTrue(host.status.transport.didStart)
+        XCTAssertEqual(host.status.attempts, 2)
+        XCTAssertNotEqual(host.status.attemptID, stalledID)
+        host.cancel()
+        try await wait { host.status.phase == .idle }
     }
     func testTerminationBeforePipeDeliveryRetainsLastTrace() async throws {
         let terminated = DispatchSemaphore(value: 0)
