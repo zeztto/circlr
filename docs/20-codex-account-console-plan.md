@@ -6,7 +6,7 @@
 
 **사용자가 자신의 ChatGPT 계정으로 Codex에 로그인하고, circlr의 접이식 콘솔에서 대화하며 곡을 편집한다.** circlr가 로컬 Codex App Server를 관리하고, Codex는 circlr MCP를 통해 기존 음악 명령을 실행한다. 로그인 과정의 공식 브라우저를 제외하면 별도의 Codex 앱·터미널을 열 필요가 없는 경험을 목표로 한다.
 
-이 문서는 아키텍처 결정과 구현 순서다. 0.80 개발 후보에는 앱 실행 파일과 분리된 `CirclrCodex` 프로토콜 코어, 범위 제한 `AgentRunLease`, 그리고 한 turn에만 묶이는 앱 내부 `TrustedAgentIngress` socket이 있다. 실제 Unix socket에서 편집·중단·완료 후 늦은 요청을 검증했지만, 이 ingress는 앱의 Codex 세션이나 MCP helper에 아직 연결되지 않았다. 계정 연결·모델 호출·런타임 설치·자연어 대화 UI와 인증된 운영 호출자는 구현·검증되지 않았다. 아래의 파일·정책은 항목별 실제 코드와 QA가 확인될 때까지 완료로 보지 않는다.
+이 문서는 아키텍처 결정과 구현 순서다. 0.80 개발 후보에는 앱 실행 파일과 분리된 `CirclrCodex` 프로토콜 코어, 범위 제한 `AgentRunLease`, 그리고 한 turn에만 묶이는 앱 내부 `TrustedAgentIngress` socket이 있다. 실제 Unix socket에서 편집·중단·완료 후 늦은 요청을 검증했지만, 이 ingress는 앱의 Codex 세션이나 MCP helper에 아직 연결되지 않았다. build210은 내부 프로토콜에 계정 상태 조회·모델 목록·읽기 전용 thread 생성과 명시적 turn 모델을 추가했다. build211은 보안 리뷰에 따라 자식 환경·작업 디렉터리 설정을 host 생성 시 필수로 만들고, 관리형 reducer에서 승인된 canonical 디렉터리와 열린 읽기 전용 thread ID에 turn을 묶었다. 설치 CLI와의 계정·한 turn smoke는 **앱 밖**에서만 수행했다. 앱 안의 계정 연결·모델 대화·런타임 설치·자연어 UI와 인증된 운영 호출자는 구현·검증되지 않았다. 아래의 파일·정책은 항목별 실제 코드와 QA가 확인될 때까지 완료로 보지 않는다.
 
 ## 1. 공식 근거와 선택
 
@@ -137,6 +137,8 @@ App Server wire에서는 `jsonrpc` 필드를 생략하며 MCP JSON-RPC envelope�
 
 로컬 0.149.1 schema에서 `thread/start`·`thread/resume`에는 `config` 객체가 있지만 `turn/start`에는 없다. 따라서 같은 thread에서 다음 turn을 시작할 때 MCP helper가 자동으로 교체된다고 가정할 수 없다. 한 turn의 socket/capability를 새 turn에 재사용하지 않도록 helper 종료·재기동과 late-call 차단을 pinned-runtime fixture로 증명해야 한다. `mcp_servers.<id>.env_vars`는 [공식 MCP 설정](https://learn.chatgpt.com/docs/config-file/config-reference)의 전달 항목일 뿐, 그 값이 모델·shell에 비노출된다는 보증이 아니므로 실제 자식 환경·프로세스 신원을 검사하기 전에는 credential 전달 경로로 확정하지 않는다.
 
+2026-09-24의 [별도 개발 smoke](../qa/0.80-build210-codex-smoke.md)는 설치된 0.149.1에서 ChatGPT 계정 조회와 실제 `turn/completed=completed`를 확인했다. 같은 런타임에서 `thread/start.sandbox`는 문서의 `readOnly` 대신 `read-only`를 받아들였고, 전역 설정을 따른 turn은 `gpt-6-astra`가 더 새 Codex를 요구해 실패했다. `model/list`에서 고른 `gpt-5.6-sol`을 thread와 turn 양쪽에 명시하자 완료됐다. 그러므로 고정 버전의 생성 schema와 실제 응답으로 값·모델을 선택하며, 계정 조회만으로 대화 성공을 판정하지 않는다. 앱 내부 대화와 도구 권한은 여전히 미구현이다.
+
 연결 상태는 `stopped → starting → initializing → needsLogin/ready → reconnecting/failed`로 모델링한다. `ready`는 인증·정책·필수 MCP가 모두 준비됐다는 뜻이다. turn 상태는 `idle/running/waitingForInput/cancelling/completed/failed/interrupted`로 별도 관리한다. 인증돼도 정책이나 MCP가 준비되지 않으면 읽기 설명만 가능하고 쓰기는 닫는다.
 
 ## 7. 음악 명령의 실행 권한과 충돌
@@ -207,7 +209,7 @@ Codex 설정의 MCP allowlist, `features.shell_tool`, `features.unified_exec`, `
 | P4 · UI/UX → native UI | `Sources/CirclrApp/AgentConsole.swift`, `CodexApprovalView.swift`, `CodexConversationView.swift`, `RootView.swift` | 한 overlay에서 대화·진행·질문·중단·사용량. 기존 canvas gesture와 명령 유지. Korean IME·VoiceOver·키보드·최소화 검증 |
 | P5 · infra/QA/review | `scripts/package-app.py`, `scripts/build-app.sh`, `Resources/Info.plist`, 향후 `qa/codex-console-review.md`, `README.md`, `CHANGELOG.md` | 깨끗한 Mac의 앱 단독 설치·로그인·편집·복원. 서명·notarization·runtime 교체/rollback. 실제 음악 E2E 증거 후 버전 갱신 |
 
-P1의 Foundation codec·상태기계는 build189에서 착수하고 build190에서 내부 테스트 대상으로 보강했다. 분할 UTF-8 JSONL, 요청 ID·세대, 초기화·turn·중단, 응답보다 먼저 도착한 이벤트와 승인 요청, 늦은 이벤트와 연결 교체를 fixture로 검사한다. turn ID가 없어 소유 대화를 확정할 수 없는 MCP elicitation은 거절한다. 앱 실행 파일과 연결하거나 계정/모델을 호출하지 않았다. P2·P3·P4는 G0가 확정된 뒤 계약을 소비하며, 지원되는 요청에 대한 신뢰된 승인 UI·RunLease·재배포 런타임이 아직 필요하다. 코드 수정 뒤 native/code/security 검토와 QA를 거친다. `.circlr` 음악 schema 변경은 이 기능의 전제 조건이 아니다.
+P1의 Foundation codec·상태기계는 build189에서 착수하고 build190에서 내부 테스트 대상으로 보강했다. 분할 UTF-8 JSONL, 요청 ID·세대, 초기화·turn·중단, 응답보다 먼저 도착한 이벤트와 승인 요청, 늦은 이벤트와 연결 교체를 fixture로 검사한다. turn ID가 없어 소유 대화를 확정할 수 없는 MCP elicitation은 거절한다. build210에는 같은 요청 ID 공간의 `account/read`, `model/list`, `thread/start`와 명시적 `turn/start.model`을 추가했다. build210에서 자식 프로세스의 환경 allowlist·canonical 작업 디렉터리를 host에 넣었다. build211에서는 환경 설정의 생략 경로를 제거하고, 관리형 reducer의 승인 canonical cwd·서버가 연 읽기 전용 thread ID 외의 turn을 거절했다. 기존 비관리형 turn-only 프로토콜 경로는 앱과 연결되지 않았으며 운영 계정 콘솔로 재사용하면 안 된다. 향후 통합자는 host의 승인 workspace와 reducer의 `authorizedThreadCWD`를 같은 신뢰된 선택에서 주입해야 한다. 단, 아직 앱 target에는 연결되지 않았고, 자식에게 전달한 `CODEX_HOME`이 이후 모델·shell에서 비밀로 유지되는지는 검증하지 않았다. P2·P3·P4는 G0가 확정된 뒤 계약을 소비하며, 지원되는 요청에 대한 신뢰된 승인 UI·RunLease·재배포 런타임이 아직 필요하다. 코드 수정 뒤 native/code/security 검토와 QA를 거친다. `.circlr` 음악 schema 변경은 이 기능의 전제 조건이 아니다.
 
 ## 11. 인수 검증
 
@@ -233,7 +235,7 @@ fixture 검증, 실제 계정 통신, native UI, 실제 오디오, 배포 패키
 ## 12. 이번 계획의 검증 기록과 남은 결정
 
 - 공식 페이지를 2026-09-07에 열어 확인했다. 기존 `developers.openai.com/codex/*` 주소 일부는 위의 `learn.chatgpt.com/docs/*`로 이동한다.
-- 로컬 `codex --version`: **codex-cli 0.149.1**. `app-server --help`와 `generate-json-schema`를 실행했다. 2026-09-24에는 [bounded stdio 초기화 QA](../qa/0.80-codex-stdio.md)로 실제 자식 프로세스의 `initialize` 응답을 확인하고 종료했다. 모델 요청·로그인·계정 조회는 실행하지 않았다.
+- 로컬 `codex --version`: **codex-cli 0.149.1**. `app-server --help`와 `generate-json-schema`를 실행했다. 초기 [bounded stdio QA](../qa/0.80-codex-stdio.md)는 `initialize`까지만 확인했다. 이어 [build210 앱 밖 smoke](../qa/0.80-build210-codex-smoke.md)에서 기존 ChatGPT 로그인 조회·모델 목록·명시적 모델의 한 turn 완료를 확인했다. 새 로그인 흐름과 앱 내부 대화는 실행하지 않았다.
 - 생성 schema에서 주요 메서드·필수 인자를 확인했다. 특히 `turn/steer.expectedTurnId`가 필요하고, 외부 토큰 주입 항목에는 내부 사용 제한 설명이 있어 채택하지 않았다. 조사 결과는 [로컬 schema 대조 기록](evidence/codex-app-server-0.149.1.json)에 보관한다.
 - 아직 검증하지 않은 사항: 배포할 런타임의 실제 로그인·격리 동작, clean Mac 실행, 조직별 허용 여부, 생산 환경 지원 상태, 아키텍처별 재배포 의존성과 서명. G0/P2/P5의 통과 항목이다.
 - 2026-09-24 공식 문서 재검토에서도 App Server의 계정·대화 API와 명령의 production 미지원 표기는 동시에 유지된다. Python SDK의 stable 배포본은 내부 App Server 사용 사실을 바꾸지 않는다. 현재 gateway·일반 MCP socket의 정적 감사에서는 신뢰 세션 연결 부재와 STOP 우회 위험을 확인했다. 내부 테스트는 별도로 추가하되 이것만으로 G0를 통과시키지 않는다.

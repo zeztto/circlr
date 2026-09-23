@@ -10,6 +10,10 @@ final class CodexProtocolTests: XCTestCase {
         return reducer.dequeueOutbound(generation: generation)
     }
 
+    private func canonical(_ path: String) -> String {
+        URL(fileURLWithPath: path).resolvingSymlinksInPath().standardizedFileURL.path
+    }
+
     private func handshake(_ reducer: inout CodexEventReducer) throws -> UInt64 {
         let generation = try reducer.start(version: "0.80.0")
         let initialize = try XCTUnwrap(dequeue(&reducer))
@@ -30,6 +34,189 @@ final class CodexProtocolTests: XCTestCase {
         XCTAssertEqual(try CodexWire.decode(Data(initialized.dropLast())),
                        .notification(method: "initialized", params: .object([:])))
         return generation
+    }
+
+    func testAccountReadProjectsOnlyModeAndPlanAndSharesRequestIDs() throws {
+        var reducer = CodexEventReducer(authorizedThreadCWD: "/tmp")
+        let generation = try handshake(&reducer)
+        let accountID = try reducer.readAccount()
+        let accountRequest = try JSONDecoder().decode(CodexJSONValue.self, from: XCTUnwrap(dequeue(&reducer)))
+        XCTAssertEqual(accountRequest["method"], .string("account/read"))
+        XCTAssertEqual(accountRequest["params"]?["refreshToken"], .bool(false))
+        XCTAssertEqual(accountRequest["id"], accountID.value.json)
+        XCTAssertThrowsError(try reducer.readAccount())
+
+        let response = packet("{\"id\":\(idNumber(accountID)),\"result\":{\"account\":{\"type\":\"chatgpt\",\"email\":\"private@example.test\",\"planType\":\"pro\",\"accessToken\":\"secret\"},\"requiresOpenaiAuth\":true}}")
+        let events = try reducer.receive(response, generation: generation)
+        XCTAssertEqual(events, [.accountRead(CodexAccountSummary(authMode: .chatGPT, plan: .pro))])
+        XCTAssertFalse(String(describing: events).contains("private@example.test"))
+        XCTAssertFalse(String(describing: events).contains("secret"))
+
+        let nextID = try reducer.startThread(model: "gpt-5.6-sol", cwd: "/tmp")
+        XCTAssertEqual(idNumber(nextID), idNumber(accountID) + 1)
+        let threadRequest = try JSONDecoder().decode(CodexJSONValue.self, from: XCTUnwrap(dequeue(&reducer)))
+        XCTAssertEqual(threadRequest["method"], .string("thread/start"))
+        XCTAssertEqual(threadRequest["params"]?["model"], .string("gpt-5.6-sol"))
+        XCTAssertEqual(threadRequest["params"]?["cwd"], .string(canonical("/tmp")))
+        XCTAssertEqual(threadRequest["params"]?["sandbox"], .string("read-only"))
+        XCTAssertEqual(threadRequest["params"]?["approvalPolicy"], .string("never"))
+        XCTAssertNil(threadRequest["jsonrpc"])
+        XCTAssertThrowsError(try reducer.startTurn(threadID: "thread-1", text: "too early"))
+        XCTAssertEqual(try reducer.receive(packet("{\"id\":\(idNumber(nextID)),\"result\":{\"thread\":{\"id\":\"thread-1\"}}}"), generation: generation),
+                       [.threadOpened(threadID: "thread-1")])
+        XCTAssertEqual(reducer.activeThreadID, "thread-1")
+        let turnID = try reducer.startTurn(threadID: "thread-1", text: "Hello", model: "gpt-5.6-sol")
+        XCTAssertEqual(idNumber(turnID), idNumber(nextID) + 1)
+        let turnRequest = try JSONDecoder().decode(CodexJSONValue.self, from: XCTUnwrap(dequeue(&reducer)))
+        XCTAssertEqual(turnRequest["params"]?["model"], .string("gpt-5.6-sol"))
+    }
+
+    func testAccountReadSignedOutAndMalformedResultsFailClosed() throws {
+        var reducer = CodexEventReducer()
+        let generation = try handshake(&reducer)
+        let firstID = try reducer.readAccount(refreshToken: true)
+        let firstRequest = try JSONDecoder().decode(CodexJSONValue.self, from: XCTUnwrap(dequeue(&reducer)))
+        XCTAssertEqual(firstRequest["params"]?["refreshToken"], .bool(true))
+        XCTAssertEqual(try reducer.receive(packet("{\"id\":\(idNumber(firstID)),\"result\":{\"account\":null,\"requiresOpenaiAuth\":true}}"), generation: generation),
+                       [.accountRead(CodexAccountSummary(authMode: .signedOut, plan: nil))])
+        let secondID = try reducer.readAccount()
+        _ = dequeue(&reducer)
+        XCTAssertEqual(try reducer.receive(packet("{\"id\":\(idNumber(secondID)),\"result\":{\"account\":{\"type\":\"chatgpt\",\"email\":\"private@example.test\",\"planType\":null},\"requiresOpenaiAuth\":true}}"), generation: generation),
+                       [.accountRead(CodexAccountSummary(authMode: .chatGPT, plan: .unknown))])
+        let thirdID = try reducer.readAccount()
+        _ = dequeue(&reducer)
+        XCTAssertEqual(try reducer.receive(packet("{\"id\":\(idNumber(thirdID)),\"result\":{\"account\":{\"type\":\"chatgpt\",\"planType\":\"future-plan\"},\"requiresOpenaiAuth\":true}}"), generation: generation),
+                       [.accountRead(CodexAccountSummary(authMode: .chatGPT, plan: .unknown))])
+        let malformedID = try reducer.readAccount()
+        _ = dequeue(&reducer)
+        XCTAssertThrowsError(try reducer.receive(packet("{\"id\":\(idNumber(malformedID)),\"result\":{\"account\":{\"type\":\"chatgpt\"},\"requiresOpenaiAuth\":true}}"), generation: generation)) { error in
+            XCTAssertEqual(error as? CodexProtocolError, .requiredField("account/read.account.planType"))
+        }
+        XCTAssertEqual(reducer.connectionState, .failed(.requiredField("account/read.account.planType")))
+        XCTAssertEqual(reducer.outboundPacketCount, 0)
+    }
+
+    func testSchemaOptionalAccountAndModelCursorRemainValid() throws {
+        var reducer = CodexEventReducer()
+        let generation = try handshake(&reducer)
+        let accountID = try reducer.readAccount()
+        _ = dequeue(&reducer)
+        XCTAssertEqual(try reducer.receive(packet("{\"id\":\(idNumber(accountID)),\"result\":{\"requiresOpenaiAuth\":true}}"), generation: generation),
+                       [.accountRead(CodexAccountSummary(authMode: .signedOut, plan: nil))])
+        let catalogID = try reducer.listModels()
+        _ = dequeue(&reducer)
+        XCTAssertEqual(try reducer.receive(packet("{\"id\":\(idNumber(catalogID)),\"result\":{\"data\":[{\"id\":\"gpt-5.6-sol\",\"isDefault\":true}]}}"), generation: generation),
+                       [.modelsListed(CodexModelPage(models: [CodexModelSummary(id: "gpt-5.6-sol", isDefault: true)], nextCursor: nil))])
+        XCTAssertEqual(reducer.connectionState, .protocolReady)
+    }
+
+    func testModelListProjectsOnlyIDAndDefaultWithCursor() throws {
+        var reducer = CodexEventReducer()
+        let generation = try handshake(&reducer)
+        let firstID = try reducer.listModels()
+        let firstRequest = try JSONDecoder().decode(CodexJSONValue.self, from: XCTUnwrap(dequeue(&reducer)))
+        XCTAssertEqual(firstRequest["method"], .string("model/list"))
+        XCTAssertEqual(firstRequest["params"]?["includeHidden"], .bool(false))
+        XCTAssertNil(firstRequest["params"]?["cursor"])
+        XCTAssertThrowsError(try reducer.listModels())
+        let events = try reducer.receive(packet("{\"id\":\(idNumber(firstID)),\"result\":{\"data\":[{\"id\":\"gpt-5.6-sol\",\"isDefault\":true,\"displayName\":\"Sol\",\"description\":\"private@example.test secret\"}],\"nextCursor\":\"page-2\"}}"), generation: generation)
+        XCTAssertEqual(events, [.modelsListed(CodexModelPage(models: [CodexModelSummary(id: "gpt-5.6-sol", isDefault: true)], nextCursor: "page-2"))])
+        XCTAssertFalse(String(describing: events).contains("private@example.test"))
+        XCTAssertFalse(String(describing: events).contains("secret"))
+        let nextID = try reducer.listModels(cursor: "page-2")
+        let nextRequest = try JSONDecoder().decode(CodexJSONValue.self, from: XCTUnwrap(dequeue(&reducer)))
+        XCTAssertEqual(nextRequest["params"]?["cursor"], .string("page-2"))
+        XCTAssertEqual(try reducer.receive(packet("{\"id\":\(idNumber(nextID)),\"result\":{\"data\":[],\"nextCursor\":null}}"), generation: generation),
+                       [.modelsListed(CodexModelPage(models: [], nextCursor: nil))])
+        XCTAssertThrowsError(try reducer.listModels(cursor: ""))
+    }
+
+    func testMalformedModelCatalogFailsClosed() throws {
+        var reducer = CodexEventReducer()
+        let generation = try handshake(&reducer)
+        let id = try reducer.listModels()
+        _ = dequeue(&reducer)
+        XCTAssertThrowsError(try reducer.receive(packet("{\"id\":\(idNumber(id)),\"result\":{\"data\":[{\"id\":\"gpt-5.6-sol\"}],\"nextCursor\":null}}"), generation: generation)) { error in
+            XCTAssertEqual(error as? CodexProtocolError, .requiredField("model/list.data.id/isDefault"))
+        }
+        XCTAssertEqual(reducer.connectionState, .failed(.requiredField("model/list.data.id/isDefault")))
+    }
+
+    func testAccountAndModelRPCErrorsDoNotExposeServerText() throws {
+        var reducer = CodexEventReducer()
+        let generation = try handshake(&reducer)
+        let accountID = try reducer.readAccount()
+        _ = dequeue(&reducer)
+        XCTAssertEqual(try reducer.receive(packet("{\"id\":\(idNumber(accountID)),\"error\":{\"code\":-32000,\"message\":\"private@example.test secret\"}}"), generation: generation),
+                       [.rpcError(method: "account/read", code: -32000, message: "Codex request failed")])
+        let modelID = try reducer.listModels()
+        _ = dequeue(&reducer)
+        XCTAssertEqual(try reducer.receive(packet("{\"id\":\(idNumber(modelID)),\"error\":{\"code\":-32000,\"message\":\"private@example.test secret\"}}"), generation: generation),
+                       [.rpcError(method: "model/list", code: -32000, message: "Codex request failed")])
+        XCTAssertEqual(reducer.connectionState, .protocolReady)
+    }
+
+    func testThreadStartRejectsMalformedAndStaleResponses() throws {
+        var reducer = CodexEventReducer(authorizedThreadCWD: "/tmp")
+        let oldGeneration = try handshake(&reducer)
+        let oldID = try reducer.startThread(model: "gpt-5.6-sol", cwd: "/tmp")
+        _ = dequeue(&reducer)
+        let generation = try handshake(&reducer)
+        XCTAssertEqual(try reducer.receive(packet("{\"id\":\(idNumber(oldID)),\"result\":{\"thread\":{\"id\":\"old\"}}}"), generation: oldGeneration),
+                       [.ignoredStaleGeneration])
+        XCTAssertNil(reducer.activeThreadID)
+        XCTAssertThrowsError(try reducer.startThread(model: " ", cwd: "/tmp"))
+        XCTAssertThrowsError(try reducer.startThread(model: "gpt-5.6-sol", cwd: "relative"))
+        let id = try reducer.startThread(model: "gpt-5.6-sol", cwd: "/tmp")
+        _ = dequeue(&reducer)
+        XCTAssertThrowsError(try reducer.startThread(model: "gpt-5.6-sol", cwd: "/tmp"))
+        XCTAssertThrowsError(try reducer.receive(packet("{\"id\":\(idNumber(id)),\"result\":{\"thread\":{}}}"), generation: generation)) { error in
+            XCTAssertEqual(error as? CodexProtocolError, .requiredField("thread.id"))
+        }
+        XCTAssertEqual(reducer.connectionState, .failed(.requiredField("thread.id")))
+        XCTAssertNil(reducer.activeThreadID)
+    }
+
+    func testManagedThreadRejectsForeignTurnIDBeforeAndAfterOpening() throws {
+        var reducer = CodexEventReducer(authorizedThreadCWD: "/tmp")
+        let generation = try handshake(&reducer)
+        XCTAssertThrowsError(try reducer.startTurn(threadID: "foreign", text: "before open"))
+        XCTAssertNil(dequeue(&reducer))
+
+        let threadRequestID = try reducer.startThread(model: "gpt-5.6-sol", cwd: "/tmp")
+        _ = dequeue(&reducer)
+        XCTAssertEqual(try reducer.receive(packet("{\"id\":\(idNumber(threadRequestID)),\"result\":{\"thread\":{\"id\":\"managed\"}}}"), generation: generation),
+                       [.threadOpened(threadID: "managed")])
+        XCTAssertThrowsError(try reducer.startTurn(threadID: "foreign", text: "wrong thread"))
+        XCTAssertEqual(reducer.activeThreadID, "managed")
+        XCTAssertEqual(reducer.turnState, .idle)
+        XCTAssertNil(dequeue(&reducer))
+        _ = try reducer.startTurn(threadID: "managed", text: "allowed")
+        let turnRequest = try JSONDecoder().decode(CodexJSONValue.self, from: XCTUnwrap(dequeue(&reducer)))
+        XCTAssertEqual(turnRequest["params"]?["threadId"], .string("managed"))
+    }
+
+    func testThreadStartRequiresBoundAuthorizedDirectory() throws {
+        var unbound = CodexEventReducer()
+        _ = try handshake(&unbound)
+        XCTAssertThrowsError(try unbound.startThread(model: "gpt-5.6-sol", cwd: "/tmp"))
+        XCTAssertNil(dequeue(&unbound))
+
+        var invalidBinding = CodexEventReducer(authorizedThreadCWD: "/tmp/missing-circlr-workspace")
+        _ = try handshake(&invalidBinding)
+        XCTAssertThrowsError(try invalidBinding.startThread(model: "gpt-5.6-sol", cwd: "/tmp"))
+        XCTAssertThrowsError(try invalidBinding.startTurn(threadID: "foreign", text: "cannot bypass binding"))
+        XCTAssertNil(dequeue(&invalidBinding))
+
+        var reducer = CodexEventReducer(authorizedThreadCWD: "/tmp")
+        _ = try handshake(&reducer)
+        XCTAssertThrowsError(try reducer.startThread(model: "gpt-5.6-sol", cwd: "/"))
+        XCTAssertThrowsError(try reducer.startThread(model: "gpt-5.6-sol", cwd: "/tmp/../etc"))
+        XCTAssertThrowsError(try reducer.startThread(model: "gpt-5.6-sol", cwd: "/tmp/missing-circlr-workspace"))
+        XCTAssertNil(dequeue(&reducer))
+        _ = try reducer.startThread(model: "gpt-5.6-sol", cwd: "/tmp/./")
+        let request = try JSONDecoder().decode(CodexJSONValue.self, from: XCTUnwrap(dequeue(&reducer)))
+        XCTAssertEqual(request["params"]?["cwd"], .string(canonical("/tmp")))
     }
 
     func testFramerRestoresSplitUnicodeAndCoalescedMessages() throws {
@@ -79,6 +266,7 @@ final class CodexProtocolTests: XCTestCase {
         let request = try JSONDecoder().decode(CodexJSONValue.self, from: outbound)
         XCTAssertEqual(request["method"], .string("turn/start"))
         XCTAssertEqual(request["params"]?["input"]?[0]?["text"], .string("Chorus 분석"))
+        XCTAssertNil(request["params"]?["model"])
         XCTAssertEqual(try reducer.receive(packet("{\"id\":\(idNumber(turnRequestID)),\"result\":{\"turn\":{\"id\":\"turn-1\",\"status\":\"inProgress\"}}}"), generation: generation),
                        [.turnStarted(threadID: "thread-1", turnID: "turn-1")])
         let stream = packet("{\"method\":\"item/agentMessage/delta\",\"params\":{\"threadId\":\"thread-1\",\"turnId\":\"turn-1\",\"itemId\":\"item-1\",\"delta\":\"안녕\"}}")

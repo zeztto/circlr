@@ -23,6 +23,10 @@
 
 버튼이 보이지 않으면 앱 실행을 다시 시도한 뒤 설정을 확인하세요. 조직에서 관리하는 Mac은 관리자에게 문의하세요. **앱이 손상되었거나 컴퓨터를 손상시킨다는 경고**는 위 절차로 처리하지 말고 다운로드와 체크섬을 재확인한 뒤 [이슈](https://github.com/zeztto/circlr/issues)에 버전·macOS 버전·경고 내용을 남겨주세요. 경고 종류는 [Apple 공식 안내](https://support.apple.com/ko-kr/102445)를 참고하세요.
 
+### 오디오 장치에서 소리가 나지 않을 때
+
+앱의 **출력 설정**에서 Mac 내장 스피커 또는 다른 지원 장치를 명시적으로 선택하고 다시 재생해 보세요. 이 선택은 circlr에만 적용되며 macOS의 기본 출력은 바꾸지 않습니다. 오래된 Scarlett 등 외부 인터페이스는 세대·macOS 버전에 따라 지원 범위가 다르므로 [Focusrite의 macOS 호환성 안내](https://support.focusrite.com/hc/en-gb/articles/12033372452754-Focusrite-Compatibility-on-macOS)에서 정확한 세대를 확인하세요. 장치 초기화가 실패하면 circlr는 재시도를 안내하며, 해당 장치의 실제 청취 품질은 별도로 확인해야 합니다.
+
 ## English
 
 Current circlr macOS packages are **ad-hoc signed** and **not notarized by Apple**. macOS may report that it cannot verify the developer or check the app for malicious software on first launch. See the [packaging script](../scripts/package-app.py) and [release procedure](releases/README.md) for the packaging state.
@@ -43,3 +47,7 @@ Proceed only after checking the source and file and deciding you trust the app. 
 4. Choose **Open** in the next alert and authenticate with your Mac login password or Touch ID if prompted. Subsequent launches of the same app can use a normal double-click.
 
 If the button is missing, attempt a launch again and check Settings. For a managed Mac, contact your administrator. If the alert says the app **is damaged or will damage your computer**, recheck the download and checksum and [report an issue](https://github.com/zeztto/circlr/issues) with the app version, macOS version and alert text instead of following the steps above. See [Apple’s alert descriptions](https://support.apple.com/en-us/102445).
+
+### If audio does not start on an external interface
+
+Choose the Mac's built-in speakers or another supported device explicitly in circlr's **Output settings**, then retry playback. This selection affects circlr only; it does not change the macOS system default. Older Scarlett interfaces have different support by generation and macOS version, so check the exact model against [Focusrite's macOS compatibility guidance](https://support.focusrite.com/hc/en-gb/articles/12033372452754-Focusrite-Compatibility-on-macOS). circlr reports device initialization failures and allows a retry; audible output on a particular interface still needs its own check.

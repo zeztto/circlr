@@ -4,6 +4,18 @@ import XCTest
 @testable import CirclrCodex
 
 final class CodexProcessHostTests: XCTestCase {
+    private func canonicalURL(_ url: URL) throws -> URL {
+        let resolved = try XCTUnwrap(url.path.withCString { realpath($0, nil) })
+        defer { free(resolved) }
+        return URL(fileURLWithPath: String(cString: resolved), isDirectory: true)
+    }
+
+    private func safeChildConfiguration() throws -> CodexProcessChildConfiguration {
+        CodexProcessChildConfiguration(
+            environment: ["LANG": "C", "PATH": "/usr/bin:/bin"],
+            currentDirectoryURL: try canonicalURL(FileManager.default.temporaryDirectory))
+    }
+
     private final class Observed: @unchecked Sendable {
         private let lock = NSLock()
         private var bytes = Data()
@@ -30,8 +42,109 @@ final class CodexProcessHostTests: XCTestCase {
         func orderedMessages() -> [String] { lock.lock(); defer { lock.unlock() }; return messages }
     }
 
+    private func outputFromShortLivedChild(_ host: CodexProcessHost) throws -> String {
+        let ended = expectation(description: "configured child exited")
+        let observed = Observed()
+        do {
+            _ = try host.start(onOutput: { _, bytes in
+                _ = observed.append(bytes, expectedCount: Int.max)
+            }, onExit: { _, reason in
+                observed.setExit(reason)
+                ended.fulfill()
+            })
+        } catch {
+            ended.fulfill()
+            wait(for: [ended], timeout: 0)
+            throw error
+        }
+        wait(for: [ended], timeout: 3)
+        XCTAssertEqual(observed.exitReason(), .exited(status: 0))
+        return String(decoding: observed.output(), as: UTF8.self)
+    }
+
+    func testExplicitChildConfigurationReplacesEnvironmentAndSetsCanonicalDirectory() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("circlr-codex-host-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let canonicalDirectory = try canonicalURL(directory)
+        let configuration = CodexProcessChildConfiguration(
+            environment: ["LANG": "C", "PATH": "/usr/bin:/bin"], currentDirectoryURL: canonicalDirectory)
+
+        let environment = try outputFromShortLivedChild(CodexProcessHost(
+            executableURL: URL(fileURLWithPath: "/usr/bin/env"), arguments: [],
+            childConfiguration: configuration))
+        XCTAssertEqual(Set(environment.split(separator: "\n").map(String.init)),
+                       Set(["LANG=C", "PATH=/usr/bin:/bin"]))
+
+        let currentDirectory = try outputFromShortLivedChild(CodexProcessHost(
+            executableURL: URL(fileURLWithPath: "/bin/pwd"), arguments: ["-P"],
+            childConfiguration: configuration))
+        XCTAssertEqual(currentDirectory, canonicalDirectory.path + "\n")
+    }
+
+    func testParentOnlySecretIsAbsentFromChildEnvironment() throws {
+        let secretKey = "CIRCLR_TEST_PARENT_ONLY_SECRET_" +
+            UUID().uuidString.replacingOccurrences(of: "-", with: "")
+        XCTAssertEqual(setenv(secretKey, "synthetic-test-value", 1), 0)
+        defer { unsetenv(secretKey) }
+
+        let environment = try outputFromShortLivedChild(CodexProcessHost(
+            executableURL: URL(fileURLWithPath: "/usr/bin/env"), arguments: [],
+            childConfiguration: safeChildConfiguration()))
+        XCTAssertFalse(environment.contains(secretKey + "="))
+        XCTAssertEqual(Set(environment.split(separator: "\n").map(String.init)),
+                       Set(["LANG=C", "PATH=/usr/bin:/bin"]))
+    }
+
+    func testExplicitChildConfigurationRejectsUnlistedEnvironmentAndNoncanonicalDirectory() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("circlr-codex-host-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let canonicalDirectory = try canonicalURL(directory)
+        let unlisted = CodexProcessHost(executableURL: URL(fileURLWithPath: "/bin/pwd"), arguments: [],
+            childConfiguration: CodexProcessChildConfiguration(
+                environment: ["UNLISTED_CAPABILITY": "test-value"], currentDirectoryURL: canonicalDirectory))
+        XCTAssertThrowsError(try unlisted.start(onOutput: { _, _ in }, onExit: { _, _ in })) { error in
+            XCTAssertEqual(error as? CodexProcessHostError, .invalidEnvironment)
+        }
+
+        let apiKey = CodexProcessHost(executableURL: URL(fileURLWithPath: "/bin/pwd"), arguments: [],
+            childConfiguration: CodexProcessChildConfiguration(
+                environment: ["OPENAI_API_KEY": "test-only"], currentDirectoryURL: canonicalDirectory))
+        XCTAssertThrowsError(try apiKey.start(onOutput: { _, _ in }, onExit: { _, _ in })) { error in
+            XCTAssertEqual(error as? CodexProcessHostError, .invalidEnvironment)
+        }
+
+        let invalidValue = CodexProcessHost(executableURL: URL(fileURLWithPath: "/bin/pwd"), arguments: [],
+            childConfiguration: CodexProcessChildConfiguration(
+                environment: ["LANG": "C\0extra"], currentDirectoryURL: canonicalDirectory))
+        XCTAssertThrowsError(try invalidValue.start(onOutput: { _, _ in }, onExit: { _, _ in })) { error in
+            XCTAssertEqual(error as? CodexProcessHostError, .invalidEnvironment)
+        }
+
+        let symlink = canonicalDirectory.deletingLastPathComponent()
+            .appendingPathComponent("circlr-codex-link-\(UUID().uuidString)")
+        try FileManager.default.createSymbolicLink(at: symlink, withDestinationURL: canonicalDirectory)
+        defer { try? FileManager.default.removeItem(at: symlink) }
+        let noncanonical = CodexProcessHost(executableURL: URL(fileURLWithPath: "/bin/pwd"), arguments: [],
+            childConfiguration: CodexProcessChildConfiguration(environment: [:], currentDirectoryURL: symlink))
+        XCTAssertThrowsError(try noncanonical.start(onOutput: { _, _ in }, onExit: { _, _ in })) { error in
+            XCTAssertEqual(error as? CodexProcessHostError, .invalidCurrentDirectory)
+        }
+
+        let nonexistent = CodexProcessHost(executableURL: URL(fileURLWithPath: "/bin/pwd"), arguments: [],
+            childConfiguration: CodexProcessChildConfiguration(environment: [:],
+                currentDirectoryURL: canonicalDirectory.appendingPathComponent("missing", isDirectory: true)))
+        XCTAssertThrowsError(try nonexistent.start(onOutput: { _, _ in }, onExit: { _, _ in })) { error in
+            XCTAssertEqual(error as? CodexProcessHostError, .invalidCurrentDirectory)
+        }
+    }
+
     func testCatExchangesOneJSONLPacketAndStopsCleanly() throws {
-        let host = CodexProcessHost(executableURL: URL(fileURLWithPath: "/bin/cat"), arguments: [])
+        let host = CodexProcessHost(executableURL: URL(fileURLWithPath: "/bin/cat"), arguments: [],
+                                    childConfiguration: try safeChildConfiguration())
         let received = expectation(description: "cat echoed packet")
         let ended = expectation(description: "child reaped")
         let packet = Data("{\"method\":\"initialized\"}\n".utf8)
@@ -60,14 +173,15 @@ final class CodexProcessHostTests: XCTestCase {
 
     func testLaunchFailureStaleGenerationAndPacketBounds() throws {
         let missing = CodexProcessHost(executableURL: URL(fileURLWithPath: "/definitely/not/a/codex-binary"),
-                                       arguments: [])
+                                       arguments: [], childConfiguration: try safeChildConfiguration())
         XCTAssertThrowsError(try missing.start(onOutput: { _, _ in }, onExit: { _, _ in })) { error in
             XCTAssertEqual(error as? CodexProcessHostError, .invalidExecutable)
         }
         XCTAssertFalse(missing.isRunning)
 
         let host = CodexProcessHost(executableURL: URL(fileURLWithPath: "/bin/cat"),
-                                    arguments: [], maximumPacketBytes: 8)
+                                    arguments: [], childConfiguration: try safeChildConfiguration(),
+                                    maximumPacketBytes: 8)
         let first = try host.start(onOutput: { _, _ in }, onExit: { _, _ in })
         XCTAssertThrowsError(try host.start(onOutput: { _, _ in }, onExit: { _, _ in })) { error in
             XCTAssertEqual(error as? CodexProcessHostError, .alreadyRunning)
@@ -93,7 +207,8 @@ final class CodexProcessHostTests: XCTestCase {
 
     func testShortLivedChildDeliversOutputBeforeExit() throws {
         let host = CodexProcessHost(executableURL: URL(fileURLWithPath: "/bin/echo"),
-                                    arguments: ["{\"id\":1,\"result\":{}}"])
+                                    arguments: ["{\"id\":1,\"result\":{}}"],
+                                    childConfiguration: try safeChildConfiguration())
         let ended = expectation(description: "echo exited")
         let observedState = Observed()
         let generation = try host.start(onOutput: { observed, bytes in
@@ -114,7 +229,8 @@ final class CodexProcessHostTests: XCTestCase {
     }
 
     func testStopFromOutputCallbackReapsWithoutDeadlock() throws {
-        let host = CodexProcessHost(executableURL: URL(fileURLWithPath: "/bin/cat"), arguments: [])
+        let host = CodexProcessHost(executableURL: URL(fileURLWithPath: "/bin/cat"), arguments: [],
+                                    childConfiguration: try safeChildConfiguration())
         let ended = expectation(description: "callback stopped child")
         let observed = Observed()
         let generation = try host.start(onOutput: { [weak host] _, _ in
@@ -132,7 +248,8 @@ final class CodexProcessHostTests: XCTestCase {
     #if DEBUG
     func testReleasingLastHostReferenceReapsIdleChild() throws {
         var host: CodexProcessHost? = CodexProcessHost(
-            executableURL: URL(fileURLWithPath: "/bin/cat"), arguments: [], stopGrace: 0.05)
+            executableURL: URL(fileURLWithPath: "/bin/cat"), arguments: [],
+            childConfiguration: try safeChildConfiguration(), stopGrace: 0.05)
         weak let weakHost = host
         _ = try host?.start(onOutput: { _, _ in }, onExit: { _, _ in })
         let child = try XCTUnwrap(host?.ownedProcessForTesting)
@@ -170,7 +287,8 @@ final class CodexProcessHostTests: XCTestCase {
         // sleep leaves stdin open but unread, so a large nonblocking JSONL
         // packet fills the pipe and reaches the write deadline reliably.
         let host = CodexProcessHost(executableURL: URL(fileURLWithPath: "/bin/sleep"),
-                                    arguments: ["5"], maximumPacketBytes: 1_100_000,
+                                    arguments: ["5"], childConfiguration: try safeChildConfiguration(),
+                                    maximumPacketBytes: 1_100_000,
                                     writeTimeout: 0.03, stopGrace: 0.05)
         let reachedFailure = DispatchSemaphore(value: 0)
         let releaseCleanup = DispatchSemaphore(value: 0)

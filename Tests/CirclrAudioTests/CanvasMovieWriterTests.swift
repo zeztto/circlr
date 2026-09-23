@@ -4,6 +4,122 @@ import CoreGraphics
 @testable import CirclrAudio
 
 final class CanvasMovieWriterTests:XCTestCase {
+    @MainActor func testAudioEndpointFrameCountMatchesDecodedMovie() async throws {
+        let folder=FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at:folder,withIntermediateDirectories:true)
+        defer{try? FileManager.default.removeItem(at:folder)}
+        let target=folder.appendingPathComponent("endpoint.mp4")
+        let recorder=try CanvasMovieWriter(url:target,size:CGSize(width:160,height:120),pcm:PCM(frames:48_000))
+        let context=CGContext(data:nil,width:160,height:120,bitsPerComponent:8,bytesPerRow:0,space:CGColorSpaceCreateDeviceRGB(),bitmapInfo:CGImageAlphaInfo.premultipliedLast.rawValue)!
+        let image=context.makeImage()!
+        for index in 0...30 {
+            try recorder.append(image,seconds:Double(index)/30)
+            await recorder.waitUntilIdle()
+            try await Task.sleep(for:.milliseconds(20))
+        }
+        try await recorder.finish(seconds:1)
+        let presentation=try await decodedVideoPresentation(at:target)
+        XCTAssertEqual(recorder.submittedFrameCount,31)
+        XCTAssertEqual(recorder.frameCount,31)
+        XCTAssertEqual(recorder.droppedFrames,0)
+        XCTAssertEqual(recorder.frameCount,presentation.count)
+        XCTAssertEqual(presentation.max() ?? -1,1,accuracy:0.001)
+        let duration=try await AVURLAsset(url:target).load(.duration)
+        XCTAssertEqual(duration.seconds,1+1/30,accuracy:0.001)
+        XCTAssertEqual(try PCM.read(target).duration,1,accuracy:0.001)
+    }
+    @MainActor func testNearAudioEndpointFrameCountMatchesDecodedMovie() async throws {
+        let folder=FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at:folder,withIntermediateDirectories:true)
+        defer{try? FileManager.default.removeItem(at:folder)}
+        let target=folder.appendingPathComponent("near-endpoint.mp4")
+        // The final 30 fps PTS precedes the PCM end by only 20 audio frames.
+        let recorder=try CanvasMovieWriter(url:target,size:CGSize(width:160,height:120),pcm:PCM(frames:48_020))
+        let context=CGContext(data:nil,width:160,height:120,bitsPerComponent:8,bytesPerRow:0,space:CGColorSpaceCreateDeviceRGB(),bitmapInfo:CGImageAlphaInfo.premultipliedLast.rawValue)!
+        let image=context.makeImage()!
+        for index in 0...30 {
+            try recorder.append(image,seconds:Double(index)/30)
+            await recorder.waitUntilIdle()
+            try await Task.sleep(for:.milliseconds(20))
+        }
+        try await recorder.finish(seconds:48_020.0/PCM.rate)
+        let presentation=try await decodedVideoPresentation(at:target)
+        XCTAssertEqual(recorder.submittedFrameCount,31)
+        XCTAssertEqual(recorder.frameCount,31)
+        XCTAssertEqual(recorder.droppedFrames,0)
+        XCTAssertEqual(recorder.frameCount,presentation.count)
+        XCTAssertEqual(presentation.max() ?? -1,1,accuracy:0.001)
+        let duration=try await AVURLAsset(url:target).load(.duration)
+        XCTAssertEqual(duration.seconds,1+1/30,accuracy:0.001)
+        XCTAssertEqual(try PCM.read(target).duration,48_020.0/PCM.rate,accuracy:0.001)
+    }
+    @MainActor func testValidFrameTwentyMillisecondsBeforeAudioEndIsPreserved() async throws {
+        let folder=FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at:folder,withIntermediateDirectories:true)
+        defer{try? FileManager.default.removeItem(at:folder)}
+        let target=folder.appendingPathComponent("valid-tail-frame.mp4")
+        let recorder=try CanvasMovieWriter(url:target,size:CGSize(width:160,height:120),pcm:PCM(frames:48_000))
+        let context=CGContext(data:nil,width:160,height:120,bitsPerComponent:8,bytesPerRow:0,space:CGColorSpaceCreateDeviceRGB(),bitmapInfo:CGImageAlphaInfo.premultipliedLast.rawValue)!
+        let image=context.makeImage()!
+        for index in 0..<30 {
+            try recorder.append(image,seconds:Double(index)/30)
+            await recorder.waitUntilIdle()
+            try await Task.sleep(for:.milliseconds(20))
+        }
+        try recorder.append(image,seconds:0.98)
+        await recorder.waitUntilIdle()
+        try await recorder.finish(seconds:1)
+        let presentation=try await decodedVideoPresentation(at:target)
+        XCTAssertEqual(recorder.submittedFrameCount,31)
+        XCTAssertEqual(recorder.frameCount,31)
+        XCTAssertEqual(presentation.count,31)
+        XCTAssertEqual(presentation.max() ?? -1,0.98,accuracy:0.001)
+        let duration=try await AVURLAsset(url:target).load(.duration)
+        XCTAssertEqual(duration.seconds,1,accuracy:0.001)
+        XCTAssertEqual(try PCM.read(target).duration,1,accuracy:0.001)
+    }
+    @MainActor func testScheduledLoopExitEndpointFrameCountMatchesDecodedMovie() async throws {
+        let folder=FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at:folder,withIntermediateDirectories:true)
+        defer{try? FileManager.default.removeItem(at:folder)}
+        let target=folder.appendingPathComponent("loop-exit-endpoint.mp4")
+        let mix=PCM(frames:18_000)
+        let loop=try PlaybackLoopPCM(mix:mix,bodySeconds:0.25)
+        let recorder=try CanvasMovieWriter(url:target,size:CGSize(width:160,height:120),pcm:mix,loop:loop)
+        try recorder.scheduleAudio(loop:nil,exitTail:PCM(frames:24_000),atFrame:24_000)
+        let context=CGContext(data:nil,width:160,height:120,bitsPerComponent:8,bytesPerRow:0,space:CGColorSpaceCreateDeviceRGB(),bitmapInfo:CGImageAlphaInfo.premultipliedLast.rawValue)!
+        let image=context.makeImage()!
+        for index in 0...30 {
+            try recorder.append(image,seconds:Double(index)/30)
+            await recorder.waitUntilIdle()
+            try await Task.sleep(for:.milliseconds(20))
+        }
+        try await recorder.finish(seconds:1)
+        let presentation=try await decodedVideoPresentation(at:target)
+        XCTAssertEqual(recorder.submittedFrameCount,31)
+        XCTAssertEqual(recorder.frameCount,31)
+        XCTAssertEqual(recorder.droppedFrames,0)
+        XCTAssertEqual(presentation.count,recorder.frameCount)
+        XCTAssertEqual(presentation.max() ?? -1,1,accuracy:0.001)
+        let asset=AVURLAsset(url:target)
+        let duration=try await asset.load(.duration)
+        XCTAssertEqual(duration.seconds,1+1/30,accuracy:0.001)
+        XCTAssertEqual(try PCM.read(target).duration,1,accuracy:0.001)
+    }
+    @MainActor private func decodedVideoPresentation(at target:URL) async throws -> [Double] {
+        let asset=AVURLAsset(url:target)
+        let tracks=try await asset.loadTracks(withMediaType:.video)
+        let video=try XCTUnwrap(tracks.first)
+        let reader=try AVAssetReader(asset:asset)
+        let output=AVAssetReaderTrackOutput(track:video,outputSettings:[kCVPixelBufferPixelFormatTypeKey as String:kCVPixelFormatType_32BGRA])
+        reader.add(output);XCTAssertTrue(reader.startReading())
+        var presentation=[Double]()
+        while let sample=output.copyNextSampleBuffer() {
+            presentation.append(CMSampleBufferGetPresentationTimeStamp(sample).seconds)
+        }
+        XCTAssertEqual(reader.status,.completed)
+        return presentation
+    }
     @MainActor func testCanvasMovieContainsVideoAndSynchronizedAudio() async throws {
         let folder=FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at:folder,withIntermediateDirectories:true)

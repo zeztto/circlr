@@ -22,6 +22,9 @@ public struct CodexPendingServerRequest: Equatable {
 
 public enum CodexEvent: Equatable {
     case protocolReady
+    case accountRead(CodexAccountSummary)
+    case modelsListed(CodexModelPage)
+    case threadOpened(threadID: String)
     case turnStarted(threadID: String, turnID: String)
     case turnCompleted(threadID: String, turnID: String, status: CodexTurnState, error: String?)
     case assistantDelta(itemID: String, text: String)
@@ -81,12 +84,18 @@ public struct CodexEventReducer {
 
     private enum PendingClientRequest {
         case initialize
+        case accountRead
+        case modelList
+        case threadStart
         case turnStart(threadID: String, serial: UInt64)
         case interrupt(threadID: String, turnID: String, serial: UInt64)
 
         var method: String {
             switch self {
             case .initialize: return "initialize"
+            case .accountRead: return "account/read"
+            case .modelList: return "model/list"
+            case .threadStart: return "thread/start"
             case .turnStart: return "turn/start"
             case .interrupt: return "turn/interrupt"
             }
@@ -98,6 +107,9 @@ public struct CodexEventReducer {
     public private(set) var turnState: CodexTurnState = .idle
     public private(set) var activeThreadID: String?
     public private(set) var activeTurnID: String?
+    private var openedReadOnlyThreadID: String?
+    private let requiresManagedThread: Bool
+    private let authorizedThreadCWD: String?
     public private(set) var pendingServerRequests: [CodexServerRequestID: CodexPendingServerRequest] = [:]
     private var answeredServerRequests: Set<CodexServerRequestID> = []
     private var queuedRejectedReplies: [CodexServerRequestID: QueuedRejectedReply] = [:]
@@ -134,7 +146,8 @@ public struct CodexEventReducer {
                 maximumOutboundBytes: Int = 1_048_576,
                 maximumPendingServerRequests: Int = 64,
                 maximumAssistantItems: Int = 256,
-                maximumAssistantTextBytes: Int = 1_048_576) {
+                maximumAssistantTextBytes: Int = 1_048_576,
+                authorizedThreadCWD: String? = nil) {
         precondition(maximumPendingServerRequests > 0 && maximumAssistantItems > 0 && maximumAssistantTextBytes > 0)
         self.framing = CodexJSONLFramer(maximumLineBytes: maximumLineBytes,
                                        maximumMessagesPerRead: maximumMessagesPerRead)
@@ -143,6 +156,20 @@ public struct CodexEventReducer {
         self.maximumPendingServerRequests = maximumPendingServerRequests
         self.maximumAssistantItems = maximumAssistantItems
         self.maximumAssistantTextBytes = maximumAssistantTextBytes
+        self.requiresManagedThread = authorizedThreadCWD != nil
+        // The host must supply its approved workspace directory. A nil value
+        // preserves legacy turn-only protocol use, but cannot open a thread.
+        // An invalid supplied path remains managed and fails closed.
+        self.authorizedThreadCWD = authorizedThreadCWD.flatMap(Self.canonicalDirectoryPath)
+    }
+
+    private static func canonicalDirectoryPath(_ path: String) -> String? {
+        guard path.hasPrefix("/") else { return nil }
+        let canonical = URL(fileURLWithPath: path).resolvingSymlinksInPath().standardizedFileURL.path
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: canonical, isDirectory: &isDirectory),
+              isDirectory.boolValue else { return nil }
+        return canonical
     }
 
     /// Start a new *transport* generation. Call only after the previous child is
@@ -167,6 +194,7 @@ public struct CodexEventReducer {
         assistantTextBytes = 0
         activeThreadID = nil
         activeTurnID = nil
+        openedReadOnlyThreadID = nil
         turnState = .idle
         turnSerial = 0
         interruptSent = false
@@ -201,6 +229,7 @@ public struct CodexEventReducer {
         assistantTextBytes = 0
         activeThreadID = nil
         activeTurnID = nil
+        openedReadOnlyThreadID = nil
         turnState = .idle
         interruptSent = false
         connectionState = .stopped
@@ -225,16 +254,25 @@ public struct CodexEventReducer {
     }
 
     @discardableResult
-    public mutating func startTurn(threadID: String, text: String) throws -> CodexClientRequestID {
+    public mutating func startTurn(threadID: String, text: String,
+                                   model: String? = nil) throws -> CodexClientRequestID {
         guard connectionState == .protocolReady,
               turnState != .starting, turnState != .running, turnState != .cancelling,
+              !pendingClientRequests.values.contains(where: { if case .threadStart = $0 { return true }; return false }),
               turnSerial < UInt64.max,
-              !threadID.isEmpty, !text.isEmpty else { throw CodexProtocolError.invalidState }
+              !threadID.isEmpty, !text.isEmpty,
+              !requiresManagedThread || openedReadOnlyThreadID == threadID,
+              model.map({ !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) ?? true else {
+            throw CodexProtocolError.invalidState
+        }
         let input: CodexJSONValue = .array([.object(["type": .string("text"), "text": .string(text)])])
         let nextSerial = turnSerial + 1
-        let id = try send(method: "turn/start", params: .object([
+        var params: [String: CodexJSONValue] = [
             "threadId": .string(threadID), "input": input
-        ]), pending: .turnStart(threadID: threadID, serial: nextSerial))
+        ]
+        if let model { params["model"] = .string(model) }
+        let id = try send(method: "turn/start", params: .object(params),
+                          pending: .turnStart(threadID: threadID, serial: nextSerial))
         turnSerial = nextSerial
         activeThreadID = threadID
         activeTurnID = nil
@@ -246,6 +284,53 @@ public struct CodexEventReducer {
         answeredServerRequests.removeAll()
         clearDeferred()
         return id
+    }
+
+    /// Read only the account's authentication mode and plan. The response's
+    /// email and any future credential fields are discarded by the projection.
+    @discardableResult
+    public mutating func readAccount(refreshToken: Bool = false) throws -> CodexClientRequestID {
+        guard connectionState == .protocolReady,
+              !pendingClientRequests.values.contains(where: { if case .accountRead = $0 { return true }; return false }) else {
+            throw CodexProtocolError.invalidState
+        }
+        return try send(method: "account/read", params: .object([
+            "refreshToken": .bool(refreshToken)
+        ]), pending: .accountRead)
+    }
+
+    /// Page through the current account's visible model catalog before choosing
+    /// a model for `thread/start` and `turn/start`.
+    @discardableResult
+    public mutating func listModels(cursor: String? = nil) throws -> CodexClientRequestID {
+        guard connectionState == .protocolReady,
+              cursor.map({ !$0.isEmpty }) ?? true,
+              !pendingClientRequests.values.contains(where: { if case .modelList = $0 { return true }; return false }) else {
+            throw CodexProtocolError.invalidState
+        }
+        var params: [String: CodexJSONValue] = ["includeHidden": .bool(false)]
+        if let cursor { params["cursor"] = .string(cursor) }
+        return try send(method: "model/list", params: .object(params), pending: .modelList)
+    }
+
+    /// The caller must choose `model` from this app-server's `model/list` catalog
+    /// and construct this reducer with a trusted, approved workspace directory.
+    /// The app-server sandbox stays read-only; music writes use the separate
+    /// TrustedAgentGateway lease and revision boundary.
+    @discardableResult
+    public mutating func startThread(model: String, cwd: String) throws -> CodexClientRequestID {
+        guard connectionState == .protocolReady,
+              turnState != .starting, turnState != .running, turnState != .cancelling,
+              !pendingClientRequests.values.contains(where: { if case .threadStart = $0 { return true }; return false }),
+              !model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              let authorizedThreadCWD,
+              Self.canonicalDirectoryPath(cwd) == authorizedThreadCWD else {
+            throw CodexProtocolError.invalidState
+        }
+        return try send(method: "thread/start", params: .object([
+            "model": .string(model), "cwd": .string(authorizedThreadCWD),
+            "sandbox": .string("read-only"), "approvalPolicy": .string("never")
+        ]), pending: .threadStart)
     }
 
     /// Cancellation is a request. Only a matching `turn/completed` event confirms
@@ -344,13 +429,17 @@ public struct CodexEventReducer {
                 throw CodexProtocolError.unexpectedResponse
             }
             if let error {
+                // Account and catalog RPC errors are server-controlled text. Do
+                // not forward an address or credential embedded in that text.
+                let publicMessage = pending.method == "account/read" || pending.method == "model/list"
+                    ? "Codex request failed" : error.message
                 if pending.method == "initialize" { fail(.invalidState) }
                 else if case .turnStart(_, let serial) = pending,
                         serial == turnSerial, isTurnActive {
                     turnState = .failed
                     let rejections = try rejectAllDeferredServerRequests()
                     return [.rpcError(method: pending.method, code: error.code,
-                                      message: error.message)] + rejections
+                                      message: publicMessage)] + rejections
                 }
                 else if case .interrupt(let threadID, let turnID, let serial) = pending,
                         serial == turnSerial,
@@ -359,7 +448,7 @@ public struct CodexEventReducer {
                     turnState = .running
                     interruptSent = false
                 }
-                return [.rpcError(method: pending.method, code: error.code, message: error.message)]
+                return [.rpcError(method: pending.method, code: error.code, message: publicMessage)]
             }
             guard let result else { throw CodexProtocolError.malformedEnvelope }
             switch pending {
@@ -370,6 +459,22 @@ public struct CodexEventReducer {
                 try outbound.enqueue(CodexWire.notification(method: "initialized"))
                 connectionState = .protocolReady
                 return [.protocolReady]
+            case .accountRead:
+                guard connectionState == .protocolReady else { throw CodexProtocolError.invalidState }
+                return [.accountRead(try CodexAccountSummary(json: result))]
+            case .modelList:
+                guard connectionState == .protocolReady else { throw CodexProtocolError.invalidState }
+                return [.modelsListed(try CodexModelPage(json: result))]
+            case .threadStart:
+                guard connectionState == .protocolReady else { throw CodexProtocolError.invalidState }
+                guard let threadID = result["thread"]?["id"]?.string, !threadID.isEmpty else {
+                    throw CodexProtocolError.requiredField("thread.id")
+                }
+                activeThreadID = threadID
+                openedReadOnlyThreadID = threadID
+                activeTurnID = nil
+                turnState = .idle
+                return [.threadOpened(threadID: threadID)]
             case .turnStart(let threadID, let serial):
                 guard serial == turnSerial else { return [.ignoredUnrelatedEvent("turn/start")] }
                 guard let turnID = result["turn"]?["id"]?.string, !turnID.isEmpty else {

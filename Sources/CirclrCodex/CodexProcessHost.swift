@@ -3,6 +3,8 @@ import Darwin
 
 public enum CodexProcessHostError: Error, Equatable {
     case invalidExecutable
+    case invalidEnvironment
+    case invalidCurrentDirectory
     case alreadyRunning
     case launchFailed
     case stopped
@@ -12,6 +14,25 @@ public enum CodexProcessHostError: Error, Equatable {
     case writeFailed
     case writeTimedOut
     case stopTimedOut
+}
+
+/// Required child-only launch context. This context replaces the
+/// inherited environment rather than merging with the app's credentials.
+/// CODEX_HOME is a credential-bearing location and must be chosen by the owner;
+/// never place credentials or capabilities in process arguments. This boundary
+/// does not control what a launched child later passes to models or tools.
+public struct CodexProcessChildConfiguration {
+    public static let allowedEnvironmentKeys: Set<String> = [
+        "HOME", "PATH", "TMPDIR", "LANG", "LC_ALL", "CODEX_HOME"
+    ]
+
+    public let environment: [String: String]
+    public let currentDirectoryURL: URL
+
+    public init(environment: [String: String], currentDirectoryURL: URL) {
+        self.environment = environment
+        self.currentDirectoryURL = currentDirectoryURL
+    }
 }
 
 public enum CodexProcessExit: Equatable {
@@ -57,6 +78,7 @@ public final class CodexProcessHost: @unchecked Sendable {
 
     private let executableURL: URL
     private let arguments: [String]
+    private let childConfiguration: CodexProcessChildConfiguration
     private let maximumPacketBytes: Int
     private let maximumPendingOutputBytes: Int
     private let writeTimeout: TimeInterval
@@ -78,6 +100,7 @@ public final class CodexProcessHost: @unchecked Sendable {
     #endif
 
     public init(executableURL: URL, arguments: [String],
+                childConfiguration: CodexProcessChildConfiguration,
                 maximumPacketBytes: Int = 1_048_576,
                 maximumPendingOutputBytes: Int = 1_048_576,
                 writeTimeout: TimeInterval = 0.5,
@@ -88,6 +111,7 @@ public final class CodexProcessHost: @unchecked Sendable {
         precondition(stopGrace.isFinite && stopGrace > 0)
         self.executableURL = executableURL
         self.arguments = arguments
+        self.childConfiguration = childConfiguration
         self.maximumPacketBytes = maximumPacketBytes
         self.maximumPendingOutputBytes = maximumPendingOutputBytes
         self.writeTimeout = writeTimeout
@@ -115,9 +139,29 @@ public final class CodexProcessHost: @unchecked Sendable {
             throw CodexProcessHostError.invalidExecutable
         }
 
+        guard childConfiguration.environment.allSatisfy({ key, value in
+            CodexProcessChildConfiguration.allowedEnvironmentKeys.contains(key) &&
+                !value.contains("\0")
+        }) else { throw CodexProcessHostError.invalidEnvironment }
+
+        let directory = childConfiguration.currentDirectoryURL
+        var isDirectory: ObjCBool = false
+        guard directory.isFileURL, directory.path.hasPrefix("/"),
+              FileManager.default.fileExists(atPath: directory.path, isDirectory: &isDirectory),
+              isDirectory.boolValue,
+              let resolved = directory.path.withCString({ realpath($0, nil) }) else {
+            throw CodexProcessHostError.invalidCurrentDirectory
+        }
+        defer { free(resolved) }
+        guard directory.path == String(cString: resolved) else {
+            throw CodexProcessHostError.invalidCurrentDirectory
+        }
+
         let process = Process(), input = Pipe(), output = Pipe()
         process.executableURL = executableURL
         process.arguments = arguments
+        process.environment = childConfiguration.environment
+        process.currentDirectoryURL = childConfiguration.currentDirectoryURL
         process.standardInput = input
         process.standardOutput = output
         process.standardError = FileHandle.nullDevice

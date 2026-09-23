@@ -8,13 +8,13 @@ English · [한국어](README.ko.md)
 
 In circlr, a circle is a timeline. Build a song from sections, place MIDI, audio, instruments and effects on and around their orbits, and connect their inputs and outputs. Move between the whole arrangement and detailed editing on one zoomable canvas.
 
-![circlr build209 playing f0r h3r with the full song orbit and active section](docs/images/circlr-song-build209.png)
+![circlr build211 playing f0r h3r with the full song orbit and active section](docs/images/circlr-song-build211-final.png)
 
-*0.80.0 build209 development preview from an isolated native app. The latest public release is still 0.70.0. [Capture provenance](docs/images/README.md).*
+*0.80.0 build211 development preview from an isolated native app. The latest public release is still 0.70.0. [Capture provenance](docs/images/README.md).*
 
 > **0.70.0 · build180.** Smoother playback canvas and MP4 capture in the verified scenarios, with viewing mode beside Record. [Evidence and limits](docs/releases/0.70.0-qa.md).
 
-**In development:** [0.80.0](docs/releases/0.80.0.md) opens playback on the full song orbit, reduces label clutter in dense sections, and tests playback, recording, editing and export. Its QA gates remain open; 0.70.0 is the latest release.
+**In development:** [0.80.0](docs/releases/0.80.0.md) opens playback on the full song orbit, reduces label clutter in dense sections, and tests playback, recording, editing and export. A 38-second recording from the final build211 package saved and decoded 1,138 frames, with no gap over two frames in that file. Other QA gates remain open; 0.70.0 is the latest release.
 
 ## What you can work with
 
@@ -24,9 +24,9 @@ In circlr, a circle is a timeline. Build a song from sections, place MIDI, audio
 - **Sound and motion:** instrument/effect routing, automation, bounce and source restoration; playback-follow and signal visualization controls.
 - **Local agents:** an MCP interface for inspecting and editing projects, generating MIDI, rendering and saving, with activity visible in the console.
 
-<img src="docs/images/circlr-song-portrait-build209.png" width="280" alt="circlr build209 playing the song orbit in a portrait window">
+<img src="docs/images/circlr-song-portrait-build211-final.png" width="280" alt="circlr build211 playing the song orbit in a portrait window">
 
-*The same build209 demo in a 720×900 portrait window, showing the responsive toolbar. [Capture details](docs/images/README.md).*
+*The same build211 demo in a 720×900 portrait window, showing the responsive toolbar. [Capture details](docs/images/README.md).*
 
 These are implemented development features, not a guarantee of compatibility with every audio device or plug-in. Artist profiles and a combined text, image and video workspace are the [longer-term direction](docs/21-artist-universe.md).
 
@@ -35,6 +35,8 @@ These are implemented development features, not a guarantee of compatibility wit
 Download **0.70.0 build180** for Apple Silicon from [GitHub Releases](https://github.com/zeztto/circlr/releases/tag/v0.70.0), or build from `main` for source development.
 
 The downloaded app is ad-hoc signed and not notarized by Apple. If macOS blocks its first launch, verify the download, then use **System Settings → Privacy & Security → Open Anyway**. [macOS installation and first launch](docs/install-macos.md#english).
+
+If an older audio interface does not start, select the Mac built-in output in circlr and see [audio device guidance](docs/install-macos.md).
 
 The colored **f0r h3r v6** demo is included. Choose **File → 데모곡 불러오기…** to open an editable copy.
 
@@ -53,7 +55,7 @@ Choose a synth circle, then **음색·악기 찾기** to search the built-in pat
 
 ## First session
 
-1. Right-click empty canvas space to create a circle. Add sections to plan the song, then add MIDI, audio, instruments and effects inside them.
+1. Right-click empty canvas space to create a circle. Add sections to plan the song, then place MIDI, audio, instruments and effects on and around their orbits.
 2. Zoom with the wheel over empty canvas space; double-click a circle to enter its detail. Connect ports to define signal flow.
 3. Edit notes or steps, import audio/MIDI, and use the toolbar to switch to automation or sound settings.
 4. Save the `.circlr` project with **⌘S**. Use **Bounce** to turn a track path into audio and **Restore original** to return to its source.

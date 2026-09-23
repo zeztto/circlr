@@ -225,7 +225,9 @@ private final class CanvasMovieEncoder:@unchecked Sendable {
         guard !ended else{return};ended=true
         guard frameCount>0 else{cancel();throw CirclrError("녹화된 화면이 없습니다")}
         let requested=max(lastSeconds+1/30,seconds)
-        let duration=audioEnd.map{min(Double($0)/PCM.rate,requested)} ?? requested
+        // Keep the final accepted video sample presentable. PCM submission
+        // remains capped at audioEnd; only the movie session may extend by one frame.
+        let duration=audioEnd.map{min(Double($0)/PCM.rate+1/30,requested)} ?? requested
         let end=CMTime(seconds:duration,preferredTimescale:48_000)
         let limit=try frameLimit(seconds:duration)
         video.markAsFinished()
