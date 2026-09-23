@@ -31,6 +31,11 @@ struct AlbumCanvas: NSViewRepresentable {
     var editor: NSHostingView<InlineCircleEditor>?
     var editorAddress: CircleAddress?
     var labelPlacements:[CanvasLabelPlacement]=[]
+    // Only during draw: visibility is a property of the current scene/camera, not each paint pass.
+    var drawingLabelContext:CircleSceneNode?
+    var drawingVisibleIDs:Set<CircleAddress>?
+    var drawingPortHandles:[CirclePortHandle]?
+    var isDrawingFrame=false
     var fileDropPreview:CanvasFileDropPreview?
     var hoverAddress:CircleAddress?
     var colorTarget: (projectID: ID, address: CircleAddress)?
@@ -79,6 +84,10 @@ struct AlbumCanvas: NSViewRepresentable {
     var lastVisualFrameTime = 0.0
     var frameCount = 0
     var maximumFrameGap = 0.0
+    var visualUpdateTiming=CanvasFrameTiming()
+    var screenDrawTiming=CanvasFrameTiming()
+    var movieDrawTiming=CanvasFrameTiming()
+    var movieCaptureDepth=0
     var accessibilityUpdateTime = 0.0
     override var isFlipped: Bool { true }
     override var acceptsFirstResponder: Bool { true }
@@ -93,6 +102,8 @@ struct AlbumCanvas: NSViewRepresentable {
         }
         store.captureMovieFrame = { [weak self] in
             guard let self,self.bounds.width>=64,self.bounds.height>=64 else{return nil}
+            self.movieCaptureDepth += 1
+            defer { self.movieCaptureDepth -= 1 }
             self.updatePlaybackFrame();self.placeEditor()
             return CanvasMovieCapture.image(of:self)
         }
@@ -366,6 +377,7 @@ struct AlbumCanvas: NSViewRepresentable {
             : tint
     }
     func isVisible(_ node: CircleSceneNode) -> Bool {
+        if let drawingVisibleIDs { return drawingVisibleIDs.contains(node.id) }
         let context=labelContext
         let direct=node.parent==context?.id
         if let scene,scene.isOrbit,let context {
@@ -381,8 +393,19 @@ struct AlbumCanvas: NSViewRepresentable {
         return direct || parent.radius*camera.zoom >= 140
     }
     override func draw(_ dirtyRect: NSRect) {
+        let started=ProcessInfo.processInfo.systemUptime
+        let movie=movieCaptureDepth>0
+        defer {
+            let ended=ProcessInfo.processInfo.systemUptime
+            if movie { movieDrawTiming.record(start:started,end:ended) }
+            else { screenDrawTiming.record(start:started,end:ended) }
+        }
         StudioTheme.canvasNS.setFill(); bounds.fill()
         guard let scene else { return }
+        drawingLabelContext=labelContext
+        isDrawingFrame=true
+        drawingVisibleIDs=Set(scene.nodes.filter(isVisible).map(\.id))
+        defer { drawingPortHandles=nil;drawingVisibleIDs=nil;drawingLabelContext=nil;isDrawingFrame=false }
         if store.project.album?.layout.grid != false { drawGrid() }
         for node in scene.nodes {
             let radius = node.radius*camera.zoom, center = screen(node)
@@ -424,6 +447,9 @@ struct AlbumCanvas: NSViewRepresentable {
         }
         for node in scene.nodes where isVisible(node) { drawPlaybackCircle(node) }
         drawReadableLabels()
+        // Selected-port obstacles may query handles before labels are placed.
+        // Recompute for the port pass so newly placed labels still mask overlaps.
+        drawingPortHandles=nil
         drawPortHandles()
         if !store.viewingMode {drawCableEditing()}
         drawPortLabels()

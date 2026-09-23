@@ -26,6 +26,7 @@ extension AlbumCanvasView {
         CanvasWorkspaceGeometry.viewport(width:bounds.width,height:bounds.height,console:!store.viewingMode && store.consoleBounds.height>0 ? store.consoleBounds:nil)
     }
     var labelContext:CircleSceneNode? {
+        if isDrawingFrame { return drawingLabelContext }
         guard let scene else{return nil}
         if scene.isOrbit {
             var context=scene.node(playbackVisibilityFocus ?? store.hierarchySelection ?? .album) ?? scene.node(.album)

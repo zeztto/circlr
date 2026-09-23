@@ -14,6 +14,8 @@ In circlr, a circle is a timeline. Build a song from sections, place MIDI, audio
 
 > **0.60.0 · build170.** Twelve factory synth presets, oversampled Drive and the refined f0r h3r v6 demo. [Verification record](docs/releases/0.60.0-qa.md).
 
+**In development:** 0.70.0 prioritizes playback canvas performance. The first same-canvas callback comparison and remaining release gates are in the [0.70.0 work record](docs/releases/0.70.0.md). The screenshot and download above still refer to the released 0.60.0 app.
+
 ## What you can work with
 
 - **Song form:** connected album, song and section timelines; reusable sections, repetitions and arrangement variations.

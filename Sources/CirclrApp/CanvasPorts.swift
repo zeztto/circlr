@@ -5,8 +5,14 @@ extension AlbumCanvasView {
     private static let portFallback = CirclePort.flowPorts + CirclePort.ports(for: .router(AudioRouter())) +
         CirclePort.ports(for: .effect(Effect(.compressor))) + CirclePort.ports(for: .instrument(trackID: ""))
     func visiblePortHandles() -> [CirclePortHandle] {
+        if let drawingPortHandles { return drawingPortHandles }
         guard let scene else { return [] }
         var result: [CirclePortHandle] = []
+        var connectedByPort: [CirclePortEndpoint: Set<PortOctant>] = [:]
+        for edge in scene.edges {
+            connectedByPort[.init(node:edge.from,portID:edge.fromPortID),default:[]].insert(edge.placement.from)
+            connectedByPort[.init(node:edge.to,portID:edge.toPortID),default:[]].insert(edge.placement.to)
+        }
         let fixed = cableDrag?.mode == .reconnect ? cableDrag?.fixed : connecting?.endpoint
         let fixedPort = fixed.flatMap { endpoint in (try? CirclePortCatalog.ports(at:endpoint.node,in:store.project))?.first { $0.id == endpoint.portID } }
         let time = store.selectedCircle.flatMap { visibleTimeHandle($0) }
@@ -26,12 +32,7 @@ extension AlbumCanvasView {
                 } else if let gesture = cableDrag, gesture.mode == .placement {
                     engaged = (try? GroupPortEditing.resolve(endpoint,in:store.project)) == gesture.moving; expanded = engaged
                 }
-                var connected = Set<PortOctant>()
-                for edge in scene.edges {
-                    if edge.from == node.id && edge.fromPortID == port.id { connected.insert(edge.placement.from) }
-                    if edge.to == node.id && edge.toPortID == port.id { connected.insert(edge.placement.to) }
-                }
-                let directions = CirclePortPresentation.octants(for:port,radius:node.radius*camera.zoom,engaged:engaged,expanded:expanded,connected:connected)
+                let directions = CirclePortPresentation.octants(for:port,radius:node.radius*camera.zoom,engaged:engaged,expanded:expanded,connected:connectedByPort[endpoint] ?? [])
                 for direction in directions {
                     guard let point = try? CirclePortGeometry.anchor(center:Point(center.x,center.y),radius:node.outerRadius*camera.zoom,port:port,octant:direction),
                           cablePointAvailable(point, labels:false),
@@ -41,6 +42,7 @@ extension AlbumCanvasView {
                 }
             }
         }
+        if isDrawingFrame { drawingPortHandles=result }
         return result
     }
     func drawPortHandles() {

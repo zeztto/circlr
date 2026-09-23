@@ -73,6 +73,8 @@ struct PlaybackVisualFrame {
     }
 
     func updatePlaybackFrame() {
+        let started=ProcessInfo.processInfo.systemUptime
+        defer { visualUpdateTiming.record(start:started,end:ProcessInfo.processInfo.systemUptime) }
         guard store.playback.playing else { refreshPlaybackAnimation(playing: false); return }
         guard let scene, let prepared = store.playback.prepared else { return }
         let now = ProcessInfo.processInfo.systemUptime
@@ -153,7 +155,7 @@ struct PlaybackVisualFrame {
            let revealed=try? HierarchySceneBuilder.build(store.project,revealing:pin) { scene=revealed }
         guard let scene else { return }
         let resolution=PlaybackFollowResolver.resolve(settings,currentSection:visualFrame.focus,
-            activeCircles:participatingFollowCircles(in:scene),in:scene)
+            activeCircles:settings.target == .pinned ? participatingFollowCircles(in:scene) : [],in:scene)
         // A stale render may still reveal a removed pin. Suspend it immediately,
         // but never move the camera using playback positions from old music.
         if visualFrame.stale,resolution != .missingPinnedTarget {
@@ -261,6 +263,7 @@ struct PlaybackVisualFrame {
          "windowOccluded": !(window?.occlusionState.contains(.visible) ?? false),
          "meterPlaying": store.meter.playing,
          "frameCount": frameCount, "maximumFrameGap": maximumFrameGap, "reduceMotion": reducePlaybackMotion,
+         "timing": ["visualUpdate":visualUpdateTiming.diagnostics, "screenDraw":screenDrawTiming.diagnostics, "movieDraw":movieDrawTiming.diagnostics],
          "camera": store.json(camera), "canvasSize": [bounds.width, bounds.height],
          "orbitContext":store.json(labelContext?.id),
          "visibleCircles":(scene?.nodes ?? []).filter(isVisible).map { node -> [String:Any] in
