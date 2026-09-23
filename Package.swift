@@ -19,6 +19,7 @@ let package = Package(
         .executableTarget(name: "CirclrOutputDeviceCatalog", dependencies: ["CirclrAudio"], path: "Tools/CirclrOutputDeviceCatalog"),
         .testTarget(name: "CirclrCoreTests", dependencies: ["CirclrCore"]),
         .testTarget(name: "CirclrAudioTests", dependencies: ["CirclrAudio"]),
-        .testTarget(name: "CirclrCodexTests", dependencies: ["CirclrCodex"])
+        .testTarget(name: "CirclrCodexTests", dependencies: ["CirclrCodex"]),
+        .testTarget(name: "CirclrAppTests", dependencies: ["CirclrApp", "CirclrCore"])
     ]
 )

@@ -258,8 +258,7 @@ import CirclrAudio
     private var contextKey = ""
     private var contexts: [ID:(CirclrCore.Section,MusicContext,MusicClock)] = [:]
     private var recoveryTask: Task<Void,Never>?
-    private let storageRoot = FileManager.default.urls(for:.applicationSupportDirectory,in:.userDomainMask)[0]
-        .appendingPathComponent(RecoveryFileStore.storageDirectoryName(for:Bundle.main.bundleIdentifier))
+    private let storageRoot:URL
     private var recoveryURL:URL { storageRoot.appendingPathComponent("recovery-v2.json") }
     private var legacyRecoveryURL:URL { storageRoot.appendingPathComponent("recovery.json") }
     private var recoveryStore:RecoveryFileStore?
@@ -278,7 +277,9 @@ import CirclrAudio
     }
     private var recoveryOwnershipFailureShown=false
     struct Recovery: Codable { var project: Project; var root: URL?; var date: Date }
-    init() {
+    init(storageRootOverride:URL?=nil) {
+        storageRoot=storageRootOverride ?? FileManager.default.urls(for:.applicationSupportDirectory,in:.userDomainMask)[0]
+            .appendingPathComponent(RecoveryFileStore.storageDirectoryName(for:Bundle.main.bundleIdentifier))
         consoleOpen=consolePreferences.isOpen
         consoleLogHeight=consolePreferences.logHeight
         playback.onOutputChange = {[weak self] in self?.refreshOutputStatus()}

@@ -1,6 +1,6 @@
 # Codex 계정 기반 대화형 콘솔 구현 계획
 
-작성일: 2026-09-07 · 갱신: 2026-09-23 · 상태: 단계별 구현 중 · 기준 앱: circlr 0.80 개발 후보
+작성일: 2026-09-07 · 갱신: 2026-09-24 · 상태: 단계별 구현 중 · 기준 앱: circlr 0.80 개발 후보
 
 > 2026-09-23 재확인: 공식 [App Server 문서](https://learn.chatgpt.com/docs/app-server)는 현재 `codex app-server` 명령을 experimental·production 미지원으로 표시한다. 공개 0.80 계정 콘솔은 [G0 판단](releases/0.80.0.md)에 따라 보류한다. 아래 설계의 API와 패키징 가정은 지원 상태가 바뀌고 실제 macOS 격리·배포 QA가 끝나기 전까지 제품 계약이 아니다.
 
@@ -18,6 +18,7 @@
 | Codex는 로컬 stdio MCP와 도구별 설정을 지원한다. | 원격 MCP 서버를 운영하지 않고 음악 도구만 제공한다. | [MCP](https://learn.chatgpt.com/docs/extend/mcp?surface=cli) |
 | Codex CLI와 App Server 소스가 공개되어 있다. | 배포 시 선택 릴리스의 라이선스·NOTICE·의존 실행 파일을 별도로 확인한다. | [Open Source](https://learn.chatgpt.com/docs/open-source) |
 | `codex exec`는 stable 비대화형 명령이며 JSONL 출력과 session resume을 지원한다. | 사용자가 설치·로그인한 CLI로 사전 허용 범위의 짧은 백그라운드 작업을 시험한다. 중간 승인·steering이 필요한 대화형 콘솔의 대체 경로로 표기하지 않는다. | [Developer commands](https://learn.chatgpt.com/docs/developer-commands), [Non-interactive mode](https://learn.chatgpt.com/docs/non-interactive-mode) |
+| Agents API는 관리형 Codex harness를 제공하지만 Platform application API key·권한과 별도 API 과금을 요구한다. | 사용자 자신의 ChatGPT/Codex 플랜으로 앱에서 대화한다는 요구의 대체 경로로 사용하지 않는다. | [Agents API](https://developers.openai.com/api/docs/guides/agents-api/overview), [Quickstart](https://developers.openai.com/api/docs/guides/agents-api/quickstart) |
 
 선택 근거와 제품 설계는 구분한다. 위 문서가 circlr의 상용 배포 승인, 모든 계정의 이용 자격, 모든 Codex 도구의 자동 제공을 보장하지는 않는다. 현재 Codex 대화의 기억·도구·계정 세션이 circlr로 자동 이전되는 것도 아니다. circlr용 새 대화와 음악 도구를 구성한다.
 
@@ -139,12 +140,14 @@ App Server wire에서는 `jsonrpc` 필드를 생략하며 MCP JSON-RPC envelope�
 
 MCP의 설명·annotation이나 모델의 약속만으로 편집 권한을 보장하지 않는다. `AgentSessionGateway`가 다음 계약을 집행한다.
 
+**현재 연결 상태:** `CirclrCodex`는 앱 target의 dependency가 아니며, gateway의 `beginTrustedAgentTurn`/`executeTrustedAgent`에는 호출자가 없다. 기존 `mcp/server.py`의 일반 socket은 같은 macOS 사용자와 앱 runID를 확인하지만 AI turn의 lease를 확인하지 않는다. 그 socket을 내장 Codex helper에 그대로 연결하면 AI STOP 뒤 늦은 `apply`가 일반 MCP 경로로 들어올 수 있다. 전용 helper와 app-owned ingress가 연결·검증되기 전에는 일반 socket을 신뢰된 계정 세션으로 승격하지 않는다.
+
 1. 사용자 요청에 대해 앱이 프로젝트·허용 도구·대상 ID·파일 목적지·유효기간을 가진 실행권한 `RunLease`를 발급한다. 모델이 lease나 허용 범위를 만들 수 없다.
 2. helper마다 앱이 생성한 세션 전용 IPC를 연결한다. 비밀 값은 모델 arguments·명령줄·로그로 전달하지 않는다. gateway가 신뢰한 연결과 lease를 결합한다. MCP tool call에 Codex turnID가 자동 포함된다고 가정하지 않는다.
 3. 한 helper 세션에 하나의 활성 turn만 매핑한다. turn 시작 응답과 결합하기 전에는 쓰기를 실행하지 않는다. 대화·계정·문서가 바뀌면 연결 generation과 lease를 갱신한다.
 4. 기존 `projectID`·`expectedRevision`을 검증한다. MCP가 보낸 오래된 revision을 gateway가 현재 값으로 바꿔 통과시키지 않는다. 충돌하면 새 snapshot을 읽고 의도를 재평가한다.
 5. 쓰기는 공통 dispatcher와 Core 검증을 거쳐 한 batch당 한 Undo로 적용한다. 한 대화 turn이 여러 batch를 실행할 수 있으므로 “대화 전체 취소 = Undo 한 번”이라고 표시하지 않는다.
-6. 비동기 렌더 결과를 적용하는 순간에도 lease·generation·문서 revision을 확인한다. 검증과 문서 commit 사이에 다른 MainActor 작업이 끼어들지 않게 한다. AI 중단·로그아웃·문서 교체 뒤 늦은 결과는 반영하지 않는다. 이미 완료한 편집은 남기고 명시적으로 Undo할 수 있다.
+6. UI의 **AI 중단**은 먼저 앱의 lease를 철회하고 소유 job을 취소한 뒤 `turn/interrupt`를 보낸다. 원격 중단 응답이나 `turn/completed`를 기다리는 동안에도 새 쓰기는 허용하지 않는다. 비동기 렌더 결과를 적용하는 순간에도 lease·generation·문서 revision을 확인한다. 검증과 문서 commit 사이에 다른 MainActor 작업이 끼어들지 않게 한다. AI 중단·로그아웃·문서 교체 뒤 늦은 결과는 반영하지 않는다. 이미 완료한 편집은 남기고 명시적으로 Undo할 수 있다.
 7. 승인 필요 작업은 후보 변경의 hash·revision·대상과 결합한다. 승인 후 후보가 달라지면 다시 검토한다. 새 파일 목적지는 native picker/앱이 발급한 경로 handle로 제한한다.
 
 현재 socket의 0700/0600·peer UID는 다른 OS 사용자를 차단하는 경계다. 같은 UID의 악성 프로세스까지 격리하는 것으로 표현하지 않는다. 내장 Codex의 일반 파일/프로세스 도구 제한, 전용 작업 폴더, helper 경로 검증과 함께 집행해야 한다. 기존 외부 MCP 모드는 명시적으로 연결한 로컬 자동화 기능으로 유지한다.
@@ -230,6 +233,7 @@ fixture 검증, 실제 계정 통신, native UI, 실제 오디오, 배포 패키
 - 로컬 `codex --version`: **codex-cli 0.149.1**. `app-server --help`와 `generate-json-schema`를 실행했다. 2026-09-24에는 [bounded stdio 초기화 QA](../qa/0.80-codex-stdio.md)로 실제 자식 프로세스의 `initialize` 응답을 확인하고 종료했다. 모델 요청·로그인·계정 조회는 실행하지 않았다.
 - 생성 schema에서 주요 메서드·필수 인자를 확인했다. 특히 `turn/steer.expectedTurnId`가 필요하고, 외부 토큰 주입 항목에는 내부 사용 제한 설명이 있어 채택하지 않았다. 조사 결과는 [로컬 schema 대조 기록](evidence/codex-app-server-0.149.1.json)에 보관한다.
 - 아직 검증하지 않은 사항: 배포할 런타임의 실제 로그인·격리 동작, clean Mac 실행, 조직별 허용 여부, 생산 환경 지원 상태, 아키텍처별 재배포 의존성과 서명. G0/P2/P5의 통과 항목이다.
+- 2026-09-24 공식 문서 재검토에서도 App Server의 계정·대화 API와 명령의 production 미지원 표기는 동시에 유지된다. Python SDK의 stable 배포본은 내부 App Server 사용 사실을 바꾸지 않는다. 현재 gateway·일반 MCP socket의 정적 감사에서는 신뢰 세션 연결 부재와 STOP 우회 위험을 확인했다. 내부 테스트는 별도로 추가하되 이것만으로 G0를 통과시키지 않는다.
 - API key 연결, 일반 shell 터미널, 음성 대화, 오디오/영상의 모델 입력, cloud agent, 샘플 구매 자동화는 후속 범위다. 이 계획의 첫 결과는 **사용자 계정으로 대화하면서 현재 음악 기능을 안전하게 호출하는 circlr 콘솔**이다.
 
 ## 2026-09-08 음악 전문 에이전트 연결

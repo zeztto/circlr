@@ -1,5 +1,9 @@
 # 변경 이력
 
+## 0.80.0 · build208 — 개발 중
+
+- 사용자 파일과 분리된 저장 루트를 주입해 실제 AppStore의 AI 권한 경계를 통합 검증했다. `snapshot → inspect → MIDI 편집 → Undo`, AI STOP 뒤 늦은 쓰기·이미 수락된 bounce commit 거절, 새 turn 재개를 확인했다. 앱 안의 Codex 계정 대화와 전용 trusted ingress는 아직 연결되지 않았다. 구형 Scarlett는 필수 출력 기준에서 제외하고 Mac 내장 출력의 native 재생 경계를 다시 검사했다. [QA](qa/0.80-build208.md).
+
 ## 0.80.0 · build207 — 개발 중
 
 - 다른 앱이 마지막으로 선택한 뒤 종료했을 때 살아 있는 앱의 기본 MCP 경로가 빈 곳을 가리키는 문제를 분리했다. 앱은 열린 socket과 기본 선택 여부를 표시하고, 명시적 버튼으로 자기 socket을 다시 선택한다. 자동으로 다른 앱에 연결하지 않는다.
