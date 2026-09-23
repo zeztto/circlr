@@ -85,7 +85,27 @@ enum TrustedAgentReply {
                                  document:currentTrustedDocument)
         do {
             let result:[String:Any]
-            if request.method=="snapshot" || request.method=="inspect" {
+            if request.method=="job" {
+                guard let jobID=request.arguments?.jobID,
+                      let owned=trustedAgentJob,owned.id==jobID,owned.lease==lease,
+                      let job=agentJobs[jobID] else {
+                    throw CirclrError("trusted_run_scope: 이 turn의 작업만 조회할 수 있습니다")
+                }
+                // Never forward AgentJob itself: it may include absolute
+                // output paths, media details, or an unsanitized error string.
+                var receipt:[String:Any]=["jobID":jobID,"kind":job.kind,
+                    "state":job.state,"progress":job.progress.isFinite
+                        ? min(1,max(0,job.progress)) : 0,
+                    "projectID":project.id,"revision":project.musicRevision]
+                if let nodeID=job.nodeID {receipt["nodeID"]=nodeID}
+                if let seconds=job.renderedSeconds,seconds.isFinite,seconds>=0 {
+                    receipt["renderedSeconds"]=seconds
+                }
+                if let hasSignal=job.endWindowHasSignal {
+                    receipt["endWindowHasSignal"]=hasSignal
+                }
+                result=receipt
+            } else if request.method=="snapshot" || request.method=="inspect" {
                 let projection:Data
                 if request.method=="snapshot" {
                     projection=try JSONEncoder().encode(AgentRunSnapshot(project))
@@ -115,7 +135,7 @@ enum TrustedAgentReply {
             if let jobID=result["jobID"] as? ID {
                 trustedAgentJob=TrustedAgentJob(id:jobID,lease:lease)
             }
-            let recorded:TrustedAgentReply=["snapshot","inspect"].contains(request.method) ? .notReplayable:.success(result)
+            let recorded:TrustedAgentReply=["snapshot","inspect","job"].contains(request.method) ? .notReplayable:.success(result)
             try trustedReplies.remember(id:request.id,fingerprint:fingerprint,value:recorded)
             return result
         } catch {

@@ -1,5 +1,11 @@
 # Screenshots · 실행 화면
 
+## 0.80.0 build216 development preview
+
+`circlr-song-build216.png` (1440×900, SHA-256 `175323125c19e407683c6f987c37c0d6583baf7b90ad9b6985d3b973ceaf65e8`) and `circlr-song-portrait-build216.png` (720×900, SHA-256 `b95af63c1cd68b75aedfbd9584d8582513cc29b73fbbda30f6ae43ea921732ed`) are byte-identical copies of full-window CUA screenshots from the isolated **0.80.0/build216** native app. Source files: `qa/generated/r80-build216-native/build216-song-orbit-landscape-1440x900.png` and `build216-song-orbit-portrait-720x900.png`. The original packaged executable SHA-256 was `04c63d791b7bd3a5c7549573aabe0626e3b9fc33b9e9e3dc821b2e04da16d5da`. Both show the bundled **f0r h3r** QA copy stopped with seven numbered sections; the portrait shows the two-row toolbar. No playback or physical listening was inferred from these screenshots. [build216 native QA](../../qa/0.80-build216-native.md).
+
+두 PNG는 격리된 build216 실제 앱 전체 창의 원본을 바이트 변경 없이 복사했습니다. 가로·세로 창 모두 정지한 **f0r h3r** QA 사본의 일곱 섹션 순번을 보여 주고, 세로 창에는 두 줄 상단 조작이 보입니다. 이미지 자체는 재생·물리 청취·정식 출시 판정의 증거가 아닙니다.
+
 ## 0.80.0 build214 development preview
 
 `circlr-song-build214.png` (1440×900, SHA-256 `a8f09d07a558e3b2573240354701fe1c417d481c013827325878e2a0ae6f6293`) and `circlr-song-portrait-build214.png` (720×900, SHA-256 `7b456938b6df0aebb8ac039af911b9ad68849e9159d1fcb8a1c97f35de55c634`) are unchanged full-window PNG bytes from the isolated **0.80.0/build214** native app. The packaged executable SHA-256 was `d99ab42ae79e084bba9b72626ff425f160ce1ae68d9b9b0dbe58a06db23da2aa`. The landscape shows **f0r h3r** playing with seven numbered sections; the portrait shows the stopped song and two-row toolbar. Mac Studio speakers were selected only in the QA app. These images verify the screen, not physical listening, hover behavior or 0.80 release readiness. [build214 native QA](../../qa/0.80-build214-native.md).

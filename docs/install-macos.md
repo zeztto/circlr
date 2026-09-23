@@ -29,6 +29,8 @@
 
 2026-09-24 기준 Focusrite는 macOS 26에서 **Scarlett 6i6 1세대의 오디오 전송은 가능하지만 Scarlett Mix Control은 작동하지 않는다**고 안내하고, **6i6 2세대는 지원 대상**으로 표시합니다. macOS 장치 목록의 `Scarlett 6i6 USB`라는 이름만으로 세대를 확인할 수 없습니다. [Focusrite의 세대 확인 안내](https://support.focusrite.com/hc/en-gb/articles/208295789-Which-generation-of-Scarlett-do-I-have)에 따라 기기 밑면의 시리얼 접두 문자를 확인하세요. circlr의 출시 QA는 외부 장치가 연결되어 있어도 앱 안에서 Mac 내장 출력을 선택해 수행하며, Scarlett 호환성은 정확한 세대와 실제 입출력을 확인하는 별도 검사로 기록합니다.
 
+현재 오디오 **녹음 입력**은 macOS의 기본 입력을 사용합니다. 기본 Scarlett에서 녹음 준비가 멈추면 사용자가 **시스템 설정 → 사운드 → 입력**에서 다른 지원 입력 장치(있는 경우 내장 마이크 포함)를 직접 선택해 다시 시도할 수 있습니다. circlr가 macOS 기본 입력을 자동 변경하지는 않습니다. 앱 전용 입력 장치 선택과 실제 take 검증은 [0.90 계획의 R90-07](releases/0.90.0.md)에 남아 있으며, 현재 기능으로 안내하지 않습니다.
+
 ## English
 
 Current circlr macOS packages are **ad-hoc signed** and **not notarized by Apple**. macOS may report that it cannot verify the developer or check the app for malicious software on first launch. See the [packaging script](../scripts/package-app.py) and [release procedure](releases/README.md) for the packaging state.
@@ -55,3 +57,5 @@ If the button is missing, attempt a launch again and check Settings. For a manag
 Choose the Mac's built-in speakers or another supported device explicitly in circlr's **Output settings**, then retry playback. This selection affects circlr only; it does not change the macOS system default. Older Scarlett interfaces have different support by generation and macOS version, so check the exact model against [Focusrite's macOS compatibility guidance](https://support.focusrite.com/hc/en-gb/articles/12033372452754-Focusrite-Compatibility-on-macOS). circlr reports device initialization failures and allows a retry; audible output on a particular interface still needs its own check.
 
 As of 2026-09-24, Focusrite lists the **1st Gen Scarlett 6i6 as passing audio on macOS 26 while Scarlett Mix Control does not work**, and lists the **2nd Gen 6i6 as supported**. The device name `Scarlett 6i6 USB` in macOS does not establish its generation. Check the serial prefix on the underside using [Focusrite's generation guide](https://support.focusrite.com/hc/en-gb/articles/208295789-Which-generation-of-Scarlett-do-I-have). circlr release QA selects Mac built-in output in the app even when an external device is connected; compatibility with a Scarlett requires a separate check of its exact generation and physical input/output.
+
+Audio **recording input** currently uses the macOS default input. If preparation stalls with the Scarlett as default, you can manually select another supported input device (including a built-in microphone where available) in **System Settings → Sound → Input** and retry. circlr does not change the system default for you. App-specific input selection and a verified take remain in [R90-07 of the 0.90 plan](releases/0.90.0.md); they are not a current product feature.

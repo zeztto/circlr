@@ -1,5 +1,17 @@
 # 변경 이력
 
+## 0.80.0 · build216 — 개발 중
+
+- build215 실제 세로 창 QA에서 첫 Intro의 ‘순서 앞으로’와 마지막 Outro의 ‘순서 뒤로’가 활성처럼 보이는 결함을 발견했다. AppKit popup 검증을 모사한 테스트를 RED로 재현하고, 선택 서클 메뉴의 자동 활성화를 끄고 GREEN으로 수정했다. 키보드 이동·Undo·저장 후 명시적 재열기는 build215에서 통과했다. 첫 Open panel의 일회성 `manifest.json` 오류는 원인 미확정으로 남긴다.
+- 수정 후 전체 Swift 회귀 **1,184개 항목 종료 코드 0**, 0.80.0/build216 arm64 앱·다섯 helper 패키지와 strict deep 서명이 통과했다. Python/MCP/agent kit 소스는 build215 검증 뒤 변경되지 않았다. 격리된 실제 720×900 앱에서 양쪽 경계 메뉴의 disabled·중간 섹션 enabled, 키 이동·Undo를 확인했다. 남은 0.80 출고 QA 전에는 정식 tag·Release를 만들지 않는다. [build215 native 실패](qa/0.80-build215-native.md) · [build216 QA](qa/0.80-build216.md) · [native 재검사](qa/0.80-build216-native.md).
+
+## 0.80.0 · build215 — 개발 중
+
+- 축소한 곡 궤도에서 선택 섹션을 `⇧⌥←/→`, 우클릭 메뉴, 명령 검색으로 한 칸 이동할 수 있게 했다. 분기·전환 제약, 공간 배치, Undo를 유지한다.
+- 내부 trusted AI turn의 소유 bounce 작업에 경로 없는 읽기 전용 `job` 상태 조회를 추가했다. STOP 뒤 조회와 request ID 재사용을 거절한다. 실제 계정 대화는 아직 출시 기능이 아니다.
+- 구형 기본 입력 장치에 묶이지 않을 앱 전용 입력 선택의 CoreAudio UID catalog·binding 계약을 검증했다. 이 Mac의 AUHAL 시작은 선택 UID 적용 이전에 timeout이 재현되어, 선택 입력 녹음은 명시적 미지원 오류로 닫고 기존 기본 입력 경로를 유지했다. 사용자에게 선택 입력 기능을 제공하는 단계는 아니다.
+- 당시 소스 Swift 회귀 **1,184개 항목 종료 코드 0**, Python 프로젝트 **50개**, MCP 서버 **41개**, agent kit **9개** 통과. arm64 앱·다섯 helper 0.80.0/build215 패키지와 strict deep 서명을 확인했다. build214 격리 앱의 16 stems+mix GUI 내보내기는 각 197.002초·nonzero PCM이었고 앱 RSS 최고 약 1.97GiB였다. 실제 build215 키보드 이동은 통과했으나 경계 우클릭 메뉴는 FAIL이며 build216에서 수정한다. 녹음 take·물리 청취·반복 메모리 검사는 남아 있다. [build215 QA](qa/0.80-build215.md) · [대형 stems](qa/0.80-build215-stems.md). 정식 tag·Release는 아직 없다.
+
 ## 0.80.0 · build214 — 개발 중
 
 - 곡 궤도와 섹션 라벨에 실행 순번을 표시하고, 선택·hover·접근성에서 시작·끝 시간을 볼 수 있게 했다. 반복 섹션은 현재 occurrence만 강조하며 감상 모드에서는 새 텍스트를 숨긴다.

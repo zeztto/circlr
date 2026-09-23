@@ -974,6 +974,13 @@ struct AlbumCanvas: NSViewRepresentable {
         }
         if event.modifierFlags.contains(.command) || event.modifierFlags.contains(.control) {super.keyDown(with:event);return}
         if handleConnectionKey(event) { return }
+        if store.project.usesOrbits,event.modifierFlags.contains([.option,.shift]),
+           [123,124].contains(event.keyCode),let address=store.hierarchySelection,
+           case .section=address {
+            _=store.moveSectionOccurrence(address,direction:event.keyCode==123 ? .earlier:.later)
+            needsDisplay=true
+            return
+        }
         if event.modifierFlags.contains([.option,.shift]),[123,124,125,126].contains(event.keyCode),!store.project.usesOrbits {
             let spacing=store.project.album?.layout.spacing ?? 24
             let x=event.keyCode==123 ? -spacing:event.keyCode==124 ? spacing:0
@@ -1044,6 +1051,9 @@ struct AlbumCanvas: NSViewRepresentable {
             circleAccessibility[node.id]=element
             let timing=songTimeline.timing(for:node.id)
             element.setAccessibilityLabel(node.title+" · "+(timing ?? node.subtitle));element.setFrameInView(hitRect,view:self)
+            element.setAccessibilityHelp(node.role == .section && scene.isOrbit
+                ? "섹션을 선택한 뒤 Shift Option 왼쪽·오른쪽 화살표로 곡 순서를 한 칸 이동합니다. 이동할 수 없는 끝이나 분기 경로에서는 실행되지 않습니다."
+                : nil)
             element.setAccessibilitySelected(store.hierarchySelections.contains(node.id))
             return element
         }
@@ -1078,6 +1088,9 @@ extension AlbumCanvasView {
         let create=creationMenu(at:point,selected:selected?.id)
         guard let node=selected ?? hit(point) else{appendAutoLayoutMenu(to:create,context:creationScope(at:point,selected:selected?.id));return create}
         let menu=NSMenu()
+        // AppKit's default auto-validation re-enables the deliberately disabled
+        // first/last section reorder action when the context menu opens.
+        menu.autoenablesItems=false
         let createItem=NSMenuItem(title:"서클 만들기",action:nil,keyEquivalent:"")
         createItem.submenu=create;menu.addItem(createItem);menu.addItem(.separator())
         func action(_ title:String,in target:NSMenu?=nil,_ block:@escaping()->Void) {
@@ -1126,6 +1139,17 @@ extension AlbumCanvasView {
                 if !outgoing.isEmpty {let child=submenu("연결 해제");for edge in outgoing {action(graph.nodes.first{$0.id==edge.to}?.name ?? edge.to,in:child){[weak self] in self?.store.disconnectHierarchy(node.id,edgeID:edge.id)}}}
             }
         case .section(let arrangement,let use):
+            let projectID=store.project.id,revision=store.project.musicRevision
+            menu.addItem(.separator())
+            for (direction,title) in [(CanvasSectionReorder.Direction.earlier,"순서 앞으로 한 칸 · ⇧⌥←"),
+                                       (.later,"순서 뒤로 한 칸 · ⇧⌥→")] {
+                action(title){[weak self] in
+                    self?.store.moveSectionOccurrence(node.id,direction:direction,
+                        expectedProjectID:projectID,expectedRevision:revision)
+                }
+                menu.items.last?.isEnabled=CanvasSectionReorder.placement(for:node.id,direction:direction,in:store.project) != nil
+            }
+            menu.addItem(.separator())
             if let a=store.project.arrangements.first(where:{$0.id==arrangement}) {
                 let child=submenu("다음 섹션 연결")
                 for target in a.uses where target.id != use {action(target.name,in:child){[weak self] in self?.store.connectHierarchy(node.id,.section(arrangementID:arrangement,useID:target.id))}}

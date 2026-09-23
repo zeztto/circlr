@@ -58,7 +58,7 @@ public struct AgentRunLeaseController {
                                document: AgentRunDocumentBinding,
                                methods: Set<String>, targets: Set<AgentRunTarget>,
                                ttl: TimeInterval, now: Date = Date()) throws -> AgentRunLease {
-        let supported: Set<String> = ["snapshot", "inspect", "apply", "bounce"]
+        let supported: Set<String> = ["snapshot", "inspect", "job", "apply", "bounce"]
         guard Self.safeIdentifier(sessionID),Self.safeIdentifier(turnID),
               Self.safeIdentifier(document.projectID),
               ttl.isFinite, (0...3600).contains(ttl), ttl > 0,
@@ -118,6 +118,11 @@ public struct AgentRunLeaseController {
                   request.expectedRevision == nil || request.expectedRevision == project.musicRevision else {
                 throw CirclrError("stale_revision: snapshot 대상 문서가 바뀌었습니다")
             }
+        } else if request.method=="job" {
+            guard request.projectID == project.id,
+                  request.expectedRevision == nil || request.expectedRevision == project.musicRevision else {
+                throw CirclrError("stale_revision: job 대상 문서가 바뀌었습니다")
+            }
         } else {
             try AgentProjectEditing.check(request,project:project)
         }
@@ -131,6 +136,13 @@ public struct AgentRunLeaseController {
         switch request.method {
         case "snapshot":
             guard request.arguments == nil else {throw CirclrError("trusted_run_scope: snapshot에는 인수가 없습니다")}
+            return []
+        case "job":
+            guard let args=request.arguments,let jobID=args.jobID,
+                  safeIdentifier(jobID) else {
+                throw CirclrError("trusted_run_scope: 조회할 jobID가 필요합니다")
+            }
+            try requireOnlyArguments(args,["jobID"],decodedKeys:request.decodedArgumentKeys)
             return []
         case "inspect":
             guard let args=request.arguments,

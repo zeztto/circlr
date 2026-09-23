@@ -1,4 +1,5 @@
 import AVFAudio
+import CoreAudio
 import Foundation
 import CirclrCore
 
@@ -23,12 +24,16 @@ protocol AudioCaptureBackend:AnyObject {
 private final class CaptureAttempt:@unchecked Sendable {
     let id=UUID(),control:CaptureControl
     private let queue=DispatchQueue(label:"circlr.audio-capture",qos:.userInitiated)
-    private let factory:@Sendable ()->AudioCaptureBackend
+    private let factory:@Sendable (InputDeviceSelection)->AudioCaptureBackend
+    private let selection:InputDeviceSelection
     private var backend:AudioCaptureBackend?
-    init(control:CaptureControl,factory:@escaping @Sendable ()->AudioCaptureBackend){self.control=control;self.factory=factory}
+    init(control:CaptureControl,selection:InputDeviceSelection,
+         factory:@escaping @Sendable (InputDeviceSelection)->AudioCaptureBackend) {
+        self.control=control;self.selection=selection;self.factory=factory
+    }
     func start(to url:URL,maximumSeconds:Double,reply:@escaping @Sendable (Result<CaptureFormat,Error>)->Void) {
         queue.async {
-            let backend=self.factory();self.backend=backend
+            let backend=self.factory(self.selection);self.backend=backend
             do {reply(.success(try backend.start(to:url,maximumSeconds:maximumSeconds,control:self.control)))}
             catch {self.control.disable();_ = try? backend.stop();self.backend=nil;reply(.failure(error))}
         }
@@ -57,14 +62,22 @@ private final class CaptureAttempt:@unchecked Sendable {
     private var completedFrames:UInt64=0
     private var startReply:((Result<CaptureFormat,Error>)->Void)?
     private var timeoutTask:Task<Void,Never>?
-    private let factory:@Sendable ()->AudioCaptureBackend
-    public init(){factory={EngineCaptureBackend()}}
-    init(factory:@escaping @Sendable ()->AudioCaptureBackend){self.factory=factory}
+    private let factory:@Sendable (InputDeviceSelection)->AudioCaptureBackend
+    public init(){factory={selection in
+        switch selection {
+        case .systemDefault:return EngineCaptureBackend()
+        case .deviceUID:return UnavailableSelectedInputCapture(selection:selection)
+        }
+    }}
+    init(factory:@escaping @Sendable ()->AudioCaptureBackend){self.factory={_ in factory()}}
+    init(selectionFactory:@escaping @Sendable (InputDeviceSelection)->AudioCaptureBackend){self.factory=selectionFactory}
     deinit {timeoutTask?.cancel();attempt?.finish{_ in}}
-    public func start(to url:URL,maximumSeconds:Double,timeout:Double=10,completion:@escaping (Result<CaptureFormat,Error>)->Void)throws {
+    public func start(to url:URL,maximumSeconds:Double,selection:InputDeviceSelection = .systemDefault,
+                      timeout:Double=10,completion:@escaping (Result<CaptureFormat,Error>)->Void)throws {
         guard attempt==nil else{throw CirclrError("이전 입력 장치를 정리하고 있습니다")}
         guard maximumSeconds.isFinite,maximumSeconds>0,maximumSeconds<=86400,timeout.isFinite,timeout>0,timeout<=60 else{throw CirclrError("녹음 시간 범위를 확인하세요")}
-        let next=CaptureAttempt(control:try CaptureControl(),factory:factory)
+        try selection.validate()
+        let next=CaptureAttempt(control:try CaptureControl(),selection:selection,factory:factory)
         attempt=next;format=nil;completedFrames=0;startReply=completion;phase = .starting;message="입력 장치 연결 중";onChange?()
         next.start(to:url,maximumSeconds:maximumSeconds){[weak self] result in Task{@MainActor in self?.started(next.id,result:result)}}
         timeoutTask=Task{[weak self] in
@@ -108,6 +121,24 @@ private final class CaptureAttempt:@unchecked Sendable {
             self.onChange?();completion(result)
         }}
     }
+}
+
+/// AUHAL instantiation can stall before an explicit device is bound on affected
+/// hosts. Keep selected capture closed until an isolated native path is verified.
+private final class UnavailableSelectedInputCapture:AudioCaptureBackend {
+    private let selection:InputDeviceSelection
+    init(selection:InputDeviceSelection){self.selection=selection}
+    func start(to:URL,maximumSeconds:Double,control:CaptureControl) throws -> CaptureFormat {
+        guard case .deviceUID(let uid)=selection else{throw InputDeviceBindingError.invalidSelection}
+        let access=CoreAudioInputDeviceAccess()
+        let id=try access.resolveUID(uid)
+        guard id != kAudioObjectUnknown else{throw InputDeviceBindingError.missingDevice}
+        guard try access.isAlive(id) else{throw InputDeviceBindingError.unavailableDevice}
+        guard try access.hasInput(id) else{throw InputDeviceBindingError.noInput}
+        guard try access.descriptor(id).uid==uid else{throw InputDeviceBindingError.changedDevice}
+        throw InputDeviceBindingError.selectedCaptureUnavailable
+    }
+    func stop() throws -> CapturedAudio? {nil}
 }
 
 private final class EngineCaptureBackend:AudioCaptureBackend {

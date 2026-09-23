@@ -20,7 +20,57 @@ struct StudioPalette: Identifiable {
     var listHeight:CGFloat=360
 }
 
+/// A section's musical position is independent of its freeform canvas position.
+/// Preview through the same editor used for orbit dragging so a command is offered
+/// only when the complete path and its outgoing transitions permit the move.
+enum CanvasSectionReorder {
+    enum Direction { case earlier, later }
+    struct Placement { let before: ID? }
+
+    static func placement(for address:CircleAddress,direction:Direction,in project:Project)->Placement? {
+        guard case .section(let arrangementID,let useID)=address,
+              let plan=try? ArrangementCompiler.compile(project,arrangementID:arrangementID) else{return nil}
+        var seen=Set<ID>()
+        let order=plan.occurrences.compactMap{seen.insert($0.use.id).inserted ? $0.use.id:nil}
+        guard let index=order.firstIndex(of:useID) else{return nil}
+        let target:ID?
+        switch direction {
+        case .earlier:
+            guard index>0 else{return nil}
+            target=order[index-1]
+        case .later:
+            guard index+1<order.count else{return nil}
+            target=index+2<order.count ? order[index+2]:nil
+        }
+        var candidate=project
+        do {try OrbitEditing.reorderSection(address,before:target,in:&candidate)}
+        catch{return nil}
+        return candidate==project ? nil:Placement(before:target)
+    }
+}
+
 extension AppStore {
+    @discardableResult func moveSectionOccurrence(_ address:CircleAddress,
+                                                   direction:CanvasSectionReorder.Direction,
+                                                   expectedProjectID:ID?=nil,
+                                                   expectedRevision:Int?=nil)->Bool {
+        guard !viewingMode,!startupOpen,
+              expectedProjectID.map({$0==project.id}) ?? true,
+              expectedRevision.map({$0==project.musicRevision}) ?? true else{return false}
+        var identity=numberEditIdentity
+        guard resolveActiveNumericDraft(),nameEditing.resolve() else{return false}
+        identity.revision=project.musicRevision
+        guard identity==numberEditIdentity,
+              expectedProjectID.map({$0==project.id}) ?? true,
+              expectedRevision.map({$0==project.musicRevision}) ?? true,
+              let placement=CanvasSectionReorder.placement(for:address,direction:direction,in:project) else{return false}
+        let revision=project.musicRevision
+        mutate("섹션 순서 이동"){try OrbitEditing.reorderSection(address,before:placement.before,in:&$0)}
+        guard project.musicRevision != revision else{return false}
+        if hierarchySelection != address {selectHierarchy(address)}
+        return true
+    }
+
     func openCircleSettings() {
         guard let address=hierarchySelection else{return}
         connectionsOpen=false
@@ -68,6 +118,21 @@ extension AppStore {
                     run:{[weak self] in self?.recoverSectionInsertion(context)}))
             }else{
                 add("insert-section-after","이 섹션 뒤에 삽입"){[weak self] in self?.insertSection(after:context)}
+            }
+        }
+        if let address=hierarchySelection,case .section=address {
+            let projectID=project.id,revision=project.musicRevision
+            if CanvasSectionReorder.placement(for:address,direction:.earlier,in:project) != nil {
+                add("section-earlier","선택 섹션 순서 앞으로 한 칸","⇧⌥←"){[weak self] in
+                    guard let self,self.hierarchySelection==address else{return}
+                    self.moveSectionOccurrence(address,direction:.earlier,expectedProjectID:projectID,expectedRevision:revision)
+                }
+            }
+            if CanvasSectionReorder.placement(for:address,direction:.later,in:project) != nil {
+                add("section-later","선택 섹션 순서 뒤로 한 칸","⇧⌥→"){[weak self] in
+                    guard let self,self.hierarchySelection==address else{return}
+                    self.moveSectionOccurrence(address,direction:.later,expectedProjectID:projectID,expectedRevision:revision)
+                }
             }
         }
         if selectedUse != nil { add("router", "오디오 라우터 서클 만들기") { [weak self] in self?.addMusicRouter() } }
@@ -250,7 +315,7 @@ extension AlbumCanvasView {
                 let title=prefix+item.title
                 if item.title=="자동 정렬" {return []} // Added once below through the shared workspace command scope.
                 if let child=item.submenu {return flatten(child,prefix:title+" · ",path:identity)}
-                guard let action=item.representedObject as? CircleMenuAction else{return []}
+                guard item.isEnabled,let action=item.representedObject as? CircleMenuAction else{return []}
                 return [StudioCommand(id:identity,title:title,run:action.run)]
             }
         }
@@ -471,6 +536,7 @@ struct KeyboardHelpView:View {
         ("포트 · Tab / Return","다음 포트 선택 / 해당 포트로 연결 편집"),
         ("케이블 · Delete / Esc","선택 케이블 해제 / 선택 취소"),
         ("R","이름·음악 설정"),("+ − / F","확대·축소 / 전체 앨범"),("⌥ 방향키","화면 이동"),
+        ("⇧⌥← / ⇧⌥→","궤도에서 선택 섹션 순서 앞·뒤로 한 칸"),
         ("⇧⌥ 방향키","자유 배치에서 선택 서클 이동"),
         ("Space","재생·정지"),("⇧⌘R","영상 녹화 시작·마치기"),("⌘K / ⌘D / ⌘G","섹션 추가 / 재사용 / 그룹"),("Delete","선택 서클·노트 삭제"),
         ("⌘N / ⌘O / ⌘S / ⇧⌘S","새 앨범·열기·저장 / 다른 이름으로 저장"),("⌘Z / ⇧⌘Z","실행 취소 / 다시 실행"),
@@ -494,7 +560,7 @@ struct KeyboardHelpView:View {
         if row.0.hasPrefix("MIDI") || row.0.hasPrefix("피아노 롤") || ["⌥⌘I","⌥⌘E","⌥⌘B","⌘4"].contains(row.0) {return "MIDI"}
         if row.0.hasPrefix("오디오") || row.0=="⌥⌘R" {return "오디오"}
         if row.0.contains("오토메이션") {return "오토메이션"}
-        if row.0.hasPrefix("케이블") || row.0.hasPrefix("포트") || ["A / C","L","Tab · ← → ↑ ↓","⇧ 방향키","Return / Esc","K / ⇧K · P / ⇧P","R","+ − / F","⌥ 방향키","⇧⌥ 방향키"].contains(row.0) {return "캔버스"}
+        if row.0.hasPrefix("케이블") || row.0.hasPrefix("포트") || ["A / C","L","Tab · ← → ↑ ↓","⇧ 방향키","Return / Esc","K / ⇧K · P / ⇧P","R","+ − / F","⌥ 방향키","⇧⌥← / ⇧⌥→","⇧⌥ 방향키"].contains(row.0) {return "캔버스"}
         return "공통"
     }
     private var filtered:[Int] {

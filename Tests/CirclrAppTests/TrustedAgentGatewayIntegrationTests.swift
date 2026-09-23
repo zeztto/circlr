@@ -84,6 +84,15 @@ import CirclrCore
         return request
     }
 
+    private func job(_ project: Project, jobID: ID, id: String) -> AgentRequest {
+        var request = request("job", project: project, id: id)
+        request.expectedRevision = nil
+        var arguments = AgentArguments()
+        arguments.jobID = jobID
+        request.arguments = arguments
+        return request
+    }
+
     private func noteCount(_ reply: [String: Any]) throws -> Int {
         let notes = try XCTUnwrap(reply["notes"] as? [[String: Any]])
         return notes.count
@@ -130,7 +139,7 @@ import CirclrCore
         defer { cleanUp(store, root: root) }
         let (arrangementID, useID, laneID, trackID, scope) = try targets(in: store.project)
         let stopped = try store.beginTrustedAgentTurn(sessionID: "integration-session",
-            turnID: "stopped-turn", methods: ["snapshot", "inspect", "apply", "bounce"], targets: scope)
+            turnID: "stopped-turn", methods: ["snapshot", "inspect", "job", "apply", "bounce"], targets: scope)
         let before = store.project
         let lateApply = addNote(before, arrangementID: arrangementID, useID: useID,
                                 laneID: laneID, id: "late-apply")
@@ -152,14 +161,32 @@ import CirclrCore
         XCTAssertFalse(FileManager.default.fileExists(atPath: lateSave.arguments!.path!))
 
         let rendering = try store.beginTrustedAgentTurn(sessionID: "integration-session",
-            turnID: "render-turn", methods: ["bounce"], targets: scope)
+            turnID: "render-turn", methods: ["bounce", "job"], targets: scope)
         let receipt = try store.executeTrustedAgent(bounce(store.project,
             arrangementID: arrangementID, useID: useID, trackID: trackID, id: "accepted-bounce"),
             lease: rendering)
         let jobID = try XCTUnwrap(receipt["jobID"] as? ID)
         XCTAssertEqual(receipt["state"] as? String, "running")
+        let statusRequest=job(store.project,jobID:jobID,id:"owned-job-status")
+        let status=try store.executeTrustedAgent(statusRequest,lease:rendering)
+        XCTAssertEqual(status["jobID"] as? ID,jobID)
+        XCTAssertEqual(status["kind"] as? String,"bounce")
+        XCTAssertEqual(status["projectID"] as? ID,store.project.id)
+        XCTAssertEqual(status["revision"] as? Int,store.project.musicRevision)
+        let progress=try XCTUnwrap(status["progress"] as? Double)
+        XCTAssertTrue((0...1).contains(progress))
+        XCTAssertTrue(["running","completed"].contains(status["state"] as? String ?? ""))
+        for forbidden in ["path","message","error","media","tail"] {
+            XCTAssertNil(status[forbidden],"Trusted job status leaked \(forbidden)")
+        }
+        XCTAssertThrowsError(try store.executeTrustedAgent(statusRequest,lease:rendering),
+                             "Each progress poll must use a fresh request ID")
+        XCTAssertThrowsError(try store.executeTrustedAgent(job(store.project,
+            jobID:"another-job",id:"foreign-job-status"),lease:rendering))
         store.stopTrustedAgentTurn()
         XCTAssertEqual(store.agentJob?.state, "cancelled")
+        XCTAssertThrowsError(try store.executeTrustedAgent(job(store.project,
+            jobID:jobID,id:"late-job-status"),lease:rendering))
         XCTAssertThrowsError(try store.checkTrustedAgentJobCommit(rendering, jobID: jobID))
         XCTAssertEqual(store.project, before)
 

@@ -116,6 +116,47 @@ final class AgentRunLeaseTests: XCTestCase {
         XCTAssertThrowsError(try controller.authorize(request,lease:lease,project:project,document:document,now:now))
     }
 
+    func testJobStatusRequiresCurrentProjectAndOnlyAJobID() throws {
+        let project=Project(),now=Date(timeIntervalSince1970:100)
+        var controller=AgentRunLeaseController()
+        let document=binding(project)
+        let lease=try controller.issue(sessionID:"session",turnID:"turn",document:document,
+                                       methods:["job"],targets:[],ttl:60,now:now)
+        var query=request("job",project)
+        query.expectedRevision=nil // Progress reads are safe across unrelated music edits.
+        var args=AgentArguments();args.jobID="owned-job"
+        query.arguments=args
+        XCTAssertNoThrow(try controller.authorize(query,lease:lease,project:project,document:document,now:now))
+
+        var invalid=query;invalid.projectID=nil
+        XCTAssertThrowsError(try controller.authorize(invalid,lease:lease,project:project,document:document,now:now))
+        invalid=query;invalid.projectID="another-project"
+        XCTAssertThrowsError(try controller.authorize(invalid,lease:lease,project:project,document:document,now:now))
+        invalid=query;invalid.expectedRevision=project.musicRevision+1
+        XCTAssertThrowsError(try controller.authorize(invalid,lease:lease,project:project,document:document,now:now))
+        invalid=query;invalid.arguments?.jobID=""
+        XCTAssertThrowsError(try controller.authorize(invalid,lease:lease,project:project,document:document,now:now))
+        invalid=query;invalid.arguments?.path="/tmp/private.wav"
+        XCTAssertThrowsError(try controller.authorize(invalid,lease:lease,project:project,document:document,now:now))
+
+        for extra in ["unexpected","path"] {
+            let wire:[String:Any]=["id":"job-query","method":"job","projectID":project.id,
+                                   "arguments":["jobID":"owned-job",extra:NSNull()]]
+            let decoded=try JSONDecoder().decode(AgentRequest.self,
+                from:JSONSerialization.data(withJSONObject:wire))
+            XCTAssertThrowsError(try controller.authorize(decoded,lease:lease,
+                project:project,document:document,now:now))
+        }
+        let nullID:[String:Any]=["id":"job-query","method":"job","projectID":project.id,
+                                 "arguments":["jobID":NSNull()]]
+        let decodedNull=try JSONDecoder().decode(AgentRequest.self,
+            from:JSONSerialization.data(withJSONObject:nullID))
+        XCTAssertThrowsError(try controller.authorize(decodedNull,lease:lease,
+            project:project,document:document,now:now))
+        controller.revoke()
+        XCTAssertThrowsError(try controller.authorize(query,lease:lease,project:project,document:document,now:now))
+    }
+
     func testUnknownAndSharedEditsFailClosed() throws {
         let project=Project(),now=Date(timeIntervalSince1970:100)
         var controller=AgentRunLeaseController()
