@@ -591,13 +591,18 @@ struct AlbumCanvas: NSViewRepresentable {
         guard let curve=drawingConnectionCurves?[edge.id] else { return }
         let tint: NSColor = edge.kind == .midi ? StudioTheme.accentNS : edge.kind == .flow ? StudioTheme.secondaryNS : NSColor(srgbRed:0.62,green:0.75,blue:0.94,alpha:1)
         let fade = connectionFade(edge)
+        // Dense playback retains every cable and its hit geometry, while
+        // unfocused routes shed arrowheads and a duplicate full-length glow.
+        // Selection, hover, and the currently playing flow keep their emphasis;
+        // the pulse on an active signal route is still drawn separately.
+        let compactAmbient = densePlaybackFade >= 0.5 && !connectionIsFocused(edge)
         wire(curve,color:tint.withAlphaComponent(0.78-0.58*fade),dashed:edge.kind == .sidechain)
-        if let before = try? curve.point(at: 0.48), let tip = try? curve.point(at: 0.52) {
+        if !compactAmbient, let before = try? curve.point(at: 0.48), let tip = try? curve.point(at: 0.52) {
             let angle = atan2(tip.y-before.y, tip.x-before.x), path = NSBezierPath()
             for offset in [-0.5, 0.5] { path.move(to: NSPoint(x: tip.x-7*cos(angle+offset), y: tip.y-7*sin(angle+offset))); path.line(to: NSPoint(x:tip.x,y:tip.y)) }
             tint.withAlphaComponent(1-0.75*fade).setStroke(); path.lineWidth=1.5-0.5*fade; path.stroke()
         }
-        drawPlaybackEdge(edge, curve: curve, tint: tint, fade: fade)
+        drawPlaybackEdge(edge, curve: curve, tint: tint, fade: fade, drawGlowWire: !compactAmbient)
     }
     // An overview still shows every connection and keeps the full hit geometry.
     // Active editing restores the ordinary ports and labels immediately.

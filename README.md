@@ -6,15 +6,15 @@ English · [한국어](README.ko.md)
 
 [Getting started](#getting-started) · [Documentation](docs/README.md) · [Roadmap](docs/releases/roadmap.md) · [Releases](https://github.com/zeztto/circlr/releases)
 
-In circlr, a circle is a timeline. Build a song from sections, place MIDI, audio, instruments and effects inside them, and connect their inputs and outputs. Move between the whole arrangement and detailed editing on one zoomable canvas.
+In circlr, a circle is a timeline. Build a song from sections, place MIDI, audio, instruments and effects on and around their orbits, and connect their inputs and outputs. Move between the whole arrangement and detailed editing on one zoomable canvas.
 
-![Bach Invention 8 section orbit and connected MIDI, instrument and output circles in circlr](docs/images/circlr-bach-build184.jpg)
+![f0r h3r song orbit with colored sections and connected paths in circlr](docs/images/circlr-song-build195.png)
 
-*0.80.0 build184 development preview: an actual frame from a short native-app recording. The latest public release is still 0.70.0. [Capture provenance](docs/images/README.md).*
+*0.80.0 build195 development preview: the first frame of a native-app MP4. The latest public release is still 0.70.0. [Capture provenance](docs/images/README.md).*
 
 > **0.70.0 · build180.** Smoother playback canvas and MP4 capture in the verified scenarios, with viewing mode beside Record. [Evidence and limits](docs/releases/0.70.0-qa.md).
 
-**In development:** [0.80.0](docs/releases/0.80.0.md) improves orbit readability and tests the complete playback, recording, editing and export path. The current build keeps a visible MIDI/audio editor open when playback starts and offers job-only cancellation through MCP. Its QA gates remain open; 0.70.0 is the latest release.
+**In development:** [0.80.0](docs/releases/0.80.0.md) improves orbit readability and tests the complete playback, recording, editing and export path. The current build keeps a visible MIDI/audio editor open when playback starts, offers job-only cancellation through MCP and lets you select an app-only output device with **⌘,** if the default stalls. Its QA gates remain open; 0.70.0 is the latest release.
 
 ## What you can work with
 

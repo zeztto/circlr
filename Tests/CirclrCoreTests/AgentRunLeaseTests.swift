@@ -27,6 +27,37 @@ final class AgentRunLeaseTests: XCTestCase {
         return request
     }
 
+    private func inspectFixture() -> Project {
+        var project=Project()
+        _=project.addTrack(name:"Lead")
+        _=project.addTrack(name:"Bass")
+        _=project.addSection(name:"Chorus",at:Point(),bars:2)
+        project.sections[0].settings.tempo = .local(97)
+        project.arrangements[0].uses[0].settings.tempo = .local(101)
+        project.arrangements[0].uses[0].barsOverride=3
+        let secret="/Users/private-session/source.wav"
+        let asset=Asset(name:"source",path:secret,duration:4,sampleRate:48000)
+        project.assets=[asset]
+        project.sections[0].lanes[0].audio=[AudioClip(assetID:asset.id,duration:2)]
+        project.tracks[0].instrument.kind = .audioUnit
+        project.tracks[0].instrument.plugin=PluginDescriptor(name:"Private plugin",type:1,subtype:2,manufacturer:3,state:Data(secret.utf8))
+        var variant=project.sections[0].lanes[0]
+        variant.notes=[Note(beat:2,pitch:67),Note(beat:0,pitch:60),Note(beat:1,pitch:64)]
+        project.arrangements[0].uses[0].laneOverrides[variant.id]=variant
+        return project
+    }
+
+    private func inspectRequest(_ project:Project,laneID:ID?=nil,
+                                offset:Int?=nil,limit:Int?=nil) -> AgentRequest {
+        var request=request("inspect",project)
+        var args=AgentArguments()
+        args.arrangementID=project.activeArrangementID
+        args.useID=project.active.uses[0].id
+        args.laneID=laneID;args.offset=offset;args.limit=limit
+        request.arguments=args
+        return request
+    }
+
     func testScopedTurnAcceptsExactMIDITargetButNotOtherLaneOrStaleRevision() throws {
         let project=Project(),now=Date(timeIntervalSince1970:100)
         var controller=AgentRunLeaseController()
@@ -221,5 +252,187 @@ final class AgentRunLeaseTests: XCTestCase {
             ownedLease:new,ownedJobID:"new-job",document:actual,now:now))
         XCTAssertFalse(controller.permitsOwnedJobCommit(old,jobID:"old-job",
             ownedLease:nil,ownedJobID:nil,document:actual,now:now))
+    }
+
+    func testInspectRequiresExactSectionAndLaneScopeAndCurrentRevision() throws {
+        let project=inspectFixture(),now=Date(timeIntervalSince1970:100)
+        let section=AgentRunTarget.section(arrangementID:project.activeArrangementID,useID:project.active.uses[0].id)
+        let selected=project.sections[0].lanes[0].id
+        let lane=AgentRunTarget.lane(arrangementID:project.activeArrangementID,useID:project.active.uses[0].id,laneID:selected)
+        var controller=AgentRunLeaseController()
+        let document=binding(project)
+        let lease=try controller.issue(sessionID:"session",turnID:"turn",document:document,
+                                       methods:["inspect"],targets:[section,lane],ttl:60,now:now)
+        XCTAssertNoThrow(try controller.authorize(inspectRequest(project),lease:lease,
+                                                   project:project,document:document,now:now))
+        XCTAssertNoThrow(try controller.authorize(inspectRequest(project,laneID:selected),lease:lease,
+                                                   project:project,document:document,now:now))
+        XCTAssertThrowsError(try controller.authorize(inspectRequest(project,laneID:project.sections[0].lanes[1].id),
+                                                       lease:lease,project:project,document:document,now:now))
+        var stale=inspectRequest(project,laneID:selected)
+        stale.expectedRevision=project.musicRevision+1
+        XCTAssertThrowsError(try controller.authorize(stale,lease:lease,project:project,document:document,now:now))
+        stale=inspectRequest(project,laneID:selected)
+        stale.projectID="wrong-project"
+        XCTAssertThrowsError(try controller.authorize(stale,lease:lease,project:project,document:document,now:now))
+        stale=inspectRequest(project,laneID:selected)
+        stale.arguments?.useID="wrong-use"
+        XCTAssertThrowsError(try controller.authorize(stale,lease:lease,project:project,document:document,now:now))
+        XCTAssertThrowsError(try AgentRunInspect(project,arrangementID:project.activeArrangementID,
+                                                  useID:project.active.uses[0].id,laneID:"wrong-lane"))
+    }
+
+    func testInspectPagesEffectiveMIDINotesAndExcludesSensitiveModels() throws {
+        let project=inspectFixture(),use=project.active.uses[0],laneID=project.sections[0].lanes[0].id
+        let summary=try AgentRunInspect(project,arrangementID:project.activeArrangementID,
+                                         useID:use.id,laneID:nil,offset:0,limit:1)
+        let summaryJSON=try JSONSerialization.jsonObject(with:JSONEncoder().encode(summary)) as! [String:Any]
+        XCTAssertEqual(summary.total,2)
+        XCTAssertEqual(summary.lanes?.count,1)
+        XCTAssertEqual(summary.nextOffset,1)
+        XCTAssertNil(summary.notes)
+        let lastLane=try AgentRunInspect(project,arrangementID:project.activeArrangementID,
+                                          useID:use.id,laneID:nil,offset:summary.nextOffset!,limit:1)
+        XCTAssertEqual(lastLane.lanes?.count,1)
+        XCTAssertNil(lastLane.nextOffset)
+        XCTAssertEqual((summaryJSON["context"] as? [String:Any])?["tempo"] as? Double,101)
+        XCTAssertEqual((summaryJSON["section"] as? [String:Any])?["bars"] as? Int,3)
+        let inspected=try AgentRunInspect(project,arrangementID:project.activeArrangementID,
+                                           useID:use.id,laneID:laneID,offset:1,limit:1)
+        XCTAssertEqual(inspected.total,3)
+        XCTAssertEqual(inspected.notes?.count,1)
+        XCTAssertEqual(inspected.notes?.first?.beat,1)
+        XCTAssertEqual(inspected.notes?.first?.pitch,64)
+        XCTAssertEqual(inspected.lane?.noteCount,3)
+        XCTAssertEqual(inspected.nextOffset,2)
+        XCTAssertNil(inspected.lanes)
+        let lastNote=try AgentRunInspect(project,arrangementID:project.activeArrangementID,
+                                          useID:use.id,laneID:laneID,offset:inspected.nextOffset!,limit:1)
+        XCTAssertEqual(lastNote.notes?.first?.pitch,67)
+        XCTAssertNil(lastNote.nextOffset)
+        let beyond=try AgentRunInspect(project,arrangementID:project.activeArrangementID,
+                                        useID:use.id,laneID:laneID,offset:99,limit:256)
+        XCTAssertEqual(beyond.notes?.count,0)
+        XCTAssertNil(beyond.nextOffset)
+        for projection in [summary,inspected] {
+            let text=String(decoding:try JSONEncoder().encode(projection),as:UTF8.self)
+            for forbidden in ["/Users/private-session","source.wav","plugin","state","assets","graph","path","sourceStart"] {
+                XCTAssertFalse(text.localizedCaseInsensitiveContains(forbidden),"unexpected sensitive field: \(forbidden)")
+            }
+        }
+    }
+
+    func testInspectRejectsMalformedArgumentsIncludingUnknownAndNullFields() throws {
+        let project=inspectFixture(),now=Date(timeIntervalSince1970:100)
+        let section=AgentRunTarget.section(arrangementID:project.activeArrangementID,useID:project.active.uses[0].id)
+        var controller=AgentRunLeaseController()
+        let document=binding(project)
+        let lease=try controller.issue(sessionID:"session",turnID:"turn",document:document,
+                                       methods:["inspect"],targets:[section],ttl:60,now:now)
+        var invalid=inspectRequest(project)
+        invalid.arguments?.path="/tmp/secret"
+        XCTAssertThrowsError(try controller.authorize(invalid,lease:lease,project:project,document:document,now:now))
+        for (offset,limit) in [(-1,1),(0,0),(0,257),(1_000_001,1)] {
+            invalid=inspectRequest(project,offset:offset,limit:limit)
+            XCTAssertThrowsError(try controller.authorize(invalid,lease:lease,project:project,document:document,now:now))
+        }
+        invalid=inspectRequest(project)
+        invalid.arguments?.arrangementID=nil
+        XCTAssertThrowsError(try controller.authorize(invalid,lease:lease,project:project,document:document,now:now))
+        var payload:[String:Any]=["id":"req","method":"inspect","projectID":project.id,
+                                  "expectedRevision":project.musicRevision,
+                                  "arguments":["arrangementID":project.activeArrangementID,
+                                               "useID":project.active.uses[0].id,"unexpected":NSNull()]]
+        let raw=try JSONSerialization.data(withJSONObject:payload)
+        let decoded=try JSONDecoder().decode(AgentRequest.self,from:raw)
+        XCTAssertThrowsError(try controller.authorize(decoded,lease:lease,project:project,document:document,now:now))
+        payload["arguments"]=["arrangementID":project.activeArrangementID,
+                              "useID":project.active.uses[0].id,"path":NSNull()]
+        let nullField=try JSONDecoder().decode(AgentRequest.self,from:JSONSerialization.data(withJSONObject:payload))
+        XCTAssertThrowsError(try controller.authorize(nullField,lease:lease,project:project,document:document,now:now))
+        for key in ["laneID","offset","limit"] {
+            payload["arguments"]=["arrangementID":project.activeArrangementID,
+                                  "useID":project.active.uses[0].id,key:NSNull()]
+            let nullOptional=try JSONDecoder().decode(AgentRequest.self,
+                from:JSONSerialization.data(withJSONObject:payload))
+            XCTAssertThrowsError(try controller.authorize(nullOptional,lease:lease,
+                                                          project:project,document:document,now:now))
+        }
+    }
+
+    func testAgentRequestEncodingStillUsesOriginalWireFields() throws {
+        let project=inspectFixture()
+        let original=inspectRequest(project,laneID:project.sections[0].lanes[0].id,
+                                    offset:1,limit:2)
+        let encoded=try JSONEncoder().encode(original)
+        let decoded=try JSONDecoder().decode(AgentRequest.self,from:encoded)
+        let roundTrip=try JSONEncoder().encode(decoded)
+        let before=try JSONSerialization.jsonObject(with:encoded) as! NSDictionary
+        let after=try JSONSerialization.jsonObject(with:roundTrip) as! NSDictionary
+        XCTAssertEqual(before,after)
+        XCTAssertNil(before["decodedArgumentKeys"])
+        XCTAssertNil(before["decodedCanonicalWire"])
+        XCTAssertEqual((after["arguments"] as? [String:Any])?["laneID"] as? String,
+                       project.sections[0].lanes[0].id)
+    }
+
+    func testTrustedReplayRejectsAddedUnknownOrNullFieldsForApplyAndInspect() throws {
+        let project=inspectFixture(),now=Date(timeIntervalSince1970:100)
+        let arrangementID=project.activeArrangementID,useID=project.active.uses[0].id
+        let laneID=project.sections[0].lanes[0].id
+        let section=AgentRunTarget.section(arrangementID:arrangementID,useID:useID)
+        let lane=AgentRunTarget.lane(arrangementID:arrangementID,useID:useID,laneID:laneID)
+        let document=binding(project)
+        var controller=AgentRunLeaseController()
+        let lease=try controller.issue(sessionID:"session",turnID:"turn",document:document,
+                                       methods:["apply","inspect"],targets:[section,lane],ttl:60,now:now)
+        var operation=AgentOperation("set_notes")
+        operation.arrangementID=arrangementID;operation.useID=useID;operation.laneID=laneID
+        operation.notes=[Note(beat:0,pitch:60)]
+        var apply=request("apply",project),applyArgs=AgentArguments()
+        applyArgs.operations=[operation];apply.arguments=applyArgs
+        let requests=[apply,inspectRequest(project,laneID:laneID)]
+        for source in requests {
+            let valid=try JSONDecoder().decode(AgentRequest.self,from:JSONEncoder().encode(source))
+            let fingerprint=try valid.trustedReplayFingerprintMaterial().base64EncodedString()
+            var ledger=AgentRunReplayLedger<String>()
+            XCTAssertNil(try ledger.replay(id:valid.id,fingerprint:fingerprint))
+            try controller.authorize(valid,lease:lease,project:project,document:document,now:now)
+            try ledger.remember(id:valid.id,fingerprint:fingerprint,value:"accepted")
+
+            var wire=try JSONSerialization.jsonObject(with:JSONEncoder().encode(valid)) as! [String:Any]
+            var arguments=wire["arguments"] as! [String:Any]
+            for (key,value) in [("unexpected",NSNull() as Any),("path",NSNull() as Any)] {
+                arguments[key]=value;wire["arguments"]=arguments
+                let changed=try JSONDecoder().decode(AgentRequest.self,
+                    from:JSONSerialization.data(withJSONObject:wire))
+                let changedFingerprint=try changed.trustedReplayFingerprintMaterial().base64EncodedString()
+                XCTAssertNotEqual(changedFingerprint,fingerprint)
+                XCTAssertThrowsError(try ledger.replay(id:changed.id,fingerprint:changedFingerprint))
+                arguments.removeValue(forKey:key)
+            }
+            if source.method=="apply" {
+                var operations=arguments["operations"] as! [[String:Any]]
+                for (key,value) in [("path","/tmp/secret" as Any),("original",NSNull() as Any)] {
+                    operations[0][key]=value;arguments["operations"]=operations;wire["arguments"]=arguments
+                    let changed=try JSONDecoder().decode(AgentRequest.self,
+                        from:JSONSerialization.data(withJSONObject:wire))
+                    let changedFingerprint=try changed.trustedReplayFingerprintMaterial().base64EncodedString()
+                    XCTAssertNotEqual(changedFingerprint,fingerprint)
+                    XCTAssertThrowsError(try ledger.replay(id:changed.id,fingerprint:changedFingerprint))
+                    XCTAssertThrowsError(try controller.authorize(changed,lease:lease,
+                                                                  project:project,document:document,now:now))
+                    operations[0].removeValue(forKey:key)
+                }
+            }
+            // The write gateway deliberately replays an exact accepted apply
+            // before checking the new revision. Inspect itself is not replayable.
+            if source.method=="apply" {
+                var advanced=project;advanced.musicRevision += 1
+                XCTAssertEqual(try ledger.replay(id:valid.id,fingerprint:fingerprint),"accepted")
+                XCTAssertThrowsError(try controller.authorize(valid,lease:lease,
+                                                              project:advanced,document:document,now:now))
+            }
+        }
     }
 }

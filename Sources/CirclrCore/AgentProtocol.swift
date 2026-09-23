@@ -1,12 +1,108 @@
 import Foundation
 
+/// Canonicalizes the entire decoded wire request, including keys and nulls
+/// that typed Codable models intentionally ignore. Trusted replay identity
+/// must distinguish those bytes from a previously accepted request.
+private indirect enum AgentWireJSON:Codable {
+    case object([String:AgentWireJSON])
+    case array([AgentWireJSON])
+    case string(String)
+    case integer(Int64)
+    case number(Double)
+    case bool(Bool)
+    case null
+
+    private struct Key:CodingKey {
+        var stringValue:String
+        var intValue:Int? {nil}
+        init?(stringValue:String){self.stringValue=stringValue}
+        init?(intValue:Int){return nil}
+    }
+
+    init(from decoder:Decoder)throws {
+        if let keyed=try? decoder.container(keyedBy:Key.self) {
+            var fields:[String:AgentWireJSON]=[:]
+            for key in keyed.allKeys {fields[key.stringValue]=try keyed.decode(Self.self,forKey:key)}
+            self = .object(fields)
+        } else if var unkeyed=try? decoder.unkeyedContainer() {
+            var values:[AgentWireJSON]=[]
+            while !unkeyed.isAtEnd {values.append(try unkeyed.decode(Self.self))}
+            self = .array(values)
+        } else {
+            let single=try decoder.singleValueContainer()
+            if single.decodeNil() {self = .null}
+            else if let value=try? single.decode(Bool.self) {self = .bool(value)}
+            else if let value=try? single.decode(Int64.self) {self = .integer(value)}
+            else if let value=try? single.decode(Double.self) {self = .number(value)}
+            else {self = .string(try single.decode(String.self))}
+        }
+    }
+
+    func encode(to encoder:Encoder)throws {
+        switch self {
+        case .object(let fields):
+            var container=encoder.container(keyedBy:Key.self)
+            for (name,value) in fields {try container.encode(value,forKey:Key(stringValue:name)!)}
+        case .array(let values):
+            var container=encoder.unkeyedContainer()
+            for value in values {try container.encode(value)}
+        case .string(let value):var container=encoder.singleValueContainer();try container.encode(value)
+        case .integer(let value):var container=encoder.singleValueContainer();try container.encode(value)
+        case .number(let value):var container=encoder.singleValueContainer();try container.encode(value)
+        case .bool(let value):var container=encoder.singleValueContainer();try container.encode(value)
+        case .null:var container=encoder.singleValueContainer();try container.encodeNil()
+        }
+    }
+}
+
 public struct AgentRequest:Codable {
     public var id:String
     public var method:String
     public var projectID:ID?
     public var expectedRevision:Int?
     public var arguments:AgentArguments?
+    // JSONDecoder normally drops unknown argument keys. Preserve their names
+    // for the trusted gateway so an unrecognized or null field cannot bypass
+    // its exact allowlist. External MCP decoding keeps its existing behavior.
+    var decodedArgumentKeys:Set<String>?
+    private var decodedCanonicalWire:Data?
+    private enum CodingKeys:String,CodingKey {case id,method,projectID,expectedRevision,arguments}
+    private struct RawKey:CodingKey {
+        var stringValue:String
+        var intValue:Int? {nil}
+        init?(stringValue:String){self.stringValue=stringValue}
+        init?(intValue:Int){return nil}
+    }
     public init(method:String,id:String = newID()){self.id=id;self.method=method}
+    public init(from decoder:Decoder)throws {
+        let encoder=JSONEncoder();encoder.outputFormatting=[.sortedKeys]
+        decodedCanonicalWire=try encoder.encode(AgentWireJSON(from:decoder))
+        let c=try decoder.container(keyedBy:CodingKeys.self)
+        id=try c.decode(String.self,forKey:.id)
+        method=try c.decode(String.self,forKey:.method)
+        projectID=try c.decodeIfPresent(ID.self,forKey:.projectID)
+        expectedRevision=try c.decodeIfPresent(Int.self,forKey:.expectedRevision)
+        if c.contains(.arguments),try !c.decodeNil(forKey:.arguments) {
+            let raw=try c.nestedContainer(keyedBy:RawKey.self,forKey:.arguments)
+            decodedArgumentKeys=Set(raw.allKeys.map(\.stringValue))
+            arguments=try c.decode(AgentArguments.self,forKey:.arguments)
+        } else {
+            decodedArgumentKeys=nil
+            arguments=nil
+        }
+    }
+
+    /// Combines the current typed value with its original decoded wire form.
+    /// The first part detects in-process mutation; the second retains unknown
+    /// and explicit-null fields that synthesized Codable encoding would drop.
+    public func trustedReplayFingerprintMaterial() throws -> Data {
+        let encoder=JSONEncoder();encoder.outputFormatting=[.sortedKeys]
+        let typed=try encoder.encode(self)
+        var material=typed
+        material.append(0)
+        material.append(decodedCanonicalWire ?? typed)
+        return material
+    }
 }
 public struct AgentArguments:Codable {
     public var soundTarget:String?
@@ -30,6 +126,7 @@ public struct AgentArguments:Codable {
     public var operations:[AgentOperation]?
     public var arrangementID:ID?
     public var useID:ID?
+    public var laneID:ID?
     public var trackID:ID?
     public var tailSeconds:Double?
     public var nodeID:ID?
@@ -102,6 +199,8 @@ public struct AgentOperation:Codable {
     public var fadeOut:Double?
     public var parameter:AutomationParameter?
     public var automationPoints:[AutomationPoint]?
+    var decodedFieldKeys:Set<String>?
+    var decodedNullFieldKeys:Set<String>?
     public init(_ kind:String){self.kind=kind}
 
     private enum CodingKeys:String,CodingKey {case kind,at,compositionID,arrangementID,useID,laneID,nodeID,trackID,name,notes,pattern,patternID,original,change,sustainChange,append,instrument,synthVoice,effect,context,settings,gain,muted,startBeat,lengthBeats,repeatCount,from,to,sidechain,bars,stepIndex,subdivisions,pitch,velocity,gate,enabled,noteIDs,edit,velocityOffset,semitones,beatOffset,strength,clipID,sourceStart,duration,sourceOffset,fadeIn,fadeOut,parameter,automationPoints}
@@ -109,8 +208,10 @@ public struct AgentOperation:Codable {
     public init(from decoder:Decoder)throws {
         let c=try decoder.container(keyedBy:CodingKeys.self)
         kind=try c.decode(String.self,forKey:.kind)
+        let raw=try decoder.container(keyedBy:RawKey.self)
+        decodedFieldKeys=Set(raw.allKeys.map(\.stringValue))
+        decodedNullFieldKeys=Set(try raw.allKeys.filter{try raw.decodeNil(forKey:$0)}.map(\.stringValue))
         if kind=="edit_sustain" {
-            let raw=try decoder.container(keyedBy:RawKey.self)
             let allowed:Set<String>=["kind","arrangementID","useID","laneID","original","patternID","trackID","sustainChange"]
             guard try raw.allKeys.allSatisfy({key in guard allowed.contains(key.stringValue) else{return false};return try !raw.decodeNil(forKey:key)}) else {throw CirclrError("edit_sustain 필드와 null 여부를 확인하세요")}
         }

@@ -601,7 +601,14 @@ import CirclrAudio
                     guard let self,self.renderGeneration == generation,!Task.isCancelled else { return }
                     self.prepared = result; self.preparedKey = key
                     self.status = result.peak > 1 ? "출력이 0 dBFS를 넘습니다. Gain을 낮추세요" : (plan.warnings.first ?? "재생 준비 완료")
-                    if autoplay { self.status="오디오 출력 연결 중";try await self.playback.play(result,selection:outputSelection,loop:loopMode != .off);self.playbackLoopArrangementID=snapshot.activeArrangementID;self.playbackLoopUseID=useID;self.status="재생 중" }
+                    if autoplay {
+                        self.status="오디오 출력 연결 중"
+                        try await self.playback.play(result,selection:outputSelection,loop:loopMode != .off)
+                        guard self.renderGeneration == generation,!Task.isCancelled else{return}
+                        self.playbackLoopArrangementID=snapshot.activeArrangementID
+                        self.playbackLoopUseID=useID
+                        self.status="재생 중"
+                    }
                     guard self.renderGeneration == generation else { return }
                     self.preparing = false; completion?(result)
                 } catch { guard let self,self.renderGeneration == generation else { return }; self.preparing = false; self.handlePlaybackError(error) }

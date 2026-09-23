@@ -79,12 +79,21 @@ extension AppStore {
             return (outputPreparationStage ?? step)+" · \(outputStatus.elapsedSeconds)초. "+(outputStatus.request == .waiting ? "Space로 재생 준비를 취소할 수 있습니다.":"재생 요청은 멈췄으며 장치 응답을 기다립니다. 준비되면 다시 재생하세요.")+outputLastStageDetail
         }
         if outputStatus.phase == .ready,[.timedOut,.cancelled].contains(outputStatus.request) {return "출력 준비 완료. Space로 다시 재생하세요."}
-        if outputStatus.phase == .idle,outputStatus.attempts>0,[.timedOut,.cancelled].contains(outputStatus.request) {return (outputStatus.request == .timedOut ? "재생 준비 제한 시간을 초과했습니다. ":"")+"이전 출력 정리가 끝났습니다. Space로 새 출력을 연결해 재생하세요."+outputLastStageDetail}
+        if outputStatus.phase == .idle,outputStatus.attempts>0,[.timedOut,.cancelled].contains(outputStatus.request) {
+            let recovery = outputStatus.request == .timedOut
+                ? "재생 준비 제한 시간을 초과했습니다. 이전 출력 정리가 끝났습니다. ⌘,에서 다른 출력 장치를 선택하거나 Space로 다시 재생하세요."
+                : "이전 출력 정리가 끝났습니다. Space로 다시 재생하세요."
+            return recovery+outputLastStageDetail
+        }
         return auditionDetail
     }
     func handlePlaybackError(_ error:Error) {
         refreshOutputStatus()
-        if case PlaybackOutputWaitError.timedOut = error {status=error.localizedDescription}
+        // Viewing mode hides the status row and disables output settings.
+        // Return to the editor on a real failure so recovery is discoverable.
+        if !(error is CancellationError),viewingMode {_ = setViewingMode(false)}
+        if case PlaybackOutputWaitError.timedOut = error {status=error.localizedDescription+" ⌘,에서 다른 출력 장치를 선택할 수 있습니다."}
+        else if case PlaybackTransportError.timedOut = error {status=error.localizedDescription+" ⌘,에서 다른 출력 장치를 선택할 수 있습니다."}
         else if error is PlaybackTransportError {status=error.localizedDescription}
         else if !(error is CancellationError) {fail(error)}
     }

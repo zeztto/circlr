@@ -58,7 +58,7 @@ public struct AgentRunLeaseController {
                                document: AgentRunDocumentBinding,
                                methods: Set<String>, targets: Set<AgentRunTarget>,
                                ttl: TimeInterval, now: Date = Date()) throws -> AgentRunLease {
-        let supported: Set<String> = ["snapshot", "apply", "bounce"]
+        let supported: Set<String> = ["snapshot", "inspect", "apply", "bounce"]
         guard Self.safeIdentifier(sessionID),Self.safeIdentifier(turnID),
               Self.safeIdentifier(document.projectID),
               ttl.isFinite, (0...3600).contains(ttl), ttl > 0,
@@ -132,20 +132,38 @@ public struct AgentRunLeaseController {
         case "snapshot":
             guard request.arguments == nil else {throw CirclrError("trusted_run_scope: snapshot에는 인수가 없습니다")}
             return []
+        case "inspect":
+            guard let args=request.arguments,
+                  let arrangementID=args.arrangementID,let useID=args.useID,
+                  safeIdentifier(arrangementID),safeIdentifier(useID),
+                  args.laneID.map(safeIdentifier) ?? true,
+                  !(request.decodedArgumentKeys?.contains("laneID") == true && args.laneID == nil),
+                  !(request.decodedArgumentKeys?.contains("offset") == true && args.offset == nil),
+                  !(request.decodedArgumentKeys?.contains("limit") == true && args.limit == nil),
+                  (0...1_000_000).contains(args.offset ?? 0),
+                  (1...256).contains(args.limit ?? 64) else {
+                throw CirclrError("trusted_run_scope: inspect의 편곡·섹션과 0–1000000 offset, 1–256 limit을 확인하세요")
+            }
+            try requireOnlyArguments(args,["arrangementID","useID","laneID","offset","limit"],decodedKeys:request.decodedArgumentKeys)
+            var targets:Set<AgentRunTarget>=[.section(arrangementID:arrangementID,useID:useID)]
+            if let laneID=args.laneID {
+                targets.insert(.lane(arrangementID:arrangementID,useID:useID,laneID:laneID))
+            }
+            return targets
         case "bounce":
             guard let args=request.arguments,
                   let arrangementID=args.arrangementID,let useID=args.useID,
                   let trackID=args.trackID, args.path == nil else {
                 throw CirclrError("trusted_run_scope: bounce의 편곡·섹션·트랙을 명시하고 파일 경로는 생략하세요")
             }
-            try requireOnlyArguments(args,["arrangementID","useID","trackID","tailSeconds"])
+            try requireOnlyArguments(args,["arrangementID","useID","trackID","tailSeconds"],decodedKeys:request.decodedArgumentKeys)
             return [.section(arrangementID:arrangementID,useID:useID),.track(trackID)]
         case "apply":
             guard let args=request.arguments, let operations=args.operations,
                   !operations.isEmpty,operations.count<=128 else {
                 throw CirclrError("trusted_run_scope: 1–128개 편집이 필요합니다")
             }
-            try requireOnlyArguments(args,["operations"])
+            try requireOnlyArguments(args,["operations"],decodedKeys:request.decodedArgumentKeys)
             var targets:Set<AgentRunTarget>=[]
             for op in operations {
                 guard op.original != true,
@@ -190,10 +208,12 @@ public struct AgentRunLeaseController {
     }
 
     private static func requireOnlyArguments(_ args: AgentArguments,
-                                             _ allowed: Set<String>) throws {
+                                             _ allowed: Set<String>,
+                                             decodedKeys:Set<String>?=nil) throws {
         let data=try JSONEncoder().encode(args)
         guard let fields=try JSONSerialization.jsonObject(with:data) as? [String:Any],
-              Set(fields.keys).isSubset(of:allowed) else {
+              Set(fields.keys).isSubset(of:allowed),
+              decodedKeys?.isSubset(of:allowed) ?? true else {
             throw CirclrError("trusted_run_scope: 이 명령에 허용되지 않은 인수가 있습니다")
         }
     }
@@ -202,7 +222,9 @@ public struct AgentRunLeaseController {
                                              _ allowed: Set<String>) throws {
         let data=try JSONEncoder().encode(op)
         guard let fields=try JSONSerialization.jsonObject(with:data) as? [String:Any],
-              Set(fields.keys).isSubset(of:allowed) else {
+              Set(fields.keys).isSubset(of:allowed),
+              op.decodedFieldKeys?.isSubset(of:allowed) ?? true,
+              op.decodedNullFieldKeys?.isEmpty ?? true else {
             throw CirclrError("trusted_run_scope: 편집 종류와 관계없는 필드는 허용하지 않습니다")
         }
     }
@@ -272,6 +294,110 @@ public struct AgentRunSnapshot: Encodable {
         }
         assets=project.assets.map{AssetSummary(id:$0.id,name:$0.name,
                                                 duration:$0.duration,sampleRate:$0.sampleRate)}
+    }
+}
+
+/// A deliberately narrow read model for one authorized section occurrence.
+/// It must not grow by embedding Project, Lane, MusicContext, Asset or Graph:
+/// those models can contain media paths and serialized plugin state.
+public struct AgentRunInspect: Encodable {
+    public struct SectionSummary: Encodable {
+        public let id: ID
+        public let name: String
+        public let useName: String
+        public let bars: Int
+        public let repeatCount: Int
+        public let beats: Double
+        public let seconds: Double
+    }
+    public struct ContextSummary: Encodable {
+        public let tempo: Double
+        public let meterNumerator: Int
+        public let meterDenominator: Int
+        public let scaleRoot: Int
+        public let scaleName: String
+        public let scaleIntervals: [Int]
+        public let beatSubdivisions: Int
+        public let beatAccents: [Int]
+        public let swing: Double
+    }
+    public struct LaneSummary: Encodable {
+        public let id: ID
+        public let trackID: ID
+        public let noteCount: Int
+        public let audioClipCount: Int
+    }
+    public struct NoteSummary: Encodable {
+        public let id: ID
+        public let beat: Double
+        public let length: Double
+        public let pitch: Int
+        public let velocity: Int
+    }
+
+    public let projectID: ID
+    public let revision: Int
+    public let arrangementID: ID
+    public let useID: ID
+    public let section: SectionSummary
+    public let context: ContextSummary
+    public let offset: Int
+    public let limit: Int
+    public let total: Int
+    public let nextOffset: Int?
+    /// A section-level query pages safe lane summaries. A lane query pages
+    /// only that lane's effective MIDI notes, including use-level overrides.
+    public let lanes: [LaneSummary]?
+    public let lane: LaneSummary?
+    public let notes: [NoteSummary]?
+
+    public init(_ project:Project,arrangementID:ID,useID:ID,laneID:ID?,
+                offset:Int=0,limit:Int=64) throws {
+        guard (0...1_000_000).contains(offset),(1...256).contains(limit),
+              let arrangement=project.arrangements.first(where:{$0.id==arrangementID}),
+              let use=arrangement.uses.first(where:{$0.id==useID}) else {
+            throw CirclrError("trusted_run_scope: inspect 대상 또는 페이지가 유효하지 않습니다")
+        }
+        let (definition,resolved,clock)=try ArrangementCompiler.context(project:project,use:use,arrangementID:arrangementID)
+        let effective=try ArrangementCompiler.effectiveLanes(section:definition,use:use)
+        projectID=project.id;revision=project.musicRevision
+        self.arrangementID=arrangementID;self.useID=useID
+        section=SectionSummary(id:definition.id,name:definition.name,useName:use.name,
+                               bars:use.barsOverride ?? definition.bars,
+                               repeatCount:use.repeatCount,beats:clock.beats,seconds:clock.seconds)
+        context=ContextSummary(tempo:resolved.tempo,meterNumerator:resolved.meter.numerator,
+                               meterDenominator:resolved.meter.denominator,
+                               scaleRoot:resolved.scale.root,scaleName:resolved.scale.name,
+                               scaleIntervals:resolved.scale.intervals,
+                               beatSubdivisions:resolved.beatGrid.subdivisions,
+                               beatAccents:resolved.beatGrid.accents,swing:resolved.beatGrid.swing)
+        self.offset=offset;self.limit=limit
+        func summary(_ item:Lane)->LaneSummary {
+            LaneSummary(id:item.id,trackID:item.trackID,
+                        noteCount:item.notes.count,audioClipCount:item.audio.count)
+        }
+        if let laneID {
+            guard let selected=effective.first(where:{$0.id==laneID}) else {
+                throw CirclrError("trusted_run_scope: laneID가 선택한 섹션에 속하지 않습니다")
+            }
+            let sorted=selected.notes.sorted {
+                if $0.beat != $1.beat {return $0.beat < $1.beat}
+                if $0.pitch != $1.pitch {return $0.pitch < $1.pitch}
+                return $0.id < $1.id
+            }
+            let start=min(offset,sorted.count),end=start+min(limit,sorted.count-start)
+            total=sorted.count;lane=summary(selected);lanes=nil
+            nextOffset=end<sorted.count ? end:nil
+            notes=sorted[start..<end].map {
+                NoteSummary(id:$0.id,beat:$0.beat,length:$0.length,
+                            pitch:$0.pitch,velocity:$0.velocity)
+            }
+        } else {
+            let start=min(offset,effective.count),end=start+min(limit,effective.count-start)
+            total=effective.count;lanes=effective[start..<end].map(summary)
+            nextOffset=end<effective.count ? end:nil
+            lane=nil;notes=nil
+        }
     }
 }
 

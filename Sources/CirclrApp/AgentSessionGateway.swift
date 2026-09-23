@@ -18,7 +18,7 @@ enum TrustedAgentReply {
         switch self {
         case .success(let result): return result
         case .failure(let message): throw CirclrError(message)
-        case .notReplayable: throw CirclrError("trusted_run_replay: snapshot은 새 request id로 다시 조회하세요")
+        case .notReplayable: throw CirclrError("trusted_run_replay: 읽기 요청은 새 request id로 다시 조회하세요")
         }
     }
 }
@@ -76,9 +76,8 @@ enum TrustedAgentReply {
         guard !trustedRun.turnCompleted else {
             throw CirclrError("trusted_run_stale: 완료된 turn은 새 요청을 실행할 수 없습니다")
         }
-        let encoder=JSONEncoder();encoder.outputFormatting=[.sortedKeys]
-        let encoded=try encoder.encode(request)
-        let fingerprint=SHA256.hash(data:encoded).map{String(format:"%02x",$0)}.joined()
+        let fingerprint=SHA256.hash(data:try request.trustedReplayFingerprintMaterial())
+            .map{String(format:"%02x",$0)}.joined()
         if let replay=try trustedReplies.replay(id:request.id,fingerprint:fingerprint) {
             return try replay.value()
         }
@@ -86,11 +85,23 @@ enum TrustedAgentReply {
                                  document:currentTrustedDocument)
         do {
             let result:[String:Any]
-            if request.method=="snapshot" {
-                let data=try JSONEncoder().encode(AgentRunSnapshot(project))
-                guard data.count<=1_048_576,
-                      let snapshot=try JSONSerialization.jsonObject(with:data) as? [String:Any] else {
-                    throw CirclrError("trusted_run_snapshot: 응답을 인코딩할 수 없습니다")
+            if request.method=="snapshot" || request.method=="inspect" {
+                let projection:Data
+                if request.method=="snapshot" {
+                    projection=try JSONEncoder().encode(AgentRunSnapshot(project))
+                } else {
+                    guard let args=request.arguments,
+                          let arrangementID=args.arrangementID,
+                          let useID=args.useID else {
+                        throw CirclrError("trusted_run_scope: inspect 대상을 확인하세요")
+                    }
+                    projection=try JSONEncoder().encode(try AgentRunInspect(project,
+                        arrangementID:arrangementID,useID:useID,laneID:args.laneID,
+                        offset:args.offset ?? 0,limit:args.limit ?? 64))
+                }
+                guard projection.count<=1_048_576,
+                      let snapshot=try JSONSerialization.jsonObject(with:projection) as? [String:Any] else {
+                    throw CirclrError("trusted_run_read: 응답을 인코딩할 수 없습니다")
                 }
                 result=snapshot
             } else {
@@ -104,7 +115,7 @@ enum TrustedAgentReply {
             if let jobID=result["jobID"] as? ID {
                 trustedAgentJob=TrustedAgentJob(id:jobID,lease:lease)
             }
-            let recorded:TrustedAgentReply=request.method=="snapshot" ? .notReplayable:.success(result)
+            let recorded:TrustedAgentReply=["snapshot","inspect"].contains(request.method) ? .notReplayable:.success(result)
             try trustedReplies.remember(id:request.id,fingerprint:fingerprint,value:recorded)
             return result
         } catch {

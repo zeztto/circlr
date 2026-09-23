@@ -255,10 +255,12 @@ struct PlaybackVisualFrame {
         }
     }
 
-    func drawPlaybackEdge(_ edge: CircleSceneEdge, curve: CirclePortCurve, tint: NSColor, fade: Double) {
+    func drawPlaybackEdge(_ edge: CircleSceneEdge, curve: CirclePortCurve, tint: NSColor, fade: Double, drawGlowWire: Bool) {
         let strength = displayStrength(visualFrame.edgeLevels[edge.id] ?? 0)
         guard strength > 0, !visualFrame.stale, store.playback.playing else { return }
-        wire(curve, color: tint.withAlphaComponent((0.3+strength*0.55)*(1-0.82*fade)), dashed: edge.kind == .sidechain)
+        if drawGlowWire {
+            wire(curve, color: tint.withAlphaComponent((0.3+strength*0.55)*(1-0.82*fade)), dashed: edge.kind == .sidechain)
+        }
         guard !reducePlaybackMotion else { return }
         func point(_ t: Double) -> NSPoint {
             let p = (try? curve.point(at: t)) ?? curve.from

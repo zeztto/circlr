@@ -1,5 +1,11 @@
 # Screenshots · 실행 화면
 
+## 0.80.0 build195 development preview
+
+`circlr-song-build195.png` is the uncomposited first decoded frame of the isolated build195 native-app MP4 `r80-build195-song-preview.mp4`. It shows the bundled **f0r h3r** song orbit and section paths on a 702×750 canvas. SHA-256: `680e48c34c784740f443429880d4895752e82dfed648fd6b97c4443b873ec051`. The local source MP4 (SHA-256 `79d97776b078420d9b1ca46b14528305af046b15413b0167b6e8693013f6130c`) remains outside Git. The clip is 9.363 seconds with 282 decoded frames and nonzero AAC, but it does not verify physical listening, compositor FPS or the final 0.80 release. [Native QA](../../qa/0.80-build195.md).
+
+`circlr-song-build195.png`는 별도 build195 실제 앱이 동봉 **f0r h3r**를 녹화한 MP4의 첫 디코드 프레임을 합성·보정 없이 복사한 것입니다. 702×750 캔버스의 곡 궤도와 섹션 경로를 보여줍니다. 원본 MP4는 Git 제외 QA 자료이며 이 이미지는 실제 스피커 청취·표시 FPS·0.80 정식 출시의 증거가 아닙니다.
+
 ## 0.80.0 build184 development preview
 
 `circlr-bach-build184.jpg` is the 2-second video frame of the isolated build184 native-app MP4 `qa/generated/r80-build184-qa-recording.mp4`, showing the bundled Bach Invention 8 section orbit, connected MIDI/instrument/output circles and playback focus. The recording is an actual 1426×1080 canvas capture; this JPEG was encoded once from the decoded frame with no visual compositing. SHA-256: `9301ff5d6ac307d734ce578fc5f27efdb6421e8f5b81f830dd9e5a905008cf54`. This is a development preview, not the final 0.80 release screenshot. The source MP4 remains local ignored QA evidence. [Video QA and limits](../../qa/0.80-short-movie.md).
