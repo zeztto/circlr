@@ -35,11 +35,11 @@ struct AgentConsole:View {
                         Text(job.tail.map{String(format:"바운스 · 여운 %.1f초",$0.effectiveSeconds)} ?? "바운스 여운 계산 중")
                             .font(.system(size:11)).lineLimit(1).help(job.message)
                         ProgressView().controlSize(.small)
-                        Button("취소"){store.stop()}.accessibilityLabel("바운스 취소")
+                        Button("취소"){_ = try? store.cancelAgentJob(job.id,source:"콘솔")}.accessibilityLabel("바운스 취소")
                     }else{
                         Text(job.kind).font(.system(size:11,design:.monospaced))
                         ProgressView(value:job.progress).frame(width:65)
-                        Button("정지"){store.stop()}
+                        Button("취소"){_ = try? store.cancelAgentJob(job.id,source:"콘솔")}.accessibilityLabel("\(job.kind) 작업 취소")
                     }
                 } else if let job=store.agentJob,job.state=="completed" {
                     if let tail=job.tail {

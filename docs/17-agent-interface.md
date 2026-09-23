@@ -20,7 +20,7 @@ flowchart LR
 
 ## 연결 경계
 
-- `mcp/server.py`: Python 표준 라이브러리의 stdio JSON-RPC MCP adapter. 개발 브랜치는 도구 23개와 입력 schema를 제공하고 native 명령을 전달한다. 사용 앱 0.19의 기존 도구 14개와 구분한다.
+- `mcp/server.py`: Python 표준 라이브러리의 stdio JSON-RPC MCP adapter. 개발 브랜치는 도구 27개와 입력 schema를 제공하고 native 명령을 전달한다. 사용 앱 0.19의 기존 도구 14개와 구분한다.
 - `AgentSocket.swift`: 앱의 `Application Support/circlr/Agent/agent.sock`. 폴더 0700·socket 0600 및 peer UID로 현재 사용자만 연결한다. TCP 포트나 shell 명령 실행은 제공하지 않는다.
 - `AgentWorkspace.swift`: UI와 MCP 공통 dispatcher, request retry, job lifecycle, 실제 activity 기록.
 - `AgentProtocol.swift`: Codable 명령과 Core transaction. 오디오/UI를 직접 제어하는 임의의 스크립트를 모델에 저장하지 않는다.
@@ -58,7 +58,7 @@ build 62의 `sounds`는 GUI와 같은 실제 음색 catalog를 읽는다. snapsh
 
 `open`도 같은 job 형태다. 파일 읽기·검증을 별도 Task로 실행해 macOS 파일 접근 확인이 대기하더라도 메인 스레드가 멈추지 않는다. completed 이후 snapshot을 읽어 새 문서 ID를 얻는다. OS가 중단하지 못한 파일 읽기라도 stop 이후의 늦은 결과는 문서에 적용하지 않는다. 최초 파일 접근의 시스템 권한은 사용자가 허용해야 하며 이 API가 우회하지 않는다. save는 현재 동기 응답이므로 대용량 미디어 패키지 저장을 job으로 분리하는 일은 후속 확장이다.
 
-`stop`은 재생과 렌더를 취소하고 generation을 갱신한다. 이미 진행하던 worker의 늦은 완료가 파일·문서에 반영되지 않게 한다. 바운스는 원본 입력을 보존하고 결과 오디오로 출력 연결을 교체한다. 복원은 같은 Core BounceEditing을 사용한다.
+`cancel_job`은 현재 프로젝트의 정확한 running jobID를 취소하고 generation을 갱신한다. `projectID`와 `runtime.capabilities.jobCancellation=1`이 필요하며 음악 revision은 바꾸지 않는다. 이미 끝난 job은 현재 상태를 반환한다. 재생·녹음·영상 상태를 건드리지 않지만, 이후 MCP 호출의 쓰기 권한까지 철회하는 AI 세션 STOP은 아니다. `stop`은 재생과 렌더를 함께 정지한다. 취소 뒤 오래 걸린 worker의 늦은 완료가 파일·문서에 반영되지 않도록 한다. 바운스는 원본 입력을 보존하고 결과 오디오로 출력 연결을 교체한다. 복원은 같은 Core BounceEditing을 사용한다.
 
 동일 native request ID와 동일 bytes를 재전송하면 캐시한 결과를 반환한다. 같은 ID에 다른 bytes를 보내면 거부한다. 캐시는 앱 실행 중 최근 256개의 쓰기/실행 요청에 한정되며 앱 재시작 후에는 유지되지 않는다. 연결이 끊어졌을 때 새 ID로 무조건 다시 실행하지 말고 snapshot/job을 읽어 완료 여부를 확인한다.
 

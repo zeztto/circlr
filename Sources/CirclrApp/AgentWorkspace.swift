@@ -55,7 +55,7 @@ extension AppStore {
          "playback":capturePlaybackVisualization?() ?? ["playing":playback.playing,"seconds":playback.seconds],"output":json(playback.outputStatus),"audition":json(auditionOutput.status),
          "view":["startupOpen":startupOpen,"loopMode":playbackLoopMode.rawValue,"loopTransition":playbackLoopState,"loopIteration":playback.loopIteration,"elapsedSeconds":playback.elapsedSeconds,"viewingMode":viewingMode,"follow":playbackFollow.rawValue,"followSettings":json(playbackFollowSettings),"zoom":hierarchyZoom,"layout":project.usesOrbits ? "orbit":"freeform","consoleOpen":consoleOpen,"consoleBounds":[consoleBounds.minX,consoleBounds.minY,consoleBounds.width,consoleBounds.height]],
          "library":["open":libraryOpen,"folders":library.folders.count,"files":library.entries.count,"selectedFiles":library.chosenIDs.count,"scanning":library.scanning,"searching":library.searching,"previewPreparing":library.previewPreparing,"previewPlaying":library.previewing,"previewPending":library.previewPending,"previewSeconds":library.previewSeconds],
-         "runtime":["version":Bundle.main.object(forInfoDictionaryKey:"CFBundleShortVersionString") as? String ?? "development","build":Bundle.main.object(forInfoDictionaryKey:"CFBundleVersion") as? String ?? "development","capabilities":["playbackLoop":1,"playbackLoopLive":1,"workspaceView":1,"soundCatalog":1,"synthCutoffAutomation":1,"synthResonanceAutomation":1,"midiTempoImport":1,"midiPitchBendImport":1,"midiSustainImport":1,"midiSustainEditing":1,"midiPitchBendEditing":1,"sectionLengthEditing":1],"bundleID":Bundle.main.bundleIdentifier ?? "","windows":NSApplication.shared.windows.filter{$0.identifier?.rawValue=="main"}.map{["visible":$0.isVisible,"minimized":$0.isMiniaturized]}]]
+         "runtime":["version":Bundle.main.object(forInfoDictionaryKey:"CFBundleShortVersionString") as? String ?? "development","build":Bundle.main.object(forInfoDictionaryKey:"CFBundleVersion") as? String ?? "development","capabilities":["playbackLoop":1,"playbackLoopLive":1,"workspaceView":1,"soundCatalog":1,"synthCutoffAutomation":1,"synthResonanceAutomation":1,"midiTempoImport":1,"midiPitchBendImport":1,"midiSustainImport":1,"midiSustainEditing":1,"midiPitchBendEditing":1,"sectionLengthEditing":1,"jobCancellation":1],"bundleID":Bundle.main.bundleIdentifier ?? "","windows":NSApplication.shared.windows.filter{$0.identifier?.rawValue=="main"}.map{["visible":$0.isVisible,"minimized":$0.isMiniaturized]}]]
     }
     func receiveAgent(_ data:Data,source:String)->[String:Any] {
         do {
@@ -95,6 +95,10 @@ extension AppStore {
             return ["projectID":project.id,"revision":project.musicRevision,"use":json(use),"context":json(context),"clock":["beats":clock.beats,"seconds":clock.seconds,"barStarts":clock.barStarts],"lanes":json(try ArrangementCompiler.effectiveLanes(section:section,use:use)),"graph":json(try SectionGraphEditing.effective(section:section,use:use)),"circles":circles]
         case "events":return ["events":json(activity.filter{$0.id>(args.afterSequence ?? 0)}),"sequence":activitySequence,"job":json(agentJob)]
         case "job":guard let id=args.jobID,let job=agentJobs[id] else {throw CirclrError("jobID를 찾을 수 없습니다")};return ["job":json(job),"revision":project.musicRevision]
+        case "cancel_job":
+            guard request.projectID==project.id else {throw CirclrError("stale_project: 현재 문서를 다시 확인하세요")}
+            guard let id=args.jobID else {throw CirclrError("jobID가 필요합니다")}
+            return try cancelAgentJob(id,source:source)
         case "stop":stop();return ["state":"stopped"]
         case "play":guard !preparing else {throw CirclrError("현재 렌더 작업을 정지한 뒤 재생하세요")};if !playback.playing{play()};recordActivity(source,"재생 요청");return ["state":"preparing_or_playing"]
         case "playback_loop":
@@ -199,6 +203,19 @@ extension AppStore {
             mutate("바운스 원본 복원"){$0=candidate};return agentState()
         default:throw CirclrError("지원하지 않는 method: \(request.method)")
         }
+    }
+    /// Cancel only the active native agent job. Transport, recording and movie state are untouched.
+    func cancelAgentJob(_ id:ID,source:String)throws->[String:Any] {
+        guard let known=agentJobs[id] else {throw CirclrError("jobID를 찾을 수 없습니다")}
+        if known.state != "running" {return ["job":json(known),"revision":project.musicRevision]}
+        guard var current=agentJob,current.id==id else {throw CirclrError("현재 실행 중인 작업이 아닙니다")}
+        productionGeneration+=1
+        productionTask?.cancel();productionWorker?.cancel();agentOpenWorker?.cancel()
+        current.state="cancelled";current.message="에이전트 작업 취소"
+        agentJob=current
+        preparing=false;progress=0;status="에이전트 작업 취소 · \(current.kind)"
+        recordActivity(source,"취소 · \(current.kind) · \(id)")
+        return ["job":json(current),"revision":project.musicRevision]
     }
     func agentPath(_ path:String)throws->URL {
         guard path.hasPrefix("/"),!path.contains("\0") else {throw CirclrError("절대 경로를 사용하세요")}

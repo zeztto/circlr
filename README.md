@@ -8,13 +8,13 @@ English · [한국어](README.ko.md)
 
 In circlr, a circle is a timeline. Build a song from sections, place MIDI, audio, instruments and effects inside them, and connect their inputs and outputs. Move between the whole arrangement and detailed editing on one zoomable canvas.
 
-![Song sections unfolding around the song orbit in circlr](docs/images/circlr-song-build180.jpg)
+![Bach Invention 8 section orbit and connected MIDI, instrument and output circles in circlr](docs/images/circlr-bach-build184.jpg)
 
-*A frame from an actual 0.70.0 build180 recording of the bundled f0r h3r canvas. [Capture details](docs/images/README.md).*
+*0.80.0 build184 development preview: an actual frame from a short native-app recording. The latest public release is still 0.70.0. [Capture provenance](docs/images/README.md).*
 
 > **0.70.0 · build180.** Smoother playback canvas and MP4 capture in the verified scenarios, with viewing mode beside Record. [Evidence and limits](docs/releases/0.70.0-qa.md).
 
-**In development:** [0.80.0](docs/releases/0.80.0.md) improves orbit readability and tests the complete playback, recording, editing and export path. Its QA gates remain open; 0.70.0 is the latest release.
+**In development:** [0.80.0](docs/releases/0.80.0.md) improves orbit readability and tests the complete playback, recording, editing and export path. The current build keeps a visible MIDI/audio editor open when playback starts and offers job-only cancellation through MCP. Its QA gates remain open; 0.70.0 is the latest release.
 
 ## What you can work with
 
@@ -26,7 +26,7 @@ In circlr, a circle is a timeline. Build a song from sections, place MIDI, audio
 
 <img src="docs/images/circlr-song-portrait-build180.jpg" width="280" alt="Song orbit on a portrait display during playback">
 
-*The same build180 canvas on a portrait display. The MP4 contains the canvas, so its frame does not show the toolbar. [Capture details](docs/images/README.md).*
+*A separate build180 f0r h3r portrait capture from the latest public release. The MP4 contains the canvas, so its frame does not show the toolbar. [Capture details](docs/images/README.md).*
 
 These are implemented development features, not a guarantee of compatibility with every audio device or plug-in. Artist profiles and a combined text, image and video workspace are the [longer-term direction](docs/21-artist-universe.md).
 

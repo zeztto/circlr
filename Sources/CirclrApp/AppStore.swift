@@ -77,6 +77,7 @@ import CirclrAudio
     var navigationEntryCache:[StudioNavigationEntry]=[]
     var canvasCommands: (() -> [StudioCommand])?
     var focusCanvas: (() -> Void)?
+    var isPrecisionEditorVisible: (() -> Bool)?
     let nameEditing=NameEditingRegistry()
     @Published var hierarchyZoom = 1.0
     @Published var hierarchySettingsOpen = false
@@ -549,7 +550,7 @@ import CirclrAudio
         if midiRecording || audioRecording || audioRecordPending {stop();return}
         if playback.playing { stop(); return }
         if preparing { stop(); return }
-        playbackFollow = playbackFollow.startingPlayback()
+        playbackFollow = playbackFollow.startingPlayback(visiblePrecisionEditor:isPrecisionEditorVisible?() ?? false)
         prepare(onlySelection:onlySelection,autoplay:true,loopMode:playbackLoopMode)
     }
     func prepare(onlySelection:Bool,autoplay:Bool,includeStems:Bool = false,loopMode:PlaybackLoopMode = .off,completion:((PreparedAudio)->Void)? = nil) {

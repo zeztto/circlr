@@ -146,7 +146,7 @@ MCP의 설명·annotation이나 모델의 약속만으로 편집 권한을 보�
 
 현재 socket의 0700/0600·peer UID는 다른 OS 사용자를 차단하는 경계다. 같은 UID의 악성 프로세스까지 격리하는 것으로 표현하지 않는다. 내장 Codex의 일반 파일/프로세스 도구 제한, 전용 작업 폴더, helper 경로 검증과 함께 집행해야 한다. 기존 외부 MCP 모드는 명시적으로 연결한 로컬 자동화 기능으로 유지한다.
 
-현재 `stop`과 job은 전역적이다. 첫 구현에 **소유자별 job 취소와 commit 직전 lease 확인**을 추가해야 AI 중단을 음악 재생과 분리할 수 있다. UI 문구만 바꾸어 해결하지 않는다. 로그의 `turnID → native requestID → transactionID/jobID` 관계도 새로 보관한다.
+0.80 build185의 `cancel_job`은 정확한 running jobID를 취소하고 음악 재생과 분리하지만, 현재 프로젝트의 같은 UID MCP 클라이언트가 jobID를 알면 호출할 수 있고 이후 쓰기 권한도 남는다. 기존 `stop`은 여전히 DAW 전체 정지다. 앱 안의 Codex 대화를 출고하려면 **신뢰한 세션에 귀속된 소유자별 취소와 commit 직전 RunLease 확인**을 추가해야 AI 중단이 이후 작업까지 차단된다. UI 문구만 바꾸어 해결하지 않는다. 로그의 `turnID → native requestID → transactionID/jobID` 관계도 새로 보관한다.
 
 모델의 turn 완료와 오디오 job 완료는 별개다. 완료한 turn에는 새 쓰기를 허용하지 않으며, 이미 시작된 job은 제한된 완료 권한으로 추적한다. 콘솔에 남은 job의 중단 동작을 유지하고 로그아웃·문서 교체·권한 만료 때 이 권한도 회수한다. 큰 저장 작업은 파일 준비를 background에서 수행한 뒤 commit 직전에 권한을 재검증하는 job으로 분리해 UI가 취소 입력에 응답하게 한다.
 

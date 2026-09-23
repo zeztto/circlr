@@ -84,4 +84,24 @@ final class PlaybackPositionTests: XCTestCase {
         XCTAssertEqual(PlaybackFollowMode.off.startingPlayback(), .off)
         XCTAssertEqual(PlaybackFollowMode.suspended.startingPlayback(), .following)
     }
+    func testStartingPlaybackKeepsVisiblePrecisionEditorAndNoEditorResumesFollow() {
+        XCTAssertEqual(PlaybackFollowMode.following.startingPlayback(visiblePrecisionEditor:true), .suspended)
+        XCTAssertEqual(PlaybackFollowMode.suspended.startingPlayback(visiblePrecisionEditor:true), .suspended)
+        XCTAssertEqual(PlaybackFollowMode.off.startingPlayback(visiblePrecisionEditor:true), .off)
+        XCTAssertEqual(PlaybackFollowMode.suspended.startingPlayback(visiblePrecisionEditor:false), .following)
+        XCTAssertEqual(PlaybackFollowMode.following.startingPlayback(), .following)
+        XCTAssertEqual(PlaybackFollowMode.suspended.startingPlayback(), .following)
+        XCTAssertEqual(PlaybackFollowMode.off.startingPlayback(), .off)
+    }
+    func testOnlyEditableMIDIAndReadyAudioArePrecisionPlaybackSources() {
+        XCTAssertTrue(PlaybackFollowMode.isEditingMIDIOrAudio(.midi(laneID:"lane"),audioClipReady:false))
+        XCTAssertTrue(PlaybackFollowMode.isEditingMIDIOrAudio(.rhythmMIDI(trackID:"track"),audioClipReady:false))
+        XCTAssertFalse(PlaybackFollowMode.isEditingMIDIOrAudio(.audio(laneID:"lane",clipID:"clip"),audioClipReady:false))
+        XCTAssertTrue(PlaybackFollowMode.isEditingMIDIOrAudio(.audio(laneID:"lane",clipID:"clip"),audioClipReady:true))
+        XCTAssertFalse(PlaybackFollowMode.isEditingMIDIOrAudio(.rhythmAudio(trackID:"track"),audioClipReady:false))
+        XCTAssertTrue(PlaybackFollowMode.isEditingMIDIOrAudio(.rhythmAudio(trackID:"track"),audioClipReady:true))
+        XCTAssertFalse(PlaybackFollowMode.isEditingMIDIOrAudio(.instrument(trackID:"track"),audioClipReady:true))
+        XCTAssertFalse(PlaybackFollowMode.isEditingMIDIOrAudio(.mix,audioClipReady:true))
+        XCTAssertFalse(PlaybackFollowMode.isEditingMIDIOrAudio(nil,audioClipReady:true))
+    }
 }

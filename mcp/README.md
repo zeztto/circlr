@@ -39,7 +39,7 @@ build 62부터 `circlr_sounds`로 실제 음색을 조회한다. 먼저 snapshot
 2. `circlr_inspect`로 대상 섹션의 실제 lane, notes, node, connection ID를 읽는다. 포트 기능이 포함된 개발 앱에서는 `circlr_ports`로 명시적 bus와 케이블 배치를 읽는다.
 3. `circlr_apply`에 projectID, expectedRevision, operations를 전달한다. 한 batch가 한 Undo 단위다. 다른 편곡의 편집도 사용자의 캔버스 선택을 이동시키지 않는다.
 4. `circlr_bounce` 또는 `circlr_export`는 jobID를 즉시 반환한다. `circlr_job`으로 완료 상태를 확인한다. 도구 호출 성공은 렌더 완료를 뜻하지 않는다.
-5. `circlr_events`로 sequence 이후의 실제 로그를 읽는다. 렌더 취소는 `circlr_stop`이다. 작업 중 문서가 바뀌면 이전 snapshot의 결과를 적용하지 않는다.
+5. `circlr_events`로 sequence 이후의 실제 로그를 읽는다. build185 이후 실행 중인 agent job만 취소할 때는 snapshot의 `runtime.capabilities.jobCancellation=1`을 확인하고 `circlr_cancel_job`에 현재 `projectID`와 정확한 `jobID`를 보낸다. `circlr_stop`은 DAW 재생·녹음·영상까지 정지한다. 작업 중 문서가 바뀌면 이전 snapshot의 결과를 적용하지 않는다.
 6. `circlr_save`로 미디어를 포함한 프로젝트를 저장한다. 원본 복원은 `circlr_restore_bounce`다.
 
 `circlr_open`도 jobID를 반환한다. `circlr_job`의 completed를 확인한 뒤 `circlr_snapshot`으로 새 projectID/revision을 읽는다. macOS가 앱의 문서 폴더 접근을 처음 요청하면 사용자가 시스템 창에서 허용해야 한다. 파일을 읽는 동안에도 상태 조회와 정지는 동작한다. 취소한 열기 요청이 나중에 문서를 교체하지 않는다.
@@ -120,7 +120,7 @@ Core/MCP 검사와 native 명령/UI 확인을 마쳤으며 저장/재열기·pro
 
 그룹 포트는 `circlr_set_group_port`/`circlr_remove_group_port`로 관리한다. node는 group 주소, target은 내부 실제 endpoint다. 두 명령 모두 project/music/layout revision을 요구하며 음악은 유지한다. 반환 portID를 connect/reconnect에 사용하고, 기존 ID의 target을 바꿀 수는 없다. [정확한 요청·Undo·미해결 대상 계약](../docs/36-group-ports.md#mcp). `circlr_focus`의 node 주소로 그룹을 바로 보여줄 수도 있다.
 
-0.20의 `circlr_record`는 현재 선택한 섹션·트랙의 실제 오디오 녹음을 시작한다. 사용자가 입력 녹음을 요청했을 때만 사용하며 `projectID`·`expectedRevision`이 필요하다. macOS 마이크 권한 선택은 사용자에게 맡긴다. snapshot.recording의 phase/busy/seconds/peak/format/message/recoveryPath로 실제 상태를 확인한다. STOP 뒤에도 파일 마무리는 비동기이므로 busy=false와 실제 새 take를 확인하기 전 재시도하지 않는다. 장치의 첫 두 채널(모노는 1채널)을 기록하며, 반주 transport 동기·latency 보정·장치 채널 선택은 후속 범위다. read-only 전문 역할에는 이 도구가 노출되지 않는다. 통합 개발 adapter의 전체 catalog는 23개다.
+0.20의 `circlr_record`는 현재 선택한 섹션·트랙의 실제 오디오 녹음을 시작한다. 사용자가 입력 녹음을 요청했을 때만 사용하며 `projectID`·`expectedRevision`이 필요하다. macOS 마이크 권한 선택은 사용자에게 맡긴다. snapshot.recording의 phase/busy/seconds/peak/format/message/recoveryPath로 실제 상태를 확인한다. STOP 뒤에도 파일 마무리는 비동기이므로 busy=false와 실제 새 take를 확인하기 전 재시도하지 않는다. 장치의 첫 두 채널(모노는 1채널)을 기록하며, 반주 transport 동기·latency 보정·장치 채널 선택은 후속 범위다. read-only 전문 역할에는 이 도구가 노출되지 않는다. 현재 개발 adapter의 catalog는 27개다.
 
 
 ### 로컬 라이브러리 상태 (build 31 개발 앱)

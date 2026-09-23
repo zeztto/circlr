@@ -130,14 +130,14 @@ OPERATION["oneOf"].append({"type": "object", "properties": {"kind": {"enum": ["e
 OPERATION["description"] += " edit_sustain requires fresh midiSustainEditing=1 and sustainChange. Exactly one target: arrangementID/useID/laneID/original boolean (explicit), or shared patternID/trackID. sustainChange: insert uses beat/rawValue; update uses index/beat/rawValue; remove uses index; setInitial uses channel/rawValue; clear has only kind. Raw CC64 values are 0–127, down at 64; indices address the current revision. Inspect lanes and snapshot patterns expose sustain. Clear removes sustain only; pitch bend and notes remain. Shared edits affect every use; normal original=true retains use overrides. All operations in a batch validate before any mutation."
 
 
-def tool(name, method, description, properties=None, required=(), write=False):
+def tool(name, method, description, properties=None, required=(), write=False, destructive=None):
     properties = properties or {}
     if write:
         properties = {**REVISION, **properties}
         required = ("projectID", "expectedRevision", *required)
     return {"name": "circlr_" + name, "method": method, "description": description,
             "inputSchema": schema(properties, required),
-            "annotations": {"readOnlyHint": method in {"snapshot", "inspect", "ports", "sounds", "events", "job"}, "destructiveHint": write, "openWorldHint": False}}
+            "annotations": {"readOnlyHint": method in {"snapshot", "inspect", "ports", "sounds", "events", "job"}, "destructiveHint": write if destructive is None else destructive, "openWorldHint": False}}
 
 
 TOOLS = [
@@ -175,9 +175,10 @@ TOOLS = [
     tool("open", "open", "Start asynchronous local .circlr open. Read job to completion, then snapshot for the new project. Rejects unsaved edits. macOS may require the user to allow first file access.", {"path": STRING}, ("path",), True),
     tool("undo", "undo", "Undo one whole edit. Requires current project ID and revision. Also supply expectedLayoutRevision from ports/snapshot to protect against concurrent layout edits.", LAYOUT_REVISION, write=True),
     tool("job", "job", "Read one job's running/completed/failed/cancelled state and output path or bounced node ID.", {"jobID": STRING}, ("jobID",)),
+    tool("cancel_job", "cancel_job", "Cancel the active native agent job by jobID without stopping playback, recording or movie capture. Terminal jobs return their existing state; this does not revoke permission for later MCP calls. Requires jobCancellation=1. Use circlr_stop only when the user wants the DAW transport stopped too.", {"projectID": STRING, "jobID": STRING}, ("projectID", "jobID"), destructive=True),
     tool("events", "events", "Read actual app/agent activity after a sequence cursor. Last 500 events retained. No polling faster than once per second.", {"afterSequence": {"type": "integer", "minimum": 0}}),
     tool("play", "play", "Prepare and play the album through the Mac audio output."),
-    tool("stop", "stop", "Immediately stop playback and cancel the active render job."),
+    tool("stop", "stop", "Stop the DAW transport, recording or movie capture and cancel the active render job. For job-only cancellation use circlr_cancel_job."),
     tool("record", "record", "Start audio recording at the currently selected section/track. Use only when the user requests microphone recording. May require macOS permission. First two input channels (one for mono). Read snapshot.recording until started or failed; circlr_stop cancels or stops and finalizes asynchronously. Do not retry while recording.busy is true.", write=True),
     tool("playback_loop", "playback_loop", "Choose off/song/section. Requires playbackLoop=1, playbackLoopLive=1 and fresh revision. Stopped or one-shot playback: configure next Play only (no restart); section captures selection at Play. While a loop is playing: capture the current active arrangement and selected use now, render in background without stopping current audio, then schedule replacement at a hardware-acknowledged future boundary. off finishes the current cycle and exit tail before stopping. accepted_pending is acceptance, not completed application: poll snapshot.view.loopTransition until busy=false and verify loopMode. Repeated requests while rendering/scheduled are rejected; Stop cancels. Revision changes during rendering cancel the request; after scheduling they stop output safely. song means active arrangement, not whole album. Linear export PCM is unchanged.", {"loopMode": {"type": "string", "enum": ["off", "song", "section"]}}, ("loopMode",), True),
     tool("workspace_view", "workspace_view", "Set text-free viewing mode and playback follow without changing musical data. Requires workspaceView=1 and fresh project/revision. follow controls following/off; followSettings selects song/section/pinned, fit/keepZoom, off/subtle/emphasized transition. Pinned requires an explicit stable circle address, never the current selection. Validate and resolve drafts before entering viewing mode; invalid or composing input blocks entry. Follow settings persist in the project workspace. Read snapshot.view for actual settings/state. Native visibility is not certified by this tool.", {
@@ -326,6 +327,16 @@ def call_tool(path, name, arguments, read_only=False):
         if key in arguments:
             request[key] = arguments[key]
     try:
+        if entry["method"] == "cancel_job":
+            probe = rpc(path, {"id": str(uuid.uuid4()), "method": "snapshot", "arguments": {}})
+            state = probe.get("result") if isinstance(probe, dict) and probe.get("ok") is True else None
+            if not isinstance(state, dict) or state.get("projectID") != request.get("projectID"):
+                raise ValueError("stale_project: read the current snapshot before cancelling a job")
+            runtime = state.get("runtime")
+            capabilities = runtime.get("capabilities") if isinstance(runtime, dict) else None
+            capability = capabilities.get("jobCancellation") if isinstance(capabilities, dict) else None
+            if type(capability) is not int or capability != 1:
+                raise ValueError("This app does not support jobCancellation=1; update the app")
         required_capabilities = []
         if entry["method"] == "workspace_view":
             required_capabilities.append("workspaceView")
@@ -389,7 +400,7 @@ def serve(path, read_only=False):
             if method == "initialize":
                 negotiated = True
                 requested = request.get("params", {}).get("protocolVersion")
-                result = {"protocolVersion": requested if requested in VERSIONS else "2025-11-25", "capabilities": {"tools": {"listChanged": False}}, "serverInfo": {"name": "circlr", "version": "0.40.0"}, "instructions": ("Read-only specialist session. Return edit proposals to the coordinator. " if read_only else "") + "Read snapshot before mutations. Use stable IDs and expectedRevision. Long jobs return immediately; monitor with circlr_job/events. CUA is unnecessary."}
+                result = {"protocolVersion": requested if requested in VERSIONS else "2025-11-25", "capabilities": {"tools": {"listChanged": False}}, "serverInfo": {"name": "circlr", "version": "0.80.0"}, "instructions": ("Read-only specialist session. Return edit proposals to the coordinator. " if read_only else "") + "Read snapshot before mutations. Long jobs return immediately; monitor with circlr_job/events and use circlr_cancel_job for job-only cancellation. CUA is unnecessary."}
             elif method == "ping":
                 result = {}
             elif not initialized:

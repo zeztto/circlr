@@ -1,5 +1,11 @@
 # Screenshots · 실행 화면
 
+## 0.80.0 build184 development preview
+
+`circlr-bach-build184.jpg` is the 2-second video frame of the isolated build184 native-app MP4 `qa/generated/r80-build184-qa-recording.mp4`, showing the bundled Bach Invention 8 section orbit, connected MIDI/instrument/output circles and playback focus. The recording is an actual 1426×1080 canvas capture; this JPEG was encoded once from the decoded frame with no visual compositing. SHA-256: `9301ff5d6ac307d734ce578fc5f27efdb6421e8f5b81f830dd9e5a905008cf54`. This is a development preview, not the final 0.80 release screenshot. The source MP4 remains local ignored QA evidence. [Video QA and limits](../../qa/0.80-short-movie.md).
+
+`circlr-bach-build184.jpg`는 격리된 build184 앱이 직접 녹화한 Bach Invention 8 MP4의 2초 프레임입니다. 디코딩한 캔버스 프레임을 JPEG로 한 번 인코딩했고 화면 요소를 합성하지 않았습니다. 0.80 정식 출시 화면이나 실제 청취·표시 FPS 검증으로 취급하지 않습니다.
+
 ## 0.70.0 build180
 
 Frames extracted at 8 seconds from two actual build180 native-app MP4 recordings of the bundled f0r h3r song with song-level playback follow. The files show the **canvas**, not the app chrome or a simulated interface. JPEG encoding was applied once to the decoded frame; no layout or visual element was composited. The source recordings stay in the local ignored `.build/` QA directory and are not redistributed with the app. These frames document landscape/portrait orbital song form and playback graphics, not compositor FPS or physical listening.

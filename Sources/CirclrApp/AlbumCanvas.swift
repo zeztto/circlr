@@ -127,6 +127,22 @@ struct AlbumCanvas: NSViewRepresentable {
         }
         store.canvasCommands = { [weak self] in self?.availableCommands() ?? [] }
         store.focusCanvas = { [weak self] in guard let self else{return};self.store.editorFocusRequest=nil;self.window?.makeFirstResponder(self) }
+        store.isPrecisionEditorVisible = { [weak self] in
+            guard let self, let editor=self.editor, editor.window === self.window,
+                  self.editorAddress == self.store.hierarchySelection,
+                  !self.store.viewingMode, self.store.movieWriter == nil,
+                  !editor.isHiddenOrHasHiddenAncestor,
+                  !self.store.hierarchySettingsOpen, !self.store.connectionsOpen,
+                  self.store.midiImportDraft == nil, self.store.hierarchyTransitionID == nil,
+                  self.store.embeddedPlugin == nil, !self.store.automationVisible,
+                  self.store.musicEditingIssue == nil else { return false }
+            let audioClipReady=self.store.currentAudioClip.flatMap { clip in
+                self.store.project.assets.first { $0.id == clip.assetID }
+            } != nil
+            guard PlaybackFollowMode.isEditingMIDIOrAudio(self.store.musicEditingNode?.content,
+                                                          audioClipReady:audioClipReady) else { return false }
+            return !editor.visibleRect.isEmpty && editor.frame.intersects(self.bounds)
+        }
         store.viewingModeDidChange = { [weak self] in self?.applyViewingMode() }
         installCircleColorObserver()
         registerForDraggedTypes([.fileURL])

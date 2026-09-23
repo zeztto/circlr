@@ -3,7 +3,21 @@ import Foundation
 public enum PlaybackFollowMode: String {
     case off, following, suspended
     public func interrupted(playing: Bool) -> Self { playing && self == .following ? .suspended : self }
-    public func startingPlayback() -> Self { self == .suspended ? .following : self }
+    /// Only a MIDI grid/orbit or an audio waveform is a precision editor that
+    /// should remain in view when ordinary playback begins.
+    public static func isEditingMIDIOrAudio(_ content: MusicCircleContent?, audioClipReady: Bool) -> Bool {
+        switch content {
+        case .midi, .rhythmMIDI: return true
+        case .audio, .rhythmAudio: return audioClipReady
+        default: return false
+        }
+    }
+    /// A visible precision editor is an intentional camera position. Ordinary playback
+    /// leaves it in place; callers without one retain the existing follow-on-start policy.
+    public func startingPlayback(visiblePrecisionEditor: Bool = false) -> Self {
+        if visiblePrecisionEditor { return self == .following ? .suspended : self }
+        return self == .suspended ? .following : self
+    }
     public func toggled() -> Self { self == .following ? .off : .following }
 }
 
