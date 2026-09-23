@@ -31,6 +31,7 @@ struct AlbumCanvas: NSViewRepresentable {
     var editor: NSHostingView<InlineCircleEditor>?
     var editorAddress: CircleAddress?
     var labelPlacements:[CanvasLabelPlacement]=[]
+    var labelTextCache:[CanvasLabelTextKey:CanvasLabelText]=[:]
     // Only during draw: visibility is a property of the current scene/camera, not each paint pass.
     var drawingLabelContext:CircleSceneNode?
     var drawingVisibleIDs:Set<CircleAddress>?
@@ -87,6 +88,11 @@ struct AlbumCanvas: NSViewRepresentable {
     var visualUpdateTiming=CanvasFrameTiming()
     var screenDrawTiming=CanvasFrameTiming()
     var movieDrawTiming=CanvasFrameTiming()
+    var movieCaptureTiming=CanvasFrameTiming()
+    var movieDirectCaptureCount=0
+    var movieSubviewCaptureCount=0
+    var moviePreview:CGImage?
+    var moviePreviewDrawCount=0
     var movieCaptureDepth=0
     var accessibilityUpdateTime = 0.0
     override var isFlipped: Bool { true }
@@ -102,10 +108,20 @@ struct AlbumCanvas: NSViewRepresentable {
         }
         store.captureMovieFrame = { [weak self] in
             guard let self,self.bounds.width>=64,self.bounds.height>=64 else{return nil}
+            let started=ProcessInfo.processInfo.systemUptime
+            defer { self.movieCaptureTiming.record(start:started,end:ProcessInfo.processInfo.systemUptime) }
             self.movieCaptureDepth += 1
             defer { self.movieCaptureDepth -= 1 }
-            self.updatePlaybackFrame();self.placeEditor()
-            return CanvasMovieCapture.image(of:self)
+            // The 60 Hz visual timer already prepares ordinary recording frames.
+            // The opening frame still needs a synchronous update before its first capture.
+            if self.store.movieWriter == nil { self.updatePlaybackFrame() }
+            self.placeEditor()
+            let image=CanvasMovieCapture.image(of:self)
+            if self.store.movieWriter != nil,self.subviews.allSatisfy(\.isHidden) {
+                self.moviePreview=image
+                self.needsDisplay=true
+            }
+            return image
         }
         store.canvasCommands = { [weak self] in self?.availableCommands() ?? [] }
         store.focusCanvas = { [weak self] in guard let self else{return};self.store.editorFocusRequest=nil;self.window?.makeFirstResponder(self) }
@@ -226,6 +242,7 @@ struct AlbumCanvas: NSViewRepresentable {
             visualSelection = store.hierarchySelection; playbackVisibilityFocus = nil
         }
         if renderedRevision != store.hierarchyRevision {
+            labelTextCache.removeAll(keepingCapacity:true)
             let anchor=editorAddress ?? store.hierarchySelection ?? .album
             let previous=renderedProjectID==store.project.id && renderedOrbits != nil && renderedOrbits != store.project.usesOrbits ? scene?.node(anchor):nil
             scene = store.hierarchyScene; renderedRevision = store.hierarchyRevision
@@ -400,6 +417,14 @@ struct AlbumCanvas: NSViewRepresentable {
             if movie { movieDrawTiming.record(start:started,end:ended) }
             else { screenDrawTiming.record(start:started,end:ended) }
         }
+        if movieCaptureDepth == 0,store.movieWriter != nil,subviews.allSatisfy(\.isHidden),
+           let moviePreview {
+            moviePreviewDrawCount += 1
+            NSImage(cgImage:moviePreview,size:bounds.size).draw(in:bounds,from:.zero,
+                operation:.copy,fraction:1,respectFlipped:true,hints:nil)
+            return
+        }
+        if store.movieWriter == nil { moviePreview=nil }
         StudioTheme.canvasNS.setFill(); bounds.fill()
         guard let scene else { return }
         drawingLabelContext=labelContext

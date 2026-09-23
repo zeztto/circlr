@@ -54,6 +54,8 @@ extension AppStore {
     }
     func captureMovieTick() {
         guard let recorder=movieWriter,!moviePreparing else{return}
+        let started=ProcessInfo.processInfo.systemUptime
+        defer { movieTickTiming.record(start:started,end:ProcessInfo.processInfo.systemUptime) }
         guard movieRevision==project.musicRevision else{finishMovieRecording();status="음악 변경으로 영상 녹화를 마쳤습니다";return}
         if !playback.playing {finishMovieRecording();return}
         let seconds=playback.elapsedSeconds

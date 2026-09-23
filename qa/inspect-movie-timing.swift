@@ -16,7 +16,10 @@ import Foundation
 
         func timestamps(_ track: AVAssetTrack) throws -> [Double] {
             let reader = try AVAssetReader(asset: asset)
-            let output = AVAssetReaderTrackOutput(track: track, outputSettings: nil)
+            // Decode video: compressed H.264 packet count is not display-frame count.
+            let settings: [String: Any]? = track.mediaType == .video
+                ? [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA] : nil
+            let output = AVAssetReaderTrackOutput(track: track, outputSettings: settings)
             reader.add(output)
             guard reader.startReading() else { throw reader.error ?? NSError(domain: "MovieTiming", code: 2) }
             var result: [Double] = []
@@ -32,6 +35,9 @@ import Foundation
         let audioPTS = try (audio.first.map(timestamps) ?? []).sorted()
         let deltas = zip(videoPTS.dropFirst(), videoPTS).map(-)
         let positiveDeltas = deltas.filter { $0 > 0 && $0.isFinite }.sorted()
+        let longestGaps = deltas.enumerated().sorted { $0.element > $1.element }.prefix(5).map { index, gap in
+            ["atSeconds": videoPTS[index], "gapMilliseconds": gap * 1000]
+        }
         func percentile(_ fraction: Double) -> Double {
             guard !positiveDeltas.isEmpty else { return 0 }
             return positiveDeltas[Int(Double(positiveDeltas.count - 1) * fraction)]
@@ -42,13 +48,14 @@ import Foundation
             "videoFrames": videoPTS.count,
             "videoFirstPTS": videoPTS.first ?? 0,
             "videoLastPTS": videoPTS.last ?? 0,
-            "videoNominalFPS": videoPTS.count > 1 ? Double(videoPTS.count - 1) / max(0.001, (videoPTS.last ?? 0) - (videoPTS.first ?? 0)) : 0,
+            "videoAverageFPS": videoPTS.count > 1 ? Double(videoPTS.count - 1) / max(0.001, (videoPTS.last ?? 0) - (videoPTS.first ?? 0)) : 0,
             "videoDuplicatePTS": deltas.filter { $0 == 0 }.count,
             "videoGapsOverTwoFrames": deltas.filter { $0 > 2.0 / 30.0 }.count,
             "videoDeltaP50Milliseconds": percentile(0.50) * 1000,
             "videoDeltaP95Milliseconds": percentile(0.95) * 1000,
             "videoDeltaP99Milliseconds": percentile(0.99) * 1000,
             "videoMaximumGapMilliseconds": (positiveDeltas.last ?? 0) * 1000,
+            "videoLongestGaps": longestGaps,
             "audioPackets": audioPTS.count,
             "audioFirstPTS": audioPTS.first ?? 0,
             "audioLastPTS": audioPTS.last ?? 0,

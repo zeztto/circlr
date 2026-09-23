@@ -20,9 +20,23 @@ import AppKit
         cg.clear(CGRect(origin:.zero,size:size))
         cg.scaleBy(x:size.width/view.bounds.width,y:size.height/view.bounds.height)
         cg.translateBy(x:-view.bounds.minX,y:-view.bounds.minY)
-        // AppKit traverses descendants and applies their view transforms. This
-        // keeps the same editor/hidden-subview policy as ordinary canvas drawing.
-        view.displayIgnoringOpacity(view.bounds,in:context)
+        if let canvas=view as? AlbumCanvasView,view.subviews.allSatisfy(\.isHidden) {
+            // Layer-backed displayIgnoringOpacity draws this canvas twice. With no
+            // visible child editor, draw once in the view's flipped coordinates.
+            canvas.movieDirectCaptureCount += 1
+            cg.saveGState()
+            cg.translateBy(x:0,y:view.bounds.height)
+            cg.scaleBy(x:1,y:-1)
+            // AppKit text needs a flipped NSGraphicsContext as well as the CTM.
+            NSGraphicsContext.current=NSGraphicsContext(cgContext:cg,flipped:true)
+            canvas.draw(canvas.bounds)
+            NSGraphicsContext.current=context
+            cg.restoreGState()
+        } else {
+            // Preserve AppKit descendant transforms when an inline editor is shown.
+            (view as? AlbumCanvasView)?.movieSubviewCaptureCount += 1
+            view.displayIgnoringOpacity(view.bounds,in:context)
+        }
         return bitmap.cgImage
     }
 }

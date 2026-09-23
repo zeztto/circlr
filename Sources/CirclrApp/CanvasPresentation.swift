@@ -21,6 +21,14 @@ struct CanvasLabelText {
     }
 }
 
+struct CanvasLabelTextKey: Hashable {
+    let address:CircleAddress
+    let title:String
+    let primary:Bool
+    let showsSubtitle:Bool
+    let availableWidth:Double
+}
+
 extension AlbumCanvasView {
     var workspaceViewport:CGRect {
         CanvasWorkspaceGeometry.viewport(width:bounds.width,height:bounds.height,console:!store.viewingMode && store.consoleBounds.height>0 ? store.consoleBounds:nil)
@@ -57,7 +65,15 @@ extension AlbumCanvasView {
     }
     func readableLabelText(for node:CircleSceneNode)->CanvasLabelText {
         let primary=node.id==store.hierarchySelection
-        return CanvasLabelText(node.title,primary:primary,showsSubtitle:primary || node.radius*camera.zoom>=65,availableWidth:workspaceViewport.width)
+        let showsSubtitle=primary || node.radius*camera.zoom>=65
+        let width=min(workspaceViewport.width,primary ? 340:248)
+        let key=CanvasLabelTextKey(address:node.id,title:node.title,primary:primary,
+            showsSubtitle:showsSubtitle,availableWidth:Double(width))
+        if let cached=labelTextCache[key] {return cached}
+        let text=CanvasLabelText(node.title,primary:primary,showsSubtitle:showsSubtitle,availableWidth:width)
+        if labelTextCache.count>=512 {labelTextCache.removeAll(keepingCapacity:true)}
+        labelTextCache[key]=text
+        return text
     }
     var readableLabelObstacles:[CGRect] {
         var obstacles:[CGRect]=[]

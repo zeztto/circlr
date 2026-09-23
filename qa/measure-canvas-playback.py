@@ -39,7 +39,7 @@ def main():
     first_timing = first.get("timing") or {}
     last_timing = last.get("timing") or {}
     draw_rates = {}
-    for name in ("visualUpdate", "screenDraw", "movieDraw"):
+    for name in ("visualUpdate", "screenDraw", "movieDraw", "movieCapture", "movieTick"):
         before = (first_timing.get(name) or {}).get("calls")
         after = (last_timing.get(name) or {}).get("calls")
         if before is not None and after is not None:
@@ -63,6 +63,8 @@ def main():
         "timingScope": "p50/p95/p99: last 600 callbacks (may overlap before interval); maxima: app lifetime",
         # Native timing is a rolling last-600-callback view, not this exact window.
         "trailingTimingLast600Callbacks": last.get("timing"),
+        "movieStart": first.get("movie"),
+        "movieEnd": last.get("movie"),
     }
     print(json.dumps(result, indent=2, ensure_ascii=False))
 

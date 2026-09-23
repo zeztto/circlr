@@ -263,7 +263,16 @@ struct PlaybackVisualFrame {
          "windowOccluded": !(window?.occlusionState.contains(.visible) ?? false),
          "meterPlaying": store.meter.playing,
          "frameCount": frameCount, "maximumFrameGap": maximumFrameGap, "reduceMotion": reducePlaybackMotion,
-         "timing": ["visualUpdate":visualUpdateTiming.diagnostics, "screenDraw":screenDrawTiming.diagnostics, "movieDraw":movieDrawTiming.diagnostics],
+         "timing": ["visualUpdate":visualUpdateTiming.diagnostics, "screenDraw":screenDrawTiming.diagnostics,
+                    "movieDraw":movieDrawTiming.diagnostics, "movieCapture":movieCaptureTiming.diagnostics,
+                    "movieTick":store.movieTickTiming.diagnostics],
+         "movie":store.movieWriter.map { recorder in
+             ["submitted":recorder.submittedFrameCount,"encoded":recorder.frameCount,
+              "skipped":recorder.skippedCaptureCount,"dropped":recorder.droppedFrames,
+              "pending":recorder.pendingFrameCount,"maximumEncodeMilliseconds":recorder.maximumEncodeSeconds*1000,
+              "directCaptures":movieDirectCaptureCount,"subviewCaptures":movieSubviewCaptureCount,
+              "previewDraws":moviePreviewDrawCount] as [String:Any]
+         } ?? [:],
          "camera": store.json(camera), "canvasSize": [bounds.width, bounds.height],
          "orbitContext":store.json(labelContext?.id),
          "visibleCircles":(scene?.nodes ?? []).filter(isVisible).map { node -> [String:Any] in

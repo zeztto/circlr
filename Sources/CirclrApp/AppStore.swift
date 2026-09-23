@@ -36,6 +36,7 @@ import CirclrAudio
     @Published var movieFinalizing:Task<Void,Never>?
     @Published var movieSeconds=0.0
     @Published var lastMovieURL:URL?
+    var movieTickTiming=CanvasFrameTiming()
     var movieRevision=0
     var movieGeneration=0
     var captureMovieFrame:(()->CGImage?)?
@@ -243,7 +244,9 @@ import CirclrAudio
         selectedTrackID = project.addTrack(name:"악기 1")
         _ = project.addTrack(name:"드럼",drums:true)
         project.enableAlbum(); project.name = "새 앨범"
-        timer = Timer(timeInterval:1/30,repeats:true) { [weak self] _ in Task { @MainActor in self?.tick() } }
+        timer = Timer(timeInterval:1/30,repeats:true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.tick() }
+        }
         if let timer {RunLoop.main.add(timer,forMode:.common)}
         do {
             let input = try MIDIInput()
