@@ -23,7 +23,7 @@ final class CirclePortPresentationTests: XCTestCase {
         XCTAssertNil(CirclePortGeometry.hit(hidden,visibleHandles:try handles(selected:nil)))
     }
 
-    func testExistingNonDefaultConnectionsRemainVisibleAndTinyCirclesCannotBeHit() throws {
+    func testExistingNonDefaultConnectionsAndTinyOverviewDefaults() throws {
         let port = CirclePort.ports(for:.effect(Effect(.compressor))).first{$0.isSidechain}!
         XCTAssertEqual(CirclePortPresentation.octants(for:port,radius:60,engaged:false,expanded:false,connected:[.north,.southeast]),[.north,.southeast])
         XCTAssertEqual(CirclePortPresentation.octants(for:port,radius:60,engaged:true,expanded:true,connected:[.north]),[.north,.west])
@@ -32,7 +32,8 @@ final class CirclePortPresentationTests: XCTestCase {
             XCTAssertTrue(CirclePortPresentation.octants(for:port,radius:radius,engaged:true,expanded:true,connected:[],selected:true).isEmpty)
         }
         for radius in [44.0,45.0] {
-            XCTAssertTrue(CirclePortPresentation.octants(for:port,radius:radius,engaged:true,expanded:true,connected:Set(PortOctant.allCases)).isEmpty)
+            XCTAssertTrue(CirclePortPresentation.octants(for:port,radius:radius,engaged:false,expanded:false,connected:Set(PortOctant.allCases)).isEmpty)
+            XCTAssertEqual(CirclePortPresentation.octants(for:port,radius:radius,engaged:true,expanded:true,connected:Set(PortOctant.allCases)),[port.defaultOctant])
             XCTAssertEqual(CirclePortPresentation.octants(for:port,radius:radius,engaged:true,expanded:true,connected:[.north],selected:true),[port.defaultOctant])
         }
         XCTAssertEqual(CirclePortPresentation.octants(for:port,radius:46,engaged:true,expanded:true,connected:[.north],selected:true),[.north,port.defaultOctant].sorted{$0.rawValue<$1.rawValue})
@@ -41,25 +42,56 @@ final class CirclePortPresentationTests: XCTestCase {
         }
     }
 
-    func testOnlySelectedRouterPortRemainsAtTinyOverviewScale() throws {
+    func testTinyFocusedRouterPortsStayDistinctAndHittable() throws {
         let ports = CirclePort.ports(for:.router(AudioRouter()))
         let selected = ports[2]
         let handles = try ports.flatMap { port in
-            try CirclePortPresentation.octants(for:port,radius:44,engaged:true,expanded:true,
+            try CirclePortPresentation.octants(for:port,radius:44,engaged:true,expanded:port.id == selected.id,
                                                connected:Set(PortOctant.allCases),selected:port.id == selected.id).map { octant in
                 CirclePortHandle(endpoint:.init(node:.signal("router"),portID:port.id),octant:octant,
                                  point:try CirclePortGeometry.anchor(center:Point(350,260),radius:44,port:port,octant:octant))
             }
         }
-        XCTAssertEqual(handles.count,1)
-        XCTAssertEqual(handles.first?.endpoint.portID,selected.id)
-        XCTAssertEqual(handles.first?.octant,selected.defaultOctant)
-        XCTAssertEqual(CirclePortGeometry.hit(try XCTUnwrap(handles.first).point,visibleHandles:handles),handles.first)
+        XCTAssertEqual(handles.count,ports.count)
+        XCTAssertEqual(Set(handles.map(\.endpoint.portID)),Set(ports.map(\.id)))
+        XCTAssertTrue(handles.allSatisfy { handle in
+            ports.first(where: { $0.id == handle.endpoint.portID })?.defaultOctant == handle.octant
+        })
+        for handle in handles {
+            XCTAssertEqual(CirclePortGeometry.hit(handle.point,visibleHandles:handles),handle)
+        }
+        XCTAssertEqual(CirclePortPresentation.octants(for:selected,radius:44,engaged:false,expanded:false,connected:[],selected:true),[selected.defaultOctant])
         for port in ports {
             XCTAssertEqual(CirclePortPresentation.octants(for:port,radius:100,engaged:true,expanded:port.id == selected.id,
                                                           connected:[port.defaultOctant],selected:port.id == selected.id).count,
                            port.id == selected.id ? 8:1)
         }
+    }
+
+    func testTinyRouterMovesCoveredOutputControlsOutsideReadableLabel() throws {
+        let center = Point(300,240), radius = 44.0
+        let request = CanvasLabelRequest(id:.signal("router"),anchor:CGPoint(x:center.x,y:center.y),
+                                         size:CGSize(width:120,height:36),radius:radius,priority:100)
+        let label = try XCTUnwrap(CanvasLabelLayout.place([request],within:CGRect(x:0,y:0,width:700,height:480)).first?.rect)
+        XCTAssertEqual(label.minX,center.x+radius+9)
+        let ports = CirclePort.ports(for:.router(AudioRouter()))
+        var handles:[CirclePortHandle] = []
+        for port in ports {
+            let original = try CirclePortGeometry.anchor(center:center,radius:radius,port:port,octant:port.defaultOctant)
+            if port.direction == .output { XCTAssertTrue(label.contains(CGPoint(x:original.x,y:original.y))) }
+            let choice = try XCTUnwrap(CirclePortPresentation.overviewAnchor(for:port,center:center,radius:radius) { point in
+                !label.insetBy(dx:-10,dy:-10).contains(CGPoint(x:point.x,y:point.y)) &&
+                    !handles.contains(where: { hypot($0.point.x-point.x,$0.point.y-point.y) <= CirclePortGeometry.hitRadius*2 })
+            })
+            let handle = CirclePortHandle(endpoint:.init(node:.signal("router"),portID:port.id),octant:choice.octant,point:choice.point)
+            XCTAssertFalse(label.insetBy(dx:-10,dy:-10).contains(CGPoint(x:handle.point.x,y:handle.point.y)))
+            XCTAssertEqual(CirclePortGeometry.hit(handle.point,visibleHandles:handles+[handle]),handle)
+            handles.append(handle)
+        }
+        XCTAssertEqual(handles.count,4)
+        XCTAssertEqual(Set(handles.map(\.endpoint.portID)),Set(ports.map(\.id)))
+        XCTAssertTrue(handles.filter { $0.endpoint.portID.hasPrefix("out.") }.allSatisfy { $0.octant != .east })
+        for handle in handles { XCTAssertEqual(CirclePortGeometry.hit(handle.point,visibleHandles:handles),handle) }
     }
 
     func testSelectedPortCameraKeepsAnchorOnScreenWithoutMovingNormalOverview() throws {

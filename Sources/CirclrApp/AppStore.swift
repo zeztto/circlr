@@ -9,6 +9,39 @@ import CoreAudioKit
 import CirclrCore
 import CirclrAudio
 
+/// Retains canceled render work only until it has stopped; the next renderer
+/// must not retain the previous PreparedAudio while allocating new PCM.
+@MainActor final class RenderDrain {
+    private var task:Task<Void,Never>?
+    private var worker:Task<PreparedAudio,Error>?
+    init(task:Task<Void,Never>?,worker:Task<PreparedAudio,Error>?) {self.task=task;self.worker=worker}
+    func cancel() {task?.cancel();worker?.cancel()}
+    func wait() async {
+        if let task {await task.value}
+        task=nil
+        if let worker {_ = try? await worker.value}
+        worker=nil
+    }
+}
+
+@MainActor final class ProductionDrain {
+    private var task:Task<Void,Never>?
+    private var worker:Task<PCM,Error>?
+    private var openWorker:Task<LoadedProject,Error>?
+    init(task:Task<Void,Never>?,worker:Task<PCM,Error>?,openWorker:Task<LoadedProject,Error>?) {
+        self.task=task;self.worker=worker;self.openWorker=openWorker
+    }
+    func cancel() {task?.cancel();worker?.cancel();openWorker?.cancel()}
+    func wait() async {
+        if let task {await task.value}
+        task=nil
+        if let worker {_ = try? await worker.value}
+        worker=nil
+        if let openWorker {_ = try? await openWorker.value}
+        openWorker=nil
+    }
+}
+
 @MainActor final class AppStore: ObservableObject {
     @Published var project = Project() { didSet {
         if oldValue.id != project.id { stopTrustedAgentTurn() }
@@ -101,6 +134,8 @@ import CirclrAudio
     @Published var playbackLoopTransition:WorkspaceLoopTransition?
     var playbackLoopTask:Task<Void,Never>?
     var playbackLoopWorker:Task<PreparedAudio,Error>?
+    var playbackLoopDrainTask:Task<Void,Never>?
+    var playbackLoopDrainID:UUID?
     var playbackLoopArrangementID:ID?
     var playbackLoopUseID:ID?
     @Published var playbackFollow: PlaybackFollowMode = .following
@@ -196,9 +231,9 @@ import CirclrAudio
     let recorder = AudioRecorder()
     var prepared: PreparedAudio?
     var preparedKey = ""
-    private var renderTask: Task<Void,Never>?
+    var renderTask: Task<Void,Never>?
     private var renderGeneration = 0
-    private var renderWorker: Task<PreparedAudio,Error>?
+    var renderWorker: Task<PreparedAudio,Error>?
     var productionTask: Task<Void,Never>?
     var productionWorker: Task<PCM,Error>?
     var agentOpenWorker: Task<LoadedProject,Error>?
@@ -603,21 +638,48 @@ import CirclrAudio
         playbackFollow = playbackFollow.startingPlayback(visiblePrecisionEditor:isPrecisionEditorVisible?() ?? false)
         prepare(onlySelection:onlySelection,autoplay:true,loopMode:playbackLoopMode)
     }
+    func takeRenderDrainForAgent() -> RenderDrain {
+        renderGeneration += 1
+        let drain=RenderDrain(task:renderTask,worker:renderWorker)
+        drain.cancel()
+        renderTask=nil;renderWorker=nil
+        return drain
+    }
+    func takeProductionDrain() -> ProductionDrain {
+        productionGeneration += 1
+        let drain=ProductionDrain(task:productionTask,worker:productionWorker,openWorker:agentOpenWorker)
+        drain.cancel()
+        productionTask=nil;productionWorker=nil;agentOpenWorker=nil
+        return drain
+    }
     func prepare(onlySelection:Bool,autoplay:Bool,includeStems:Bool = false,loopMode:PlaybackLoopMode = .off,completion:((PreparedAudio)->Void)? = nil) {
         library.stopPreview()
         let outputSelection=outputPreferences.selection
         do {
+            guard !playback.playing else {throw CirclrError("재생을 정지한 뒤 오디오를 준비하세요")}
+            guard !(productionTask != nil && agentJob?.state == "running") else {
+                throw CirclrError("진행 중인 에이전트 작업을 마친 뒤 오디오를 준비하세요")
+            }
             let snapshot = project,root = mediaRoot
             let useID=(onlySelection || loopMode == .section) ? selectedUse?.id:nil
             if (onlySelection || loopMode == .section),useID == nil {throw CirclrError("재생할 섹션을 먼저 선택하세요")}
             let plan = try useID != nil ? ArrangementCompiler.compile(snapshot,onlyUseID:useID) : loopMode == .song ? ArrangementCompiler.compile(snapshot) : AlbumCompiler.executionPlan(snapshot)
+            guard plan.duration > 0 else {throw CirclrError("섹션을 먼저 만드세요")}
             let key = "\(snapshot.musicRevision):\(snapshot.activeArrangementID):\(useID ?? "all"):\(includeStems):\(loopMode.rawValue)"
+            cancelPlaybackLoopTransition()
+            let loopDrain=playbackLoopDrainTask
+            let productionDrain=takeProductionDrain()
             if key == preparedKey,let prepared {
-                if !autoplay { completion?(prepared); return }
                 renderGeneration += 1; let generation = renderGeneration
-                preparing = true; status = "오디오 출력 연결 중"
+                let drain=RenderDrain(task:renderTask,worker:renderWorker)
+                drain.cancel();renderWorker=nil
+                preparing = true; status = autoplay ? "오디오 출력 연결 중" : "오디오 준비"
                 renderTask = Task { [weak self] in
-                    guard let self else { return }
+                    await drain.wait()
+                    if let loopDrain {await loopDrain.value}
+                    await productionDrain.wait()
+                    guard let self,self.renderGeneration == generation,!Task.isCancelled else { return }
+                    if !autoplay { self.preparing=false;completion?(prepared);return }
                     do { try await self.playback.play(prepared,selection:outputSelection,loop:loopMode != .off)
                         guard generation == self.renderGeneration else { return }
                         self.playbackLoopArrangementID=snapshot.activeArrangementID;self.playbackLoopUseID=useID
@@ -626,10 +688,14 @@ import CirclrAudio
                 }
                 return
             }
-            guard plan.duration > 0 else { throw CirclrError("섹션을 먼저 만드세요") }
             renderGeneration += 1; let generation = renderGeneration
-            preparing = true; progress = 0; status = "오디오 준비"; renderTask?.cancel(); renderWorker?.cancel()
+            let drain=RenderDrain(task:renderTask,worker:renderWorker)
+            preparing = true; progress = 0; status = "오디오 준비"
+            drain.cancel();renderWorker=nil
             renderTask = Task { [weak self] in
+                await drain.wait()
+                if let loopDrain {await loopDrain.value}
+                await productionDrain.wait()
                 guard self?.renderGeneration == generation,!Task.isCancelled else{return}
                 do {
                     let worker = Task.detached(priority:.userInitiated) {
@@ -658,12 +724,55 @@ import CirclrAudio
             }
         } catch { fail(error) }
     }
-    func stop() { trustedRun.revoke();trustedDocumentBinding=nil;trustedAgentJob=nil;trustedReplies=AgentRunReplayLedger();cancelDemoLoading();cancelPlaybackLoopTransition();library.stopPreview(); cancelMediaImport(); cancelRecordingRequest(); finishMovieRecording(); if agentJob?.state == "running" {agentJob?.state="cancelled";agentJob?.message="사용자가 정지했습니다";recordActivity("앱","작업 취소")}; productionGeneration += 1; productionTask?.cancel(); productionWorker?.cancel(); agentOpenWorker?.cancel(); cancelAudition(); renderGeneration += 1; renderTask?.cancel(); renderWorker?.cancel(); renderTask = nil; preparing = false; playback.stop(); meter.update(seconds:0,playing:false); if midiRecording || audioRecording { stopRecording() }; status = "정지" }
+    func stop() { trustedRun.revoke();trustedDocumentBinding=nil;trustedAgentJob=nil;trustedReplies=AgentRunReplayLedger();cancelDemoLoading();cancelPlaybackLoopTransition();library.stopPreview(); cancelMediaImport(); cancelRecordingRequest(); finishMovieRecording(); if agentJob?.state == "running" {agentJob?.state="cancelled";agentJob?.message="사용자가 정지했습니다";recordActivity("앱","작업 취소")}; productionGeneration += 1; productionTask?.cancel(); productionWorker?.cancel(); agentOpenWorker?.cancel(); cancelAudition(); renderGeneration += 1; renderTask?.cancel(); renderWorker?.cancel(); preparing = false; playback.stop(); meter.update(seconds:0,playing:false); if midiRecording || audioRecording { stopRecording() }; status = "정지" }
     func export(stems:Bool = false) {
+        if stems && (preparing || playback.playing || agentJob?.state == "running") {fail(CirclrError("재생과 진행 중인 작업을 정지한 뒤 Stem을 내보내세요"));return}
         let panel = NSSavePanel(); panel.nameFieldStringValue = project.name + (stems ? "-stems" : ".wav"); panel.title = stems ? "Stem 저장 폴더" : "WAV 내보내기"
         if !stems { panel.allowedContentTypes = [UTType(filenameExtension:"wav")!] }
         guard panel.runModal() == .OK,let url = panel.url else { return }
+        if stems && (preparing || playback.playing || agentJob?.state == "running") {fail(CirclrError("재생과 진행 중인 작업을 정지한 뒤 Stem을 내보내세요"));return}
         let names = Dictionary(uniqueKeysWithValues:project.tracks.map{($0.id,$0.name)})
+        if stems {
+            do {
+                let snapshot=project,root=mediaRoot,plan=try AlbumCompiler.executionPlan(project)
+                guard plan.duration > 0 else { throw CirclrError("섹션을 먼저 만드세요") }
+                renderGeneration += 1; let generation=renderGeneration
+                let drain=RenderDrain(task:renderTask,worker:renderWorker)
+                drain.cancel();renderWorker=nil
+                cancelPlaybackLoopTransition()
+                let loopDrain=playbackLoopDrainTask
+                let productionDrain=takeProductionDrain()
+                preparing=true;progress=0;status="Stem 내보내기 준비"
+                renderTask=Task { [weak self] in
+                    // The previous preparation/export owns a detached renderer. Drain it
+                    // after cancellation before allocating this export's song buffers.
+                    await drain.wait()
+                    if let loopDrain {await loopDrain.value}
+                    await productionDrain.wait()
+                    guard let self,self.renderGeneration == generation,!Task.isCancelled else{return}
+                    do {
+                        self.playback.stopAndReleasePrepared()
+                        self.prepared=nil;self.preparedKey=""
+                        self.meter.update(seconds:0,playing:false)
+                        let worker=Task.detached(priority:.userInitiated) {
+                            try await AudioExport.saveStems(project:snapshot,root:root,plan:plan,to:url,stemNames:names) { message,value in
+                                DispatchQueue.main.async { [weak self] in
+                                    guard let self,self.renderGeneration == generation else{return}
+                                    self.status=message;self.progress=value
+                                }
+                            }
+                        }
+                        try await withTaskCancellationHandler { try await worker.value } onCancel: { worker.cancel() }
+                        guard self.renderGeneration == generation,!Task.isCancelled else{return}
+                        self.preparing=false;self.status="내보내기 완료 · \(url.lastPathComponent)"
+                    } catch {
+                        guard self.renderGeneration == generation else{return}
+                        self.preparing=false;self.fail(error)
+                    }
+                }
+            } catch {fail(error)}
+            return
+        }
         prepare(onlySelection:false,autoplay:false,includeStems:stems) { [weak self] audio in
             do {
                 try AudioExport.save(audio,to:url,stemNames:stems ? names:nil)
@@ -698,6 +807,7 @@ import CirclrAudio
             || audioRecordingBusy || midiRecording || audioRecordPending || libraryOpen
             || (preparing && renderTask == nil && productionTask == nil)
         let renderTask=renderTask,renderWorker=renderWorker
+        let playbackLoopTask=playbackLoopTask,playbackLoopWorker=playbackLoopWorker,playbackLoopDrainTask=playbackLoopDrainTask
         let productionTask=productionTask,productionWorker=productionWorker,agentOpenWorker=agentOpenWorker
         let mediaImportTask=mediaImportTask,mediaImportWorker=mediaImportWorker
         let demoLoadTask=demoLoadTask,demoLoadWorker=demoLoadWorker
@@ -712,6 +822,9 @@ import CirclrAudio
         Task { [weak self] in
             if let renderTask {await renderTask.value}
             if let renderWorker {_ = try? await renderWorker.value}
+            if let playbackLoopTask {await playbackLoopTask.value}
+            if let playbackLoopWorker {_ = try? await playbackLoopWorker.value}
+            if let playbackLoopDrainTask {await playbackLoopDrainTask.value}
             if let productionTask {await productionTask.value}
             if let productionWorker {_ = try? await productionWorker.value}
             if let agentOpenWorker {_ = try? await agentOpenWorker.value}

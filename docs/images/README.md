@@ -1,5 +1,11 @@
 # Screenshots · 실행 화면
 
+## 0.80.0 build213 development preview
+
+`circlr-song-build213.png` (1440×900, SHA-256 `f5c6a9e84c472e3caaa2ac0d34242611542d8388cae454e5330c0e54356132ba`) and `circlr-song-portrait-build213.png` (720×900, SHA-256 `176266708a6bf38621aa80a35ef160fb13f671cbea640c37c1790d0e99285f71`) are unchanged, uncomposited full-window PNG bytes captured from an isolated **0.80.0/build213** macOS app. The original packaged executable SHA-256 was `a36467a6bcbfb27912e847ba9162359ec829a03449a154ee5db06c0d29066938` before the QA copy was re-signed. A QA copy of the bundled **f0r h3r** was playing on its full song orbit with Mac Studio speakers selected in the app. The portrait shows the two-row toolbar. The system default Scarlett was unchanged. These images verify the native UI, not physical listening or 0.80 release readiness. [build213 native QA](../../qa/0.80-build213-native.md).
+
+두 PNG는 격리한 실제 build213 앱에서 동봉 **f0r h3r** QA 사본을 곡 전체 궤도에서 재생하며 찍은 합성 없는 원본 창 화면입니다. 앱에서만 Mac Studio 내장 스피커를 선택했고 시스템 기본 Scarlett은 변경하지 않았습니다. 세로 캡처는 두 줄 상단 조작을 보여줍니다. 화면 증거이며 실제 청취·정식 출시 판정은 아닙니다.
+
 ## 0.80.0 build211 final package development preview
 
 `circlr-song-build211-final.png` (1440×900, SHA-256 `daeb95edefa5193558172266976534625d8a3ad43d022b13c9bd931f7cebccfc`) and `circlr-song-portrait-build211-final.png` (720×900, SHA-256 `bbe878e33320e704d0a024e6228ee1dbf180eb881f98a7bdad9a816b82d5d22a`) are uncomposited full-window screenshots from the isolated build211 final package with executable SHA-256 `78ef7cae624439f34076abde3a2d11ac340b900df06477d1dcc6d29c84bb0865`. The bundled **f0r h3r** demo was playing with app-selected Mac Studio speakers and song follow. The portrait shows the responsive two-row toolbar. The system default Scarlett was unchanged. These images verify the screen, not physical listening or final 0.80 readiness. [Final-package native movie QA](../../qa/0.80-build211-final2-native.md).

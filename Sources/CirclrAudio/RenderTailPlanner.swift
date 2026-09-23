@@ -40,7 +40,8 @@ public enum RenderTailPlanner {
     }
 
     public static func arrangement(project: Project, plan: ExecutionPlan, requestedSeconds: Double? = nil,
-                                   includeStems: Bool = true, includeVisualization: Bool = false) throws -> TailPlan {
+                                   includeStems: Bool = true, includeVisualization: Bool = false,
+                                   streamStems: Bool = false) throws -> TailPlan {
         try validateRequest(requestedSeconds)
         var tracks: [ID: Extent] = [:]
         for occurrence in plan.occurrences {
@@ -86,7 +87,8 @@ public enum RenderTailPlanner {
         for node in ordered where node.kind == .master { result.include(global[node.id] ?? Extent()) }
         let resolved = try resolve(result, requestedSeconds: requestedSeconds)
         _ = try ArrangementRenderer.preparationFrames(project: project, plan: plan, tailSeconds: resolved.effectiveSeconds,
-                                                       includeStems: includeStems, includeVisualization: includeVisualization)
+                                                       includeStems: includeStems, includeVisualization: includeVisualization,
+                                                       streamStems: streamStems)
         return resolved
     }
 

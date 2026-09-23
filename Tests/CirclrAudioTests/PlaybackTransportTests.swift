@@ -73,6 +73,20 @@ private final class TestPlaybackBackend:PlaybackBackend {
             playback.stop();try await eventually{playback.outputStatus.transport.phase == .idle}
         }
     }
+    func testExplicitStopReleaseClearsCachedPCMWithoutChangingStopCache()async throws {
+        let fixture=PlaybackFixture(),playback=Playback(factory:{TestPlaybackBackend(fixture)})
+        var input=try audio();input.mix=PCM(frames:Int((input.plan.duration*PCM.rate).rounded()))
+        try await playback.play(input,loop:true)
+        XCTAssertNotNil(playback.prepared)
+        XCTAssertNotNil(playback.loopPCM)
+        playback.stop()
+        XCTAssertNotNil(playback.prepared)
+        XCTAssertNotNil(playback.loopPCM)
+        playback.stopAndReleasePrepared()
+        XCTAssertNil(playback.prepared)
+        XCTAssertNil(playback.loopPCM)
+        try await eventually{playback.outputStatus.transport.phase == .idle}
+    }
     func testThrowingPreparedCallbackPreventsOutput()async throws {
         struct RecorderFailure:Error {}
         let fixture=PlaybackFixture(),playback=Playback(factory:{TestPlaybackBackend(fixture)})

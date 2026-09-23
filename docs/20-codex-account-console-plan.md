@@ -211,6 +211,8 @@ Codex 설정의 MCP allowlist, `features.shell_tool`, `features.unified_exec`, `
 
 P1의 Foundation codec·상태기계는 build189에서 착수하고 build190에서 내부 테스트 대상으로 보강했다. 분할 UTF-8 JSONL, 요청 ID·세대, 초기화·turn·중단, 응답보다 먼저 도착한 이벤트와 승인 요청, 늦은 이벤트와 연결 교체를 fixture로 검사한다. turn ID가 없어 소유 대화를 확정할 수 없는 MCP elicitation은 거절한다. build210에는 같은 요청 ID 공간의 `account/read`, `model/list`, `thread/start`와 명시적 `turn/start.model`을 추가했다. build210에서 자식 프로세스의 환경 allowlist·canonical 작업 디렉터리를 host에 넣었다. build211에서는 환경 설정의 생략 경로를 제거하고, 관리형 reducer의 승인 canonical cwd·서버가 연 읽기 전용 thread ID 외의 turn을 거절했다. 기존 비관리형 turn-only 프로토콜 경로는 앱과 연결되지 않았으며 운영 계정 콘솔로 재사용하면 안 된다. 향후 통합자는 host의 승인 workspace와 reducer의 `authorizedThreadCWD`를 같은 신뢰된 선택에서 주입해야 한다. 단, 아직 앱 target에는 연결되지 않았고, 자식에게 전달한 `CODEX_HOME`이 이후 모델·shell에서 비밀로 유지되는지는 검증하지 않았다. P2·P3·P4는 G0가 확정된 뒤 계약을 소비하며, 지원되는 요청에 대한 신뢰된 승인 UI·RunLease·재배포 런타임이 아직 필요하다. 코드 수정 뒤 native/code/security 검토와 QA를 거친다. `.circlr` 음악 schema 변경은 이 기능의 전제 조건이 아니다.
 
+개발 build212의 내부 `CodexOfflineSessionCoordinator`는 실제 계정 대신 가짜 JSONL 자식을 host와 reducer에 연결한다. 승인 요청은 오류로 거절하고, 모델 목록을 전부 확인하기 전에는 thread를 열지 않는다. 취소 뒤 대기 중인 텍스트, 느린 observer의 출력 폭주, 재시작 뒤 늦은 이벤트를 제한하는 fixture를 통과했다. 이 코드는 앱 target과 로그인 UI에 연결되지 않았으며 G0의 production 지원·인증 격리·런타임 재배포 판정을 바꾸지 않는다.
+
 ## 11. 인수 검증
 
 | 시나리오 | 합격 증거 |

@@ -18,12 +18,25 @@ public struct PortLabelPlacement {
 
 /// Presentation only: every persisted connection keeps its original geometric anchor.
 public enum CirclePortPresentation {
+    /// Choose one overview control on the port's own side of the circle. A label
+    /// may cover the default anchor, but must keep its existing click priority.
+    public static func overviewAnchor(for port: CirclePort, center: Point, radius: Double,
+                                      available: (Point) -> Bool) -> (octant: PortOctant, point: Point)? {
+        let candidates: [PortOctant] = port.direction == .input
+            ? [.west, .northwest, .southwest] : [.east, .northeast, .southeast]
+        for octant in candidates {
+            if let point = try? CirclePortGeometry.anchor(center: center, radius: radius, port: port, octant: octant),
+               available(point) { return (octant, point) }
+        }
+        return nil
+    }
+
     public static func octants(for port: CirclePort, radius: Double, engaged: Bool, expanded: Bool,
                                connected: Set<PortOctant>, selected: Bool = false) -> [PortOctant] {
         guard radius.isFinite, radius > 0 else { return [] }
-        // Keep one selected control available at overview scale. Eight octants would
-        // overlap here and obscure neighbouring circles; saved edge anchors are not changed.
-        if radius <= 45 { return selected ? [port.defaultOctant] : [] }
+        // Overview exposes only the default control of each focused logical port.
+        // Eight octants would overlap here; saved edge anchors are not changed.
+        if radius <= 45 { return engaged || selected ? [port.defaultOctant] : [] }
         var result = connected
         if engaged || expanded { result.insert(port.defaultOctant) }
         if expanded, radius >= 90 { result.formUnion(PortOctant.allCases) }

@@ -428,6 +428,9 @@ extension AppStore {
     func beginAgentRender(_ request:AgentRequest,source:String,
                           trustedLease:AgentRunLease?=nil)throws->[String:Any] {
         guard !preparing else {throw CirclrError("이미 실행 중인 렌더 작업이 있습니다")}
+        guard !playbackLoopChangeBusy,playbackLoopDrainTask == nil else {
+            throw CirclrError("루프 전환 렌더가 끝난 뒤 에이전트 렌더를 시작하세요")
+        }
         let args=request.arguments ?? AgentArguments(),snapshot=project,root=mediaRoot
         let isBounce=request.method=="bounce",arrangementID=args.arrangementID ?? project.activeArrangementID
         let file:URL?
@@ -456,13 +459,17 @@ extension AppStore {
             tail=try RenderTailPlanner.arrangement(project:snapshot,plan:plan,requestedSeconds:args.tailSeconds,includeStems:false)
             sectionRender=nil;albumRender=plan
         }
-        productionGeneration+=1;let generation=productionGeneration,jobID=newID()
+        let renderDrain=takeRenderDrainForAgent()
+        let productionDrain=takeProductionDrain()
+        let generation=productionGeneration,jobID=newID()
         let lease=AgentJobCommitLease(projectID:snapshot.id,revision:snapshot.musicRevision,
                                       generation:generation,jobID:jobID)
         let renderTitle=(isBounce ? "이펙트 포함 바운스":"앨범 WAV 렌더")+String(format:" · 여운 %.2f초",tail.effectiveSeconds)
         agentJob=AgentJob(id:jobID,kind:request.method,state:"running",message:([renderTitle]+tail.notices).joined(separator:" · "),tail:tail)
         preparing=true;progress=0;status=agentJob!.message
         productionTask=Task { [weak self] in
+            await renderDrain.wait()
+            await productionDrain.wait()
             guard let self,self.productionGeneration==generation,!Task.isCancelled else{return}
             do {
                 let body=sectionRender?.clock.seconds ?? 0

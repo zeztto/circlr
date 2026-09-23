@@ -362,6 +362,23 @@ public struct CodexEventReducer {
         answeredServerRequests.insert(id)
     }
 
+    /// Decline a pending server request without granting a capability. The
+    /// offline coordinator uses this until a separate, trusted approval owner
+    /// exists. A resolved, answered, or previous-generation request cannot be
+    /// revived by a late UI action.
+    public mutating func declineServerRequest(_ id: CodexServerRequestID,
+                                              generation observedGeneration: UInt64) throws -> CodexEvent {
+        guard observedGeneration == generation else { throw CodexProtocolError.staleGeneration }
+        guard connectionState == .protocolReady,
+              let request = pendingServerRequests[id],
+              !answeredServerRequests.contains(id) else { throw CodexProtocolError.invalidState }
+        let events = try rejectServerRequest(id: id, method: request.method,
+                                             threadID: request.threadID,
+                                             message: "circlr approval is unavailable")
+        pendingServerRequests.removeValue(forKey: id)
+        return events[0]
+    }
+
     public mutating func receive(_ bytes: Data, generation observedGeneration: UInt64) throws -> [CodexEvent] {
         guard observedGeneration == generation else { return [.ignoredStaleGeneration] }
         guard connectionState == .initializing || connectionState == .protocolReady else {

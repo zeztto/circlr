@@ -16,10 +16,25 @@ public enum ArrangementRenderer {
     /// 15-track club arrangements need more than the previous fixed 1 GiB allowance.
     static var preparationByteLimit:Double {min(2_147_483_648,Double(ProcessInfo.processInfo.physicalMemory)/4)}
     public static func render(project: Project, root: URL?, plan: ExecutionPlan, tailSeconds: Double? = nil, includeStems: Bool = true, includeVisualization: Bool = false, progress: @escaping (String, Double) -> Void = { _,_ in }) async throws -> PreparedAudio {
+        try await renderPrepared(project:project,root:root,plan:plan,tailSeconds:tailSeconds,
+                                 includeStems:includeStems,includeVisualization:includeVisualization,stemSink:nil,progress:progress)
+    }
+    /// Stems are delivered one at a time; the caller must persist each before the next render.
+    static func renderStems(project:Project,root:URL?,plan:ExecutionPlan,
+                            progress:@escaping (String,Double)->Void,
+                            stemSink:@escaping (ID,PCM)throws->Void) async throws -> PreparedAudio {
+        try await renderPrepared(project:project,root:root,plan:plan,tailSeconds:nil,
+                                 includeStems:false,includeVisualization:false,stemSink:stemSink,progress:progress)
+    }
+    private static func renderPrepared(project: Project, root: URL?, plan: ExecutionPlan, tailSeconds: Double?,
+                                       includeStems: Bool, includeVisualization: Bool,
+                                       stemSink: ((ID,PCM)throws->Void)?,
+                                       progress: @escaping (String, Double) -> Void) async throws -> PreparedAudio {
         guard plan.duration > 0 else { throw CirclrError("먼저 섹션을 만들고 시작 서클을 지정하세요") }
         try validatePitchBendSupport(project:project,plan:plan)
         let tailPlan = try RenderTailPlanner.arrangement(project:project,plan:plan,requestedSeconds:tailSeconds,
-                                                        includeStems:includeStems,includeVisualization:includeVisualization)
+                                                        includeStems:includeStems,includeVisualization:includeVisualization,
+                                                        streamStems:stemSink != nil)
         let tailSeconds = tailPlan.effectiveSeconds
         let frames = try RenderTailPlanner.frameCount(bodySeconds:plan.duration,tailSeconds:tailSeconds)
         var tracks = Dictionary(uniqueKeysWithValues: project.tracks.map { ($0.id,PCM(frames: frames)) })
@@ -115,20 +130,29 @@ public enum ArrangementRenderer {
             part.fadeInOut(); tracks[track.id]?.mix(part,at:Int((transition.start*PCM.rate).rounded()),gain:track.gain)
         }
         progress("사운드 노드 처리",0.8)
-        let full = try await renderSignal(project.signal,tracks:project.tracks,sources:tracks,frames:frames)
+        var full = try await renderSignal(project.signal,tracks:project.tracks,sources:tracks,frames:frames)
         guard let master = project.signal.nodes.first(where: { $0.kind == .master }), let mix = full[master.id] else { throw CirclrError("출력 노드가 없습니다") }
         if includeVisualization {
             let connected = PlaybackAnalysis.connectedSignals(project.signal)
             visualization.signals = full.filter { connected.contains($0.key) }.mapValues { PlaybackEnvelope($0) }
             visualization.master = visualization.signals[master.id]
         }
+        // Only sidechain senders need their original full-mix signal for stems.
+        // Release other graph buffers before rendering the first stem.
+        let sidechainSenders=Set(project.signal.edges.filter(\.sidechain).map(\.from))
+        let sidechainReference=full.filter{sidechainSenders.contains($0.key)}
+        full.removeAll(keepingCapacity:false)
         var stems: [ID: PCM] = [:]
-        for (index,track) in (includeStems ? project.tracks : []).enumerated() {
+        for (index,track) in ((includeStems || stemSink != nil) ? project.tracks : []).enumerated() {
             try Task.checkCancellation()
             progress("\(track.name) stem 준비",0.8+0.19*Double(index)/Double(max(1,project.tracks.count)))
-            let isolated = tracks.mapValues { _ in PCM(frames: frames) }.merging([track.id: tracks[track.id] ?? PCM(frames:frames)]) { _,new in new }
-            let result = try await renderSignal(project.signal,tracks:project.tracks,sources:isolated,frames:frames,sidechainReference:full)
-            stems[track.id] = result[master.id]
+            // Missing source IDs share one read-only silence buffer in renderSignal.
+            let isolated = [track.id: tracks[track.id] ?? PCM(frames:frames)]
+            let result = try await renderSignal(project.signal,tracks:project.tracks,sources:isolated,frames:frames,sidechainReference:sidechainReference)
+            guard let stem = result[master.id] else { throw CirclrError("Stem 출력 노드가 없습니다") }
+            if let stemSink { try stemSink(track.id,stem) }
+            else { stems[track.id] = stem }
+            tracks.removeValue(forKey:track.id)
         }
         guard mix.left.allSatisfy(\.isFinite),mix.right.allSatisfy(\.isFinite) else { throw CirclrError("유효하지 않은 오디오 출력입니다") }
         progress("재생 준비 완료",1)
@@ -167,9 +191,11 @@ public enum ArrangementRenderer {
 
     /// Shared by render and preflight, before jobs or PCM allocations begin.
     static func preparationFrames(project: Project, plan: ExecutionPlan, tailSeconds: Double,
-                                  includeStems: Bool, includeVisualization: Bool) throws -> Int {
+                                  includeStems: Bool, includeVisualization: Bool, streamStems:Bool = false) throws -> Int {
         let frames = try RenderTailPlanner.frameCount(bodySeconds: plan.duration, tailSeconds: tailSeconds)
-        let estimate = Double(frames) * 8 * Double(project.tracks.count * (includeStems ? 2 : 1) + project.signal.nodes.filter { $0.kind != .source }.count + 5)
+        let processorCount = project.signal.nodes.filter { $0.kind != .source }.count
+        let estimate = Double(frames) * 8 * Double(project.tracks.count * (includeStems ? 2 : 1)
+            + processorCount * (streamStems ? 2 : 1) + 5)
         var graphEstimate = 0.0
         for occurrence in plan.occurrences {
             let localFrames = try RenderTailPlanner.frameCount(bodySeconds: occurrence.duration, tailSeconds: tailSeconds)
@@ -179,7 +205,11 @@ public enum ArrangementRenderer {
             graphEstimate = max(graphEstimate, bytes)
         }
         let visualEstimate = includeVisualization ? PlaybackAnalysis.estimatedBytes(plan: plan, signal: project.signal, tail: tailSeconds) : 0
-        guard estimate + graphEstimate + visualEstimate < preparationByteLimit else { throw CirclrError("준비 오디오가 메모리 작업 한도를 넘습니다. 구간을 나누어 내보내세요") }
+        // Section graph buffers are gone before the full signal/stem pass.
+        // Streaming keeps only one stem graph, so budget the larger phase peak.
+        let sectionEstimate = Double(frames) * 8 * Double(project.tracks.count + 5) + graphEstimate
+        let workingEstimate = streamStems ? max(estimate,sectionEstimate) : estimate + graphEstimate
+        guard workingEstimate + visualEstimate < preparationByteLimit else { throw CirclrError("준비 오디오가 메모리 작업 한도를 넘습니다. 구간을 나누어 내보내세요") }
         return frames
     }
     public static func expandPattern(_ pattern: RhythmPattern, length: Double, grid: BeatGrid) -> Lane {
@@ -219,9 +249,14 @@ public enum ArrangementRenderer {
     static func renderSignal(_ graph: SignalGraph, tracks: [Track], sources: [ID:PCM], frames: Int, sidechainReference: [ID:PCM]? = nil) async throws -> [ID:PCM] {
         let sorted = try SignalValidator.sorted(graph,tracks:tracks)
         var buffers: [ID:PCM] = [:]
+        var silence: PCM?
         for node in sorted {
             try Task.checkCancellation()
-            if node.kind == .source { buffers[node.id] = node.trackID.flatMap { sources[$0] } ?? PCM(frames:frames); continue }
+            if node.kind == .source {
+                if let source = node.trackID.flatMap({ sources[$0] }) { buffers[node.id] = source }
+                else { if silence == nil { silence = PCM(frames:frames) }; buffers[node.id] = silence }
+                continue
+            }
             var input = PCM(frames:frames), sidechain = PCM(frames:frames), hasSidechain = false
             for edge in graph.edges where edge.to == node.id {
                 if edge.sidechain { if let source = sidechainReference?[edge.from] ?? buffers[edge.from] { sidechain.mix(source,gain:edge.gain); hasSidechain = true } }

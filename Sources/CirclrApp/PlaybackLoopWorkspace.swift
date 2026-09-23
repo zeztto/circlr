@@ -90,8 +90,22 @@ struct WorkspaceLoopTransition {
     }
     func cancelPlaybackLoopTransition() {
         playbackLoopTransition=nil
-        playbackLoopTask?.cancel();playbackLoopTask=nil
-        playbackLoopWorker?.cancel();playbackLoopWorker=nil
+        let task=playbackLoopTask,worker=playbackLoopWorker
+        task?.cancel();worker?.cancel()
+        playbackLoopTask=nil;playbackLoopWorker=nil
+        guard task != nil || worker != nil else{return}
+        let previous=playbackLoopDrainTask
+        let id=UUID()
+        playbackLoopDrainID=id
+        playbackLoopDrainTask=Task { [weak self] in
+            if let previous {await previous.value}
+            if let task {await task.value}
+            if let worker {_ = try? await worker.value}
+            if self?.playbackLoopDrainID==id {
+                self?.playbackLoopDrainTask=nil
+                self?.playbackLoopDrainID=nil
+            }
+        }
     }
     func refreshPlaybackLoopTransition() {
         guard let pending=playbackLoopTransition else{return}

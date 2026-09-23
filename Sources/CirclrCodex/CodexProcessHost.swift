@@ -35,7 +35,7 @@ public struct CodexProcessChildConfiguration {
     }
 }
 
-public enum CodexProcessExit: Equatable {
+public enum CodexProcessExit: Equatable, Sendable {
     case stopped
     case exited(status: Int32)
     case readFailed

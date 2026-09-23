@@ -174,6 +174,11 @@ import CirclrCore
         if let activeID{transport.cancel(activeID)}
         activeID=nil;offset=0
     }
+    /// A new full render must not overlap the stopped transport's cached PCM.
+    public func stopAndReleasePrepared() {
+        stop()
+        preparedValue=nil;loopValue=nil
+    }
 }
 
 public final class TakeWriter {

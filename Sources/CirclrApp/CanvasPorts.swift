@@ -16,12 +16,36 @@ extension AlbumCanvasView {
         let fixed = cableDrag?.mode == .reconnect ? cableDrag?.fixed : connecting?.endpoint
         let fixedPort = fixed.flatMap { endpoint in (try? CirclePortCatalog.ports(at:endpoint.node,in:store.project))?.first { $0.id == endpoint.portID } }
         let time = store.selectedCircle.flatMap { visibleTimeHandle($0) }
-        for node in scene.nodes where isVisible(node) && (node.radius*camera.zoom > 45 || selectedCanvasPort?.node == node.id) && !node.ports.isEmpty {
+        let pointer = !store.viewingMode && window?.isKeyWindow == true
+            ? window.map { convert($0.mouseLocationOutsideOfEventStream,from:nil) } : nil
+        for node in scene.nodes where isVisible(node) && !node.ports.isEmpty {
             let center = screen(node)
+            let radius = node.radius*camera.zoom
+            let labelClearance = radius <= 45 ? 10.0 : 9.0
+            let tinyFocused = radius <= 45 && !store.viewingMode &&
+                (store.hierarchySelections.contains(node.id) || node.id == store.hierarchySelection || node.id == hoverAddress)
+            // Keep the tiny control reachable across the gap between the circle and
+            // its visible anchor while the pointer leaves the circle's hit region.
+            let approaching = radius <= 45 && pointer.map { pointer in
+                node.ports.contains { port in
+                    guard let choice = CirclePortPresentation.overviewAnchor(for:port,center:Point(center.x,center.y),radius:node.outerRadius*camera.zoom,available:{ point in
+                        cablePointAvailable(point,labels:false) &&
+                            !labelPlacements.contains(where: { $0.rect.insetBy(dx:-labelClearance,dy:-labelClearance).contains(NSPoint(x:point.x,y:point.y)) })
+                    }) else { return false }
+                    let normal = CirclePortGeometry.normal(choice.octant)
+                    let x = Double(pointer.x-center.x), y = Double(pointer.y-center.y)
+                    let along = x*normal.x+y*normal.y
+                    return along >= max(0,node.outerRadius*camera.zoom-8) &&
+                        along <= hypot(choice.point.x-center.x,choice.point.y-center.y)+CirclePortGeometry.hitRadius &&
+                        abs(x*normal.y-y*normal.x) <= CirclePortGeometry.hitRadius
+                }
+            } == true
+            guard radius > 45 || tinyFocused || selectedCanvasPort?.node == node.id || approaching else { continue }
             for port in node.ports {
                 let endpoint = CirclePortEndpoint(node:node.id,portID:port.id)
                 let selected = endpoint == selectedCanvasPort
-                var engaged = node.id == store.hierarchySelection || node.id == hoverAddress
+                var engaged = tinyFocused || approaching ||
+                    (radius > 45 && (node.id == store.hierarchySelection || node.id == hoverAddress))
                 var expanded = selected
                 if let fixed, let fixedPort {
                     if endpoint != fixed {
@@ -34,11 +58,22 @@ extension AlbumCanvasView {
                     engaged = (try? GroupPortEditing.resolve(endpoint,in:store.project)) == gesture.moving; expanded = engaged
                 }
                 let directions = CirclePortPresentation.octants(for:port,radius:node.radius*camera.zoom,engaged:engaged,expanded:expanded,connected:connectedByPort[endpoint] ?? [],selected:selected)
+                func available(_ point: Point) -> Bool {
+                    cablePointAvailable(point, labels:false) &&
+                        (selected || (time.map({ hypot($0.x-point.x,$0.y-point.y) > 23 }) ?? true)) &&
+                        (selected || !labelPlacements.contains(where: { $0.rect.insetBy(dx:-labelClearance,dy:-labelClearance).contains(NSPoint(x:point.x,y:point.y)) }))
+                }
+                if radius <= 45 {
+                    guard !directions.isEmpty,
+                          let choice = CirclePortPresentation.overviewAnchor(for:port,center:Point(center.x,center.y),radius:node.outerRadius*camera.zoom,available:{ point in
+                              available(point) && !result.contains(where: { $0.endpoint != endpoint && hypot($0.point.x-point.x,$0.point.y-point.y) <= CirclePortGeometry.hitRadius*2 })
+                          }) else { continue }
+                    result.append(.init(endpoint:endpoint,octant:choice.octant,point:choice.point))
+                    continue
+                }
                 for direction in directions {
                     guard let point = try? CirclePortGeometry.anchor(center:Point(center.x,center.y),radius:node.outerRadius*camera.zoom,port:port,octant:direction),
-                          cablePointAvailable(point, labels:false),
-                          selected || (time.map({ hypot($0.x-point.x,$0.y-point.y) > 23 }) ?? true),
-                          selected || !labelPlacements.contains(where: { $0.rect.insetBy(dx:-9,dy:-9).contains(NSPoint(x:point.x,y:point.y)) }) else { continue }
+                          available(point) else { continue }
                     result.append(.init(endpoint:endpoint,octant:direction,point:point))
                 }
             }

@@ -1,5 +1,18 @@
 # 변경 이력
 
+## 0.80.0 · build213 — 개발 중
+
+- 두 곡 이상 앨범의 stems가 활성 편곡안에서 끝나던 결함을 수정해 일반 WAV와 같은 앨범 전체 실행 계획을 사용한다. 두 composition fixture에서 후반 stem 신호와 전체 frame 수를 비교했다.
+- 기존 stem 목록이 없는 legacy 폴더는 개인 WAV를 보호하기 위해 덮어쓰지 않는다. 재생·루프 전환·agent 렌더/문서 열기와 GUI stems의 취소·재시작 경계를 보강하고, 새 PCM 할당 전에 이전 worker의 종료를 기다린다. [build213 QA](qa/0.80-build213.md).
+- 최종 소스 전체 Swift 1157개·12 skip·실패0, MCP 계약39개·서버41개·agent kit9개, build213 arm64 앱/다섯 helper 패키지와 strict deep 서명을 확인했다. 격리 native QA 및 정식 0.80 출고 gate는 여전히 열려 있으며 tag·GitHub Release는 만들지 않았다.
+
+## 0.80.0 · build212 — 개발 중
+
+- 전체 stems를 하나씩 렌더·기록한 뒤 원자 게시하도록 바꿨다. 16트랙 QA 곡에서 이전 메모리 사전 한도 실패를 재현했고, 새 오프라인 경로는 16 stem+전체 mix 17개 WAV를 생성했다. 실제 앱의 2트랙 stems와 후속 WAV도 확인했다. 통합 리뷰에서 다중 곡 누락·일부 작업 경합·legacy 대상 보존 문제가 발견되어 build213에서 수정 중이다.
+- 45pt 이하 축소 서클의 hover·선택 포트 표시·클릭·접근성 경로를 복원하고, 읽기 라벨이 기본 위치를 덮을 때 대체 anchor를 사용한다. 실제 앱에서 약 44pt의 IN/OUT 선택·AX와 가로/세로 화면을 확인했다.
+- 아직 앱에 연결하지 않은 `CirclrCodex`의 offline session coordinator를 가짜 JSONL 자식으로 검증했다. 승인 거절, 모델 목록, 취소 뒤 늦은 이벤트·출력 큐 한도를 다루지만 계정 로그인·대화 UI와 production runtime G0는 여전히 미완료다.
+- 당시 전체 Swift 회귀 1151개·12 skip·실패0 이후 렌더 경계 변경의 영향 필터 15개·1 skip·실패0, Python MCP 80개·agent kit 9개를 확인했다. arm64 앱/다섯 helper 패키지·strict deep 서명과 [native GUI QA](qa/0.80-build212-native.md)도 완료했다. 이 결과는 build213 수정 전 범위다. [build212 QA](qa/0.80-build212.md).
+
 ## 0.80.0 · build211 — 개발 중
 
 - build210의 실제 37초 MP4에서 UI/디코드 프레임 수가 1118/1117로 어긋난 종료 경계를 수정했다. 유한 PCM의 원래 끝점은 유지하고 MP4 영상 session만 마지막 수용 프레임 뒤 최대 1/30초까지 열어 둔다. 유효한 마지막 프레임까지 버리던 첫 후보는 독립 리뷰 후 폐기했다.
