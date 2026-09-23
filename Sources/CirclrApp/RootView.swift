@@ -120,6 +120,7 @@ struct RootView: View {
                 HStack(spacing:10) {
                     TransportControls(store:store,meter:store.meter,compact:true)
                     movieButton
+                    viewingModeButton
                     Spacer(minLength:8)
                     utilityMenu
                 }.frame(height:58)
@@ -130,6 +131,7 @@ struct RootView: View {
                     Rectangle().fill(StudioTheme.line).frame(width:1,height:24)
                     TransportControls(store:store,meter:store.meter,compact:chrome.compactTransport)
                     movieButton
+                    viewingModeButton
                     Spacer(minLength:8)
                     utilityMenu
                     globalSettings(compact:chrome.compactTransport)
@@ -161,6 +163,16 @@ struct RootView: View {
             }.help(store.movieWriter != nil ? "영상 녹화 마치기":"캔버스와 음악을 MP4로 녹화")
                 .accessibilityLabel(store.movieWriter != nil ? "영상 녹화 마치기":"영상 녹화 시작")
                 .disabled(store.movieFinalizing != nil)
+    }
+    private var viewingModeButton:some View {
+            Button{_ = store.setViewingMode(true)}label:{
+                Image(systemName:"eye")
+                    .font(.system(size:15,weight:.medium))
+                    .foregroundStyle(StudioTheme.text)
+                    .frame(width:26,height:26)
+            }
+            .help("텍스트 없는 감상 모드 (⇧⌘V)")
+            .accessibilityLabel("감상 모드 시작")
     }
     private func globalSettings(compact:Bool)->some View {
             Button{store.focusHierarchy(.album,detail:true);store.hierarchySettingsOpen=true}label:{
