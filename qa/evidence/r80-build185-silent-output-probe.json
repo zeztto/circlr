@@ -1,0 +1,74 @@
+[
+  {
+    "device": "default",
+    "status": "timeout",
+    "trace": [
+      [
+        "fileValidation",
+        "entered"
+      ],
+      [
+        "fileValidation",
+        "completed"
+      ],
+      [
+        "engineCreation",
+        "entered"
+      ],
+      [
+        "engineCreation",
+        "completed"
+      ],
+      [
+        "outputNodeAcquisition",
+        "entered"
+      ]
+    ],
+    "events": [
+      "helloBoundaryLoopCapabilities",
+      "trace",
+      "trace",
+      "prepared",
+      "trace",
+      "trace",
+      "trace"
+    ],
+    "exit": 0
+  },
+  {
+    "device": "built-in",
+    "status": "timeout",
+    "trace": [
+      [
+        "fileValidation",
+        "entered"
+      ],
+      [
+        "fileValidation",
+        "completed"
+      ],
+      [
+        "engineCreation",
+        "entered"
+      ],
+      [
+        "engineCreation",
+        "completed"
+      ],
+      [
+        "outputNodeAcquisition",
+        "entered"
+      ]
+    ],
+    "events": [
+      "helloBoundaryLoopCapabilities",
+      "trace",
+      "trace",
+      "prepared",
+      "trace",
+      "trace",
+      "trace"
+    ],
+    "exit": 0
+  }
+]
