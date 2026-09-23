@@ -5,10 +5,14 @@ struct CanvasLabelText {
     let title:NSAttributedString
     let titleHeight:CGFloat
     let showsSubtitle:Bool
+    let subtitle:String
     let size:CGSize
-    init(_ text:String,primary:Bool,showsSubtitle:Bool,availableWidth:CGFloat) {
+    init(_ text:String,primary:Bool,showsSubtitle:Bool,subtitle:String,availableWidth:CGFloat) {
         let font=NSFont.systemFont(ofSize:primary ? StudioTheme.canvasSelectedTitleSize:StudioTheme.canvasTitleSize,weight:primary ? .semibold:.medium)
-        let width=min(availableWidth,primary ? 340:248,max(80,ceil((text as NSString).size(withAttributes:[.font:font]).width)+20))
+        let subtitleFont=NSFont.systemFont(ofSize:StudioTheme.canvasSubtitleSize,weight:.medium)
+        let titleWidth=ceil((text as NSString).size(withAttributes:[.font:font]).width)+20
+        let subtitleWidth=showsSubtitle ? ceil((subtitle as NSString).size(withAttributes:[.font:subtitleFont]).width)+20:0
+        let width=min(availableWidth,max(80,max(titleWidth,subtitleWidth)))
         let style=NSMutableParagraphStyle();style.alignment = .center
         style.lineBreakMode = primary ? .byWordWrapping:.byTruncatingTail
         if primary {style.lineBreakStrategy = .hangulWordPriority}
@@ -17,6 +21,7 @@ struct CanvasLabelText {
         let measured=title.boundingRect(with:CGSize(width:max(1,width-20),height:.greatestFiniteMagnitude),options:[.usesLineFragmentOrigin,.usesFontLeading]).height
         titleHeight=primary ? min(60,max(20,ceil(measured/20)*20)):20
         self.showsSubtitle=showsSubtitle
+        self.subtitle=subtitle
         size=CGSize(width:width,height:titleHeight+16+(showsSubtitle ? 18:0))
     }
 }
@@ -26,7 +31,84 @@ struct CanvasLabelTextKey: Hashable {
     let title:String
     let primary:Bool
     let showsSubtitle:Bool
+    let subtitle:String
     let availableWidth:Double
+}
+
+/// Song-form order comes from compiled orbit intervals, not the satellites' free positions.
+struct CanvasSongSegment: Equatable {
+    let section: CircleAddress
+    let order: Int
+    let interval: OrbitInterval
+    let songDuration: Double
+    let orderLabel: String
+
+    var duration: Double { interval.end-interval.start }
+    init(section:CircleAddress,order:Int,interval:OrbitInterval,songDuration:Double) {
+        self.section=section;self.order=order;self.interval=interval;self.songDuration=songDuration
+        orderLabel=String(format:"%02d",order)
+    }
+
+    func hasRoomForOrder(at radius: Double) -> Bool {
+        radius >= 48 && duration/songDuration * 2 * .pi * (radius-12) >= 20
+    }
+}
+
+struct CanvasSongTimeline {
+    private(set) var byOwner: [CircleAddress: [CanvasSongSegment]] = [:]
+    private(set) var bySection: [CircleAddress: [CanvasSongSegment]] = [:]
+    private var orderText: [CircleAddress: String] = [:]
+    private var timingText: [CircleAddress: String] = [:]
+    private var badgeTimingText: [CircleAddress: String] = [:]
+
+    init() {}
+    init(scene: HierarchyScene) {
+        guard scene.isOrbit else { return }
+        for owner in scene.nodes where owner.role == .song || owner.role == .movement {
+            guard let total=owner.timeline?.duration, total.isFinite, total>0 else { continue }
+            let candidates=scene.nodes.enumerated().flatMap { index, node -> [(Int, CircleAddress, OrbitInterval)] in
+                guard node.role == .section, node.orbit?.owner == owner.id else { return [] }
+                return (node.orbit?.intervals ?? []).compactMap { interval in
+                    guard interval.start.isFinite, interval.end.isFinite,
+                          interval.start>=0, interval.end>interval.start,
+                          interval.end<=total+0.0001 else { return nil }
+                    return (index,node.id,interval)
+                }
+            }.sorted { a,b in
+                if a.2.start != b.2.start { return a.2.start < b.2.start }
+                if a.2.end != b.2.end { return a.2.end < b.2.end }
+                return a.0 < b.0
+            }
+            let segments=candidates.enumerated().map { position,item in
+                CanvasSongSegment(section:item.1,order:position+1,interval:item.2,songDuration:total)
+            }
+            byOwner[owner.id]=segments
+            for segment in segments { bySection[segment.section,default:[]].append(segment) }
+        }
+        for (section,segments) in bySection {
+            orderText[section]=segments.count<=3 ? segments.map(\.orderLabel).joined(separator:", "):
+                "\(segments[0].orderLabel) 외 \(segments.count-1)회"
+            timingText[section]=segments.map { segment in
+                "\(segment.orderLabel) · \(Self.time(segment.interval.start))–\(Self.time(segment.interval.end)) · 길이 \(Self.time(segment.duration))"
+            }.joined(separator:" / ")
+            if segments.count == 1 { badgeTimingText[section]=timingText[section] }
+            else if let first=segments.first,let last=segments.last {
+                badgeTimingText[section]="\(segments.count)회 · \(first.orderLabel) \(Self.time(first.interval.start))–\(Self.time(first.interval.end)) / \(last.orderLabel) \(Self.time(last.interval.start))–\(Self.time(last.interval.end))"
+            }
+        }
+    }
+
+    func segments(on owner: CircleAddress) -> [CanvasSongSegment] { byOwner[owner] ?? [] }
+    func orderLabel(for section: CircleAddress) -> String? { orderText[section] }
+    func timing(for section: CircleAddress) -> String? { timingText[section] }
+    func badgeTiming(for section:CircleAddress)->String? { badgeTimingText[section] }
+    static func isCurrent(_ interval:OrbitInterval,at seconds:Double,sectionActive:Bool)->Bool {
+        sectionActive && seconds.isFinite && interval.start<=seconds && seconds<interval.end
+    }
+    private static func time(_ seconds: Double) -> String {
+        let tenths=Int((seconds*10).rounded())
+        return String(format:"%d:%02d.%d",tenths/600,(tenths/10)%60,tenths%10)
+    }
 }
 
 /// Small processing satellites remain visible as circles during dense playback;
@@ -86,15 +168,17 @@ extension AlbumCanvasView {
             return CanvasLabelCircle(id:node.id,center:p,radius:r)
         }
     }
-    func readableLabelText(for node:CircleSceneNode)->CanvasLabelText {
-        let primary=node.id==store.hierarchySelection ||
-            (store.playback.playing && !visualFrame.stale && node.id==visualFrame.focus)
-        let showsSubtitle=primary || node.radius*camera.zoom>=65
-        let width=min(workspaceViewport.width,primary ? 340:248)
-        let key=CanvasLabelTextKey(address:node.id,title:node.title,primary:primary,
-            showsSubtitle:showsSubtitle,availableWidth:Double(width))
+    func readableLabelText(for node:CircleSceneNode,title:String,subtitle:String)->CanvasLabelText {
+        let primary=store.hierarchySelections.contains(node.id) ||
+            (store.playback.playing && !visualFrame.stale &&
+             (node.id==visualFrame.focus || visualFrame.activeSections.contains(node.id)))
+        let hovered=node.id==hoverAddress
+        let showsSubtitle=primary || hovered || node.radius*camera.zoom>=65
+        let width=min(workspaceViewport.width,primary || hovered ? 340:248)
+        let key=CanvasLabelTextKey(address:node.id,title:title,primary:primary,
+            showsSubtitle:showsSubtitle,subtitle:subtitle,availableWidth:Double(width))
         if let cached=labelTextCache[key] {return cached}
-        let text=CanvasLabelText(node.title,primary:primary,showsSubtitle:showsSubtitle,availableWidth:width)
+        let text=CanvasLabelText(title,primary:primary,showsSubtitle:showsSubtitle,subtitle:subtitle,availableWidth:width)
         if labelTextCache.count>=512 {labelTextCache.removeAll(keepingCapacity:true)}
         labelTextCache[key]=text
         return text
@@ -114,7 +198,7 @@ extension AlbumCanvasView {
         guard !store.viewingMode else{return}
         guard let scene,let context=labelContext else{return}
         let ancestors=Set(scene.path(to:context.id).dropLast().map(\.id))
-        let activeSection=store.playback.playing && !visualFrame.stale ? visualFrame.focus : nil
+        let activeSections=store.playback.playing && !visualFrame.stale ? visualFrame.activeSections : []
         // Count the context's own processing circles, not currently visible cables:
         // follow-camera movement must not flip every badge at a viewport edge.
         let processingChildCount=scene.children(of:context.id).reduce(0) {
@@ -128,7 +212,7 @@ extension AlbumCanvasView {
         let selectedEdge=selectedSceneCable
         var requests:[CanvasLabelRequest]=[],texts:[CircleAddress:CanvasLabelText]=[:]
         for node in scene.nodes where isVisible(node) && !ancestors.contains(node.id) && editorAddress != node.id {
-            let activeFocus=node.id==activeSection
+            let activeFocus=activeSections.contains(node.id) || node.id==visualFrame.focus && store.playback.playing && !visualFrame.stale
             let radius=node.radius*camera.zoom,p=screen(node),direct=node.parent==context.id
             let primary=node.id==store.hierarchySelection
             let selected=store.hierarchySelections.contains(node.id)
@@ -139,7 +223,11 @@ extension AlbumCanvasView {
                 selectedEdge?.from==node.id || selectedEdge?.to==node.id
             guard CanvasPlaybackLabelLOD.shows(node.music?.content,screenRadius:radius,
                 direct:direct,compactPlayback:compactPlayback,emphasized:editingFocus) else{continue}
-            let text=readableLabelText(for:node);texts[node.id]=text
+            let order=songTimeline.orderLabel(for:node.id)
+            let timing=(selected || node.id==hoverAddress || activeFocus) ? songTimeline.badgeTiming(for:node.id):nil
+            let subtitle=timing ?? node.subtitle+(node.repeatCount>1 ? " · ×\(node.repeatCount)":"")
+            let text=readableLabelText(for:node,title:order.map{"\($0)  \(node.title)"} ?? node.title,subtitle:subtitle)
+            texts[node.id]=text
             let expanded=node.childCount>0 && scene.children(of:node.id).contains(where:isVisible)
             // The playing section stays identifiable beside its orbit, ahead of selection and hover labels.
             requests.append(CanvasLabelRequest(id:node.id,anchor:p,size:text.size,radius:radius,expanded:expanded,priority:activeFocus ? 110:primary ? 100:node.id==hoverAddress ? 95:direct && ["MIDI","오디오"].contains(node.music?.content.label ?? "") ? 85:direct ? 70:20,allowsViewportAdjustment:emphasized))
@@ -148,7 +236,7 @@ extension AlbumCanvasView {
         for placement in labelPlacements {
             guard let node=scene.node(placement.id),let text=texts[placement.id] else{continue}
             let rect=placement.rect,selected=store.hierarchySelections.contains(node.id),hovered=hoverAddress==node.id
-            let activeFocus=node.id==activeSection
+            let activeFocus=activeSections.contains(node.id) || node.id==visualFrame.focus && store.playback.playing && !visualFrame.stale
             if !rect.insetBy(dx:-8,dy:-8).contains(placement.anchor) {
                 let end=CGPoint(x:max(rect.minX,min(rect.maxX,placement.anchor.x)),y:max(rect.minY,min(rect.maxY,placement.anchor.y)))
                 let leader=NSBezierPath();leader.move(to:placement.anchor);leader.line(to:end)
@@ -163,7 +251,9 @@ extension AlbumCanvasView {
             }
             (selected || hovered || activeFocus ? color(node):StudioTheme.lineNS).setStroke();path.lineWidth=selected ? 2:activeFocus ? 1.8:1;path.stroke()
             text.title.draw(with:NSRect(x:rect.minX+10,y:rect.minY+6,width:max(1,rect.width-20),height:text.titleHeight),options:[.usesLineFragmentOrigin,.usesFontLeading,.truncatesLastVisibleLine])
-            if text.showsSubtitle {drawText(node.subtitle+(node.repeatCount>1 ? " · ×\(node.repeatCount)":""),x:rect.midX,y:rect.minY+text.titleHeight+8,size:Double(StudioTheme.canvasSubtitleSize),color:StudioTheme.secondaryNS,maxWidth:rect.width-20)}
+            if text.showsSubtitle {
+                drawText(text.subtitle,x:rect.midX,y:rect.minY+text.titleHeight+8,size:Double(StudioTheme.canvasSubtitleSize),color:StudioTheme.secondaryNS,maxWidth:rect.width-20)
+            }
         }
     }
 }

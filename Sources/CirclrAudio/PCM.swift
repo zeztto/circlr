@@ -67,10 +67,24 @@ public struct PCM: Sendable {
         pcm.left = Array(UnsafeBufferPointer(start: channels[0], count: pcm.count)); pcm.right = Array(UnsafeBufferPointer(start: channels[1], count: pcm.count))
         return pcm
     }
-    public func writeWAV(_ url: URL) throws {
+    public func writeWAV(_ url: URL, progress: ((Double) -> Void)? = nil) throws {
+        try Task.checkCancellation()
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         let file = try AVAudioFile(forWriting: url, settings: [AVFormatIDKey: kAudioFormatLinearPCM, AVSampleRateKey: Self.rate, AVNumberOfChannelsKey: 2, AVLinearPCMBitDepthKey: 24, AVLinearPCMIsFloatKey: false, AVLinearPCMIsBigEndianKey: false], commonFormat: .pcmFormatFloat32, interleaved: false)
-        try file.write(from: buffer())
+        let chunkFrames = 16_384
+        guard let format = AVAudioFormat(standardFormatWithSampleRate: Self.rate, channels: 2),
+              let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(chunkFrames)),
+              let channels = buffer.floatChannelData else { throw CirclrError("오디오 buffer를 만들 수 없습니다") }
+        for start in stride(from: 0, to: count, by: chunkFrames) {
+            try Task.checkCancellation()
+            let length = min(chunkFrames, count - start)
+            left.withUnsafeBufferPointer { source in channels[0].update(from: source.baseAddress! + start, count: length) }
+            right.withUnsafeBufferPointer { source in channels[1].update(from: source.baseAddress! + start, count: length) }
+            buffer.frameLength = AVAudioFrameCount(length)
+            try file.write(from: buffer)
+            progress?(Double(start + length) / Double(count))
+            try Task.checkCancellation()
+        }
     }
 }
 public enum NativeDSP {

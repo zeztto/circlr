@@ -2,6 +2,21 @@ import Foundation
 import Darwin
 import CirclrCore
 
+/// STOP and the final WAV rename share this gate. If STOP wins, publication
+/// cannot begin; if publication wins, STOP waits for that rename to finish.
+public final class WAVExportCommitGate: @unchecked Sendable {
+    private let lock=NSLock()
+    private var cancelled=false
+    public init() {}
+    public func cancel() {lock.lock();cancelled=true;lock.unlock()}
+    func publish(_ body:()throws->Void) throws {
+        lock.lock();defer{lock.unlock()}
+        guard !cancelled else{throw CancellationError()}
+        try Task.checkCancellation()
+        try body()
+    }
+}
+
 public enum AudioExport {
     /// Render each stem directly into a hidden sibling directory, then publish the complete set.
     public static func saveStems(project:Project,root:URL?,plan:ExecutionPlan,to url:URL,
@@ -34,26 +49,62 @@ public enum AudioExport {
         try publishDirectory(stage,to:url)
     }
     public static func save(_ audio:PreparedAudio,to url:URL,stemNames:[ID:String]? = nil) throws {
-        guard audio.peak <= 1,stemNames == nil || audio.stems.values.allSatisfy({$0.peak<=1}) else {throw CirclrError("Clipping을 방지하려면 트랙 또는 출력 Gain을 낮춘 뒤 내보내세요")}
-        let fm=FileManager.default,parent=url.deletingLastPathComponent(),stage=parent.appendingPathComponent(".circlr-export-\(newID())\(stemNames == nil ? ".wav":"")"),backup=parent.appendingPathComponent(".circlr-export-backup-\(newID())")
+        guard let names=stemNames else {try saveWAV(audio,to:url);return}
+        guard audio.peak <= 1,audio.stems.values.allSatisfy({$0.peak<=1}) else {throw CirclrError("Clipping을 방지하려면 트랙 또는 출력 Gain을 낮춘 뒤 내보내세요")}
+        let fm=FileManager.default,parent=url.deletingLastPathComponent(),stage=parent.appendingPathComponent(".circlr-export-\(newID())"),backup=parent.appendingPathComponent(".circlr-export-backup-\(newID())")
         try fm.createDirectory(at:parent,withIntermediateDirectories:true)
         var complete=false,moved=false
         defer{if !complete{try? fm.removeItem(at:stage)}}
-        if let names=stemNames {
-            if fm.fileExists(atPath:url.path),!fm.fileExists(atPath:url.appendingPathComponent("circlr-export.json").path){throw CirclrError("기존 일반 폴더를 덮어쓸 수 없습니다. 새 stem 폴더 이름을 지정하세요")}
-            try fm.createDirectory(at:stage,withIntermediateDirectories:true)
-            for (id,pcm) in audio.stems {
-                let name=(names[id] ?? "트랙").replacingOccurrences(of:"/",with:"-").replacingOccurrences(of:":",with:"-")
-                try pcm.writeWAV(stage.appendingPathComponent("\(name)-\(id.prefix(6)).wav"))
-            }
-            try audio.mix.writeWAV(stage.appendingPathComponent("전체 mix.wav"))
-            let manifest:[String:Any]=["format":"circlr-stems-v1","musicRevision":audio.plan.revision,"arrangementID":audio.plan.arrangementID,"bodySeconds":audio.plan.duration,"tailSeconds":audio.tailSeconds,"sampleRate":PCM.rate,"bitDepth":24]
-            try JSONSerialization.data(withJSONObject:manifest,options:[.prettyPrinted,.sortedKeys]).write(to:stage.appendingPathComponent("circlr-export.json"))
-            try "Stem은 각 source의 signal 경로를 개별 render하며 원래 sidechain 입력을 유지합니다. 공유 nonlinear processor를 통과한 stem 합은 전체 mix와 다를 수 있습니다.\n".write(to:stage.appendingPathComponent("내보내기 정보.txt"),atomically:true,encoding:.utf8)
-        } else {try audio.mix.writeWAV(stage)}
+        if fm.fileExists(atPath:url.path),!fm.fileExists(atPath:url.appendingPathComponent("circlr-export.json").path){throw CirclrError("기존 일반 폴더를 덮어쓸 수 없습니다. 새 stem 폴더 이름을 지정하세요")}
+        try fm.createDirectory(at:stage,withIntermediateDirectories:true)
+        for (id,pcm) in audio.stems {
+            let name=(names[id] ?? "트랙").replacingOccurrences(of:"/",with:"-").replacingOccurrences(of:":",with:"-")
+            try pcm.writeWAV(stage.appendingPathComponent("\(name)-\(id.prefix(6)).wav"))
+        }
+        try audio.mix.writeWAV(stage.appendingPathComponent("전체 mix.wav"))
+        let manifest:[String:Any]=["format":"circlr-stems-v1","musicRevision":audio.plan.revision,"arrangementID":audio.plan.arrangementID,"bodySeconds":audio.plan.duration,"tailSeconds":audio.tailSeconds,"sampleRate":PCM.rate,"bitDepth":24]
+        try JSONSerialization.data(withJSONObject:manifest,options:[.prettyPrinted,.sortedKeys]).write(to:stage.appendingPathComponent("circlr-export.json"))
+        try "Stem은 각 source의 signal 경로를 개별 render하며 원래 sidechain 입력을 유지합니다. 공유 nonlinear processor를 통과한 stem 합은 전체 mix와 다를 수 있습니다.\n".write(to:stage.appendingPathComponent("내보내기 정보.txt"),atomically:true,encoding:.utf8)
         if fm.fileExists(atPath:url.path){try fm.moveItem(at:url,to:backup);moved=true}
         do{try fm.moveItem(at:stage,to:url);complete=true}catch{if moved{try? fm.moveItem(at:backup,to:url)};throw error}
         if moved{try? fm.removeItem(at:backup)}
+    }
+
+    /// Write a complete WAV beside its destination before atomically publishing it.
+    /// Call this from a background task; cancellation leaves the previous file intact.
+    public static func saveWAV(_ audio:PreparedAudio,to url:URL,
+                               progress:((Double)->Void)? = nil,
+                               commitGate:WAVExportCommitGate? = nil) throws {
+        try saveWAV(audio,to:url,progress:progress,commitGate:commitGate,beforePublish:{})
+    }
+    /// The final hook is internal so the cancellation/rename boundary can be tested.
+    static func saveWAV(_ audio:PreparedAudio,to url:URL,
+                        progress:((Double)->Void)?,commitGate:WAVExportCommitGate?,
+                        beforePublish:()->Void) throws {
+        try Task.checkCancellation()
+        try checkPeak(audio.mix)
+        let fm=FileManager.default,parent=url.deletingLastPathComponent()
+        try fm.createDirectory(at:parent,withIntermediateDirectories:true)
+        let stage=parent.appendingPathComponent(".circlr-export-\(newID()).wav")
+        defer { try? fm.removeItem(at:stage) }
+        try audio.mix.writeWAV(stage,progress:progress)
+        try Task.checkCancellation()
+        beforePublish()
+        try (commitGate ?? WAVExportCommitGate()).publish {
+            if let kind=try fileKind(url),kind != mode_t(S_IFREG) {
+                throw CirclrError("기존 WAV 파일이 아닌 항목을 덮어쓸 수 없습니다")
+            }
+            if fm.fileExists(atPath:url.path) {
+                let result=stage.path.withCString { source in
+                    url.path.withCString { destination in
+                        renamex_np(source,destination,UInt32(RENAME_SWAP))
+                    }
+                }
+                guard result == 0 else {throw POSIXError(POSIXErrorCode(rawValue:errno) ?? .EIO)}
+            } else {
+                try fm.moveItem(at:stage,to:url)
+            }
+        }
     }
 
     private static func checkPeak(_ pcm:PCM) throws {

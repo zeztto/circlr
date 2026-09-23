@@ -179,6 +179,10 @@ import CirclrCore
         stop()
         preparedValue=nil;loopValue=nil
     }
+    /// Waits for a stopped output host's queued CAF launch to release its PCM.
+    public func waitForStoppedOutputPCMRelease() async {
+        await outputWorker?.waitForQueuedPCMRelease()
+    }
 }
 
 public final class TakeWriter {

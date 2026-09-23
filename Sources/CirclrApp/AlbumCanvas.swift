@@ -13,6 +13,7 @@ struct AlbumCanvas: NSViewRepresentable {
     let store: AppStore
     var camera = HierarchyCamera()
     var scene: HierarchyScene?
+    var songTimeline=CanvasSongTimeline()
     var renderedRevision = -1
     var renderedProjectID:ID?
     var renderedOrbits:Bool?
@@ -254,7 +255,11 @@ struct AlbumCanvas: NSViewRepresentable {
         if hoverAddress != node?.id {hoverAddress=node?.id;needsDisplay=true}
         if let port,let descriptor=node?.ports.first(where:{$0.id==port.endpoint.portID}) {
             toolTip=(node?.title ?? "")+" · "+descriptor.name+" · 클릭으로 8방향 선택 · 끌어서 연결"
-        } else {toolTip=node.map{$0.title+" · "+$0.subtitle+" · 두 번 클릭해 확대"}}
+        } else {
+            toolTip=node.map { item in
+                item.title+" · "+(songTimeline.timing(for:item.id) ?? item.subtitle)+" · 두 번 클릭해 확대"
+            }
+        }
     }
     func update() {
         if visualSelection != store.hierarchySelection {
@@ -265,6 +270,7 @@ struct AlbumCanvas: NSViewRepresentable {
             let anchor=editorAddress ?? store.hierarchySelection ?? .album
             let previous=renderedProjectID==store.project.id && renderedOrbits != nil && renderedOrbits != store.project.usesOrbits ? scene?.node(anchor):nil
             scene = store.hierarchyScene; renderedRevision = store.hierarchyRevision
+            songTimeline=scene.map(CanvasSongTimeline.init(scene:)) ?? CanvasSongTimeline()
             renderedProjectID=store.project.id;renderedOrbits=store.project.usesOrbits
             followedSection = nil
             if let focus = playbackVisibilityFocus, scene?.node(focus) == nil { playbackVisibilityFocus = nil }
@@ -511,6 +517,7 @@ struct AlbumCanvas: NSViewRepresentable {
         }
         if store.project.usesOrbits {for node in scene.nodes {drawOrbit(node)}}
         for edge in scene.edges { drawEdge(edge) }
+        if !store.viewingMode { drawSongOrderMarkers(in:scene) }
         for node in scene.nodes {
             let radius = node.radius*camera.zoom, center = screen(node)
             guard isVisible(node), NSRect(x: center.x-radius, y: center.y-radius, width: 2*radius, height: 2*radius).intersects(bounds) else { continue }
@@ -576,10 +583,48 @@ struct AlbumCanvas: NSViewRepresentable {
             color(node).withAlphaComponent(store.hierarchySelection==node.id ? 0.85:0.4).setStroke();connector.lineWidth=1.2;connector.stroke()
         }
         OrbitDrawing.dot(anchor,radius:3,color:color(node))
+        let currentTime=currentOrbitSeconds(on:orbit.owner,duration:orbit.timeline.duration)
+        let sectionActive=visualFrame.activeSections.contains(node.id)
         for interval in orbit.intervals {
             let arc=OrbitDrawing.arc(center,radius:radius,from:interval.start/orbit.timeline.duration,to:interval.end/orbit.timeline.duration)
-            color(node).withAlphaComponent(store.hierarchySelection==node.id ? 0.95:0.6).setStroke();arc.lineWidth=store.hierarchySelection==node.id ? 3:2;arc.stroke()
+            let active=currentTime.map{CanvasSongTimeline.isCurrent(interval,at:$0,sectionActive:sectionActive)} ?? false
+            let emphasized=store.hierarchySelections.contains(node.id) || hoverAddress==node.id || active
+            color(node).withAlphaComponent(emphasized ? 0.95:0.6).setStroke();arc.lineWidth=emphasized ? 3:2;arc.stroke()
             OrbitDrawing.dot(OrbitDrawing.point(center,radius:radius,phase:interval.start/orbit.timeline.duration),radius:2,color:color(node))
+        }
+    }
+    func currentOrbitSeconds(on owner:CircleAddress,duration:Double)->Double? {
+        guard store.playback.playing,!visualFrame.stale else { return nil }
+        if let phase=visualFrame.phases[owner],phase.isFinite { return phase*duration }
+        return visualFrame.seconds.isFinite ? visualFrame.seconds:nil
+    }
+    func drawSongOrderMarkers(in scene:HierarchyScene) {
+        let normalFont=NSFont.monospacedDigitSystemFont(ofSize:10,weight:.medium)
+        let emphasizedFont=NSFont.monospacedDigitSystemFont(ofSize:10,weight:.bold)
+        for owner in scene.nodes where (owner.role == .song || owner.role == .movement) && isVisible(owner) {
+            let radius=owner.radius*camera.zoom
+            guard radius>=48, radius<max(bounds.width,bounds.height)*4 else { continue }
+            let center=screen(owner)
+            let currentTime=currentOrbitSeconds(on:owner.id,duration:owner.timeline?.duration ?? 0)
+            var placed:[NSPoint]=[]
+            for segment in songTimeline.segments(on:owner.id) where segment.hasRoomForOrder(at:radius) {
+                let mid=(segment.interval.start+segment.interval.end)/2
+                let point=OrbitDrawing.point(center,radius:radius-12,phase:mid/segment.songDuration)
+                guard bounds.insetBy(dx:-10,dy:-10).contains(point),
+                      !placed.contains(where:{hypot($0.x-point.x,$0.y-point.y)<20}),
+                      let section=scene.node(segment.section) else { continue }
+                placed.append(point)
+                let active=currentTime.map{CanvasSongTimeline.isCurrent(segment.interval,at:$0,
+                    sectionActive:visualFrame.activeSections.contains(section.id))} ?? false
+                let emphasized=active || store.hierarchySelections.contains(section.id) || hoverAddress==section.id
+                let font=emphasized ? emphasizedFont:normalFont
+                let text=segment.orderLabel as NSString
+                let tint=emphasized ? color(section):StudioTheme.secondaryNS
+                let readableTint=emphasized && (tint.usingColorSpace(.deviceRGB)?.brightnessComponent ?? 1)<0.3 ? StudioTheme.textNS:tint
+                let attributes:[NSAttributedString.Key:Any]=[.font:font,.foregroundColor:readableTint.withAlphaComponent(emphasized ? 1:0.85)]
+                let size=text.size(withAttributes:attributes)
+                text.draw(at:NSPoint(x:point.x-size.width/2,y:point.y-size.height/2),withAttributes:attributes)
+            }
         }
     }
     func drawPlayhead(_ node:CircleSceneNode) {
@@ -997,7 +1042,8 @@ struct AlbumCanvas: NSViewRepresentable {
             } else {hitRect=NSRect(x:p.x-r,y:p.y-r,width:max(12,r*2),height:max(12,r*2))}
             let element=circleAccessibility[node.id] ?? CircleAccessibility(parent:self,address:node.id)
             circleAccessibility[node.id]=element
-            element.setAccessibilityLabel(node.title+" · "+node.subtitle);element.setFrameInView(hitRect,view:self)
+            let timing=songTimeline.timing(for:node.id)
+            element.setAccessibilityLabel(node.title+" · "+(timing ?? node.subtitle));element.setFrameInView(hitRect,view:self)
             element.setAccessibilitySelected(store.hierarchySelections.contains(node.id))
             return element
         }

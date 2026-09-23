@@ -234,6 +234,7 @@ import CirclrAudio
     var renderTask: Task<Void,Never>?
     private var renderGeneration = 0
     var renderWorker: Task<PreparedAudio,Error>?
+    private var wavExportGate:WAVExportCommitGate?
     var productionTask: Task<Void,Never>?
     var productionWorker: Task<PCM,Error>?
     var agentOpenWorker: Task<LoadedProject,Error>?
@@ -640,6 +641,7 @@ import CirclrAudio
     }
     func takeRenderDrainForAgent() -> RenderDrain {
         renderGeneration += 1
+        wavExportGate?.cancel();wavExportGate=nil
         let drain=RenderDrain(task:renderTask,worker:renderWorker)
         drain.cancel()
         renderTask=nil;renderWorker=nil
@@ -669,6 +671,7 @@ import CirclrAudio
             cancelPlaybackLoopTransition()
             let loopDrain=playbackLoopDrainTask
             let productionDrain=takeProductionDrain()
+            wavExportGate?.cancel();wavExportGate=nil
             if key == preparedKey,let prepared {
                 renderGeneration += 1; let generation = renderGeneration
                 let drain=RenderDrain(task:renderTask,worker:renderWorker)
@@ -698,6 +701,13 @@ import CirclrAudio
                 await productionDrain.wait()
                 guard self?.renderGeneration == generation,!Task.isCancelled else{return}
                 do {
+                    // The canceled task and its worker have finished. Drop both
+                    // playback and cache references before allocating a new mix.
+                    self?.playback.stopAndReleasePrepared()
+                    self?.prepared=nil
+                    self?.preparedKey=""
+                    await self?.playback.waitForStoppedOutputPCMRelease()
+                    guard self?.renderGeneration == generation,!Task.isCancelled else{return}
                     let worker = Task.detached(priority:.userInitiated) {
                         try await ArrangementRenderer.render(project:snapshot,root:root,plan:plan,includeStems:includeStems,includeVisualization:true) { message,value in DispatchQueue.main.async { [weak self] in guard let self,self.renderGeneration == generation else { return }; self.status = message; self.progress = value } }
                     }
@@ -724,19 +734,20 @@ import CirclrAudio
             }
         } catch { fail(error) }
     }
-    func stop() { trustedRun.revoke();trustedDocumentBinding=nil;trustedAgentJob=nil;trustedReplies=AgentRunReplayLedger();cancelDemoLoading();cancelPlaybackLoopTransition();library.stopPreview(); cancelMediaImport(); cancelRecordingRequest(); finishMovieRecording(); if agentJob?.state == "running" {agentJob?.state="cancelled";agentJob?.message="사용자가 정지했습니다";recordActivity("앱","작업 취소")}; productionGeneration += 1; productionTask?.cancel(); productionWorker?.cancel(); agentOpenWorker?.cancel(); cancelAudition(); renderGeneration += 1; renderTask?.cancel(); renderWorker?.cancel(); preparing = false; playback.stop(); meter.update(seconds:0,playing:false); if midiRecording || audioRecording { stopRecording() }; status = "정지" }
+    func stop() { trustedRun.revoke();trustedDocumentBinding=nil;trustedAgentJob=nil;trustedReplies=AgentRunReplayLedger();cancelDemoLoading();cancelPlaybackLoopTransition();library.stopPreview(); cancelMediaImport(); cancelRecordingRequest(); finishMovieRecording(); if agentJob?.state == "running" {agentJob?.state="cancelled";agentJob?.message="사용자가 정지했습니다";recordActivity("앱","작업 취소")}; productionGeneration += 1; productionTask?.cancel(); productionWorker?.cancel(); agentOpenWorker?.cancel(); cancelAudition(); renderGeneration += 1; wavExportGate?.cancel();wavExportGate=nil;renderTask?.cancel(); renderWorker?.cancel(); preparing = false; playback.stop(); meter.update(seconds:0,playing:false); if midiRecording || audioRecording { stopRecording() }; status = "정지" }
     func export(stems:Bool = false) {
-        if stems && (preparing || playback.playing || agentJob?.state == "running") {fail(CirclrError("재생과 진행 중인 작업을 정지한 뒤 Stem을 내보내세요"));return}
+        if preparing || playback.playing || agentJob?.state == "running" {fail(CirclrError("재생과 진행 중인 작업을 정지한 뒤 \(stems ? "Stem" : "WAV")을 내보내세요"));return}
         let panel = NSSavePanel(); panel.nameFieldStringValue = project.name + (stems ? "-stems" : ".wav"); panel.title = stems ? "Stem 저장 폴더" : "WAV 내보내기"
         if !stems { panel.allowedContentTypes = [UTType(filenameExtension:"wav")!] }
         guard panel.runModal() == .OK,let url = panel.url else { return }
-        if stems && (preparing || playback.playing || agentJob?.state == "running") {fail(CirclrError("재생과 진행 중인 작업을 정지한 뒤 Stem을 내보내세요"));return}
+        if preparing || playback.playing || agentJob?.state == "running" {fail(CirclrError("재생과 진행 중인 작업을 정지한 뒤 \(stems ? "Stem" : "WAV")을 내보내세요"));return}
         let names = Dictionary(uniqueKeysWithValues:project.tracks.map{($0.id,$0.name)})
         if stems {
             do {
                 let snapshot=project,root=mediaRoot,plan=try AlbumCompiler.executionPlan(project)
                 guard plan.duration > 0 else { throw CirclrError("섹션을 먼저 만드세요") }
                 renderGeneration += 1; let generation=renderGeneration
+                wavExportGate?.cancel();wavExportGate=nil
                 let drain=RenderDrain(task:renderTask,worker:renderWorker)
                 drain.cancel();renderWorker=nil
                 cancelPlaybackLoopTransition()
@@ -753,6 +764,8 @@ import CirclrAudio
                     do {
                         self.playback.stopAndReleasePrepared()
                         self.prepared=nil;self.preparedKey=""
+                        await self.playback.waitForStoppedOutputPCMRelease()
+                        guard self.renderGeneration == generation,!Task.isCancelled else{return}
                         self.meter.update(seconds:0,playing:false)
                         let worker=Task.detached(priority:.userInitiated) {
                             try await AudioExport.saveStems(project:snapshot,root:root,plan:plan,to:url,stemNames:names) { message,value in
@@ -773,11 +786,38 @@ import CirclrAudio
             } catch {fail(error)}
             return
         }
-        prepare(onlySelection:false,autoplay:false,includeStems:stems) { [weak self] audio in
+        prepare(onlySelection:false,autoplay:false) { [weak self] audio in
+            self?.exportPreparedWAV(audio,to:url)
+        }
+    }
+    func exportPreparedWAV(_ audio:PreparedAudio,to url:URL,
+                           writer:@escaping (PreparedAudio,URL,WAVExportCommitGate,@escaping (Double)->Void)throws->Void = {
+                               try AudioExport.saveWAV($0,to:$1,progress:$3,commitGate:$2)
+                           }) {
+        guard wavExportGate == nil else {status="WAV 내보내기가 이미 진행 중입니다";return}
+        let generation=renderGeneration
+        let gate=WAVExportCommitGate()
+        wavExportGate=gate
+        preparing=true;progress=0;status="WAV 내보내는 중"
+        let worker=Task.detached(priority:.userInitiated) { [weak self] in
+            try writer(audio,url,gate) { value in
+                DispatchQueue.main.async { [weak self] in
+                    guard let self,self.renderGeneration == generation else{return}
+                    self.progress=value
+                }
+            }
+        }
+        renderTask=Task { [weak self] in
             do {
-                try AudioExport.save(audio,to:url,stemNames:stems ? names:nil)
-                self?.status = "내보내기 완료 · \(url.lastPathComponent)"
-            } catch { self?.fail(error) }
+                try await withTaskCancellationHandler {try await worker.value} onCancel: {worker.cancel()}
+                guard let self,self.renderGeneration == generation,!Task.isCancelled else{return}
+                if self.wavExportGate === gate {self.wavExportGate=nil}
+                self.preparing=false;self.status="내보내기 완료 · \(url.lastPathComponent)"
+            } catch {
+                guard let self,self.renderGeneration == generation,!Task.isCancelled else{return}
+                if self.wavExportGate === gate {self.wavExportGate=nil}
+                self.preparing=false;self.fail(error)
+            }
         }
     }
     func save(as saveAs:Bool = false) {

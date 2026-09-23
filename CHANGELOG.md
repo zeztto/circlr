@@ -1,5 +1,11 @@
 # 변경 이력
 
+## 0.80.0 · build214 — 개발 중
+
+- 곡 궤도와 섹션 라벨에 실행 순번을 표시하고, 선택·hover·접근성에서 시작·끝 시간을 볼 수 있게 했다. 반복 섹션은 현재 occurrence만 강조하며 감상 모드에서는 새 텍스트를 숨긴다.
+- 일반 WAV를 백그라운드에서 청크로 기록하고 Stop과 최종 게시를 직렬화해 취소 뒤 파일 교체를 막는다. 새 렌더 전에 이전 PCM과 출력 준비 queue를 정리하고 중복 내보내기를 차단한다.
+- 최종 소스의 Swift 회귀 1,169개 항목 종료 코드 0, Python 프로젝트 50개·MCP 서버 41개·agent kit 9개 통과. build214 arm64 앱·다섯 helper와 strict deep 서명을 확인했다. 격리된 실제 앱의 가로·세로 화면, 앱 전용 내장 출력 Play/Stop과 197.002초 nonzero GUI WAV를 확인했다. 구형 Scarlett의 정상 출력·물리 청취·순수 hover는 확인하지 않았다. [검증 기록](qa/0.80-build214.md) · [native QA](qa/0.80-build214-native.md). 정식 0.80 tag·Release는 아직 없다.
+
 ## 0.80.0 · build213 — 개발 중
 
 - 두 곡 이상 앨범의 stems가 활성 편곡안에서 끝나던 결함을 수정해 일반 WAV와 같은 앨범 전체 실행 계획을 사용한다. 두 composition fixture에서 후반 stem 신호와 전체 frame 수를 비교했다.

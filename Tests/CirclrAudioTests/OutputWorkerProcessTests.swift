@@ -559,6 +559,27 @@ for line in sys.stdin:
         try await wait { host.status.transport.phase == .idle }
         XCTAssertFalse(host.status.transport.didStart)
     }
+    func testStoppedCAFLaunchReleasesQueuedPCMBeforeDrainReturns() async throws {
+        let entered=expectation(description:"CAF launch reached write gate")
+        let release=DispatchSemaphore(value:0)
+        let host=OutputWorkerProcess(executable:try fixture("ready"),beforeCAFWrite:{
+            entered.fulfill();release.wait()
+        })
+        let pcm=PCM(frames:48_000)
+        let play=Task {try await host.play(pcm,from:0,timeout:2)}
+        await fulfillment(of:[entered],timeout:2)
+        host.cancel()
+        do {try await play.value;XCTFail("Stopped launch began playback")}
+        catch is CancellationError {}
+        var released=false
+        let drain=Task {await host.waitForQueuedPCMRelease();released=true}
+        try await Task.sleep(for:.milliseconds(30))
+        XCTAssertFalse(released,"The queued launch still owns its PCM")
+        release.signal()
+        await drain.value
+        XCTAssertTrue(released)
+        try await wait {host.status.phase == .idle}
+    }
 
     func testMissingHelperAndInvalidPCMFailWithoutDevice() async throws {
         let host = OutputWorkerProcess(executable: nil)

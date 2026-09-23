@@ -27,6 +27,8 @@
 
 앱의 **출력 설정**에서 Mac 내장 스피커 또는 다른 지원 장치를 명시적으로 선택하고 다시 재생해 보세요. 이 선택은 circlr에만 적용되며 macOS의 기본 출력은 바꾸지 않습니다. 오래된 Scarlett 등 외부 인터페이스는 세대·macOS 버전에 따라 지원 범위가 다르므로 [Focusrite의 macOS 호환성 안내](https://support.focusrite.com/hc/en-gb/articles/12033372452754-Focusrite-Compatibility-on-macOS)에서 정확한 세대를 확인하세요. 장치 초기화가 실패하면 circlr는 재시도를 안내하며, 해당 장치의 실제 청취 품질은 별도로 확인해야 합니다.
 
+2026-09-24 기준 Focusrite는 macOS 26에서 **Scarlett 6i6 1세대의 오디오 전송은 가능하지만 Scarlett Mix Control은 작동하지 않는다**고 안내하고, **6i6 2세대는 지원 대상**으로 표시합니다. macOS 장치 목록의 `Scarlett 6i6 USB`라는 이름만으로 세대를 확인할 수 없습니다. [Focusrite의 세대 확인 안내](https://support.focusrite.com/hc/en-gb/articles/208295789-Which-generation-of-Scarlett-do-I-have)에 따라 기기 밑면의 시리얼 접두 문자를 확인하세요. circlr의 출시 QA는 외부 장치가 연결되어 있어도 앱 안에서 Mac 내장 출력을 선택해 수행하며, Scarlett 호환성은 정확한 세대와 실제 입출력을 확인하는 별도 검사로 기록합니다.
+
 ## English
 
 Current circlr macOS packages are **ad-hoc signed** and **not notarized by Apple**. macOS may report that it cannot verify the developer or check the app for malicious software on first launch. See the [packaging script](../scripts/package-app.py) and [release procedure](releases/README.md) for the packaging state.
@@ -51,3 +53,5 @@ If the button is missing, attempt a launch again and check Settings. For a manag
 ### If audio does not start on an external interface
 
 Choose the Mac's built-in speakers or another supported device explicitly in circlr's **Output settings**, then retry playback. This selection affects circlr only; it does not change the macOS system default. Older Scarlett interfaces have different support by generation and macOS version, so check the exact model against [Focusrite's macOS compatibility guidance](https://support.focusrite.com/hc/en-gb/articles/12033372452754-Focusrite-Compatibility-on-macOS). circlr reports device initialization failures and allows a retry; audible output on a particular interface still needs its own check.
+
+As of 2026-09-24, Focusrite lists the **1st Gen Scarlett 6i6 as passing audio on macOS 26 while Scarlett Mix Control does not work**, and lists the **2nd Gen 6i6 as supported**. The device name `Scarlett 6i6 USB` in macOS does not establish its generation. Check the serial prefix on the underside using [Focusrite's generation guide](https://support.focusrite.com/hc/en-gb/articles/208295789-Which-generation-of-Scarlett-do-I-have). circlr release QA selects Mac built-in output in the app even when an external device is connected; compatibility with a Scarlett requires a separate check of its exact generation and physical input/output.

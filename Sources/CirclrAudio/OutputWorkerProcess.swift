@@ -41,15 +41,18 @@ final class OutputWorkerProcess: @unchecked Sendable {
     private let beforeEventDelivery: (@Sendable ([OutputWorkerPacket]) -> Void)?
     private let onTerminationObserved: (@Sendable () -> Void)?
     private let beforeLoopChangeReturn:(@Sendable () async -> Void)?
+    private let beforeCAFWrite:(@Sendable () -> Void)?
 
     init(executable: URL? = Bundle.main.executableURL?.deletingLastPathComponent().appendingPathComponent("circlr-output-worker"),
          beforeEventDelivery: (@Sendable ([OutputWorkerPacket]) -> Void)? = nil,
          onTerminationObserved: (@Sendable () -> Void)? = nil,
-         beforeLoopChangeReturn:(@Sendable () async -> Void)? = nil) {
+         beforeLoopChangeReturn:(@Sendable () async -> Void)? = nil,
+         beforeCAFWrite:(@Sendable () -> Void)? = nil) {
         self.executable = executable
         self.beforeEventDelivery = beforeEventDelivery
         self.onTerminationObserved = onTerminationObserved
         self.beforeLoopChangeReturn=beforeLoopChangeReturn
+        self.beforeCAFWrite=beforeCAFWrite
     }
     var status: PlaybackOutputStatus {
         lock.lock(); defer { lock.unlock() }
@@ -186,6 +189,13 @@ final class OutputWorkerProcess: @unchecked Sendable {
         lock.unlock()
         queue.async { self.close(id, graceful: true) }
     }
+    /// A queued launch captures its PCM until its queue block returns. Drain
+    /// that block after cancellation before allocating another full mix.
+    func waitForQueuedPCMRelease() async {
+        await withCheckedContinuation { (done:CheckedContinuation<Void,Never>) in
+            queue.async { done.resume() }
+        }
+    }
 
     private func launch(_ id: UUID, control: MediaPreviewCancellation, pcm: PCM, first: Int, selection: OutputDeviceSelection, loop: Bool, exitTail:PCM?) {
         looping = loop;loopCycleFrames=pcm.count;loopStartFrame=first;loopExitScheduled=false;loopEpochFrame=0
@@ -204,6 +214,7 @@ final class OutputWorkerProcess: @unchecked Sendable {
             try FileManager.default.createDirectory(at: root, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700])
             directory = root
             trace(id, .cafWrite, .entered)
+            beforeCAFWrite?()
             try write(pcm, first: loop ? 0:first, to: root.appendingPathComponent("audio.caf"), control: control,tail:exitTail)
             trace(id, .cafWrite, .completed)
             guard !control.isCancelled else { throw CancellationError() }
