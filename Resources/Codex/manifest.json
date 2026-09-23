@@ -1,6 +1,6 @@
 {
   "schema": "circlr-agent-kit-v1",
-  "version": "0.70.0",
+  "version": "0.80.0",
   "files": {
     "agents/circlr-arranger.toml": "a3b9415ce5de193c1d89c20d75c3213bba7c39fd07176f1242a6f11093e53308",
     "agents/circlr-beatmaker.toml": "b29a46b1b52a7042ecce14ef8a91a58347b1c7049fd133fa02f9c2570ae1c90a",

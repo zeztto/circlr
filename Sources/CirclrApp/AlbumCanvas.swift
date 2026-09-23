@@ -475,9 +475,9 @@ struct AlbumCanvas: NSViewRepresentable {
         // Selected-port obstacles may query handles before labels are placed.
         // Recompute for the port pass so newly placed labels still mask overlaps.
         drawingPortHandles=nil
-        drawPortHandles()
+        if connectionOverview { drawOverviewPortHandles() } else { drawPortHandles() }
         if !store.viewingMode {drawCableEditing()}
-        drawPortLabels()
+        if connectionOverview { drawOverviewPortLabels() } else { drawPortLabels() }
         if !store.viewingMode {drawPlaybackCaption()}
         if !store.viewingMode {drawFileDropPreview()}
         if let handle = connecting, let node = scene.node(handle.endpoint.node) {
@@ -543,13 +543,93 @@ struct AlbumCanvas: NSViewRepresentable {
         guard let a=scene.node(edge.from), let b=scene.node(edge.to), isVisible(a), isVisible(b) else { return }
         guard let curve = connectionCurve(edge) else { return }
         let tint: NSColor = edge.kind == .midi ? StudioTheme.accentNS : edge.kind == .flow ? StudioTheme.secondaryNS : NSColor(srgbRed:0.62,green:0.75,blue:0.94,alpha:1)
-        wire(curve,color:tint.withAlphaComponent(0.78),dashed:edge.kind == .sidechain)
+        let fade = connectionIsFocused(edge) ? 0 : connectionOverviewFade
+        wire(curve,color:tint.withAlphaComponent(0.78-0.58*fade),dashed:edge.kind == .sidechain)
         if let before = try? curve.point(at: 0.48), let tip = try? curve.point(at: 0.52) {
             let angle = atan2(tip.y-before.y, tip.x-before.x), path = NSBezierPath()
             for offset in [-0.5, 0.5] { path.move(to: NSPoint(x: tip.x-7*cos(angle+offset), y: tip.y-7*sin(angle+offset))); path.line(to: NSPoint(x:tip.x,y:tip.y)) }
-            tint.setStroke(); path.lineWidth=1.5; path.stroke()
+            tint.withAlphaComponent(1-0.75*fade).setStroke(); path.lineWidth=1.5-0.5*fade; path.stroke()
         }
         drawPlaybackEdge(edge, curve: curve, tint: tint)
+    }
+    // An overview still shows every connection and keeps the full hit geometry.
+    // Active editing restores the ordinary ports and labels immediately.
+    var connectionOverview: Bool {
+        connectionOverviewFade >= 0.75
+    }
+    var connectionOverviewFade: Double {
+        guard editorAddress == nil && connecting == nil && cableDrag == nil else {return 0}
+        return min(1,max(0,(0.9-camera.zoom)/0.35))
+    }
+    func connectionIsFocused(_ edge: CircleSceneEdge) -> Bool {
+        (selectedCable != nil && edge.connectionID == selectedCable) ||
+        store.hierarchySelections.contains(edge.from) || store.hierarchySelections.contains(edge.to) ||
+        hoverAddress == edge.from || hoverAddress == edge.to ||
+        selectedCanvasPort?.node == edge.from || selectedCanvasPort?.node == edge.to ||
+        (store.playback.playing && !visualFrame.stale && (visualFrame.edgeLevels[edge.id] ?? 0) > 0.0001)
+    }
+    func overviewPortIsFocused(_ endpoint: CirclePortEndpoint, selectedEdge: CircleSceneEdge?) -> Bool {
+        store.hierarchySelections.contains(endpoint.node) || hoverAddress == endpoint.node ||
+        selectedCanvasPort == endpoint || connecting?.endpoint == endpoint ||
+        (selectedEdge?.from == endpoint.node && selectedEdge?.fromPortID == endpoint.portID) ||
+        (selectedEdge?.to == endpoint.node && selectedEdge?.toPortID == endpoint.portID)
+    }
+    func drawOverviewPortHandles() {
+        let selectedEdge=selectedSceneCable
+        let selected=cableEndpointHandles().map(\.1)
+        for handle in visiblePortHandles() {
+            if selected.contains(where:{$0.endpoint==handle.endpoint && $0.octant==handle.octant}) {continue}
+            guard let node=scene?.node(handle.endpoint.node),let descriptor=node.ports.first(where:{$0.id==handle.endpoint.portID}) else {continue}
+            let point=NSPoint(x:handle.point.x,y:handle.point.y)
+            if overviewPortIsFocused(handle.endpoint,selectedEdge:selectedEdge) {
+                port(at:point,color:color(node),filled:descriptor.direction == .output)
+            } else {
+                let dot=NSBezierPath(ovalIn:NSRect(x:point.x-2.5,y:point.y-2.5,width:5,height:5))
+                if descriptor.direction == .output {
+                    color(node).withAlphaComponent(0.36).setFill();dot.fill()
+                } else {
+                    color(node).withAlphaComponent(0.36).setStroke();dot.lineWidth=1;dot.stroke()
+                }
+            }
+        }
+        if let handle=selectedPortHandle() {
+            let ring=NSBezierPath(ovalIn:NSRect(x:handle.point.x-10,y:handle.point.y-10,width:20,height:20))
+            StudioTheme.accentNS.setStroke();ring.lineWidth=3;ring.stroke()
+        }
+    }
+    func overviewPortLabelPlacements() -> [PortLabelPlacement] {
+        guard !store.viewingMode else {return []}
+        let selectedEdge=selectedSceneCable
+        let endpoints=cableEndpointHandles().map(\.1), handles=visiblePortHandles()
+        var chosen:[CirclePortEndpoint:CirclePortHandle]=[:], order:[CirclePortEndpoint]=[]
+        for handle in endpoints+handles where overviewPortIsFocused(handle.endpoint,selectedEdge:selectedEdge) {
+            guard let port=scene?.node(handle.endpoint.node)?.ports.first(where:{$0.id==handle.endpoint.portID}) else {continue}
+            if chosen[handle.endpoint] == nil {chosen[handle.endpoint]=handle;order.append(handle.endpoint)}
+            if !endpoints.contains(where:{$0.endpoint==handle.endpoint}) && handle.octant == port.defaultOctant {chosen[handle.endpoint]=handle}
+        }
+        let font=NSFont.systemFont(ofSize:StudioTheme.portLabelSize,weight:.semibold)
+        let requests=order.compactMap { endpoint -> PortLabelRequest? in
+            guard let handle=chosen[endpoint],let port=scene?.node(endpoint.node)?.ports.first(where:{$0.id==endpoint.portID}) else {return nil}
+            let width=ceil((shortPortLabel(port) as NSString).size(withAttributes:[.font:font]).width)+12
+            let priority=endpoints.contains(where:{$0.endpoint==endpoint}) || endpoint==selectedCanvasPort ? 10:0
+            return .init(endpoint:endpoint,anchor:CGPoint(x:handle.point.x,y:handle.point.y),size:CGSize(width:width,height:23),octant:handle.octant,priority:priority)
+        }
+        var obstacles=labelPlacements.map{$0.rect.insetBy(dx:-4,dy:-4)}
+        obstacles += handles.map{CGRect(x:$0.point.x-10,y:$0.point.y-10,width:20,height:20)}
+        if let editor {obstacles.append(editor.frame)}
+        if let cableTools,!cableTools.isHidden {obstacles.append(cableTools.frame)}
+        if let portTools,!portTools.isHidden {obstacles.append(portTools.frame)}
+        if let node=store.selectedCircle,let point=visibleTimeHandle(node) {obstacles.append(CGRect(x:point.x-14,y:point.y-14,width:28,height:28))}
+        return CirclePortPresentation.labels(requests,within:workspaceViewport,avoiding:obstacles)
+    }
+    func drawOverviewPortLabels() {
+        for placement in overviewPortLabelPlacements() {
+            guard let port=scene?.node(placement.endpoint.node)?.ports.first(where:{$0.id==placement.endpoint.portID}) else {continue}
+            let badge=NSBezierPath(roundedRect:placement.rect,xRadius:4,yRadius:4)
+            StudioTheme.surfaceNS.setFill();badge.fill()
+            StudioTheme.lineNS.setStroke();badge.lineWidth=1;badge.stroke()
+            (shortPortLabel(port) as NSString).draw(in:placement.rect.insetBy(dx:6,dy:3),withAttributes:[.font:NSFont.systemFont(ofSize:StudioTheme.portLabelSize,weight:.semibold),.foregroundColor:StudioTheme.textNS])
+        }
     }
     func wire(_ from:NSPoint,_ to:NSPoint,color:NSColor,dashed:Bool=false) {
         let width=max(30,abs(to.x-from.x)*0.45),path=NSBezierPath()
