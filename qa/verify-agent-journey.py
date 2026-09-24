@@ -3,6 +3,7 @@
 
 The caller must launch the isolated QA app and open a disposable project inside its
 Application Support fixtures directory. This script never contacts the production socket.
+For another isolated QA bundle, pass its dedicated --qa-root and --bundle-id.
 """
 import argparse
 import hashlib
@@ -16,7 +17,7 @@ import wave
 
 ROOT = Path(__file__).resolve().parents[1]
 QA_ROOT = Path.home() / 'Library/Application Support/circlr-integration-qa'
-SOCKET = QA_ROOT / 'Agent/agent.sock'
+QA_BUNDLE_ID = 'com.circlr.integrationqa'
 REQUIRED = {'circlr_snapshot', 'circlr_inspect', 'circlr_apply', 'circlr_undo',
             'circlr_save', 'circlr_open', 'circlr_export', 'circlr_bounce',
             'circlr_job', 'circlr_events'}
@@ -31,18 +32,28 @@ def main():
     parser.add_argument('--project', type=Path, required=True)
     parser.add_argument('--evidence', type=Path, required=True)
     parser.add_argument('--build', default='184')
+    parser.add_argument('--qa-root', type=Path, default=QA_ROOT)
+    parser.add_argument('--bundle-id', default=QA_BUNDLE_ID)
     options = parser.parse_args()
+    qa_root = options.qa_root.expanduser().resolve()
+    support_root = (Path.home() / 'Library/Application Support').resolve()
+    if (qa_root.parent != support_root or not qa_root.name.startswith('circlr-')
+            or not qa_root.name.endswith('-qa')):
+        raise SystemExit('Only a dedicated circlr-*-qa Application Support root is allowed')
+    if not options.bundle_id.startswith('com.circlr.') or not options.bundle_id.endswith('qa'):
+        raise SystemExit('Only an isolated com.circlr.*qa bundle ID is allowed')
+    socket = qa_root / 'Agent/agent.sock'
     project = options.project.resolve()
     evidence = options.evidence.resolve()
-    if not project.is_relative_to(QA_ROOT / 'fixtures') or project.suffix != '.circlr' or not project.is_dir():
+    if not project.is_relative_to(qa_root / 'fixtures') or project.suffix != '.circlr' or not project.is_dir():
         raise SystemExit('Only a disposable integration-QA fixture is allowed')
-    if evidence.exists() or (QA_ROOT / 'fixtures' / f'{project.stem}-agent-export.wav').exists():
+    if evidence.exists() or (qa_root / 'fixtures' / f'{project.stem}-agent-export.wav').exists():
         raise SystemExit('Preserve existing QA evidence and export; use a new name')
     evidence.mkdir(parents=True)
     before_manifest = sha256(project / 'manifest.json')
-    export = QA_ROOT / 'fixtures' / f'{project.stem}-agent-export.wav'
+    export = qa_root / 'fixtures' / f'{project.stem}-agent-export.wav'
     child = subprocess.Popen(
-        [sys.executable, str(ROOT / 'mcp/server.py'), '--socket', str(SOCKET)],
+        [sys.executable, str(ROOT / 'mcp/server.py'), '--socket', str(socket)],
         stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
         text=True, bufsize=1,
     )
@@ -103,7 +114,7 @@ def main():
         assert initialized['protocolVersion'] == '2025-11-25' and REQUIRED <= catalog
         report['toolCount'] = len(catalog)
         state = call('snapshot')
-        assert state['runtime']['bundleID'] == 'com.circlr.integrationqa'
+        assert state['runtime']['bundleID'] == options.bundle_id
         assert state['runtime']['build'] == options.build
         assert not state['dirty']
         if state['path'] != str(project):

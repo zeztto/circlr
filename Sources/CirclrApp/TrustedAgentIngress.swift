@@ -75,16 +75,16 @@ private func trustedCapabilityMatches(_ provided: String, _ expected: String) ->
         }
     }
 
-    /// STOP first closes this turn's authority, then tears down its socket.
     /// Calling STOP on an old ingress cannot revoke a later turn.
     func stop() {
-        closeSocket()
         if let store, store.trustedRun.active == lease {
             store.stopTrustedAgentTurn()
         }
+        closeSocket()
     }
 
-    private func closeSocket() {
+    /// Socket-only teardown. AppStore owns lease revocation and accepted jobs.
+    func closeSocket() {
         active = false
         socket = nil
     }

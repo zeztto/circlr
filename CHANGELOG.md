@@ -1,5 +1,11 @@
 # 변경 이력
 
+## 0.80.0 · build225 — 개발 중 · 출고 gate 미통과
+
+- 앱이 선택된 MIDI 섹션의 한 AI turn을 전용 socket·대상·만료 시간과 함께 소유한다. 완료·STOP·문서 교체·종료에서 연결을 닫고, 완료 전 수락된 바운스만 제한적으로 마치게 한다. 실제 Codex 계정·대화 UI는 아직 연결하지 않았다. [AI QA](qa/0.80-build225-ai.md).
+- 격리 실제 앱의 [build224 MCP 제작 QA](qa/0.80-build224-mcp-native.md)는 MIDI/Undo·FX/automation·70초 WAV·두 트랙 바운스·저장/재열기를 확인했다. QA harness에 격리 bundle ID/Support root 인자를 추가했다.
+- 관련 Swift 27개와 Python 50개 통과, build225 arm64 앱·다섯 helper strict deep 서명 통과. 전체 Swift 1,194개 중 가상 MIDI client 생성 `-2`가 두 번 재현되어 **1개 실패**다. 원인은 미확정이며 정식 0.80 tag/Release는 보류한다. 구형 Scarlett의 정상 입출력은 합격 조건으로 간주하지 않는다.
+
 ## 0.80.0 · build224 — 개발 중
 
 - 720×900 창에서 직접 섹션 이름표가 빠지지 않도록 가까운 배치가 막히면 화면 안의 빈 위치를 찾는다. 서클·도구·다른 이름표와 겹치지 않으며 가로·세로 README 화면을 build224 실제 앱으로 갱신했다. [build224 QA](qa/0.80-build224.md) · [native](qa/0.80-build224-native.md).

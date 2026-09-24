@@ -188,12 +188,15 @@ import CirclrAudio
     @Published var agentBridgeDefaultSelected=false
     @Published var agentBridgeEndpointName=""
     var agentBridgeDefaultCheckAt=0.0
-    var agentBridgeShuttingDown=false
+    var agentBridgeShuttingDown=false {didSet{if agentBridgeShuttingDown{stopTrustedAgentTurn()}}}
     var agentBridgeRetryAt=0.0
     var agentBridgeLastFailure:String?
     var agentReplies:[String:(String,[String:Any])]=[:]
     var agentReplyOrder:[String]=[]
     var trustedRun=AgentRunLeaseController()
+    /// The app, rather than a model or the public MCP bridge, owns this socket.
+    var trustedAgentIngress:TrustedAgentIngress?
+    var trustedAgentExpiryTask:Task<Void,Never>?
     var trustedDocumentBinding:AgentRunDocumentBinding?
     var trustedAgentJob:TrustedAgentJob?
     var trustedReplies=AgentRunReplayLedger<TrustedAgentReply>()
@@ -734,7 +737,7 @@ import CirclrAudio
             }
         } catch { fail(error) }
     }
-    func stop() { trustedRun.revoke();trustedDocumentBinding=nil;trustedAgentJob=nil;trustedReplies=AgentRunReplayLedger();cancelDemoLoading();cancelPlaybackLoopTransition();library.stopPreview(); cancelMediaImport(); cancelRecordingRequest(); finishMovieRecording(); if agentJob?.state == "running" {agentJob?.state="cancelled";agentJob?.message="사용자가 정지했습니다";recordActivity("앱","작업 취소")}; productionGeneration += 1; productionTask?.cancel(); productionWorker?.cancel(); agentOpenWorker?.cancel(); cancelAudition(); renderGeneration += 1; wavExportGate?.cancel();wavExportGate=nil;renderTask?.cancel(); renderWorker?.cancel(); preparing = false; playback.stop(); meter.update(seconds:0,playing:false); if midiRecording || audioRecording { stopRecording() }; status = "정지" }
+    func stop() { stopTrustedAgentTurn();trustedAgentJob=nil;cancelDemoLoading();cancelPlaybackLoopTransition();library.stopPreview(); cancelMediaImport(); cancelRecordingRequest(); finishMovieRecording(); if agentJob?.state == "running" {agentJob?.state="cancelled";agentJob?.message="사용자가 정지했습니다";recordActivity("앱","작업 취소")}; productionGeneration += 1; productionTask?.cancel(); productionWorker?.cancel(); agentOpenWorker?.cancel(); cancelAudition(); renderGeneration += 1; wavExportGate?.cancel();wavExportGate=nil;renderTask?.cancel(); renderWorker?.cancel(); preparing = false; playback.stop(); meter.update(seconds:0,playing:false); if midiRecording || audioRecording { stopRecording() }; status = "정지" }
     func export(stems:Bool = false) {
         if preparing || playback.playing || agentJob?.state == "running" {fail(CirclrError("재생과 진행 중인 작업을 정지한 뒤 \(stems ? "Stem" : "WAV")을 내보내세요"));return}
         let panel = NSSavePanel(); panel.nameFieldStringValue = project.name + (stems ? "-stems" : ".wav"); panel.title = stems ? "Stem 저장 폴더" : "WAV 내보내기"

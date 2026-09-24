@@ -28,6 +28,42 @@ enum TrustedAgentReply {
         AgentRunDocumentBinding(projectID:project.id,projectURL:projectURL,mediaRoot:mediaRoot)
     }
 
+    /// A bounded app-selected turn. No model request can choose the document,
+    /// targets, methods, lifetime, or the private socket endpoint.
+    func startAppOwnedTrustedAgentTurn() throws -> TrustedAgentIngress {
+        guard agentStartupReady,!agentBridgeShuttingDown,!editOriginal,editPatternID == nil,
+              let use=selectedUse,let trackID=selectedTrackID,
+              let lane=currentLane,lane.trackID==trackID else {
+            throw CirclrError("trusted_run_scope: 편집할 섹션의 MIDI 트랙을 선택하세요")
+        }
+        let arrangementID=project.activeArrangementID
+        switch hierarchySelection {
+        case .section(let arrangement,let chosenUse)
+            where arrangement==arrangementID && chosenUse==use.id: break
+        case .music(let arrangement,let chosenUse,_)
+            where arrangement==arrangementID && chosenUse==use.id: break
+        default: throw CirclrError("trusted_run_scope: 현재 선택과 편곡의 섹션이 일치하지 않습니다")
+        }
+        let targets:Set<AgentRunTarget>=[
+            .section(arrangementID:arrangementID,useID:use.id),
+            .lane(arrangementID:arrangementID,useID:use.id,laneID:lane.id),
+            .track(trackID)
+        ]
+        let lease=try beginTrustedAgentTurn(sessionID:newID(),turnID:newID(),
+            methods:["snapshot","inspect","apply","bounce","job"],
+            targets:targets,ttl:300)
+        do {
+            let directory=productionMediaRoot.deletingLastPathComponent()
+                .appendingPathComponent("Agent",isDirectory:true)
+            let ingress=try TrustedAgentIngress(store:self,lease:lease,directory:directory)
+            trustedAgentIngress=ingress
+            return ingress
+        } catch {
+            stopTrustedAgentTurn()
+            throw error
+        }
+    }
+
     /// Only an app-owned authenticated session may call this API. This does not
     /// treat the same-UID external MCP socket as a trusted Codex session.
     func beginTrustedAgentTurn(sessionID: ID,turnID: ID,
@@ -39,21 +75,34 @@ enum TrustedAgentReply {
                                        document:currentTrustedDocument,methods:methods,
                                        targets:targets,ttl:ttl)
         trustedDocumentBinding=currentTrustedDocument
+        trustedAgentExpiryTask=Task { [weak self] in
+            try? await Task.sleep(for:.seconds(ttl))
+            guard !Task.isCancelled,let self,self.trustedRun.active==lease else{return}
+            self.stopTrustedAgentTurn()
+        }
         recordActivity("내장 AI","turn 시작 · \(turnID)")
         return lease
     }
 
     func completeTrustedAgentTurn(_ lease: AgentRunLease) throws {
         try trustedRun.complete(lease)
+        let ingress=trustedAgentIngress
+        trustedAgentIngress=nil
+        ingress?.closeSocket()
         recordActivity("내장 AI","turn 완료 · \(lease.turnID)")
     }
 
     /// AI STOP revokes writes and its owned background job, not DAW transport.
     func stopTrustedAgentTurn() {
+        trustedAgentExpiryTask?.cancel()
+        trustedAgentExpiryTask=nil
         let owned=trustedAgentJob
         trustedRun.revoke()
         trustedDocumentBinding=nil
         trustedReplies=AgentRunReplayLedger()
+        let ingress=trustedAgentIngress
+        trustedAgentIngress=nil
+        ingress?.closeSocket()
         if let owned,agentJob?.id==owned.id,agentJob?.state=="running" {
             _=try? cancelAgentJob(owned.id,source:"내장 AI")
         }
