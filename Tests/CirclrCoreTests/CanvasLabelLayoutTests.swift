@@ -4,6 +4,109 @@ import XCTest
 final class CanvasLabelLayoutTests:XCTestCase {
     let viewport=CGRect(x:24,y:78,width:400,height:240)
 
+    func testConsoleFitUsesLowerRightOnlyWhenThereIsRoomAndPreservesEveryCircle() throws {
+        let circles=[CanvasLabelCircle(id:.signal("left"),center:CGPoint(x:300,y:300),radius:70),
+                     CanvasLabelCircle(id:.signal("right"),center:CGPoint(x:900,y:600),radius:70)]
+        for width in [700.0,1440.0] {
+            for consoleHeight in [40.0,180.0] {
+                let full=CanvasWorkspaceGeometry.viewport(width:width,height:900)
+                let console=CGRect(x:20,y:900-consoleHeight-16,width:min(820,width-40),height:consoleHeight)
+                let old=CanvasWorkspaceGeometry.viewport(width:width,height:900,console:console)
+                let camera=try XCTUnwrap(CanvasWorkspaceGeometry.fittingCamera(circles:circles,within:full,
+                    avoiding:console,marginX:50,marginY:40))
+                for circle in circles {
+                    let point=camera.screen(Point(circle.center.x,circle.center.y)),r=circle.radius*camera.zoom
+                    let frame=CGRect(x:point.x-r,y:point.y-r,width:r*2,height:r*2)
+                    XCTAssertTrue(full.insetBy(dx:49.99,dy:39.99).contains(frame),"\(width) × \(consoleHeight): \(circle.id)")
+                    XCTAssertFalse(frame.intersects(console.insetBy(dx:-13.99,dy:-13.99)),"\(width) × \(consoleHeight): \(circle.id)")
+                }
+                if width == 700 {
+                    XCTAssertGreaterThanOrEqual(old.maxY,console.minY-14)
+                    XCTAssertLessThan(camera.zoom,1.3)
+                } else if consoleHeight == 180 {
+                    let upper=try XCTUnwrap(CanvasWorkspaceGeometry.fittingCamera(circles:circles,within:old,
+                        marginX:50,marginY:40))
+                    XCTAssertGreaterThan(camera.zoom,upper.zoom*1.1)
+                    let right=camera.screen(Point(900,600))
+                    XCTAssertGreaterThan(right.y+70*camera.zoom,old.maxY)
+                    XCTAssertGreaterThan(right.x-70*camera.zoom,console.maxX)
+                }
+            }
+        }
+    }
+    func testConsoleLabelCanOccupyOnlyTheFreeLowerRightAndRemainHittable() throws {
+        let full=CanvasWorkspaceGeometry.viewport(width:1440,height:900)
+        let console=CGRect(x:20,y:704,width:820,height:180)
+        let anchor=CGPoint(x:1060,y:740)
+        let request=CanvasLabelRequest(id:.signal("right"),anchor:anchor,
+            size:CGSize(width:170,height:36),radius:46,allowsViewportAdjustment:true)
+        let label=try XCTUnwrap(CanvasLabelLayout.place([request],within:full,
+            avoiding:[console.insetBy(dx:-14,dy:-14)]).first)
+        XCTAssertGreaterThan(label.rect.minY,console.minY)
+        XCTAssertTrue(full.contains(label.rect))
+        XCTAssertFalse(label.rect.intersects(console.insetBy(dx:-14,dy:-14)))
+        XCTAssertTrue(label.rect.contains(CGPoint(x:label.rect.midX,y:label.rect.midY)))
+    }
+    func testInteractiveRegionAndKeyboardVisibilityRespectActualConsoleFootprint() {
+        for width in [700.0,1440.0] {
+            let viewport=CanvasWorkspaceGeometry.viewport(width:width,height:900)
+            let console=CGRect(x:20,y:704,width:min(820,width-40),height:180)
+            XCTAssertFalse(CanvasWorkspaceGeometry.containsInteractivePoint(CGPoint(x:100,y:740),within:viewport,avoiding:console))
+            XCTAssertTrue(CanvasWorkspaceGeometry.containsInteractivePoint(CGPoint(x:100,y:500),within:viewport,avoiding:console))
+            if width == 1440 {
+                let point=CGPoint(x:1050,y:740)
+                XCTAssertTrue(CanvasWorkspaceGeometry.containsInteractivePoint(point,within:viewport,avoiding:console))
+                let circle=CanvasLabelCircle(id:.signal("selected"),center:point,radius:48)
+                XCTAssertTrue(CanvasWorkspaceGeometry.circlesVisible([circle],through:HierarchyCamera(),
+                    within:viewport,avoiding:console))
+                XCTAssertFalse(CanvasWorkspaceGeometry.circlesVisible([circle],through:HierarchyCamera(),
+                    within:viewport,avoiding:CGRect(x:820,y:690,width:300,height:200)))
+            } else {
+                XCTAssertFalse(CanvasWorkspaceGeometry.containsInteractivePoint(CGPoint(x:650,y:740),within:viewport,avoiding:console))
+            }
+        }
+    }
+    func testDenseSceneUsesBoundedConservativeFit() throws {
+        let viewport=CanvasWorkspaceGeometry.viewport(width:1440,height:900)
+        let console=CGRect(x:20,y:704,width:820,height:180)
+        let circles=(0..<300).map { index in
+            CanvasLabelCircle(id:.signal("\(index)"),center:CGPoint(x:Double(index%20)*60,y:Double(index/20)*60),radius:18)
+        }
+        let started=ProcessInfo.processInfo.systemUptime
+        let camera=try XCTUnwrap(CanvasWorkspaceGeometry.fittingCamera(circles:circles,within:viewport,avoiding:console))
+        XCTAssertLessThan(ProcessInfo.processInfo.systemUptime-started,0.5)
+        for circle in circles {
+            let p=camera.screen(Point(circle.center.x,circle.center.y)),r=circle.radius*camera.zoom
+            let rect=CGRect(x:p.x-r,y:p.y-r,width:r*2,height:r*2)
+            XCTAssertFalse(rect.intersects(console.insetBy(dx:-13.99,dy:-13.99)))
+        }
+    }
+    func testCableWithVisibleEndpointsButHiddenCurveIsRevealed() {
+        let viewport=CanvasWorkspaceGeometry.viewport(width:1440,height:900)
+        let console=CGRect(x:20,y:704,width:820,height:180)
+        let clear=CirclePortCurve(from:Point(1000,720),control1:Point(1050,680),
+                                  control2:Point(1150,680),to:Point(1200,720))
+        XCTAssertTrue(CanvasWorkspaceGeometry.curveVisible(clear,within:viewport,avoiding:console))
+        let straight=CirclePortCurve(from:Point(1000,720),control1:Point(1050,720),
+                                     control2:Point(1150,720),to:Point(1200,720))
+        XCTAssertTrue(CanvasWorkspaceGeometry.curveVisible(straight,within:viewport,avoiding:console))
+        let hidden=CirclePortCurve(from:Point(1000,720),control1:Point(800,750),
+                                   control2:Point(1000,750),to:Point(1200,720))
+        XCTAssertTrue(viewport.contains(CGPoint(x:hidden.from.x,y:hidden.from.y)))
+        XCTAssertTrue(viewport.contains(CGPoint(x:hidden.to.x,y:hidden.to.y)))
+        XCTAssertFalse(CanvasWorkspaceGeometry.curveVisible(hidden,within:viewport,avoiding:console))
+        let offscreen=CirclePortCurve(from:Point(1000,720),control1:Point(1050,900),
+                                      control2:Point(1150,900),to:Point(1200,720))
+        XCTAssertFalse(CanvasWorkspaceGeometry.curveVisible(offscreen,within:viewport,avoiding:console))
+        let upper=CanvasWorkspaceGeometry.viewport(width:1440,height:900,console:console)
+        let hiddenMiddle=CirclePortCurve(from:Point(300,500),control1:Point(380,780),
+                                         control2:Point(520,780),to:Point(600,500))
+        XCTAssertTrue(upper.insetBy(dx:70,dy:70).contains(CGPoint(x:hiddenMiddle.from.x,y:hiddenMiddle.from.y)))
+        XCTAssertTrue(upper.insetBy(dx:70,dy:70).contains(CGPoint(x:hiddenMiddle.to.x,y:hiddenMiddle.to.y)))
+        XCTAssertFalse(CanvasWorkspaceGeometry.curveVisible(hiddenMiddle,within:viewport,avoiding:console))
+        XCTAssertFalse(CanvasWorkspaceGeometry.curveVisible(hiddenMiddle,within:upper,margin:70))
+    }
+
     func testNavigationObstacleAvoidsControlWithoutTruncatingCanvas() throws {
         let console=CGRect(x:24,y:519.5,width:675,height:122)
         let navigation=CGRect(x:543,y:475,width:164,height:36).insetBy(dx:-8,dy:-8)

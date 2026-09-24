@@ -104,8 +104,10 @@ struct ArrangementPickerButton:View {
 struct ArrangementPickerView:View {
     @ObservedObject var store:AppStore
     let request:ArrangementPickerRequest
+    let size:CGSize
     @ObservedObject private var input:ArrangementInputCoordinator
-    init(store:AppStore,request:ArrangementPickerRequest){self.store=store;self.request=request;self.input=request.input}
+    @FocusState private var keyboardFocus:String?
+    init(store:AppStore,request:ArrangementPickerRequest,size:CGSize){self.store=store;self.request=request;self.size=size;self.input=request.input}
     private var query:String {input.query}
     private var highlighted:ID? {input.highlighted}
     private var notice:String {input.notice}
@@ -115,15 +117,16 @@ struct ArrangementPickerView:View {
     private var current:Bool {store.arrangementPickerCurrent(request)}
     var body:some View {
         VStack(alignment:.leading,spacing:0) {
-            HStack {Text("편곡안 찾기").font(.system(size:18,weight:.semibold));Spacer();Button(naming == nil ? "닫기 · Esc":"이름 입력 취소 · Esc"){cancel()}.foregroundStyle(StudioTheme.secondary)}.padding(18)
+            HStack {Text("편곡안 찾기").font(.system(size:18,weight:.semibold));Spacer();Button(naming == nil ? "닫기 · Esc":"이름 입력 취소 · Esc"){cancel()}.frame(minHeight:32).foregroundStyle(StudioTheme.secondary).focusable().focused($keyboardFocus,equals:"close")}.padding(18)
             Text(request.destination+" · 앨범 재생에 사용할 편곡안").font(.system(size:12)).foregroundStyle(StudioTheme.secondary)
                 .lineLimit(2).fixedSize(horizontal:false,vertical:true).help(request.destination).padding(.horizontal,18).padding(.bottom,14)
             HStack(spacing:10) {
                 Image(systemName:naming == nil ? "magnifyingglass":"pencil").foregroundStyle(StudioTheme.secondary)
-                ArrangementInputField(input:input,requestID:request.id).frame(height:28)
+                ArrangementInputField(input:input,requestID:request.id).frame(minHeight:32)
+                    .focused($keyboardFocus,equals:"search")
                 if naming != nil {
-                    Button("적용"){input.commitName()}.disabled(!current)
-                    Button("취소"){input.cancel()}
+                    Button("적용"){input.commitName()}.frame(minHeight:32).disabled(!current).focusable().focused($keyboardFocus,equals:"apply-name")
+                    Button("취소"){input.cancel()}.frame(minHeight:32).focusable().focused($keyboardFocus,equals:"cancel-name")
                 }
             }.padding(.horizontal,18).padding(.bottom,14)
             HStack(alignment:.top,spacing:10) {
@@ -131,6 +134,7 @@ struct ArrangementPickerView:View {
                     .help(request.choices.first{$0.id==request.currentID}?.title ?? "선택 없음")
                 Spacer(minLength:8)
                 Button("현재 편곡 찾기"){input.findCurrent()}.disabled(naming != nil)
+                    .focusable().focused($keyboardFocus,equals:"current")
                 Text("\(rows.count)개 결과").monospacedDigit().fixedSize()
             }.font(.system(size:12)).foregroundStyle(StudioTheme.secondary).padding(.horizontal,18).padding(.bottom,14)
             if let operation=naming {
@@ -144,17 +148,17 @@ struct ArrangementPickerView:View {
                 HStack(spacing:10) {
                     Button("강조한 이름 변경 · ⇧⌘N"){beginName(duplicate:false,sourceID:active)}
                         .help("강조한 편곡안 이름 변경 · ⇧⌘N · 현재 재생 편곡과 캔버스는 유지")
-                        .disabled(!current || active==nil)
+                        .disabled(!current || active==nil).focusable().focused($keyboardFocus,equals:"rename")
                     Button("강조한 편곡 복제 · ⇧⌘D"){beginName(duplicate:true,sourceID:active)}
                         .help("강조한 편곡을 이름 정해 복제 · ⇧⌘D · 섹션 원본은 공유 · 이번 사용 편집은 별도")
-                        .disabled(!current || active==nil)
+                        .disabled(!current || active==nil).focusable().focused($keyboardFocus,equals:"duplicate")
                 }.padding(.horizontal,18).padding(.bottom,14)
             }
             if naming == nil,let continuation=request.continuation {
                 HStack(spacing:10) {
                     Button("복제한 \(continuation.kind) 계속 편집 · ⇧⌘E") {
                         input.continueEditing()
-                    }.disabled(!current)
+                    }.disabled(!current).focusable().focused($keyboardFocus,equals:"continue")
                         .help(continuation.name+" · 복제한 이번 사용 편집으로 이어집니다")
                     Text("복제한 이번 사용 · "+continuation.name).font(.system(size:12)).foregroundStyle(StudioTheme.secondary)
                         .lineLimit(1).help(continuation.name)
@@ -167,17 +171,24 @@ struct ArrangementPickerView:View {
             ScrollViewReader {proxy in
                 ScrollView {
                     if rows.isEmpty {Text("일치하는 편곡안이 없습니다. 이름이나 #번호를 바꿔보세요.").font(.system(size:13)).foregroundStyle(StudioTheme.secondary).padding(30)}
-                    LazyVStack(spacing:1) {ForEach(rows){choice in row(choice)}}
+                    LazyVStack(spacing:1) {ForEach(Array(rows.enumerated()),id:\.element.id){index,choice in row(choice,index:index)}}
                 }.onChange(of:active){_,id in if let id {proxy.scrollTo(id,anchor:.center)}}
                     .onChange(of:query){_,_ in if let active{proxy.scrollTo(active,anchor:.center)}}
+                    .onChange(of:keyboardFocus){_,focus in
+                        guard let focus,(focus.hasPrefix("row-") || focus.hasPrefix("row-duplicate-")),
+                              let index=Int(focus.split(separator:"-").last ?? ""),rows.indices.contains(index) else{return}
+                        proxy.scrollTo(rows[index].id,anchor:.center)
+                    }
             }
-            Text(naming == nil ? "↑↓ 선택 · Return 편곡 적용 · Esc 취소 · 같은 편곡은 현재 작업과 이력 유지\n⇧⌘N 강조한 이름 변경 · ⇧⌘D 강조한 편곡 복제":"Return 이름 적용 · Esc 이름 입력 취소 · 입력 중에는 편곡 전환이 잠깁니다")
-                .font(.system(size:12)).foregroundStyle(StudioTheme.secondary).padding(18)
-        }.frame(width:850,height:560).background(StudioTheme.surface,in:RoundedRectangle(cornerRadius:10))
+            Text(size.height<500 ? (naming == nil ? "↑↓ 선택 · Return 적용 · Esc 닫기":"Return 이름 적용 · Esc 입력 취소") :
+                 (naming == nil ? "↑↓ 선택 · Return 편곡 적용 · Esc 취소 · 같은 편곡은 현재 작업과 이력 유지\n⇧⌘N 강조한 이름 변경 · ⇧⌘D 강조한 편곡 복제":"Return 이름 적용 · Esc 이름 입력 취소 · 입력 중에는 편곡 전환이 잠깁니다"))
+                .font(.system(size:12)).foregroundStyle(StudioTheme.secondary).padding(size.height<500 ? 10:18)
+        }.frame(width:size.width,height:size.height).background(StudioTheme.surface,in:RoundedRectangle(cornerRadius:10))
             .overlay(RoundedRectangle(cornerRadius:10).strokeBorder(StudioTheme.line))
+            .background(OverlayKeyboardKeys(active:{store.arrangementPickerRequest?.id==request.id},move:moveKeyboardFocus,cancel:cancel).frame(width:0,height:0))
             .onExitCommand{cancel()}
     }
-    private func row(_ choice:ArrangementChoice)->some View {
+    private func row(_ choice:ArrangementChoice,index:Int)->some View {
         let selected=choice.id==request.currentID
         let label=([choice.title,choice.detail]+routeLines(choice)+(selected ? ["재생 편곡"]:[])).joined(separator:" · ")
         return HStack(alignment:.top,spacing:8) {
@@ -185,10 +196,12 @@ struct ArrangementPickerView:View {
                 .buttonStyle(.plain).frame(maxWidth:.infinity,alignment:.leading)
                 .help(label).accessibilityLabel(label+" · 편곡 적용")
                 .accessibilityAddTraits(active==choice.id ? .isSelected:[])
+                .focusable().focused($keyboardFocus,equals:"row-\(index)")
             Button("복제"){beginName(duplicate:true,sourceID:choice.id)}
                 .frame(width:60).padding(.top,12).padding(.trailing,18)
                 .help(choice.title+" 이름 정해 복제 · 현재 편곡은 이름 적용 전까지 유지됩니다")
                 .accessibilityLabel(choice.title+" · 이름 정해 복제")
+                .focusable().focused($keyboardFocus,equals:"row-duplicate-\(index)")
         }.background(active==choice.id ? StudioTheme.raised:Color.clear)
             .disabled(!current || naming != nil).id(choice.id)
     }
@@ -220,4 +233,22 @@ struct ArrangementPickerView:View {
     private func beginName(duplicate:Bool,sourceID:ID?){input.beginName(duplicate:duplicate,sourceID:sourceID)}
     private func cancel(){input.cancel()}
     private func apply(_ id:ID){input.apply(id)}
+    private var keyboardOrder:[String] {
+        var order=["search","close"]
+        if naming != nil {
+            if current {order.append("apply-name")}
+            order.append("cancel-name")
+        } else {
+            order.append("current")
+            if current && active != nil {order += ["rename","duplicate"]}
+            if request.continuation != nil && current {order.append("continue")}
+            if current {
+                for index in rows.indices {order += ["row-\(index)","row-duplicate-\(index)"]}
+            }
+        }
+        return order
+    }
+    private func moveKeyboardFocus(_ backward:Bool) {
+        keyboardFocus=OverlayKeyboardTraversal.next(in:keyboardOrder,current:keyboardFocus,backward:backward)
+    }
 }

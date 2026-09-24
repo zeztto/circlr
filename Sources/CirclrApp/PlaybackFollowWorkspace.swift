@@ -67,7 +67,7 @@ import CirclrCore
         let settings=store.playbackFollowSettings
         let occurrence=store.playback.prepared.flatMap { PlaybackPosition.followOccurrence(in:$0.plan,at:store.playback.seconds) }
         let remaining=occurrence.map { max(0,$0.end-store.playback.seconds) }
-        let curve=PlaybackFollowCameraCurve(start:camera,destination:next,viewport:workspaceViewport,
+        let curve=PlaybackFollowCameraCurve(start:camera,destination:next,viewport:canvasViewport,
             transition:settings.transition,changesSection:changesSection,remainingSectionSeconds:remaining,reduceMotion:reducePlaybackMotion)
         guard curve.duration>0 else {camera=next;store.hierarchyZoom=next.zoom;placeEditor();needsDisplay=true;return}
         let began=ProcessInfo.processInfo.systemUptime

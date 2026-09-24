@@ -111,7 +111,8 @@ extension AlbumCanvasView {
     }
     func cablePointAvailable(_ point:Point,labels:Bool=true)->Bool {
         let p=NSPoint(x:point.x,y:point.y)
-        return workspaceViewport.contains(p) && editor?.frame.contains(p) != true && !(cableTools?.isHidden == false && cableTools?.frame.contains(p) == true) &&
+        return CanvasWorkspaceGeometry.containsInteractivePoint(p,within:canvasViewport,avoiding:consoleObstruction) &&
+            editor?.frame.contains(p) != true && !(cableTools?.isHidden == false && cableTools?.frame.contains(p) == true) &&
             !(portTools?.isHidden == false && portTools?.frame.contains(p) == true) &&
             (!labels || !labelPlacements.contains{$0.rect.insetBy(dx:-3,dy:-3).contains(p)})
     }

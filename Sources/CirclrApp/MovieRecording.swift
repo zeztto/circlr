@@ -71,13 +71,11 @@ extension AppStore {
         guard movieRevision==project.musicRevision else{finishMovieRecording();status="음악 변경으로 영상 녹화를 마쳤습니다";return}
         if !playback.playing {finishMovieRecording();return}
         let workerSeconds=playback.elapsedSeconds
-        // The helper reports hardware time every 20 ms, whereas this capture
-        // callback runs at 30 Hz. Require a fresh hardware sample so a stalled
-        // output never manufactures video frames from wall-clock time.
-        guard workerSeconds>movieTickTiming.lastMovieWorkerSeconds else{return}
         do {
             try recorder.checkForFailure()
             guard recorder.canAcceptFrame else{recorder.reportSkippedCapture();return}
+            // The clock may bridge one late helper report, but never more than
+            // 20 ms beyond the last confirmed hardware sample.
             guard let seconds=movieTickTiming.moviePresentationSeconds(workerSeconds:workerSeconds,
                 captureUptime:ProcessInfo.processInfo.systemUptime) else{return}
             guard let frame=captureMovieFrame?(seconds) else{throw CirclrError("캔버스 화면을 읽을 수 없습니다")}

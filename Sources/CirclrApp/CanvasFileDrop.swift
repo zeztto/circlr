@@ -15,7 +15,8 @@ extension AlbumCanvasView {
     func fileDropTarget(_ sender:NSDraggingInfo)->CanvasFileDropPreview? {
         guard !store.viewingMode else{return nil}
         let point=convert(sender.draggingLocation,from:nil)
-        guard store.soundPickerRequest==nil,store.arrangementPickerRequest==nil,store.canStartMediaImport,sender.draggingSourceOperationMask.contains(.copy),workspaceViewport.contains(point),
+        guard store.soundPickerRequest==nil,store.arrangementPickerRequest==nil,store.canStartMediaImport,sender.draggingSourceOperationMask.contains(.copy),
+              CanvasWorkspaceGeometry.containsInteractivePoint(point,within:canvasViewport,avoiding:consoleObstruction),
               ![editor?.frame,portTools?.frame,cableTools?.frame].compactMap({$0}).contains(where:{$0.contains(point)}),
               let hit=hit(point),let section=scene?.path(to:hit.id).last(where:{$0.role == .section}),
               let clock=section.clock else{return nil}
@@ -57,8 +58,11 @@ extension AlbumCanvasView {
         let ring=NSBezierPath(ovalIn:NSRect(x:center.x-radius,y:center.y-radius,width:radius*2,height:radius*2));ring.lineWidth=2;ring.stroke()
         let title="\(drop.section.title) · "+(drop.midi ? "MIDI 트랙 선택":"오디오 \(drop.urls.count)개")+" · \(BeatPosition.text(drop.beat))박"
         let attrs:[NSAttributedString.Key:Any]=[.font:NSFont.systemFont(ofSize:13,weight:.semibold),.foregroundColor:NSColor.white]
-        let width=min(workspaceViewport.width-16,(title as NSString).size(withAttributes:attrs).width+24)
-        let rect=NSRect(x:max(workspaceViewport.minX+8,min(drop.cursor.x+16,workspaceViewport.maxX-width-8)),y:max(workspaceViewport.minY+8,min(drop.cursor.y+18,workspaceViewport.maxY-40)),width:width,height:32)
+        let width=min(canvasViewport.width-16,(title as NSString).size(withAttributes:attrs).width+24)
+        let request=CanvasLabelRequest(id:.signal("file-drop-preview"),anchor:drop.cursor,
+            size:CGSize(width:width,height:32),radius:0,allowsViewportAdjustment:true)
+        let obstacles=consoleObstruction.map{[$0.insetBy(dx:-14,dy:-14)]} ?? []
+        guard let rect=CanvasLabelLayout.place([request],within:canvasViewport,avoiding:obstacles).first?.rect else{return}
         NSColor(white:0.13,alpha:1).setFill();NSBezierPath(roundedRect:rect,xRadius:6,yRadius:6).fill()
         let style=NSMutableParagraphStyle();style.lineBreakMode = .byTruncatingTail
         var textAttrs=attrs;textAttrs[.paragraphStyle]=style

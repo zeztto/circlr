@@ -99,6 +99,7 @@ struct TakeRecordingMenu:View {
                     .disabled(!store.canStartMIDITake)
                 Button("오디오 테이크 녹음"){store.startAudioRecording()}
                     .disabled(!store.canStartAudioTake)
+                InputDeviceMenu(preferences:store.inputPreferences,locked:store.takeCaptureInProgress)
                 if !store.audioCaptureMessage.isEmpty {Text(store.audioCaptureMessage)}
             }
         } label: {
@@ -123,12 +124,44 @@ struct TakeRecordingMenu:View {
         .accessibilityValue(statusAccessibilityValue)
     }
 }
+private struct InputDeviceMenu:View {
+    @ObservedObject var preferences:InputPreferences
+    let locked:Bool
+    var body:some View {
+        Menu {
+            Button {
+                preferences.choose(nil)
+            } label: {
+                if preferences.selectedUID == nil {Label("시스템 기본 입력",systemImage:"checkmark")}
+                else {Text("시스템 기본 입력")}
+            }
+            ForEach(preferences.devices,id:\.uid) {device in
+                Button {
+                    preferences.choose(device.uid)
+                } label: {
+                    if preferences.selectedUID == device.uid {Label(device.name,systemImage:"checkmark")}
+                    else {Text(device.name)}
+                }
+            }
+            if preferences.missing {Text("저장된 입력 장치가 연결되지 않았습니다")}
+            if let message=preferences.message {Text(message)}
+            Divider()
+            Button(preferences.loading ? "조회 중…":"입력 장치 다시 조회") {preferences.refresh()}
+                .disabled(preferences.loading)
+            Text("시스템 기본 입력은 변경하지 않습니다")
+        } label: {
+            Text("입력 장치 · "+preferences.selectedName)
+        }
+        .disabled(locked)
+        .onAppear {if !preferences.queried && !preferences.loading {preferences.refresh()}}
+    }
+}
 struct AudioRecordButton:View {
     @ObservedObject var store:AppStore
     var body:some View {
         Button {store.startAudioRecording()} label:{Label(store.audioRecordTitle,systemImage:store.audioRecording ? "stop.circle":"record.circle")}
             .disabled(store.audioRecordingLocked || (!store.audioRecordingAvailable && !store.audioRecordingBusy))
-            .help("오디오 녹음 / 정지 · ⌥⌘R · 기본 입력 장치의 첫 두 채널, 모노 장치는 1채널")
+            .help("오디오 녹음 / 정지 · ⌥⌘R · 선택한 입력 장치의 첫 두 채널, 모노 장치는 1채널")
     }
 }
 struct AudioRecordingStatusView:View {

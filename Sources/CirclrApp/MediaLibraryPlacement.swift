@@ -47,6 +47,7 @@ struct LibraryPlacementControls:View {
     @ObservedObject var store:AppStore
     @ObservedObject var library:MediaLibraryController
     let request:MediaImportRequest
+    let keyboardFocus:FocusState<String?>.Binding
     var body:some View {
         if let clock=try? AudioImportPlacement.clock(request.destination,in:store.project) {
             let beat=AudioImportPlacement.beat(request.destination)
@@ -55,9 +56,11 @@ struct LibraryPlacementControls:View {
                 CommittedNumberField(title:"라이브러리 가져오기 시작 박",value:Binding(get:{AudioImportPlacement.beat(request.destination)},set:{value in store.changeLibraryPlacement(request){try AudioImportPlacement.start(value,of:$0,in:store.project)}}),range:0...clock.beats,width:85,presentation:.beatPosition,validate:{value in _=try AudioImportPlacement.start(value,of:request.destination,in:store.project)})
                     .environment(\.numberEditing,NumberEditingContext(snapshot:store.libraryNumberIdentity,current:{store.libraryNumberIdentity},focusCanvas:{library.searchFocus=UUID()}))
                     .disabled(!store.libraryDestinationCurrent || !store.canStartMediaImport)
+                    .focused(keyboardFocus,equals:"start")
                 Text("박 · 4분음표").foregroundStyle(StudioTheme.secondary)
                 Button("처음"){store.changeLibraryPlacement(request){try AudioImportPlacement.start(0,of:$0,in:store.project)}}
                     .disabled(!store.libraryDestinationCurrent || !store.canStartMediaImport)
+                    .focusable().focused(keyboardFocus,equals:"start-zero")
                 if beat.isFinite,beat>=0,beat<clock.beats {
                     Text("\(clock.bar(at:beat)+1)마디 · \(clock.seconds(at:beat).formatted(.number.precision(.fractionLength(0...2))))초 / \(clock.beats.formatted())박 길이")
                         .foregroundStyle(StudioTheme.secondary).lineLimit(1).truncationMode(.middle)
@@ -70,6 +73,7 @@ struct LibraryPlacementControls:View {
                         .frame(maxWidth:180).accessibilityLabel("가져올 오디오 트랙 선택")
                         .help(AudioImportPlacement.trackLabel(track,in:store.project)+" · 이름·번호로 대상 트랙 검색")
                         .disabled(!store.libraryDestinationCurrent || !store.canStartMediaImport)
+                        .focusable().focused(keyboardFocus,equals:"track")
                 }
             }.font(.system(size:12))
         }
@@ -83,6 +87,7 @@ struct LibrarySectionChooser:View {
     let revision:Int
     let generation:Int
     let selection:CircleAddress?
+    let keyboardFocus:FocusState<String?>.Binding
     @State private var query=""
     @State private var selected:CircleAddress?
     private var routes:[StudioSectionRoute] {AudioImportPlacement.sections(store.studioRoutes,query:query)}
@@ -92,6 +97,7 @@ struct LibrarySectionChooser:View {
             HStack(spacing:10) {
                 Image(systemName:"magnifyingglass").foregroundStyle(StudioTheme.secondary)
                 CommandSearchField(text:$query,onMove:move,onSubmit:{if let active{choose(active)}},onCancel:{library.choosingDestination=false},placeholder:"가져올 곡 · 섹션 검색")
+                    .focused(keyboardFocus,equals:"section-search")
             }.padding(.horizontal,18).padding(.bottom,14)
             Text("섹션을 고른 뒤 파일 목록에서 시작 박과 트랙을 정합니다.")
                 .font(.system(size:12)).foregroundStyle(StudioTheme.secondary).padding(.horizontal,18).padding(.bottom,14)
@@ -100,7 +106,7 @@ struct LibrarySectionChooser:View {
                 ScrollView {
                     if routes.isEmpty {Text("일치하는 섹션이 없습니다").foregroundStyle(StudioTheme.secondary).padding(30)}
                     LazyVStack(spacing:1) {
-                        ForEach(routes){route in
+                        ForEach(Array(routes.enumerated()),id:\.element.id){index,route in
                             Button{choose(route.id)}label:{
                                 VStack(alignment:.leading,spacing:6) {
                                     Text(route.name).font(.system(size:14,weight:.medium)).lineLimit(1)
@@ -109,16 +115,23 @@ struct LibrarySectionChooser:View {
                                     .background(active==route.id ? StudioTheme.raised:Color.clear)
                             }.buttonStyle(.plain).id(route.id).accessibilityLabel(route.path+" › "+route.name)
                                 .accessibilityAddTraits(active==route.id ? .isSelected:[])
+                                .focusable().focused(keyboardFocus,equals:"section-\(index)")
                         }
                     }
                 }.onChange(of:active){_,id in if let id{proxy.scrollTo(id,anchor:.center)}}
+                    .onChange(of:keyboardFocus.wrappedValue){_,focus in
+                        guard let focus,focus.hasPrefix("section-"),let index=Int(focus.dropFirst(8)),routes.indices.contains(index) else{return}
+                        proxy.scrollTo(routes[index].id,anchor:.center)
+                    }
             }
             Divider().overlay(StudioTheme.line)
             Text("↑↓ 선택 · Return 대상 지정 · Esc 파일 목록으로 복귀")
                 .font(.system(size:12)).foregroundStyle(StudioTheme.secondary).padding(18)
         }.frame(maxWidth:.infinity,maxHeight:.infinity,alignment:.topLeading)
+        .background(OverlayKeyboardKeys(active:{store.libraryOpen && library.choosingDestination},move:moveKeyboardFocus,cancel:{library.choosingDestination=false;keyboardFocus.wrappedValue="search"}).frame(width:0,height:0))
         .onAppear {
             if case .section(let a,let u,_,_,_,_)=store.libraryDestination?.destination {selected = .section(arrangementID:a,useID:u)}
+            keyboardFocus.wrappedValue="section-search"
         }
     }
     private func move(_ delta:Int) {
@@ -127,4 +140,8 @@ struct LibrarySectionChooser:View {
         selected=routes[max(0,min(routes.count-1,index+delta))].id
     }
     private func choose(_ id:CircleAddress) {store.chooseLibrarySection(id,projectID:projectID,revision:revision,generation:generation,selection:selection)}
+    private func moveKeyboardFocus(_ backward:Bool) {
+        let order=["section-search","workspace","add-folder","refresh","close"]+routes.indices.map{"section-\($0)"}
+        keyboardFocus.wrappedValue=OverlayKeyboardTraversal.next(in:order,current:keyboardFocus.wrappedValue,backward:backward)
+    }
 }

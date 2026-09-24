@@ -393,6 +393,18 @@ extension AlbumCanvasView {
     }
     func revealKeyboardSelection(_ node:CircleSceneNode) {
         let satellites=scene?.isOrbit == true ? scene?.immediateSatellites(of:node.id) ?? [] : []
+        if let console=consoleObstruction {
+            let nearby=satellites.filter { child in
+                let distance=hypot(child.center.x-node.center.x,child.center.y-node.center.y)
+                return distance.isFinite && child.outerRadius.isFinite && child.outerRadius>0 &&
+                    distance<=node.radius*8+child.outerRadius
+            }
+            let circles=([node]+nearby).map { item in
+                CanvasLabelCircle(id:item.id,center:CGPoint(x:item.center.x,y:item.center.y),radius:item.outerRadius)
+            }
+            if CanvasWorkspaceGeometry.circlesVisible(circles,through:camera,within:canvasViewport,
+                                                      avoiding:console) {return}
+        }
         if let target=camera.revealing(node,including:satellites,in:workspaceViewport) {
             setCamera(target,animated:true)
         }
@@ -514,6 +526,59 @@ struct CommandSearchField:NSViewRepresentable {
             if selector==#selector(NSResponder.insertNewline(_:)){parent.onSubmit();return true}
             if selector==#selector(NSResponder.cancelOperation(_:)){parent.onCancel();return true}
             return false
+        }
+    }
+}
+
+enum OverlayKeyboardTraversal {
+    enum Action:Equatable {case next,previous,cancel}
+    static func action(keyCode:UInt16,modifiers:NSEvent.ModifierFlags,markedText:Bool)->Action? {
+        guard !markedText else{return nil}
+        let flags=modifiers.intersection([.command,.control,.option,.shift])
+        if keyCode==48,flags.isEmpty{return .next}
+        if keyCode==48,flags == .shift{return .previous}
+        if keyCode==53,flags.isEmpty{return .cancel}
+        return nil
+    }
+    static func next(in order:[String],current:String?,backward:Bool)->String? {
+        guard !order.isEmpty else{return nil}
+        let index=order.firstIndex(of:current ?? order[0]) ?? 0
+        return order[(index+(backward ? order.count-1:1))%order.count]
+    }
+}
+
+/// Keeps a canvas overlay's keyboard traversal inside its own controls even when
+/// macOS Keyboard navigation is disabled. The caller owns the visible focus order.
+struct OverlayKeyboardKeys:NSViewRepresentable {
+    let active:()->Bool
+    let move:(Bool)->Void
+    let cancel:()->Void
+    func makeNSView(context:Context)->Control {
+        let view=Control();view.active=active;view.move=move;view.cancel=cancel;return view
+    }
+    func updateNSView(_ view:Control,context:Context){view.active=active;view.move=move;view.cancel=cancel}
+    static func dismantleNSView(_ view:Control,coordinator:()){view.removeMonitor()}
+    final class Control:NSView {
+        var active:(()->Bool)?
+        var move:((Bool)->Void)?
+        var cancel:(()->Void)?
+        private var monitor:Any?
+        func removeMonitor(){if let monitor{NSEvent.removeMonitor(monitor)};monitor=nil}
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow();removeMonitor()
+            guard window != nil else{return}
+            monitor=NSEvent.addLocalMonitorForEvents(matching:.keyDown){[weak self] event in
+                guard let self,let window=self.window,event.window===window,NSApp.isActive,
+                      window.isKeyWindow,self.active?()==true else{return event}
+                let marked=(window.firstResponder as? NSTextView)?.hasMarkedText()==true
+                guard let action=OverlayKeyboardTraversal.action(keyCode:event.keyCode,modifiers:event.modifierFlags,markedText:marked) else{return event}
+                switch action {
+                case .next:self.move?(false)
+                case .previous:self.move?(true)
+                case .cancel:self.cancel?()
+                }
+                return nil
+            }
         }
     }
 }

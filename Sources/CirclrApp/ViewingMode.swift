@@ -3,6 +3,15 @@ import SwiftUI
 import CirclrCore
 import Combine
 
+enum ViewingModeKeyRouting {
+    static func passesToSystem(keyCode:UInt16,modifiers:NSEvent.ModifierFlags)->Bool {
+        keyCode==49 && modifiers.contains(.function)
+    }
+    static func passesToSystem(_ event:NSEvent)->Bool {
+        passesToSystem(keyCode:event.keyCode,modifiers:event.modifierFlags)
+    }
+}
+
 @MainActor extension AppStore {
     /// A transient presentation mode. Explicit agent edits remain allowed; this is not a document lock.
     @discardableResult func setViewingMode(_ enabled:Bool)->Bool {
@@ -82,6 +91,8 @@ struct ViewingModeControls:View {
         viewingKeyMonitor=NSEvent.addLocalMonitorForEvents(matching:.keyDown){[weak self] event in
             guard let self,event.window===self.window,self.store.viewingMode else{return event}
             NotificationCenter.default.post(name:ViewingModeControls.activity,object:self.store)
+            // Fn+Space belongs to macOS input/emoji handling, even in viewing mode.
+            if ViewingModeKeyRouting.passesToSystem(event) {return event}
             let modifiers=event.modifierFlags.intersection([.command,.control,.option,.shift])
             // App/window lifecycle and recording remain available. Everything else is explicitly routed.
             if (modifiers == .command && [12,13].contains(event.keyCode)) ||
@@ -97,7 +108,7 @@ struct ViewingModeControls:View {
     func handleViewingKey(_ event:NSEvent) {
         let modifiers=event.modifierFlags.intersection([.command,.control,.option,.shift])
         if event.keyCode==53,modifiers.isEmpty {_ = store.setViewingMode(false);return}
-        if event.keyCode==49,modifiers.isEmpty {store.play();return}
+        if PlaybackSpaceShortcut.accepts(event,in:window) {store.play();return}
         if event.keyCode==3,modifiers.isEmpty {store.playbackFollow=store.playbackFollow.toggled();return}
         if [24,69,27,78].contains(event.keyCode),!modifiers.contains(.command),!modifiers.contains(.control) {
             let factor=[24,69].contains(event.keyCode) ? 1.25:0.8

@@ -54,6 +54,11 @@ import CirclrCore
             return nil
         }
         if let field,field.active,field.requestID==request.id {
+            // The picker owns Tab traversal. Do not pull focus back from one of
+            // its buttons/rows after keyboard navigation leaves the text field.
+            if event.keyCode==48,flags.isEmpty || flags == .shift {return event}
+            if let responder=window?.firstResponder,responder !== field,
+               responder !== field.currentEditor(){return event}
             guard focus(field) else{pending=[];notice="입력창을 활성화하지 못했습니다. 편곡안을 다시 여세요.";return nil}
             return event
         }

@@ -364,7 +364,9 @@ struct StepGridCanvas:NSViewRepresentable {
         case 36,76:store.editStep(grid:grid,index:page*16+column,pitch:pitches[row]);needsDisplay=true
         case 51,117:
             if store.selectedMIDIIDs.count>1 {store.removeNote()}else{store.editStep(grid:grid,index:page*16+column,pitch:pitches[row],enabled:false)};needsDisplay=true
-        case 49:store.play()
+        case 49:
+            if PlaybackSpaceShortcut.accepts(event,in:window) {store.play()}
+            else {super.keyDown(with:event)}
         case 53:store.focusCanvas?();store.hierarchyParent()
         default:super.keyDown(with:event)
         }

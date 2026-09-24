@@ -20,6 +20,7 @@ struct LibraryTrackChooser:View {
     @ObservedObject var library:MediaLibraryController
     let request:MediaImportRequest
     let entryID:String
+    let keyboardFocus:FocusState<String?>.Binding
     @State private var query=""
     @State private var highlighted=0
     private var choices:[AudioImportTrackChoice] {(try? AudioImportPlacement.tracks(for:request.destination,in:store.project,query:query)) ?? []}
@@ -31,6 +32,7 @@ struct LibraryTrackChooser:View {
             HStack(spacing:10) {
                 Image(systemName:"magnifyingglass").foregroundStyle(StudioTheme.secondary)
                 CommandSearchField(text:$query,onMove:move,onSubmit:chooseActive,onCancel:close,placeholder:"오디오 대상 트랙 이름 · 번호 검색")
+                    .focused(keyboardFocus,equals:"track-search")
             }.padding(.horizontal,18).padding(.bottom,14)
             HStack {
                 Text("오디오 대상 트랙").font(.system(size:15,weight:.semibold))
@@ -49,31 +51,44 @@ struct LibraryTrackChooser:View {
                     if choices.isEmpty {Text("일치하는 트랙이 없습니다").foregroundStyle(StudioTheme.secondary).padding(30)}
                     LazyVStack(spacing:1) {
                         ForEach(Array(choices.enumerated()),id:\.offset){index,choice in
-                            Button{choose(choice.trackID)}label:{
-                                HStack(spacing:12) {
-                                    VStack(alignment:.leading,spacing:6) {
-                                        Text(choice.name).font(.system(size:14,weight:.medium)).lineLimit(2)
-                                        Text(choice.detail).font(.system(size:12)).foregroundStyle(StudioTheme.secondary).lineLimit(2)
-                                    }.frame(maxWidth:.infinity,alignment:.leading)
-                                    if choice.trackID==requestedTrack {Text("현재 대상").font(.system(size:12)).foregroundStyle(StudioTheme.accent)}
-                                }.padding(.horizontal,18).padding(.vertical,12)
-                                    .background(index==active ? StudioTheme.raised:Color.clear)
-                            }.buttonStyle(.plain).id(index).disabled(!current)
-                                .accessibilityLabel(choice.name+" · "+choice.detail).help(choice.name+" · "+choice.detail)
-                                .accessibilityAddTraits(index==active ? .isSelected:[])
+                            row(choice,index:index)
                         }
                     }
                 }.onChange(of:active){_,index in proxy.scrollTo(index,anchor:.center)}
                     .onChange(of:query){_,_ in highlighted=0;proxy.scrollTo(0,anchor:.top)}
+                    .onChange(of:keyboardFocus.wrappedValue){_,focus in
+                        guard let focus,focus.hasPrefix("track-"),let index=Int(focus.dropFirst(6)),choices.indices.contains(index) else{return}
+                        proxy.scrollTo(index,anchor:.center)
+                    }
             }
             Divider().overlay(StudioTheme.line)
             Text("↑↓ 선택 · Return 트랙 지정 · Esc 파일 목록으로 복귀")
                 .font(.system(size:12)).foregroundStyle(StudioTheme.secondary).padding(18)
         }.frame(maxWidth:.infinity,maxHeight:.infinity,alignment:.topLeading)
-        .onAppear{highlighted=choices.firstIndex{$0.trackID==requestedTrack} ?? 0}
+        .background(OverlayKeyboardKeys(active:{store.libraryOpen && library.choosingTrack},move:moveKeyboardFocus,cancel:close).frame(width:0,height:0))
+        .onAppear{highlighted=choices.firstIndex{$0.trackID==requestedTrack} ?? 0;keyboardFocus.wrappedValue="track-search"}
     }
     private func move(_ delta:Int) {highlighted=max(0,min(choices.count-1,active+delta))}
+    private func row(_ choice:AudioImportTrackChoice,index:Int)->some View {
+        Button{choose(choice.trackID)}label:{
+            HStack(spacing:12) {
+                VStack(alignment:.leading,spacing:6) {
+                    Text(choice.name).font(.system(size:14,weight:.medium)).lineLimit(2)
+                    Text(choice.detail).font(.system(size:12)).foregroundStyle(StudioTheme.secondary).lineLimit(2)
+                }.frame(maxWidth:.infinity,alignment:.leading)
+                if choice.trackID==requestedTrack {Text("현재 대상").font(.system(size:12)).foregroundStyle(StudioTheme.accent)}
+            }.padding(.horizontal,18).padding(.vertical,12)
+                .background(index==active ? StudioTheme.raised:Color.clear)
+        }.buttonStyle(.plain).id(index).disabled(!current)
+            .accessibilityLabel(choice.name+" · "+choice.detail).help(choice.name+" · "+choice.detail)
+            .accessibilityAddTraits(index==active ? .isSelected:[])
+            .focusable().focused(keyboardFocus,equals:"track-\(index)")
+    }
     private func chooseActive() {guard choices.indices.contains(active) else{return};choose(choices[active].trackID)}
     private func choose(_ id:ID?) {store.chooseLibraryTrack(id,request:request,entryID:entryID)}
     private func close() {library.workspace = .files;library.searchFocus=UUID()}
+    private func moveKeyboardFocus(_ backward:Bool) {
+        let order=["track-search","workspace","add-folder","refresh","close"]+(current ? choices.indices.map{"track-\($0)"}:[])
+        keyboardFocus.wrappedValue=OverlayKeyboardTraversal.next(in:order,current:keyboardFocus.wrappedValue,backward:backward)
+    }
 }

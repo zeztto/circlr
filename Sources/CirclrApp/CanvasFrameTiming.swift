@@ -13,7 +13,6 @@ struct CanvasFrameTiming {
     private var previousStart = 0.0
     private var movieClock = MoviePresentationClock()
 
-    var lastMovieWorkerSeconds: Double { movieClock.lastWorkerSeconds }
     mutating func resetMovieClock() { movieClock = MoviePresentationClock() }
     mutating func moviePresentationSeconds(workerSeconds: Double, captureUptime: Double) -> Double? {
         movieClock.next(workerSeconds: workerSeconds, captureUptime: captureUptime)
@@ -57,19 +56,51 @@ struct CanvasFrameTiming {
 }
 
 /// The helper reports hardware time every 20 ms while the canvas captures at
-/// 30 Hz. Interpolate only between observed hardware samples; never continue
-/// producing frames from the wall clock when the helper clock stalls.
+/// 30 Hz. A single late helper report may be bridged by up to 20 ms beyond its
+/// last confirmed sample. A stopped output cannot produce repeated frames.
 struct MoviePresentationClock {
     private(set) var lastWorkerSeconds = 0.0
     private var lastPresentationSeconds = 0.0
     private var lastCaptureUptime: Double?
+    private var lastFreshCaptureUptime: Double?
+    private var staleInterpolationUsed = false
     private var resynchronizations = 0
     private var staleClockSkips = 0
+    private var staleAgeSkips = 0
+    private var staleInterpolatedFrames = 0
     private var boundedInterpolations = 0
 
     mutating func next(workerSeconds: Double, captureUptime: Double) -> Double? {
         guard workerSeconds.isFinite, captureUptime.isFinite, workerSeconds >= 0,
-              workerSeconds > lastWorkerSeconds else {
+              lastCaptureUptime.map({captureUptime >= $0}) ?? true else {
+            staleClockSkips += 1
+            return nil
+        }
+        if workerSeconds == lastWorkerSeconds, let freshUptime=lastFreshCaptureUptime {
+            // Two 30 Hz captures can straddle one delayed 20 ms report. The
+            // confirmed worker time remains the hard upper bound: no second
+            // stale frame, and no delayed callback can use an old sample.
+            guard captureUptime - freshUptime <= 1.0 / 30 + 0.020 else {
+                staleAgeSkips += 1
+                return nil
+            }
+            guard !staleInterpolationUsed, let lastCaptureUptime else {
+                staleClockSkips += 1
+                return nil
+            }
+            let presentation=min(lastPresentationSeconds + captureUptime - lastCaptureUptime,
+                                 workerSeconds + 0.020)
+            guard presentation - lastPresentationSeconds >= 1.0 / 48_000 else {
+                staleClockSkips += 1
+                return nil
+            }
+            lastPresentationSeconds=presentation
+            self.lastCaptureUptime=captureUptime
+            staleInterpolationUsed=true
+            staleInterpolatedFrames += 1
+            return presentation
+        }
+        guard workerSeconds > lastWorkerSeconds else {
             staleClockSkips += 1
             return nil
         }
@@ -87,6 +118,8 @@ struct MoviePresentationClock {
         lastWorkerSeconds = workerSeconds
         lastPresentationSeconds = presentation
         lastCaptureUptime = captureUptime
+        lastFreshCaptureUptime = captureUptime
+        staleInterpolationUsed = false
         return presentation
     }
 
@@ -96,6 +129,8 @@ struct MoviePresentationClock {
          "leadMilliseconds": (lastPresentationSeconds - lastWorkerSeconds) * 1000,
          "resynchronizations": resynchronizations,
          "boundedInterpolations": boundedInterpolations,
-         "staleClockSkips": staleClockSkips]
+         "staleClockSkips": staleClockSkips,
+         "staleAgeSkips": staleAgeSkips,
+         "staleInterpolatedFrames": staleInterpolatedFrames]
     }
 }

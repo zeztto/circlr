@@ -236,6 +236,7 @@ private struct MIDIRecordingKey: Hashable {
     var demoLoadWorker:Task<BundledDemo.Copy,Error>?
     let playback = Playback()
     let outputPreferences=OutputPreferences()
+    let inputPreferences=InputPreferences()
     @Published var outputPreferencesOpen=false
     @Published var outputStatus=PlaybackOutputStatus()
     let recorder = AudioRecorder()
@@ -1194,6 +1195,9 @@ private struct MIDIRecordingKey: Hashable {
         guard !midiRecording else{status="MIDI 녹음을 먼저 정지하세요";return}
         guard !moviePreparing,movieWriter == nil,movieFinalizing == nil else{status="영상 녹화를 마친 뒤 테이크를 녹음하세요";return}
         guard editPatternID==nil,let use=selectedUse,let clock=recordingClock,let address=hierarchySelection,let track=selectedTrackID else {status="녹음할 서클과 트랙을 선택하세요";return}
+        // Fix the input before the asynchronous microphone permission prompt.
+        // A menu change during authorization must not redirect this take.
+        let inputSelection=inputPreferences.selection
         stop()
         let request=recordingAuthorization.begin(projectID:project.id,revision:project.musicRevision,address:address,trackID:track,laneID:selectedLaneID)
         let arrangement=project.activeArrangementID,repeats=selectedMusic?.repeatCount ?? use.repeatCount,useID=use.id
@@ -1204,7 +1208,7 @@ private struct MIDIRecordingKey: Hashable {
             guard self.recordingAuthorization.matches(request,projectID:self.project.id,revision:self.project.musicRevision,address:self.hierarchySelection,trackID:self.selectedTrackID,laneID:self.selectedLaneID),let clock=self.audioRequestClock else{self.cancelRecordingRequest();self.status="대상이 변경되어 녹음 시작을 취소했습니다";return}
             guard allowed else {self.cancelRecordingRequest();self.audioCaptureMessage="마이크 접근이 허용되지 않았습니다";self.fail(CirclrError("시스템 설정에서 써클러의 마이크 접근을 허용하세요"));return}
             let url=self.storageRoot.appendingPathComponent("takes/\(newID()).caf");self.audioRecordURL=url
-            do {try self.recorder.start(to:url,maximumSeconds:clock.seconds*Double(repeats)){[weak self] result in
+            do {try self.recorder.start(to:url,maximumSeconds:clock.seconds*Double(repeats),selection:inputSelection){[weak self] result in
                 guard let self,self.recordingAuthorization.pending?.id==request.id else{return}
                 let valid=self.recordingAuthorization.consume(request,projectID:self.project.id,revision:self.project.musicRevision,address:self.hierarchySelection,trackID:self.selectedTrackID,laneID:self.selectedLaneID)
                 self.audioRecordPending=false

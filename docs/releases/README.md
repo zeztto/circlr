@@ -48,7 +48,7 @@
 PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s Tests -p 'test_mcp_*.py'
 
 # 실제 수정에 해당하는 Audio test class는 먼저 I/O 여부를 읽고 버전 문서에 고정한다.
-# 최종 패키지: 앱과 5개 helper를 같은 소스에서 빌드하고 kit를 재생성한다.
+# 최종 패키지: 앱과 동봉 helper 전부를 같은 소스에서 빌드하고 kit를 재생성한다.
 ./scripts/build-app.sh
 codesign --verify --deep --strict 'dist/써클러.app'
 git diff --check
@@ -68,7 +68,7 @@ git diff --check
 최종 순서는 **구현 → QA → 독립 검토/수정 → 문서 → 최종 commit → tag → push → GitHub Release 등록 → 원격 검증**이다. 사용자 요청에 따라 앞으로 완료하는 모든 제품 버전(patch 포함)에 GitHub Release를 등록한다. 문서 수정이나 미완료 후보 build는 새 제품 릴리스가 아니다.
 
 1. 한국어·영어 README와 CHANGELOG에 승인 버전의 변화·호환·제한을 반영한다. `<version>-notes.md`에 두 언어로 설치, 변경, QA, 알려진 제한, 복구 방법을 작성한다. 자동 생성 commit 목록만을 릴리스 설명으로 사용하지 않는다.
-2. 버전 문서에 필수 작업/QA PASS, 검토자·조치, 후보 build·SHA256·앱 위치, 이전 앱/프로젝트 복구 방법을 채운다. 동일 승인 후보의 앱과 5개 helper·Codex kit를 검증하고, 배포 패키지 내용에 음악 원본·Splice 등 재배포 불가 샘플·QA 프로젝트·인증정보·로컬 설정이 없는지 확인한다. 소스 공개나 저장소 공개 전환은 별도 작업이다.
+2. 버전 문서에 필수 작업/QA PASS, 검토자·조치, 후보 build·SHA256·앱 위치, 이전 앱/프로젝트 복구 방법을 채운다. 동일 승인 후보의 앱과 동봉 helper 전부·Codex kit를 검증하고, 배포 패키지 내용에 음악 원본·Splice 등 재배포 불가 샘플·QA 프로젝트·인증정보·로컬 설정이 없는지 확인한다.
 3. staged diff에 소스·문서·테스트·허용된 생성물만 포함해 최종 commit한다. 패키지가 이 commit의 소스에 대응하는지 확인한다. 소스나 생성물이 바뀌었다면 재빌드하고 영향받는 QA부터 다시 수행한다. 승인 commit에서 annotated tag를 만들고 명시적 branch/tag만 push한다. 기존 tag를 이동/삭제하지 않는다.
 4. 검증된 앱을 ZIP으로 패키징하고 SHA256 파일을 만든다. 압축을 별도 임시 폴더에 풀어 버전/build, 서명, 모든 helper, kit 및 앱 시작을 확인한다. 아래 0.30.0 명령은 **과거 출고 절차의 예시**이며 현재 0.70.0 실행 지시가 아니다. `dist/써클러.app`은 검증된 승인 후보여야 한다.
 

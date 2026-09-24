@@ -1,5 +1,34 @@
 # 변경 이력
 
+## 0.80.0 · build242 — 장시간 영상 프레임 간격 보정 · 검증 중
+
+- build241 실제 앱의 1920×1080·600.012초 MP4에서 길이·오디오 연속성은 통과했지만 영상 PTS 간격 71.7·78.3·70.0ms 세 곳이 사전 66.67ms 상한을 넘어 성능 gate가 실패했다. 늦은 출력 시각 보고를 한 번만 최대 20ms 보간하고, 보고가 계속 멈추면 캡처를 중단하도록 수정했다. [실패 증거](qa/0.80-build241-performance.md) · [build242 후보](qa/0.80-build242.md).
+- 같은 소스 Swift **1,340개·15 skip·실패 0**, Python MCP **47+39개**와 agent kit/모델 trace **23개**를 통과했다. 0.80.0/build242 Apple Silicon 본체·7 helper의 strict deep 서명과 Demos 27/27·kit 26/26·권리 파일 2/2 byte 일치를 확인했다. 실제 1080p·약 600초 MP4는 평균29.983fps와 AAC 연속성을 확인했지만 최대 PTS gap **70.0ms 한 곳**이 남아 영상 gate는 FAIL이다. 앱별 compositor FPS·물리 청취도 출고 gate로 남는다.
+
+## 0.80.0 · build241 — 재생 단축키·대형 미디어 목록 안정화 · 검증 중
+
+- build240 실제 앱에서 라이브러리 종료 뒤 `⌥Space`가 곡 재생을 시작하는 결함을 재현했다. 모든 캔버스·편집기의 재생 키를 modifier 없는 Space로 제한하고, 활성 텍스트 입력 및 감상 모드의 Fn+Space는 시스템 입력으로 보낸다. 700×600pt 미디어 필터의 키보드·포인터와 캔버스 `⌥Space` 무재생·일반 Space 시작/취소는 build241 native에서 다시 확인했다. 실제 Fn+Space OS 전달은 미검증이다.
+- 최대 50,000개 결과의 Tab 이동에서 파일 포커스 문자열 대량 생성과 선택 검증의 전체 결과 탐색을 제거했다. 결과 확정 시 인덱스를 만들고 Tab 중에는 선택 상한 64개만 확인한다. 실제 가져오기 시 파일·순서 재검증은 유지한다. 독립 코드 리뷰는 새 P1/P2를 찾지 못했으나 실기기 대형 폴더 지연은 미측정이다.
+- 동일 소스 Swift **1,336개·15 skip·실패 0**, Python MCP **47+39개**, agent kit/모델 trace **23개**가 통과했다. 0.80.0/build241 Apple Silicon 앱·7 helper의 strict deep 서명과 데모 27/27·kit 26/26·권리 파일 2/2의 byte 일치를 확인했다. [통합 QA](qa/0.80-build241.md). 앱의 최종 UI·MP4와 물리 청취는 아직 출고 gate다.
+
+## 0.80.0 · build240 — 미디어 필터 키보드 경로 · 검증 중
+
+- build239 격리 앱에서 미디어 라이브러리의 폴더·종류 필터가 Tab 포커스에 들어오지 않는 문제를 발견했다. 두 메뉴를 포커스 가능한 버튼과 인라인 선택 목록으로 바꿔 키보드와 포인터 양쪽에서 조작하게 했다. 700×600pt 실제 앱 재검은 진행 중이다.
+- 동일 소스 Swift **1,329개·15 skip·실패 0**, Python MCP **47+39개**와 agent kit/모델 trace **20개**를 통과했다. 0.80.0/build240 Apple Silicon 본체·7 helper의 strict deep 서명, 데모 27/27·kit 26/26·권리 파일 2/2의 소스 byte 일치를 확인했다. [통합 QA](qa/0.80-build240.md).
+- build239의 독립 native 근거는 외부 Codex→MCP 편집, 빈 곡 제작→WAV/stems, 앱 전용 CalDigit 입력의 녹음→저장·재열기→WAV까지 확장됐다. 615.287초 MP4는 영상·AAC·메모리 기준을 통과했지만 1920×1040이고 정지 시각이 목표보다 늦었으며 앱별 compositor FPS는 측정할 수 없었다. [출고 gate](qa/0.80-release-gates.md)의 열린 항목을 PASS로 취급하지 않는다.
+
+## 0.80.0 · build239 — 선택창 키보드 포커스 수정 · 검증 중
+
+- build238 native QA에서 미디어·음색·편곡안 검색창의 Tab 포커스가 캔버스로 빠지고 일부 Esc가 동작하지 않는 결함을 발견했다. 네 선택창과 라이브러리 하위 화면에 Tab·Shift+Tab 순회와 Esc 경로를 추가하고, 편곡안 키 입력 감시가 다른 컨트롤의 포커스를 빼앗지 않도록 조정했다. 새 패키지에서 실제 키보드·IME·접근성 재검이 필요하다.
+- build238은 700×600pt 선택창 배치, 세로·가로 곡 화면, 앱 전용 CalDigit 선택과 32초 nonzero CAF 생성까지 확인했지만 위 포커스 결함으로 출고 불가다. CAF의 레벨은 매우 낮아 음악 입력 품질을 증명하지 않는다. [native QA](qa/0.80-build238-native.md).
+- 동일 build239 소스의 Swift **1,327개·15 skip·실패 0**, Python MCP **47+39개**, agent kit **9개**가 통과했다. arm64 앱+7 helper의 strict deep 서명과 데모 27/27·kit 26/26·권리 고지 2/2의 byte 일치를 확인했다. 네 선택창의 native 포커스 검사와 [외부 Codex→MCP 모델 한 step 편집](qa/0.80-build239-model-native.md), 앱 콘솔·독립 Undo·저장·재열기·nonzero WAV를 통과했다. 빈 곡 DAW·화면 FPS·장시간 MP4·물리 청취는 여전히 열린 [출고 gate](qa/0.80-release-gates.md)다. 실제 모델 turn은 한 번만 수행했고 이후 하네스의 호출 수명주기·추가 write/shell 검사와 중복 실행 marker를 강화했다. 기존 trace standalone 재검증과 적대적 테스트 **11/11**이 통과했지만 새 설치 kit 해시 gate는 과거 실행에 소급 적용하지 않는다.
+
+## 0.80.0 · build238 — 핵심 입력·세로 작업 창·캔버스 통합 · 출고 gate 진행 중
+
+- 앱 전용 녹음 입력 선택을 격리된 AUHAL worker에 연결했다. UID 확인·장치 목록의 timeout/취소/PID 회수, 장치 중단 때 검증된 부분 CAF의 복구 저장과 손상·입력 불일치 파일 게시 금지를 추가했다. 시스템 기본 입력은 변경하지 않는다. 실제 마이크/TCC는 별도 native 검증이다.
+- 700–720pt 세로 창의 네 작업 선택창을 두 줄 상단바 아래에 맞췄다. 가로 창은 콘솔 오른쪽 우하단을 곡 fit·라벨·포트·케이블·파일 드롭·키보드 reveal에 사용하고, 80개 초과 원에서는 상단 안전 fit으로 계산량을 제한한다. 실제 데모의 Core fit zoom은 0.30256→0.32531(+7.5%); 화면 FPS 측정값은 아니다.
+- 해당 소스 Swift **1,325개·15 skip·실패 0**, Python MCP **47+39개**, agent kit **9개**를 통과했다. build238 arm64 앱+helper **7개**의 strict deep 서명과 데모 **27/27**, kit **26/26**, 권리 고지 **2/2**의 byte 일치를 확인했다. [자동 통합 QA](qa/0.80-build238.md). [격리 native](qa/0.80-build238-native.md)는 화면·입력 경로를 확인했으나 키보드 포커스 P1로 FAIL이다. 실제 모델 작업·빈 곡 DAW·긴 MP4와 정식 출고 gate는 진행 중이며 `v0.80.0` tag/Release는 아직 없다.
+
 ## 0.80.0 · build237 — 내부계수 native QA 통과 · 출고 gate 미통과
 
 - build236 격리 실제 앱에서 700×900pt 창·40pt 콘솔·500행 보관 상태로 재생 중 read-only 로그 100건/15.28초가 유입되자 앱 내부 `playback.frameCount` 증가율이 무입력 약 **51.7 count/s**에서 **10.9 count/s**로 떨어졌다. 같은 입력률의 콘솔 펼침/접힘 A/B도 **10.66/52.76 count/s**였다. 이는 실제 화면 FPS가 아니라 앱 내부 계수이며, build236 native 성능 gate는 **FAIL**이다. [build236 native QA](qa/0.80-build236-native.md).

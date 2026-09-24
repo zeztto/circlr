@@ -83,6 +83,24 @@ private final class CallbackFirstBackend:InterruptibleAudioCaptureBackend,@unche
             value.update(kw)
             sys.stdout.write(json.dumps(value) + '\\n'); sys.stdout.flush()
         request = json.loads(sys.stdin.readline())
+        if mode == 'catalog-ok':
+            if request.get('kind') != 'catalog': os._exit(8)
+            send('catalogDevice', request, device=dict(uid='fixture-input-uid', name='Fixture Mic', isDefault=False))
+            send('catalogDevice', request, device=dict(uid='default-mic', name='Default Mic', isDefault=True))
+            send('catalogFinished', request)
+            sys.exit(0)
+        if mode == 'catalog-duplicate':
+            send('catalogDevice', request, device=dict(uid='same', name='Mic A', isDefault=False))
+            send('catalogDevice', request, device=dict(uid='same', name='Mic B', isDefault=False))
+            send('catalogFinished', request)
+            sys.exit(0)
+        if mode == 'catalog-hang':
+            signal.signal(signal.SIGTERM, signal.SIG_IGN)
+            while True: time.sleep(1)
+        if mode == 'selected-request':
+            if request.get('deviceUID') != 'fixture-input-uid': os._exit(8)
+        if mode == 'default-request':
+            if request.get('deviceUID') is not None: os._exit(8)
         if mode == 'crash-start': os._exit(7)
         if mode == 'hang-start':
             signal.signal(signal.SIGTERM, signal.SIG_IGN)
@@ -95,17 +113,29 @@ private final class CallbackFirstBackend:InterruptibleAudioCaptureBackend,@unche
             sys.stdout.write('x' * 5000 + '\\n'); sys.stdout.flush()
             while True: time.sleep(1)
         if mode == 'wrong-session': request['session'] = '00000000-0000-0000-0000-000000000000'
-        send('started', request, sampleRate=48000, channels=2)
+        echoed_uid = request.get('deviceUID')
+        if mode == 'selected-no-echo': echoed_uid = None
+        if mode == 'selected-wrong-echo': echoed_uid = 'different-input-uid'
+        send('started', request, sampleRate=48000, channels=2, deviceUID=echoed_uid)
         if mode == 'crash-after-start': os._exit(7)
         if mode == 'wrong-session':
             while True: time.sleep(1)
-        send('progress', request, frames=(0 if mode == 'empty' else 500), peak=(0 if mode == 'empty' else 0.2), reachedLimit=(mode != 'empty'), interrupted=(mode != 'empty'))
+        progress_frames = 1500 if mode == 'recover-shorter' else (0 if mode == 'empty' else 500)
+        send('progress', request, frames=progress_frames, peak=(0 if mode == 'empty' else 0.2), reachedLimit=(mode != 'empty'), interrupted=(mode != 'empty'))
         stop = json.loads(sys.stdin.readline())
         if mode == 'hang-stop':
             signal.signal(signal.SIGTERM, signal.SIG_IGN)
             while True: time.sleep(1)
-        if mode != 'empty': shutil.copyfile(fixture, os.path.join(request['directory'], 'take.caf'))
-        if mode == 'bad-file':
+        if mode != 'empty' and mode != 'recover-empty': shutil.copyfile(fixture, os.path.join(request['directory'], 'take.caf'))
+        if mode == 'selected-uid-changed-stop':
+            send('failed', request, error='입력 장치가 변경되었습니다')
+        elif mode == 'recover-stop' or mode == 'recover-shorter':
+            send('finished', request, sampleRate=48000, channels=2, frames=1000, error='입력 장치가 연결 해제되었습니다')
+        elif mode == 'recover-bad-file':
+            send('finished', request, sampleRate=48000, channels=2, frames=2000, error='입력 장치가 연결 해제되었습니다')
+        elif mode == 'recover-empty':
+            send('finished', request, sampleRate=48000, channels=2, frames=0, error='입력 장치가 연결 해제되었습니다')
+        elif mode == 'bad-file':
             send('finished', request, sampleRate=48000, channels=2, frames=2000)
         else:
             send('finished', request, sampleRate=48000, channels=2, frames=(0 if mode == 'empty' else 1000))
@@ -125,6 +155,161 @@ private final class CallbackFirstBackend:InterruptibleAudioCaptureBackend,@unche
         }
     }
     private func dead(_ pid:Int32)->Bool {Darwin.kill(pid,0) != 0 && errno==ESRCH}
+
+    func testWorkerStartSelectionDecodeFailsClosed() throws {
+        let session=UUID()
+        let defaultStart=InputCaptureWorkerMessage(session:session,kind:.start)
+        XCTAssertEqual(try InputCaptureWorkerWire.checkedSelection(defaultStart),.systemDefault)
+        let selected=InputCaptureWorkerMessage(session:session,kind:.start,deviceUID:"input-a")
+        XCTAssertEqual(try InputCaptureWorkerWire.checkedSelection(selected),.deviceUID("input-a"))
+        let decoded=try InputCaptureWorkerWire.decode(Data(try InputCaptureWorkerWire.encode(selected).dropLast()))
+        XCTAssertEqual(try InputCaptureWorkerWire.checkedSelection(decoded),.deviceUID("input-a"))
+        for uid in ["", "bad\nuid",String(repeating:"x",count:1025)] {
+            let invalid=InputCaptureWorkerMessage(session:session,kind:.start,deviceUID:uid)
+            XCTAssertThrowsError(try InputCaptureWorkerWire.checkedSelection(invalid)) {
+                XCTAssertEqual($0 as? InputDeviceBindingError,.invalidSelection)
+            }
+        }
+    }
+
+    func testSelectedUIDCrossesOnlyChildStartWireAndValidatesBeforeLaunch() async throws {
+        let root=try root();defer{try? FileManager.default.removeItem(at:root)}
+        let worker=script(root,mode:"selected-request",fixture:try fixture(root))
+        let target=root.appendingPathComponent("selected.caf")
+        let backend=InputCaptureWorkerBackend(executable:worker,stopTimeout:0.3,grace:0.05,
+            selection:.deviceUID("fixture-input-uid"))
+        let control=try CaptureControl()
+        let format=try await Task.detached{try backend.start(to:target,maximumSeconds:2,control:control)}.value
+        XCTAssertEqual(format,CaptureFormat(sampleRate:48000,channels:2))
+        let take=try await Task.detached{try backend.stop()}.value
+        XCTAssertEqual(take?.frames,1000)
+        XCTAssertTrue(backend.reaped)
+
+        let invalid=InputCaptureWorkerBackend(executable:worker,selection:.deviceUID("bad\nuid"))
+        do {_ = try await Task.detached{try invalid.start(to:root.appendingPathComponent("invalid.caf"),maximumSeconds:2,control:try CaptureControl())}.value
+            XCTFail("Invalid UID reached worker")
+        }catch {XCTAssertEqual(error as? InputDeviceBindingError,.invalidSelection)}
+        XCTAssertNil(invalid.childPID)
+    }
+
+    func testDefaultStartWireContainsNoSelectedUID() async throws {
+        let root=try root();defer{try? FileManager.default.removeItem(at:root)}
+        let worker=script(root,mode:"default-request",fixture:try fixture(root))
+        let backend=InputCaptureWorkerBackend(executable:worker,stopTimeout:0.3,grace:0.05)
+        let target=root.appendingPathComponent("default.caf")
+        _ = try await Task.detached{try backend.start(to:target,maximumSeconds:2,control:try CaptureControl())}.value
+        let take=try await Task.detached{try backend.stop()}.value
+        XCTAssertEqual(take?.frames,1000)
+    }
+
+    func testSelectedInputRejectsOlderOrMismatchedWorkerEchoWithoutPublishing() async throws {
+        for mode in ["selected-no-echo","selected-wrong-echo"] {
+            let root=try root();defer{try? FileManager.default.removeItem(at:root)}
+            let worker=script(root,mode:mode,fixture:try fixture(root))
+            let target=root.appendingPathComponent("wrong-input.caf")
+            let backend=InputCaptureWorkerBackend(executable:worker,stopTimeout:0.2,grace:0.05,
+                selection:.deviceUID("fixture-input-uid"))
+            do {_ = try await Task.detached{try backend.start(to:target,maximumSeconds:2,control:try CaptureControl())}.value
+                XCTFail("Worker without matching UID echo started selected capture: \(mode)")
+            }catch {XCTAssertTrue(error.localizedDescription.contains("시작 응답"),"\(mode): \(error)")}
+            XCTAssertTrue(backend.reaped)
+            XCTAssertFalse(FileManager.default.fileExists(atPath:target.path))
+        }
+    }
+
+    func testSelectedStopErrorPublishesValidatedRecoveryThenReturnsFailure() async throws {
+        for mode in ["recover-stop","recover-shorter"] {
+            let root=try root();defer{try? FileManager.default.removeItem(at:root)}
+            let worker=script(root,mode:mode,fixture:try fixture(root))
+            let target=root.appendingPathComponent("recover.caf")
+            let backend=InputCaptureWorkerBackend(executable:worker,stopTimeout:0.3,grace:0.05,
+                selection:.deviceUID("fixture-input-uid"))
+            _ = try await Task.detached{try backend.start(to:target,maximumSeconds:2,control:try CaptureControl())}.value
+            do {_ = try await Task.detached{try backend.stop()}.value;XCTFail("Recovery must report stop failure")}
+            catch {XCTAssertTrue(error.localizedDescription.contains("복구 저장"))}
+            XCTAssertTrue(backend.reaped)
+            XCTAssertEqual(try PCM.read(target).count,1000)
+        }
+    }
+
+    func testSelectedRecoveryRejectsUIDChangeEmptyAndInvalidCAF() async throws {
+        for mode in ["selected-uid-changed-stop","recover-empty","recover-bad-file"] {
+            let root=try root();defer{try? FileManager.default.removeItem(at:root)}
+            let worker=script(root,mode:mode,fixture:try fixture(root))
+            let target=root.appendingPathComponent("rejected.caf")
+            let backend=InputCaptureWorkerBackend(executable:worker,stopTimeout:0.2,grace:0.05,
+                selection:.deviceUID("fixture-input-uid"))
+            _ = try await Task.detached{try backend.start(to:target,maximumSeconds:2,control:try CaptureControl())}.value
+            do {_ = try await Task.detached{try backend.stop()}.value;XCTFail("Invalid recovery accepted: \(mode)")}
+            catch {XCTAssertFalse(error.localizedDescription.contains("복구 저장"),"\(mode)")}
+            XCTAssertTrue(backend.reaped,mode)
+            XCTAssertFalse(FileManager.default.fileExists(atPath:target.path),mode)
+        }
+    }
+
+    func testSelectedRecoveryWillNotOverwriteOrPublishAfterCancel() async throws {
+        let root=try root();defer{try? FileManager.default.removeItem(at:root)}
+        let worker=script(root,mode:"recover-stop",fixture:try fixture(root))
+        let existing=root.appendingPathComponent("existing.caf")
+        try Data("original".utf8).write(to:existing)
+        let first=InputCaptureWorkerBackend(executable:worker,stopTimeout:0.3,grace:0.05,
+            selection:.deviceUID("fixture-input-uid"))
+        _ = try await Task.detached{try first.start(to:existing,maximumSeconds:2,control:try CaptureControl())}.value
+        do {_ = try await Task.detached{try first.stop()}.value;XCTFail("Recovery overwrote an existing take")}
+        catch {XCTAssertTrue(error.localizedDescription.contains("이미 있습니다"))}
+        XCTAssertEqual(try Data(contentsOf:existing),Data("original".utf8))
+
+        let entered=DispatchSemaphore(value:0),gate=DispatchSemaphore(value:0)
+        defer{gate.signal()}
+        let target=root.appendingPathComponent("cancelled-recovery.caf")
+        let second=InputCaptureWorkerBackend(executable:worker,stopTimeout:0.3,grace:0.05,
+            selection:.deviceUID("fixture-input-uid"),beforePublishRename:{entered.signal();gate.wait()})
+        _ = try await Task.detached{try second.start(to:target,maximumSeconds:2,control:try CaptureControl())}.value
+        let stop=Task.detached{try second.stop()}
+        try await until{entered.wait(timeout:.now()) == .success}
+        second.cancel();gate.signal()
+        do {_ = try await stop.value;XCTFail("Cancelled recovery was published")}
+        catch {XCTAssertTrue(error is CancellationError)}
+        XCTAssertFalse(FileManager.default.fileExists(atPath:target.path))
+        XCTAssertTrue(second.reaped)
+    }
+
+    func testIsolatedCatalogReturnsValidatedDevicesAndReapsHelper() async throws {
+        let root=try root();defer{try? FileManager.default.removeItem(at:root)}
+        let worker=script(root,mode:"catalog-ok")
+        let devices=try await IsolatedInputDeviceCatalog.available(executable:worker,timeout:1)
+        XCTAssertEqual(devices,[InputDeviceDescriptor(uid:"fixture-input-uid",name:"Fixture Mic",isDefault:false),
+                                InputDeviceDescriptor(uid:"default-mic",name:"Default Mic",isDefault:true)])
+        if let raw=try? String(contentsOf:root.appendingPathComponent("pid"),encoding:.utf8),let pid=Int32(raw) {
+            XCTAssertTrue(dead(pid))
+        }else{XCTFail("Catalog child PID was not recorded")}
+    }
+
+    func testIsolatedCatalogRejectsDuplicateAndTimesOutHungHelper() async throws {
+        let root=try root();defer{try? FileManager.default.removeItem(at:root)}
+        do {_ = try await IsolatedInputDeviceCatalog.available(executable:script(root,mode:"catalog-duplicate"),timeout:1)
+            XCTFail("Duplicate UID accepted")
+        }catch {XCTAssertTrue(error.localizedDescription.contains("목록"))}
+        do {_ = try await IsolatedInputDeviceCatalog.available(executable:script(root,mode:"catalog-hang"),timeout:0.1)
+            XCTFail("Hung catalog accepted")
+        }catch {XCTAssertTrue(error.localizedDescription.contains("제한 시간"))}
+        let raw=try String(contentsOf:root.appendingPathComponent("pid"),encoding:.utf8)
+        let pid=try XCTUnwrap(Int32(raw))
+        try await until{self.dead(pid)}
+    }
+
+    func testIsolatedCatalogCancellationTerminatesChild() async throws {
+        let root=try root();defer{try? FileManager.default.removeItem(at:root)}
+        let worker=script(root,mode:"catalog-hang")
+        let query=Task{try await IsolatedInputDeviceCatalog.available(executable:worker,timeout:5)}
+        try await until{FileManager.default.fileExists(atPath:root.appendingPathComponent("pid").path)}
+        query.cancel()
+        do {_ = try await query.value;XCTFail("Cancelled catalog returned")}
+        catch {XCTAssertTrue(error is CancellationError)}
+        let raw=try String(contentsOf:root.appendingPathComponent("pid"),encoding:.utf8)
+        let pid=try XCTUnwrap(Int32(raw))
+        try await until{self.dead(pid)}
+    }
 
     func testHungStartCancellationReapsPIDAndAllowsFreshRetry()async throws {
         let root=try root();defer{try? FileManager.default.removeItem(at:root)}

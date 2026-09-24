@@ -49,7 +49,9 @@ extension AppStore {
             lane.notes[i]=KeyboardEditing.changed(lane.notes[i],by:change,beats:editorBeats)
             selectedBeat=lane.notes[i].beat;setLane(lane)
         case 51,117:removeNote()
-        case 49:play()
+        case 49:
+            guard PlaybackSpaceShortcut.accepts(event,in:event.window) else{return false}
+            play()
         default:return false
         }
         return true

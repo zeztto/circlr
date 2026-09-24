@@ -19,10 +19,16 @@ public enum InputCaptureWorkerService {
         return url
     }
     private final class Session {
-        let id:UUID,control:CaptureControl,backend=EngineCaptureBackend(),url:URL
+        let id:UUID,control:CaptureControl,backend:AudioCaptureBackend,url:URL
         let lock=NSLock()
         var started=false,finished=false,peak:Float=0
-        init(_ id:UUID,_ url:URL)throws {self.id=id;self.url=url;control=try CaptureControl()}
+        init(_ id:UUID,_ url:URL,selection:InputDeviceSelection)throws {
+            self.id=id;self.url=url;control=try CaptureControl()
+            switch selection {
+            case .systemDefault:backend=EngineCaptureBackend()
+            case .deviceUID:backend=SelectedInputCaptureBackend(selection:selection)
+            }
+        }
         func setStarted(){lock.lock();started=true;lock.unlock()}
         func canStop()->Bool{lock.lock();defer{lock.unlock()};return started && !finished}
         func setFinished(){lock.lock();finished=true;lock.unlock()}
@@ -49,19 +55,42 @@ public enum InputCaptureWorkerService {
             let line=Data(pending[..<end]);pending.removeSubrange(...end)
             guard pending.isEmpty,let message=try? InputCaptureWorkerWire.decode(line) else{return 2}
             if session == nil {
+                if message.kind == .catalog {
+                    guard message.directory == nil,message.maximumSeconds == nil,message.deviceUID == nil,
+                          message.device == nil,message.sampleRate == nil,message.channels == nil,
+                          message.frames == nil,message.peak == nil,message.error == nil else{return 2}
+                    do {
+                        let devices=try InputDeviceCatalog.available()
+                        guard devices.count<=128 else{return 2}
+                        for device in devices {
+                            try InputDeviceSelection.deviceUID(device.uid).validate()
+                            output.send(InputCaptureWorkerMessage(session:message.session,kind:.catalogDevice,device:device))
+                        }
+                        output.send(InputCaptureWorkerMessage(session:message.session,kind:.catalogFinished))
+                        return 0
+                    }catch {
+                        output.send(InputCaptureWorkerMessage(session:message.session,kind:.failed,error:error.localizedDescription))
+                        return 2
+                    }
+                }
                 guard message.kind == .start,let raw=message.directory,
                       let maximum=message.maximumSeconds,maximum.isFinite,maximum>0,maximum<=86400,
-                      message.sampleRate == nil,message.frames == nil else{return 2}
+                      message.device == nil,message.sampleRate == nil,message.channels == nil,
+                      message.frames == nil,message.peak == nil,message.error == nil else{return 2}
                 do {
+                    let selection=try InputCaptureWorkerWire.checkedSelection(message)
                     let directory=try privateDirectory(raw)
                     let url=directory.appendingPathComponent("take.caf")
                     guard !FileManager.default.fileExists(atPath:url.path) else{return 2}
-                    let current=try Session(message.session,url);session=current
+                    let current=try Session(message.session,url,selection:selection);session=current
                     queue.async {
                         do {
                             let format=try current.backend.start(to:url,maximumSeconds:maximum,control:current.control)
                             current.setStarted()
-                            output.send(InputCaptureWorkerMessage(session:current.id,kind:.started,sampleRate:format.sampleRate,channels:format.channels))
+                            let confirmedUID:String?
+                            if case .deviceUID(let uid)=selection {confirmedUID=uid} else{confirmedUID=nil}
+                            output.send(InputCaptureWorkerMessage(session:current.id,kind:.started,
+                                deviceUID:confirmedUID,sampleRate:format.sampleRate,channels:format.channels))
                             let timer=DispatchSource.makeTimerSource(queue:DispatchQueue(label:"circlr.input-worker.meter"))
                             timer.schedule(deadline:.now()+0.1,repeating:.milliseconds(100))
                             timer.setEventHandler {
@@ -87,6 +116,13 @@ public enum InputCaptureWorkerService {
                             sampleRate:result?.format.sampleRate,channels:result?.format.channels,
                             frames:result?.frames ?? 0,peak:current.control.takePeak(),
                             reachedLimit:current.control.reachedLimit,interrupted:current.control.interrupted))
+                    }catch let recovery as RecoverableSelectedInputError {
+                        current.setFinished()
+                        let reason=recovery.reason.utf8.count<=1024 && !recovery.reason.isEmpty
+                            ? recovery.reason : "입력 장치가 녹음 중 중단되었습니다"
+                        output.send(InputCaptureWorkerMessage(session:current.id,kind:.finished,
+                            sampleRate:recovery.audio.format.sampleRate,channels:recovery.audio.format.channels,
+                            frames:recovery.audio.frames,interrupted:true,error:reason))
                     }catch{
                         current.setFinished()
                         output.send(InputCaptureWorkerMessage(session:current.id,kind:.failed,error:error.localizedDescription))

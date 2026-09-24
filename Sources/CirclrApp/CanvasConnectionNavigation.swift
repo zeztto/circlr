@@ -90,7 +90,19 @@ extension AlbumCanvasView {
         let bottomClearance = portToolsCanFit(in: viewport) ? portToolsHeight(in: viewport) + 20 : 20
         let safe = CGRect(x: viewport.minX + 24, y: viewport.minY + bottomClearance,
                           width: viewport.width - 48, height: viewport.height - bottomClearance - 24)
-        if let target = CirclePortPresentation.cameraRevealingSelected(port, on: node, current: camera, within: safe) {
+        let alreadyVisibleInLowerRight:Bool = {
+            guard let console=consoleObstruction,node.radius*camera.zoom>45 else{return false}
+            let circle=CanvasLabelCircle(id:node.id,center:CGPoint(x:node.center.x,y:node.center.y),radius:node.outerRadius)
+            guard CanvasWorkspaceGeometry.circlesVisible([circle],through:camera,within:canvasViewport,
+                                                         avoiding:console) else{return false}
+            let center=camera.screen(node.center)
+            guard let point=try? CirclePortGeometry.anchor(center:center,radius:node.outerRadius*camera.zoom,
+                                                             port:port,octant:port.defaultOctant) else{return false}
+            return CanvasWorkspaceGeometry.containsInteractivePoint(CGPoint(x:point.x,y:point.y),
+                within:canvasViewport.insetBy(dx:12,dy:12),avoiding:console.insetBy(dx:-14,dy:-14))
+        }()
+        if !alreadyVisibleInLowerRight,
+           let target = CirclePortPresentation.cameraRevealingSelected(port, on: node, current: camera, within: safe) {
             // Keyboard selection must remain actionable immediately, including while the
             // orbit is tiny. Animated focus could leave the selected control hidden mid-flight.
             setCamera(target)
@@ -118,11 +130,17 @@ extension AlbumCanvasView {
 
     func revealCable(_ edge: CircleSceneEdge) {
         guard let curve = connectionCurve(edge) else { return }
+        if let console=consoleObstruction {
+            if CanvasWorkspaceGeometry.curveVisible(curve,within:canvasViewport,avoiding:console) {return}
+        }
         let safe = workspaceViewport.insetBy(dx: 70, dy: 70)
-        let from = CGPoint(x: curve.from.x, y: curve.from.y), to = CGPoint(x: curve.to.x, y: curve.to.y)
-        guard !safe.contains(from) || !safe.contains(to) else { return }
-        let factor = max(0.01, min(1, safe.width/max(1, abs(to.x-from.x)), safe.height/max(1, abs(to.y-from.y))))
-        let center = Point((from.x+to.x)/2, (from.y+to.y)/2)
+        guard !CanvasWorkspaceGeometry.curveVisible(curve,within:workspaceViewport,margin:70) else { return }
+        let points=[curve.from,curve.control1,curve.control2,curve.to]
+        guard points.allSatisfy({$0.x.isFinite && $0.y.isFinite}) else{return}
+        let minX=points.map(\.x).min()!,maxX=points.map(\.x).max()!
+        let minY=points.map(\.y).min()!,maxY=points.map(\.y).max()!
+        let factor=max(0.01,min(1,safe.width/max(1,maxX-minX),safe.height/max(1,maxY-minY)))
+        let center=Point((minX+maxX)/2,(minY+maxY)/2)
         var next = camera.zoomed(to: camera.zoom*factor, around: center)
         next.pan.x += safe.midX-center.x; next.pan.y += safe.midY-center.y
         setCamera(next)

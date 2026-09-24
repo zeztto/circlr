@@ -2,6 +2,23 @@ import XCTest
 @testable import CirclrCore
 
 final class PlaybackFramingTests:XCTestCase {
+    func testDemoSongFitAvoidsConsoleWithoutShrinkingBelowTopBand() throws {
+        let root=URL(fileURLWithPath:#filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let project=try JSONDecoder().decode(Project.self,from:Data(contentsOf:root.appendingPathComponent("Resources/Demos/f0r-h3r.circlr/manifest.json")))
+        let scene=try HierarchySceneBuilder.build(project)
+        let song=try XCTUnwrap(scene.nodes.first{$0.role == .song})
+        let viewport=CanvasWorkspaceGeometry.viewport(width:1440,height:900)
+        let console=CGRect(x:20,y:704,width:820,height:180)
+        let upper=CanvasWorkspaceGeometry.viewport(width:1440,height:900,console:console)
+        let old=try XCTUnwrap(PlaybackFraming.camera(for:song,in:scene,viewport:upper))
+        let new=try XCTUnwrap(PlaybackFraming.camera(for:song,in:scene,viewport:viewport,avoiding:console))
+        XCTAssertGreaterThanOrEqual(new.zoom+1e-8,old.zoom)
+        for circle in CanvasWorkspaceGeometry.contextCircles(song.id,in:scene) {
+            let p=new.screen(Point(circle.center.x,circle.center.y)),r=circle.radius*new.zoom
+            let rect=CGRect(x:p.x-r,y:p.y-r,width:r*2,height:r*2)
+            XCTAssertFalse(rect.intersects(console.insetBy(dx:-13.99,dy:-13.99)))
+        }
+    }
     func testActualDemoSoundOrbitRevealsItsFullNearbySignalChain()throws {
         let root=URL(fileURLWithPath:#filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
         let project=try JSONDecoder().decode(Project.self,from:Data(contentsOf:root.appendingPathComponent("Resources/Demos/f0r-h3r.circlr/manifest.json")))
@@ -59,6 +76,53 @@ final class PlaybackFramingTests:XCTestCase {
                     XCTAssertTrue(viewport.contains(rect));XCTAssertGreaterThan(r,25)
                     if let console {XCTAssertFalse(console.intersects(rect))}
                 }
+            }
+        }
+    }
+    func testFollowFitKeepsSectionCirclesOutOfConsoleAtWideAndPortraitWidths() throws {
+        let (scene,section)=try fixture()
+        let circles=CanvasWorkspaceGeometry.contextCircles(section.id,in:scene)
+        XCTAssertFalse(circles.isEmpty)
+        for width in [700.0,1440.0] {
+            for consoleHeight in [40.0,180.0] {
+                let viewport=CanvasWorkspaceGeometry.viewport(width:width,height:900)
+                let console=CGRect(x:20,y:900-consoleHeight-16,
+                                   width:min(820,width-40),height:consoleHeight)
+                let camera=try XCTUnwrap(PlaybackFraming.camera(for:section,in:scene,
+                    viewport:viewport,avoiding:console))
+                let follow=try XCTUnwrap(PlaybackFollowResolver.camera(for:section.id,
+                    settings:PlaybackFollowSettings(target:.section),current:HierarchyCamera(),
+                    scene:scene,viewport:viewport,avoiding:console))
+                XCTAssertEqual(camera,follow)
+                for circle in circles {
+                    let p=camera.screen(Point(circle.center.x,circle.center.y)),r=circle.radius*camera.zoom
+                    let frame=CGRect(x:p.x-r,y:p.y-r,width:r*2,height:r*2)
+                    XCTAssertTrue(viewport.insetBy(dx:0.01,dy:0.01).contains(frame))
+                    XCTAssertFalse(frame.intersects(console.insetBy(dx:-13.99,dy:-13.99)))
+                }
+            }
+        }
+    }
+    func testKeepZoomPreservesScaleWhenSafeAndFallsBackWhenConsoleBlocksIt() throws {
+        let (scene,section)=try fixture()
+        let viewport=CanvasWorkspaceGeometry.viewport(width:1440,height:900)
+        let console=CGRect(x:20,y:704,width:820,height:180)
+        let settings=PlaybackFollowSettings(target:.section,framing:.keepZoom)
+        let fit=try XCTUnwrap(PlaybackFraming.camera(for:section,in:scene,viewport:viewport,
+            avoiding:console))
+        let safe=try XCTUnwrap(PlaybackFollowResolver.camera(for:section.id,settings:settings,
+            current:HierarchyCamera(zoom:fit.zoom*0.8),scene:scene,viewport:viewport,avoiding:console))
+        XCTAssertEqual(safe.zoom,fit.zoom*0.8,accuracy:1e-8)
+        let reduced=try XCTUnwrap(PlaybackFollowResolver.camera(for:section.id,settings:settings,
+            current:HierarchyCamera(zoom:fit.zoom*1.8),scene:scene,viewport:viewport,avoiding:console))
+        XCTAssertLessThan(reduced.zoom,fit.zoom*1.8)
+        XCTAssertEqual(reduced.zoom,fit.zoom,accuracy:1e-6)
+        for camera in [safe,reduced] {
+            for circle in CanvasWorkspaceGeometry.contextCircles(section.id,in:scene) {
+                let p=camera.screen(Point(circle.center.x,circle.center.y)),r=circle.radius*camera.zoom
+                let frame=CGRect(x:p.x-r,y:p.y-r,width:r*2,height:r*2)
+                XCTAssertTrue(viewport.insetBy(dx:0.01,dy:0.01).contains(frame))
+                XCTAssertFalse(frame.intersects(console.insetBy(dx:-13.99,dy:-13.99)))
             }
         }
     }

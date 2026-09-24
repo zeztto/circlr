@@ -109,11 +109,12 @@ struct RootView: View {
     private static let appBuild=Bundle.main.object(forInfoDictionaryKey:"CFBundleVersion") as? String ?? "development"
     @ObservedObject var store: AppStore
     var body: some View {
-        GeometryReader {geometry in workspace(width:geometry.size.width)}
+        GeometryReader {geometry in workspace(size:geometry.size)}
             .frame(minWidth:700,minHeight:600)
     }
-    private func workspace(width:CGFloat)->some View {
-        let chrome=WorkspaceChromeLayout(width:width)
+    private func workspace(size:CGSize)->some View {
+        let chrome=WorkspaceChromeLayout(width:size.width)
+        let overlays=WorkspaceOverlayLayout(viewport:size,headerHeight:chrome.headerHeight)
         return VStack(spacing:0) {
             if !store.viewingMode {
                 header(chrome)
@@ -145,7 +146,7 @@ struct RootView: View {
             if !store.viewingMode,let palette=store.commandPalette {
                 ZStack(alignment:.top) {
                     Color.black.opacity(0.25).contentShape(Rectangle()).onTapGesture{store.commandPalette=nil;store.focusCanvas?()}
-                    StudioCommandPalette(store:store,palette:palette).id(palette.id).padding(.top,85)
+                    StudioCommandPalette(store:store,palette:palette).id(palette.id).padding(.top,overlays.topInset)
                 }
             }
         }
@@ -153,7 +154,7 @@ struct RootView: View {
             if !store.viewingMode,store.navigationOpen {
                 ZStack(alignment:.top) {
                     Color.black.opacity(0.3).contentShape(Rectangle()).onTapGesture{store.navigationOpen=false;store.focusCanvas?()}
-                    StudioNavigationView(store:store).id(store.navigationIntent.id).padding(.top,85)
+                    StudioNavigationView(store:store,size:overlays.pickerSize).id(store.navigationIntent.id).padding(.top,overlays.topInset)
                 }
             }
         }
@@ -161,7 +162,7 @@ struct RootView: View {
             if !store.viewingMode,store.keyboardHelp {
                 ZStack(alignment:.top) {
                     Color.black.opacity(0.25).contentShape(Rectangle()).onTapGesture{store.keyboardHelp=false}
-                    KeyboardHelpView(store:store).padding(.top,85)
+                    KeyboardHelpView(store:store).padding(.top,overlays.topInset)
                 }
             }
         }
@@ -169,7 +170,7 @@ struct RootView: View {
             if !store.viewingMode,store.libraryOpen {
                 ZStack(alignment:.top) {
                     Color.black.opacity(0.3).contentShape(Rectangle()).onTapGesture{store.closeMediaLibrary()}
-                    MediaLibraryView(store:store).padding(.top,85)
+                    MediaLibraryView(store:store,size:overlays.pickerSize).padding(.top,overlays.topInset)
                 }
             }
         }
@@ -177,7 +178,7 @@ struct RootView: View {
             if !store.viewingMode,let request=store.soundPickerRequest {
                 ZStack(alignment:.top) {
                     Color.black.opacity(0.3).contentShape(Rectangle()).onTapGesture{store.closeSoundPicker()}
-                    SoundPickerView(store:store,request:request).id(request.id).padding(.top,85)
+                    SoundPickerView(store:store,request:request,size:overlays.pickerSize).id(request.id).padding(.top,overlays.topInset)
                 }
             }
         }
@@ -185,7 +186,7 @@ struct RootView: View {
             if !store.viewingMode,let request=store.arrangementPickerRequest {
                 ZStack(alignment:.top) {
                     Color.black.opacity(0.3).contentShape(Rectangle())
-                    ArrangementPickerView(store:store,request:request).id(request.id).padding(.top,85)
+                    ArrangementPickerView(store:store,request:request,size:overlays.pickerSize).id(request.id).padding(.top,overlays.topInset)
                 }
             }
         }
@@ -193,7 +194,7 @@ struct RootView: View {
             if !store.viewingMode,store.outputPreferencesOpen {
                 ZStack(alignment:.top) {
                     Color.black.opacity(0.3).contentShape(Rectangle()).onTapGesture{store.closeOutputPreferences()}
-                    OutputPreferencesView(store:store,preferences:store.outputPreferences).padding(.top,85)
+                    OutputPreferencesView(store:store,preferences:store.outputPreferences).padding(.top,overlays.topInset)
                 }
             }
         }

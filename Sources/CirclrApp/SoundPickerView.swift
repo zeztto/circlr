@@ -99,12 +99,14 @@ struct SoundPickerButton:View {
 struct SoundPickerView:View {
     @ObservedObject var store:AppStore
     let request:SoundPickerRequest
+    let size:CGSize
     @State private var query=""
     @State private var category:SoundCategory?
     @State private var bankDrums:Bool?
     @State private var highlighted:SoundChoice?
     @State private var searchFocus=UUID()
     @State private var notice=""
+    @FocusState private var keyboardFocus:String?
     private var catalog:[SoundCatalogItem] {store.soundCatalog(request)}
     private var rows:[SoundCatalogItem] {SoundSelection.search(catalog,query:query,category:category,bankDrums:bankDrums)}
     private var active:SoundChoice? {rows.contains{$0.id==highlighted} ? highlighted:rows.first?.id}
@@ -119,14 +121,16 @@ struct SoundPickerView:View {
         VStack(alignment:.leading,spacing:0) {
             HStack {
                 Text(request.target == .instrument ? "음색·악기 찾기":"Audio Unit 이펙트 찾기").font(.system(size:18,weight:.semibold))
-                Spacer();Button("닫기 · Esc"){store.closeSoundPicker()}.foregroundStyle(StudioTheme.secondary)
+                Spacer();Button("닫기 · Esc"){store.closeSoundPicker()}.frame(minHeight:32).foregroundStyle(StudioTheme.secondary)
+                    .focusable().focused($keyboardFocus,equals:"close")
             }.padding(18)
             Text(request.destination).font(.system(size:12)).foregroundStyle(StudioTheme.secondary).lineLimit(2)
                 .fixedSize(horizontal:false,vertical:true)
                 .help(request.destination).padding(.horizontal,18).padding(.bottom,12)
             HStack(spacing:10) {
                 Image(systemName:"magnifyingglass").foregroundStyle(StudioTheme.secondary)
-                CommandSearchField(text:$query,onMove:move,onSubmit:applySelected,onCancel:{store.closeSoundPicker()},placeholder:"음색 · 계열 · 제조사 · #1–128 검색").id(searchFocus)
+                CommandSearchField(text:$query,onMove:move,onSubmit:applySelected,onCancel:{store.closeSoundPicker()},placeholder:"음색 · 계열 · 제조사 · #1–128 검색").id(searchFocus).frame(minHeight:32)
+                    .focused($keyboardFocus,equals:"search")
             }.padding(.horizontal,18).padding(.bottom,14)
             if request.target == .instrument {
                 HStack(spacing:8) {
@@ -143,8 +147,9 @@ struct SoundPickerView:View {
             HStack(alignment:.top,spacing:8) {
                 Text("현재 · "+request.currentName+(missing ? " · 현재 목록에 없음":"")).lineLimit(2).fixedSize(horizontal:false,vertical:true).help(request.currentName)
                 Spacer(minLength:8)
-                Button("현재 음색 찾기"){query="";category=nil;bankDrums=nil;highlighted=request.currentChoice;searchFocus=UUID()}
+                    Button("현재 음색 찾기"){query="";category=nil;bankDrums=nil;highlighted=request.currentChoice;searchFocus=UUID();keyboardFocus="search"}
                     .disabled(!catalog.contains{$0.id==request.currentChoice})
+                    .focusable().focused($keyboardFocus,equals:"current")
                 Text("\(rows.count)개 결과").monospacedDigit().fixedSize()
             }.font(.system(size:12)).foregroundStyle(StudioTheme.secondary).padding(.horizontal,18).padding(.bottom,12)
             if !current || !notice.isEmpty {
@@ -155,15 +160,20 @@ struct SoundPickerView:View {
                 ScrollView {
                     if rows.isEmpty {Text(emptyMessage)
                         .font(.system(size:13)).foregroundStyle(StudioTheme.secondary).padding(30)}
-                    LazyVStack(spacing:1) {ForEach(rows){entry in row(entry)}}
+                    LazyVStack(spacing:1) {ForEach(Array(rows.enumerated()),id:\.element.id){index,entry in row(entry,index:index)}}
                 }.onChange(of:active){_,id in if let id{proxy.scrollTo(id,anchor:.center)}}
                     .onChange(of:query){_,value in highlighted=value.isEmpty ? request.currentChoice:rows.first?.id;notice=""}
+                    .onChange(of:keyboardFocus){_,focus in
+                        guard let focus,focus.hasPrefix("row-"),let index=Int(focus.dropFirst(4)),rows.indices.contains(index) else{return}
+                        proxy.scrollTo(rows[index].id,anchor:.center)
+                    }
             }
             Divider().overlay(StudioTheme.line)
-            Text("↑↓ 선택 · Return 음색 적용 · Esc 취소 · 같은 음색을 선택하면 현재 설정 유지")
-                .font(.system(size:12)).foregroundStyle(StudioTheme.secondary).padding(18)
-        }.frame(width:850,height:560).background(StudioTheme.surface,in:RoundedRectangle(cornerRadius:10))
+            Text(size.height<500 ? "↑↓ 선택 · Return 적용 · Esc 닫기":"↑↓ 선택 · Return 음색 적용 · Esc 취소 · 같은 음색을 선택하면 현재 설정 유지")
+                .font(.system(size:12)).foregroundStyle(StudioTheme.secondary).padding(size.height<500 ? 10:18)
+        }.frame(width:size.width,height:size.height).background(StudioTheme.surface,in:RoundedRectangle(cornerRadius:10))
             .overlay(RoundedRectangle(cornerRadius:10).strokeBorder(StudioTheme.line))
+            .background(OverlayKeyboardKeys(active:{store.soundPickerRequest?.id==request.id},move:moveKeyboardFocus,cancel:{store.closeSoundPicker()}).frame(width:0,height:0))
             .onAppear{if case .soundBank=request.currentChoice{category = .soundBank};highlighted=request.currentChoice}
     }
     private var emptyMessage:String {
@@ -171,13 +181,14 @@ struct SoundPickerView:View {
         return catalog.isEmpty ? "설치된 AU 이펙트가 없습니다. 설치 후 앱을 다시 열어주세요.":"일치하는 음색이 없습니다. 검색어나 종류를 바꿔보세요."
     }
     private func bankFilter(_ title:String,drums:Bool?)->some View {
-        Button{bankDrums=drums;highlighted=nil;notice="";searchFocus=UUID()}label:{
+        Button{bankDrums=drums;highlighted=nil;notice="";searchFocus=UUID();keyboardFocus="search"}label:{
             Text(title).font(.system(size:12,weight:bankDrums==drums ? .semibold:.medium))
                 .foregroundStyle(bankDrums==drums ? StudioTheme.accent:StudioTheme.text).padding(.horizontal,9).padding(.vertical,7)
                 .background(bankDrums==drums ? StudioTheme.raised:Color.clear,in:RoundedRectangle(cornerRadius:5))
         }.buttonStyle(.plain).accessibilityAddTraits(bankDrums==drums ? .isSelected:[])
+            .focusable().focused($keyboardFocus,equals:"bank-\(title)")
     }
-    private func row(_ entry:SoundCatalogItem)->some View {
+    private func row(_ entry:SoundCatalogItem,index:Int)->some View {
         Button{apply(entry.id)}label:{
             HStack(spacing:12) {
                 VStack(alignment:.leading,spacing:6) {
@@ -189,13 +200,26 @@ struct SoundPickerView:View {
         }.buttonStyle(.plain).id(entry.id).disabled(!current)
             .accessibilityLabel(entry.title+" · "+entry.detail).help(entry.title+" · "+entry.detail)
             .accessibilityAddTraits(active==entry.id ? .isSelected:[])
+            .focusable().focused($keyboardFocus,equals:"row-\(index)")
     }
     private func filter(_ title:String,value:SoundCategory?)->some View {
-        Button{category=value;bankDrums=nil;highlighted=nil;notice="";searchFocus=UUID()}label:{
+        Button{category=value;bankDrums=nil;highlighted=nil;notice="";searchFocus=UUID();keyboardFocus="search"}label:{
             Text(title).font(.system(size:12,weight:category==value ? .semibold:.medium))
                 .foregroundStyle(category==value ? StudioTheme.accent:StudioTheme.text).padding(.horizontal,9).padding(.vertical,7)
                 .background(category==value ? StudioTheme.raised:Color.clear,in:RoundedRectangle(cornerRadius:5))
         }.buttonStyle(.plain).accessibilityAddTraits(category==value ? .isSelected:[])
+            .focusable().focused($keyboardFocus,equals:"category-\(title)")
+    }
+    private var keyboardOrder:[String] {
+        var order=["search","close"]
+        if catalog.contains(where:{$0.id==request.currentChoice}) {order.append("current")}
+        if request.target == .instrument {order += ["category-전체"]+[SoundCategory.synth,.soundBank,.instrument].map{"category-\($0.label)"}}
+        if category == .soundBank {order += ["bank-전체 뱅크","bank-멜로디","bank-드럼 킷"]}
+        if current {order += rows.indices.map{"row-\($0)"}}
+        return order
+    }
+    private func moveKeyboardFocus(_ backward:Bool) {
+        keyboardFocus=OverlayKeyboardTraversal.next(in:keyboardOrder,current:keyboardFocus,backward:backward)
     }
     private func move(_ delta:Int) {
         guard !rows.isEmpty else{return};let index=rows.firstIndex{$0.id==active} ?? 0

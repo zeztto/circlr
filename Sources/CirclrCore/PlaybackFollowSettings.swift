@@ -44,13 +44,24 @@ public enum PlaybackFollowResolver {
     }
 
     public static func camera(for target: CircleAddress, settings: PlaybackFollowSettings,
-                              current: HierarchyCamera, scene: HierarchyScene, viewport: CGRect) -> HierarchyCamera? {
-        guard let node=scene.node(target), let fitted=PlaybackFraming.camera(for:node,in:scene,viewport:viewport) else { return nil }
+                              current: HierarchyCamera, scene: HierarchyScene, viewport: CGRect,
+                              avoiding console:CGRect?=nil) -> HierarchyCamera? {
+        guard let node=scene.node(target), let fitted=PlaybackFraming.camera(for:node,in:scene,viewport:viewport,avoiding:console) else { return nil }
         guard settings.framing == .keepZoom else { return fitted }
         guard current.zoom.isFinite, (1e-6...1e12).contains(current.zoom) else { return nil }
-        // Preserve the fitted content center, not the outer container's sometimes offset center.
-        let center=Point((viewport.midX-fitted.pan.x)/fitted.zoom,(viewport.midY-fitted.pan.y)/fitted.zoom)
-        return HierarchyCamera(pan:Point(viewport.midX-center.x*current.zoom,viewport.midY-center.y*current.zoom),zoom:current.zoom)
+        if let console {
+            // Keep the requested zoom where it fits. If the orbit disks cannot all
+            // avoid the console at that scale, reduce only as far as visibility needs.
+            let circles=CanvasWorkspaceGeometry.contextCircles(target,in:scene)
+            return CanvasWorkspaceGeometry.fittingCamera(circles:circles,within:viewport,
+                avoiding:console,marginX:min(56,viewport.width*0.12),
+                marginY:min(40,viewport.height*0.12),maximumZoom:current.zoom)
+        }
+        // Preserve the actual fitted content anchor, not the container's center.
+        guard let content=scene.contextBounds(of:target) else{return nil}
+        let center=Point(content.midX,content.midY),anchor=fitted.screen(center)
+        return HierarchyCamera(pan:Point(anchor.x-center.x*current.zoom,
+                                          anchor.y-center.y*current.zoom),zoom:current.zoom)
     }
 }
 

@@ -3,6 +3,18 @@ import SwiftUI
 import Combine
 import CirclrCore
 
+/// Transport responds to Space only when it is a key command, not text input or a modified shortcut.
+enum PlaybackSpaceShortcut {
+    static func accepts(keyCode:UInt16,modifiers:NSEvent.ModifierFlags,textInputActive:Bool)->Bool {
+        keyCode==49 && !textInputActive && modifiers.intersection([.command,.control,.option,.shift,.function]).isEmpty
+    }
+    static func accepts(_ event:NSEvent,in window:NSWindow?)->Bool {
+        let responder=window?.firstResponder
+        return accepts(keyCode:event.keyCode,modifiers:event.modifierFlags,
+                       textInputActive:responder is NSTextView || responder is NSTextField)
+    }
+}
+
 struct SongCanvas:NSViewRepresentable {
     @ObservedObject var store:AppStore
     func makeNSView(context:Context)->CircleCanvas { CircleCanvas(store:store) }
@@ -309,7 +321,7 @@ struct SongCanvas:NSViewRepresentable {
         else if event.keyCode==53 {store.closeFocus();store.panMode=false}
         else if event.keyCode==36 {if let id=store.selection.first {store.openCircle(id)} else if let id=store.edgeSelection {store.openEdge(id)}}
         else if event.keyCode==51 || event.keyCode==117 {store.removeSelection()}
-        else if event.keyCode==49 {store.play()}
+        else if PlaybackSpaceShortcut.accepts(event,in:window) {store.play()}
         else {super.keyDown(with:event)}
     }
     override func menu(for event:NSEvent)->NSMenu? {

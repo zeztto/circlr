@@ -30,12 +30,13 @@ extension AlbumCanvasView {
             return .init(endpoint: endpoint, anchor: CGPoint(x:handle.point.x,y:handle.point.y), size:CGSize(width:width,height:23), octant:handle.octant, priority:active ? 10:0)
         }
         var obstacles = labelPlacements.map { $0.rect.insetBy(dx:-4,dy:-4) }
+        if let console=consoleObstruction {obstacles.append(console.insetBy(dx:-14,dy:-14))}
         obstacles += all.map { CGRect(x:$0.point.x-10,y:$0.point.y-10,width:20,height:20) }
         if let editor { obstacles.append(editor.frame) }
         if let cableTools, !cableTools.isHidden { obstacles.append(cableTools.frame) }
         if let portTools, !portTools.isHidden { obstacles.append(portTools.frame) }
         if let node = store.selectedCircle, let point = visibleTimeHandle(node) { obstacles.append(CGRect(x:point.x-14,y:point.y-14,width:28,height:28)) }
-        return CirclePortPresentation.labels(requests, within:workspaceViewport, avoiding:obstacles)
+        return CirclePortPresentation.labels(requests, within:canvasViewport, avoiding:obstacles)
     }
 
     func drawPortLabels() {

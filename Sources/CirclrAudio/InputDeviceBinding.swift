@@ -141,6 +141,20 @@ final class CoreAudioInputDeviceAccess:InputDeviceAccess {
 }
 
 public enum InputDeviceCatalog {
+    static func validated(_ ids:[AudioDeviceID],defaultID:AudioDeviceID?,access:any InputDeviceAccess) -> [InputDeviceDescriptor] {
+        var seen=Set<String>()
+        return ids.compactMap {id in
+            // A single broken legacy driver must not hide healthy input devices.
+            guard (try? access.isAlive(id)) == true,(try? access.hasInput(id)) == true,
+                  let descriptor=try? access.descriptor(id),
+                  (try? InputDeviceSelection.deviceUID(descriptor.uid).validate()) != nil,
+                  !descriptor.name.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty,
+                  descriptor.name.utf8.count<=1024,
+                  !descriptor.name.unicodeScalars.contains(where:CharacterSet.controlCharacters.contains),
+                  seen.insert(descriptor.uid).inserted else{return nil}
+            return InputDeviceDescriptor(uid:descriptor.uid,name:descriptor.name,isDefault:id==defaultID)
+        }.sorted {$0.name.localizedStandardCompare($1.name)==(.orderedAscending)}
+    }
     /// Query off the MainActor; CoreAudio may synchronously contact a device driver.
     public static func available() throws -> [InputDeviceDescriptor] {
         let system=AudioObjectID(kAudioObjectSystemObject)
@@ -162,10 +176,6 @@ public enum InputDeviceCatalog {
         }
         let access=CoreAudioInputDeviceAccess()
         let defaultID=try? access.defaultInputID()
-        return try ids.compactMap { id in
-            guard try access.isAlive(id),try access.hasInput(id) else{return nil}
-            let descriptor=try access.descriptor(id)
-            return InputDeviceDescriptor(uid:descriptor.uid,name:descriptor.name,isDefault:id==defaultID)
-        }.sorted {$0.name.localizedStandardCompare($1.name)==(.orderedAscending)}
+        return validated(ids,defaultID:defaultID,access:access)
     }
 }

@@ -8,13 +8,13 @@ English · [한국어](README.ko.md)
 
 In circlr, a circle is a timeline. Build a song from sections, place MIDI, audio, instruments and effects on and around their orbits, and connect their inputs and outputs. Move between the whole arrangement and detailed editing on one zoomable canvas.
 
-![circlr build237 showing f0r h3r and its seven song sections](docs/images/circlr-song-build237.png)
+![circlr build241 showing f0r h3r and its seven song sections](docs/images/circlr-song-build241.png)
 
-*0.80.0 build237 development preview from an isolated native app. The latest public release is still 0.70.0. [Capture provenance](docs/images/README.md).*
+*0.80.0 build241 development preview from an isolated native app. The latest public release is still 0.70.0. [Capture provenance](docs/images/README.md).*
 
 > **0.70.0 · build180.** Smoother playback canvas and MP4 capture in the verified scenarios, with viewing mode beside Record. [Evidence and limits](docs/releases/0.70.0-qa.md).
 
-**In development:** [0.80.0](docs/releases/0.80.0.md) shows section order and timing on the song orbit and lets you reorder sections from the toolbar, including narrow windows. Build236 preserved CoreMIDI event timing, made stem publication respect Stop, and added console history follow. Build237 improves that console's playback response under dense log updates; two isolated-app comparisons passed the internal animation-count gate, narrowly on the second run. Its app-owned offline MCP helper can save the selected project or export to an app-chosen WAV destination only when the current turn permits it; this is not Codex account chat. Physical recording and listening, measured compositor FPS, long video, and account-console QA remain open. An older Scarlett's normal operation is not assumed; 0.70.0 remains the latest release. [Current QA](qa/0.80-build237.md).
+**In development:** [0.80.0](docs/releases/0.80.0.md) improves the orbital canvas, narrow-window controls, app-only audio input and keyboard navigation. Isolated QA has completed one external Codex→MCP MIDI edit with console activity, a blank-song production journey, and a CalDigit take preserved through save/reopen and WAV export. Build242 reduced rare long frame gaps in a ten-minute 1080p recording from three to one; automated tests and the signed Apple Silicon package pass, but the remaining 70ms gap exceeds the preset limit. Displayed FPS and physical listening remain unverified, so **0.70.0 is still the latest public release**. [QA](qa/0.80-build242.md) · [Release gates](qa/0.80-release-gates.md).
 
 ## What you can work with
 
@@ -24,9 +24,9 @@ In circlr, a circle is a timeline. Build a song from sections, place MIDI, audio
 - **Sound and motion:** instrument/effect routing, automation, bounce and source restoration; playback-follow and signal visualization controls.
 - **Local agents:** an MCP interface for inspecting and editing projects, generating MIDI, rendering and saving, with activity visible in the console.
 
-<img src="docs/images/circlr-song-portrait-build237.png" width="280" alt="circlr build237 in a portrait window with seven song sections and responsive controls">
+<img src="docs/images/circlr-song-portrait-build241.png" width="280" alt="circlr build241 in a portrait window with seven song sections and responsive controls">
 
-*The same build237 demo stopped in a 720×900 portrait window, showing the responsive section controls and all seven sections. [Capture details](docs/images/README.md).*
+*The same build241 demo stopped in a 720×900 portrait window, showing the responsive section controls and all seven sections. [Capture details](docs/images/README.md).*
 
 These are implemented development features, not a guarantee of compatibility with every audio device or plug-in. Artist profiles and a combined text, image and video workspace are the [longer-term direction](docs/21-artist-universe.md).
 

@@ -29,6 +29,30 @@ func mediaLibraryError(_ error:Error)->String {
     return "파일을 읽을 수 없습니다. 형식과 손상 여부를 확인하세요"
 }
 
+/// The visible results' lookup is rebuilt once per search, never per key press.
+/// Chosen entries remain in display order while validation touches at most 64 IDs.
+struct MediaLibraryResultLookup {
+    private let byID:[String:(offset:Int,entry:LibraryEntry)]
+    init(_ results:[LibraryEntry]) {
+        var lookup:[String:(offset:Int,entry:LibraryEntry)]=[:]
+        lookup.reserveCapacity(results.count)
+        for (offset,entry) in results.enumerated() {lookup[entry.id]=(offset,entry)}
+        byID=lookup
+    }
+    func contains(_ id:String?)->Bool {id.flatMap{byID[$0]} != nil}
+    func entry(for id:String?)->LibraryEntry? {id.flatMap{byID[$0]?.entry}}
+    func offset(for id:String?)->Int? {id.flatMap{byID[$0]?.offset}}
+    func chosen(_ ids:Set<String>)->[LibraryEntry] {
+        ids.compactMap{byID[$0]}.sorted{$0.offset<$1.offset}.map(\.entry)
+    }
+    func validate(_ ids:Set<String>)throws {
+        guard !ids.isEmpty,ids.count<=MediaLibrarySelection.limit else{throw CirclrError("한 번에 1–64개 파일을 선택하세요")}
+        let entries=ids.compactMap{byID[$0]?.entry}
+        guard entries.count==ids.count else{throw CirclrError("검색 결과가 변경됐습니다. 파일을 다시 선택하세요")}
+        try MediaLibrarySelection.validate(entries)
+    }
+}
+
 @MainActor final class MediaLibraryController:ObservableObject {
     @Published private(set) var folders:[LibraryFolder]=[]
     @Published private(set) var entries:[LibraryEntry]=[]
@@ -38,6 +62,8 @@ func mediaLibraryError(_ error:Error)->String {
     @Published var kindFilter:LibraryMediaKind? {didSet{filter()}}
     @Published private(set) var selectedID:String?
     @Published private(set) var chosenIDs:Set<String>=[]
+    private var selectedEntry:LibraryEntry?
+    private var resultLookup=MediaLibraryResultLookup([])
     private var rangeAnchor:String?
     enum Workspace:Equatable {case files,folders,destination,track(MediaImportRequest,entryID:String)}
     @Published var workspace=Workspace.files {didSet{if workspace != .files{stopPreview()}}}
@@ -74,11 +100,12 @@ func mediaLibraryError(_ error:Error)->String {
         return folderIssues[id].map{count+" · "+$0} ?? count
     }
     func showFiles(_ id:String) {guard folders.contains(where:{$0.id==id}) else{return};folderFilter=id;query=""}
-    var selected:LibraryEntry? {entries.first{$0.id==selectedID}}
-    var chosen:[LibraryEntry] {results.filter{chosenIDs.contains($0.id)}}
+    var selected:LibraryEntry? {selectedEntry}
+    var chosen:[LibraryEntry] {resultLookup.chosen(chosenIDs)}
+    var singleChosen:LibraryEntry? {chosenIDs.count==1 ? resultLookup.entry(for:chosenIDs.first):nil}
     var selectionIssue:String? {
         guard !chosenIDs.isEmpty else{return nil}
-        do {try MediaLibrarySelection.validate(MediaLibrarySelection.entries(results,ids:chosenIDs));return nil}
+        do {try resultLookup.validate(chosenIDs);return nil}
         catch{return mediaLibraryError(error)}
     }
     init(defaults:UserDefaults = .standard) {
@@ -105,12 +132,12 @@ func mediaLibraryError(_ error:Error)->String {
     func removeFolder(_ id:String) {
         stopPreview();folders.removeAll{$0.id==id};folderLocations.removeValue(forKey:id);folderIssues.removeValue(forKey:id);persist()
         if folderFilter==id {folderFilter=nil}
-        entries.removeAll{$0.folderID==id};filter();refresh()
+        entries.removeAll{$0.folderID==id};if selectedEntry?.folderID==id {selectedEntry=nil};filter();refresh()
     }
     func refresh() {
         scanGeneration+=1;let generation=scanGeneration,sources=folders
         scanTask?.cancel();scanWorker?.cancel();scanning = !sources.isEmpty;notice=""
-        if sources.isEmpty {entries=[];folderLocations=[:];folderIssues=[:];scanNotice="";filter();return}
+        if sources.isEmpty {selectedEntry=nil;entries=[];folderLocations=[:];folderIssues=[:];scanNotice="";filter();return}
         let worker=Task.detached(priority:.utility) { () throws -> ([LibraryEntry],[String:String],[String:Data],[String:String]) in
             var all:[LibraryEntry]=[],warnings:[String:String]=[:],bookmarks:[String:Data]=[:],locations:[String:String]=[:]
             for folder in sources {
@@ -139,7 +166,8 @@ func mediaLibraryError(_ error:Error)->String {
                 guard let self,self.scanGeneration==generation,!Task.isCancelled else{return}
                 for index in self.folders.indices {if let data=bookmarks[self.folders[index].id]{self.folders[index].bookmark=data}}
                 if !bookmarks.isEmpty{self.persist()}
-                self.scanning=false;self.entries=entries;self.folderIssues=warnings
+                self.scanning=false;self.selectedEntry=self.selectedID.flatMap{id in entries.first{$0.id==id}}
+                self.entries=entries;self.folderIssues=warnings
                 self.folderLocations.merge(locations){_,current in current}
                 self.scanNotice=self.folders.compactMap{folder in warnings[folder.id].map{self.folderLabel(folder.id)+": "+$0}}.joined(separator:"\n")
                 self.filter()
@@ -157,9 +185,10 @@ func mediaLibraryError(_ error:Error)->String {
             self.searchWorker=worker
             let result=await worker.value
             guard self.searchGeneration==generation,!Task.isCancelled else{return}
+            self.resultLookup=MediaLibraryResultLookup(result)
             self.results=result;self.searching=false
-            self.chosenIDs.formIntersection(Set(result.map(\.id)))
-            let focus=result.contains(where:{$0.id==self.selectedID}) ? self.selectedID:result.first?.id
+            self.chosenIDs=Set(self.chosenIDs.filter{self.resultLookup.contains($0)})
+            let focus=self.resultLookup.contains(self.selectedID) ? self.selectedID:result.first?.id
             if self.chosenIDs.isEmpty {self.chosenIDs=focus.map{[$0]} ?? []}
             self.rangeAnchor=focus;self.select(focus,force:true,preserving:true)
         }
@@ -169,7 +198,7 @@ func mediaLibraryError(_ error:Error)->String {
         notice=""
         if !preserving {let next:Set<String>=id.map{[$0]} ?? [];if chosenIDs != next{stopPreview()};chosenIDs=next;rangeAnchor=id}
         guard force || id != selectedID else{return}
-        stopPreview();selectedID=id;selectionGeneration+=1;let generation=selectionGeneration
+        stopPreview();selectedEntry=resultLookup.entry(for:id);selectedID=id;selectionGeneration+=1;let generation=selectionGeneration
         detailTask?.cancel();detailWorker?.cancel()
         guard let entry=selected,let folder=folders.first(where:{$0.id==entry.folderID}) else{detail="파일을 선택하세요";return}
         detail="파일 정보 확인 중"
@@ -186,11 +215,11 @@ func mediaLibraryError(_ error:Error)->String {
     }
     func move(_ delta:Int) {
         guard !results.isEmpty else{return}
-        let index=results.firstIndex{$0.id==selectedID} ?? 0
+        let index=resultLookup.offset(for:selectedID) ?? 0
         select(results[max(0,min(results.count-1,index+delta))].id)
     }
     func toggleSelection(_ id:String) {
-        guard !searching,results.contains(where:{$0.id==id}) else{return}
+        guard !searching,resultLookup.contains(id) else{return}
         do {let next=try MediaLibrarySelection.toggling(id,in:chosenIDs);stopPreview();chosenIDs=next;rangeAnchor=id;select(id,preserving:true)}
         catch{notice=mediaLibraryError(error)}
     }

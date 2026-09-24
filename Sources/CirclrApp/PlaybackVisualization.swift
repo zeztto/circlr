@@ -195,16 +195,18 @@ struct PlaybackVisualFrame {
             return
         case .target(let address): target=address
         }
-        let viewport=workspaceViewport
-        guard target != followedSection || viewport != playbackFollowViewport || settings != lastFollowSettings else { return }
+        let viewport=canvasViewport,console=consoleObstruction
+        guard target != followedSection || viewport != playbackFollowViewport ||
+              console != playbackFollowConsole || settings != lastFollowSettings else { return }
         var framingCamera=camera
         if settings.framing == .keepZoom,animation?.isValid == true,let destination=animationDestination {framingCamera.zoom=destination.zoom}
-        guard let next=PlaybackFollowResolver.camera(for:target,settings:settings,current:framingCamera,scene:scene,viewport:viewport) else { return }
+        guard let next=PlaybackFollowResolver.camera(for:target,settings:settings,current:framingCamera,
+                                                      scene:scene,viewport:viewport,avoiding:console) else { return }
         // Only real section-use changes get the excursion, never initial focus or a loop of one use.
         let changesSection=settings.target == .section && followedSection != nil && target != followedSection && lastFollowSettings.target == .section
         followedSection=target;lastFollowSettings=settings
-        contextFitAddress=nil;contextFitViewport=nil
-        playbackVisibilityFocus=target;playbackFollowViewport=viewport
+        contextFitAddress=nil;contextFitViewport=nil;contextFitConsole=nil
+        playbackVisibilityFocus=target;playbackFollowViewport=viewport;playbackFollowConsole=console
         animatePlaybackFollow(to:next,changesSection:changesSection)
     }
 

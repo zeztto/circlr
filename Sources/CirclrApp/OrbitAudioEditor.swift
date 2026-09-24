@@ -232,7 +232,7 @@ struct OrbitAudioEditor:NSViewRepresentable {
         if handleViewportKey(event){return}
         if store.handleAudioTrimKey(event,clipID:clip.id){needsDisplay=true;return}
         if event.keyCode==53 {cancelDrag();store.focusCanvas?();store.hierarchyParent()}
-        else if event.keyCode==49 {store.play()}
+        else if PlaybackSpaceShortcut.accepts(event,in:window) {store.play()}
         else {super.keyDown(with:event)}
     }
 }

@@ -71,7 +71,7 @@ struct EditorWindowBridge:NSViewRepresentable {
     override func cancelOperation(_ sender:Any?) {performClose(sender)}
     override func keyDown(with event:NSEvent) {
         if event.keyCode==53 {performClose(nil)}
-        else if event.keyCode==49 {store?.play()}
+        else if PlaybackSpaceShortcut.accepts(event,in:self) {store?.play()}
         else {super.keyDown(with:event)}
     }
 }

@@ -19,7 +19,7 @@ struct InputCaptureTelemetry {
 /// Parent-side session. The child is the only process that opens the input device.
 /// `start` and `stop` run on CaptureAttempt's serial queue; `cancel` is safe off-queue.
 final class InputCaptureWorkerBackend:InterruptibleAudioCaptureBackend,@unchecked Sendable {
-    private let executable:URL?,temporaryRoot:URL,stopTimeout:Double,grace:Double
+    private let executable:URL?,temporaryRoot:URL,stopTimeout:Double,grace:Double,selection:InputDeviceSelection
     private let reapProbe:@Sendable (pid_t)->pid_t
     private let beforePublishRename:(@Sendable ()->Void)?
     private let session=UUID(),lock=NSCondition()
@@ -31,9 +31,11 @@ final class InputCaptureWorkerBackend:InterruptibleAudioCaptureBackend,@unchecke
     private var backgroundReaper:DispatchSourceTimer?,delayedReapCallback:(@Sendable ()->Void)?
     init(executable:URL?=Bundle.main.executableURL?.deletingLastPathComponent().appendingPathComponent("circlr-input-worker"),
          temporaryRoot:URL=FileManager.default.temporaryDirectory,stopTimeout:Double=5,grace:Double=0.25,
+         selection:InputDeviceSelection = .systemDefault,
          reapProbe:@escaping @Sendable (pid_t)->pid_t={Darwin.waitpid($0,nil,WNOHANG)},
          beforePublishRename:(@Sendable ()->Void)?=nil) {
         self.executable=executable;self.temporaryRoot=temporaryRoot;self.stopTimeout=stopTimeout;self.grace=grace;self.reapProbe=reapProbe
+        self.selection=selection
         self.beforePublishRename=beforePublishRename
     }
     func onDelayedReap(_ callback:@escaping @Sendable ()->Void) {
@@ -61,7 +63,10 @@ final class InputCaptureWorkerBackend:InterruptibleAudioCaptureBackend,@unchecke
         }
         switch message.kind {
         case .started:
+            let expectedUID:String?
+            if case .deviceUID(let uid)=selection {expectedUID=uid} else{expectedUID=nil}
             guard startEvent==nil,finishEvent==nil,
+                  message.deviceUID==expectedUID,
                   let format=try? InputCaptureWorkerWire.checkedFormat(message) else{
                 readerFailure="입력 worker 시작 응답이 올바르지 않습니다";break
             }
@@ -81,9 +86,17 @@ final class InputCaptureWorkerBackend:InterruptibleAudioCaptureBackend,@unchecke
             metric.frames=UInt64(frames);metric.peak=max(metric.peak,peak)
             metric.reachedLimit=limit;metric.interrupted=interrupted
         case .finished:
+            let recovery=message.error != nil
             guard startEvent != nil,finishEvent==nil,let frames=message.frames,frames>=0,
-                  frames>=Int64(clamping:metric.frames),frames<=maximumFrames else{
+                  (recovery || frames>=Int64(clamping:metric.frames)),frames<=maximumFrames,
+                  message.deviceUID==nil else{
                 readerFailure="입력 worker 완료 응답이 올바르지 않습니다";break
+            }
+            if let reason=message.error {
+                guard case .deviceUID=selection,frames>0,!reason.isEmpty,reason.utf8.count<=1024,
+                      !reason.unicodeScalars.contains(where:CharacterSet.controlCharacters.contains) else{
+                    readerFailure="입력 worker 복구 응답이 올바르지 않습니다";break
+                }
             }
             if frames>0 {
                 guard let format=try? InputCaptureWorkerWire.checkedFormat(message),format==initialFormat else{
@@ -97,7 +110,8 @@ final class InputCaptureWorkerBackend:InterruptibleAudioCaptureBackend,@unchecke
                 readerFailure="입력 worker 오류 응답이 올바르지 않습니다";break
             }
             readerFailure=error
-        case .start,.stop:readerFailure="입력 worker 응답 종류가 올바르지 않습니다"
+        case .start,.stop,.catalog,.catalogDevice,.catalogFinished:
+            readerFailure="입력 worker 응답 종류가 올바르지 않습니다"
         }
         lock.broadcast()
     }
@@ -148,6 +162,7 @@ final class InputCaptureWorkerBackend:InterruptibleAudioCaptureBackend,@unchecke
     }
     func start(to url:URL,maximumSeconds:Double,control:CaptureControl)throws->CaptureFormat {
         guard control.enabled else{throw CancellationError()}
+        try selection.validate()
         guard let executable,FileManager.default.isExecutableFile(atPath:executable.path) else{
             throw CirclrError("입력 녹음 helper를 찾을 수 없습니다. 앱 설치를 확인하세요")
         }
@@ -171,7 +186,9 @@ final class InputCaptureWorkerBackend:InterruptibleAudioCaptureBackend,@unchecke
             try? input.fileHandleForReading.close();try? output.fileHandleForWriting.close()
             let outFD=output.fileHandleForReading.fileDescriptor
             DispatchQueue(label:"circlr.input-worker.reader."+session.uuidString).async {[self] in readResponses(outFD)}
-            try write(InputCaptureWorkerMessage(session:session,kind:.start,directory:directory.path,maximumSeconds:maximumSeconds),deadline:ProcessInfo.processInfo.systemUptime+1)
+            let uid:String?
+            if case .deviceUID(let value)=selection {uid=value} else{uid=nil}
+            try write(InputCaptureWorkerMessage(session:session,kind:.start,directory:directory.path,maximumSeconds:maximumSeconds,deviceUID:uid),deadline:ProcessInfo.processInfo.systemUptime+1)
             let event=try wait(.started,deadline:ProcessInfo.processInfo.systemUptime+min(60,max(10,maximumSeconds)))
             return try InputCaptureWorkerWire.checkedFormat(event)
         }catch {
@@ -179,7 +196,7 @@ final class InputCaptureWorkerBackend:InterruptibleAudioCaptureBackend,@unchecke
             throw error
         }
     }
-    private static func spawn(executable:URL,input:Pipe,output:Pipe,temporaryRoot:URL)throws->pid_t {
+    fileprivate static func spawn(executable:URL,input:Pipe,output:Pipe,temporaryRoot:URL)throws->pid_t {
         var actions:posix_spawn_file_actions_t?=nil
         guard posix_spawn_file_actions_init(&actions)==0 else{throw CirclrError("입력 worker 프로세스 준비 실패")}
         defer{posix_spawn_file_actions_destroy(&actions)}
@@ -253,6 +270,9 @@ final class InputCaptureWorkerBackend:InterruptibleAudioCaptureBackend,@unchecke
             guard !stopped else{throw CancellationError()}
             try publish(fileURL,to:destination)
             try? FileManager.default.removeItem(at:stage)
+            if let reason=event.error {
+                throw CirclrError("\(reason) · 녹음 파일은 복구 저장했지만 프로젝트에 자동 첨부하지 않았습니다")
+            }
             return CapturedAudio(url:destination,format:format,frames:frames)
         }catch {
             cancel();_ = try? cleanup();throw error
@@ -334,5 +354,120 @@ final class InputCaptureWorkerBackend:InterruptibleAudioCaptureBackend,@unchecke
             ownedTimer?.cancel();callback?()
         }
         timer.resume()
+    }
+}
+
+/// Read-only CoreAudio discovery runs in the signed helper, never on the app's
+/// MainActor. Even a wedged legacy driver is bounded by the parent timeout.
+public enum IsolatedInputDeviceCatalog {
+    public static func available(timeout:Double=5) async throws -> [InputDeviceDescriptor] {
+        let executable=Bundle.main.executableURL?.deletingLastPathComponent().appendingPathComponent("circlr-input-worker")
+        return try await available(executable:executable,timeout:timeout)
+    }
+
+    static func available(executable:URL?,timeout:Double) async throws -> [InputDeviceDescriptor] {
+        guard timeout.isFinite,timeout>0,timeout<=30 else{throw CirclrError("입력 장치 조회 제한 시간이 올바르지 않습니다")}
+        let task=Task.detached(priority:.userInitiated) {try query(executable:executable,timeout:timeout)}
+        return try await withTaskCancellationHandler(operation:{try await task.value},onCancel:{task.cancel()})
+    }
+
+    private static func query(executable:URL?,timeout:Double)throws->[InputDeviceDescriptor] {
+        try Task.checkCancellation()
+        guard let executable,FileManager.default.isExecutableFile(atPath:executable.path) else {
+            throw CirclrError("입력 장치 조회 helper를 찾을 수 없습니다. 앱 설치를 확인하세요")
+        }
+        let input=Pipe(),output=Pipe(),session=UUID()
+        let deadline=ProcessInfo.processInfo.systemUptime+timeout
+        let pid=try InputCaptureWorkerBackend.spawn(executable:executable,input:input,output:output,
+            temporaryRoot:FileManager.default.temporaryDirectory)
+        var reaped=false,exitStatus:Int32=0
+        defer {
+            try? input.fileHandleForReading.close()
+            try? input.fileHandleForWriting.close()
+            try? output.fileHandleForWriting.close()
+            try? output.fileHandleForReading.close()
+            if !reaped {
+                _ = Darwin.kill(pid,SIGTERM)
+                let grace=ProcessInfo.processInfo.systemUptime+0.15
+                while ProcessInfo.processInfo.systemUptime<grace {
+                    if Darwin.waitpid(pid,&exitStatus,WNOHANG)==pid {reaped=true;break}
+                    Thread.sleep(forTimeInterval:0.005)
+                }
+                if !reaped {
+                    _ = Darwin.kill(pid,SIGKILL)
+                    // Preserve sole waitpid ownership if the kernel is still
+                    // unwinding a blocked driver call.
+                    DispatchQueue.global(qos:.utility).async {_ = Darwin.waitpid(pid,nil,0)}
+                }
+            }
+        }
+        try? input.fileHandleForReading.close()
+        try? output.fileHandleForWriting.close()
+        let writeFD=input.fileHandleForWriting.fileDescriptor
+        let readFD=output.fileHandleForReading.fileDescriptor
+        guard fcntl(writeFD,F_SETNOSIGPIPE,1)==0,
+              fcntl(writeFD,F_SETFL,fcntl(writeFD,F_GETFL)|O_NONBLOCK)==0,
+              fcntl(readFD,F_SETFL,fcntl(readFD,F_GETFL)|O_NONBLOCK)==0 else {
+            throw CirclrError("입력 장치 조회 IPC를 준비하지 못했습니다")
+        }
+        let request=try InputCaptureWorkerWire.encode(InputCaptureWorkerMessage(session:session,kind:.catalog))
+        var sent=0
+        while sent<request.count {
+            try Task.checkCancellation()
+            guard ProcessInfo.processInfo.systemUptime<deadline else{throw CirclrError("입력 장치 조회 제한 시간을 넘었습니다")}
+            let count=request.withUnsafeBytes {Darwin.write(writeFD,$0.baseAddress!.advanced(by:sent),$0.count-sent)}
+            if count>0{sent+=count;continue}
+            if count<0 && errno==EINTR{continue}
+            guard count<0,(errno==EAGAIN || errno==EWOULDBLOCK) else{throw CirclrError("입력 장치 조회 명령을 전달하지 못했습니다")}
+            Thread.sleep(forTimeInterval:0.005)
+        }
+        try? input.fileHandleForWriting.close()
+        var pending=Data(),bytes=[UInt8](repeating:0,count:1024)
+        var devices:[InputDeviceDescriptor]=[],uids=Set<String>(),finished=false
+        while !finished {
+            try Task.checkCancellation()
+            guard ProcessInfo.processInfo.systemUptime<deadline else{throw CirclrError("입력 장치 조회 제한 시간을 넘었습니다")}
+            let count=bytes.withUnsafeMutableBytes{Darwin.read(readFD,$0.baseAddress,$0.count)}
+            if count==0{throw CirclrError("입력 장치 조회 helper가 응답 없이 종료되었습니다")}
+            if count<0 {
+                if errno==EINTR || errno==EAGAIN || errno==EWOULDBLOCK {
+                    Thread.sleep(forTimeInterval:0.005);continue
+                }
+                throw CirclrError("입력 장치 조회 응답을 읽지 못했습니다")
+            }
+            pending.append(contentsOf:bytes.prefix(count))
+            guard pending.count<=InputCaptureWorkerWire.maximumLineBytes else{throw CirclrError("입력 장치 조회 응답이 너무 큽니다")}
+            while let end=pending.firstIndex(of:10) {
+                let line=Data(pending[..<end]);pending.removeSubrange(...end)
+                let message=try InputCaptureWorkerWire.decode(line)
+                guard message.session==session else{throw CirclrError("입력 장치 조회 세션이 변경되었습니다")}
+                switch message.kind {
+                case .catalogDevice:
+                    guard let device=message.device,!device.name.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty,
+                          device.name.utf8.count<=1024,
+                          !device.name.unicodeScalars.contains(where:CharacterSet.controlCharacters.contains),
+                          devices.count<128,uids.insert(device.uid).inserted else {
+                        throw CirclrError("입력 장치 조회 목록이 올바르지 않습니다")
+                    }
+                    try InputDeviceSelection.deviceUID(device.uid).validate()
+                    devices.append(device)
+                case .catalogFinished:
+                    guard message.device==nil,pending.isEmpty else{throw CirclrError("입력 장치 조회 완료 응답이 올바르지 않습니다")}
+                    finished=true
+                case .failed:
+                    throw CirclrError(message.error ?? "입력 장치 조회에 실패했습니다")
+                default:throw CirclrError("입력 장치 조회 응답 종류가 올바르지 않습니다")
+                }
+            }
+        }
+        while ProcessInfo.processInfo.systemUptime<deadline {
+            try Task.checkCancellation()
+            let result=Darwin.waitpid(pid,&exitStatus,WNOHANG)
+            if result==pid{reaped=true;break}
+            if result<0 && errno != EINTR {throw CirclrError("입력 장치 조회 helper 종료 확인 실패")}
+            Thread.sleep(forTimeInterval:0.005)
+        }
+        guard reaped,exitStatus==0 else{throw CirclrError("입력 장치 조회 helper가 정상 종료되지 않았습니다")}
+        return devices
     }
 }

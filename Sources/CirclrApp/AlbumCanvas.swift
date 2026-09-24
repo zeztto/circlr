@@ -22,6 +22,7 @@ struct AlbumCanvas: NSViewRepresentable {
     var previousSize = NSSize.zero
     var contextFitAddress: CircleAddress?
     var contextFitViewport: CGRect?
+    var contextFitConsole: CGRect?
     var animation: Timer?
     var animationDestination: HierarchyCamera?
     var scrollMonitor: Any?
@@ -84,6 +85,7 @@ struct AlbumCanvas: NSViewRepresentable {
     var lastFollowSettings = PlaybackFollowSettings()
     var followedSection: CircleAddress?
     var playbackFollowViewport = CGRect.zero
+    var playbackFollowConsole: CGRect?
     var playbackVisibilityFocus: CircleAddress?
     var visualSelection: CircleAddress?
     var lastFollowMode: PlaybackFollowMode = .off
@@ -234,7 +236,13 @@ struct AlbumCanvas: NSViewRepresentable {
     }
     override func layout() {
         super.layout()
-        if !initialized, bounds.width > 100, let root = scene?.node(.album) { camera = orbitContextCamera(root.id) ?? camera.focused(on: root, width: bounds.width, height: bounds.height); initialized = true }
+        if !initialized, bounds.width > 100, let root = scene?.node(.album) {
+            if let fitted=orbitContextCamera(root.id) {
+                camera=fitted;contextFitAddress=root.id
+                contextFitViewport=canvasViewport;contextFitConsole=consoleObstruction
+            } else {camera=camera.focused(on:root,width:bounds.width,height:bounds.height)}
+            initialized=true
+        }
         let oldSize=previousSize
         let resized=oldSize.width>0 && oldSize != bounds.size
         previousSize = bounds.size
@@ -277,7 +285,7 @@ struct AlbumCanvas: NSViewRepresentable {
         }
         if renderedRevision != store.hierarchyRevision {
             if let renderedProjectID,renderedProjectID != store.project.id {
-                contextFitAddress=nil;contextFitViewport=nil
+                contextFitAddress=nil;contextFitViewport=nil;contextFitConsole=nil
             }
             labelTextCache.removeAll(keepingCapacity:true)
             let anchor=editorAddress ?? store.hierarchySelection ?? .album
@@ -337,11 +345,11 @@ struct AlbumCanvas: NSViewRepresentable {
         // for browsing only; fitting satellites can leave the owner below the editor gate.
         if scene.isOrbit, !detail, let target=orbitContextCamera(address,in:scene) {
             setCamera(target,animated:true)
-            contextFitAddress=address;contextFitViewport=workspaceViewport
+            contextFitAddress=address;contextFitViewport=canvasViewport;contextFitConsole=consoleObstruction
             return
         }
         if !detail,node.role == .section,
-           let target=PlaybackFraming.camera(for:node,in:scene,viewport:workspaceViewport) {
+           let target=PlaybackFraming.camera(for:node,in:scene,viewport:canvasViewport,avoiding:consoleObstruction) {
             setCamera(target,animated:true);return
         }
         var target=camera.focused(on:node,width:workspaceViewport.width,height:workspaceViewport.height,detail:detail)
@@ -375,25 +383,38 @@ struct AlbumCanvas: NSViewRepresentable {
             }
             content=nearby
         }
-        let viewport=workspaceViewport
+        let viewport=canvasViewport
         guard content.minX.isFinite,content.minY.isFinite,content.width.isFinite,content.height.isFinite,
               owner.radius.isFinite,owner.radius>0 else{return nil}
-        let fitted=min(max(80,viewport.width-100)/max(1,content.width),max(80,viewport.height-100)/max(1,content.height))
+        let framedNodes=address == .album ?
+            CanvasWorkspaceGeometry.contextCircles(address,in:scene) :
+            [CanvasLabelCircle(id:owner.id,center:CGPoint(x:owner.center.x,y:owner.center.y),radius:owner.outerRadius)] +
+            scene.immediateSatellites(of:address).filter { child in
+                let distance=hypot(child.center.x-owner.center.x,child.center.y-owner.center.y)
+                return distance.isFinite && child.outerRadius.isFinite && child.outerRadius>0 &&
+                    distance <= owner.radius*8+child.outerRadius
+            }.map{CanvasLabelCircle(id:$0.id,center:CGPoint(x:$0.center.x,y:$0.center.y),radius:$0.outerRadius)}
+        let fittedCamera=CanvasWorkspaceGeometry.fittingCamera(circles:framedNodes,within:viewport,
+                                                               avoiding:consoleObstruction,marginX:50,marginY:50)
+        let fitted=fittedCamera?.zoom ?? min(max(80,workspaceViewport.width-100)/max(1,content.width),
+                                            max(80,workspaceViewport.height-100)/max(1,content.height))
         let zoom=max(1e-6,min(1e12,address == .album ? fitted:max(fitted,62/owner.radius)))
+        if zoom == fitted,let fittedCamera {return fittedCamera}
         let center=address == .album || fitted>=62/owner.radius ? Point(content.midX,content.midY):owner.center
-        return HierarchyCamera(pan:Point(viewport.midX-center.x*zoom,viewport.midY-center.y*zoom),zoom:zoom)
+        let safe=workspaceViewport
+        return HierarchyCamera(pan:Point(safe.midX-center.x*zoom,safe.midY-center.y*zoom),zoom:zoom)
     }
     func isTimelineRing(_ node:CircleSceneNode)->Bool {
         store.project.usesOrbits && node.role != .music && node.signal == nil
     }
     @discardableResult func refitContextIfNeeded()->Bool {
-        let viewport=workspaceViewport
-        guard let address=contextFitAddress,contextFitViewport != viewport,
+        let viewport=canvasViewport,console=consoleObstruction
+        guard let address=contextFitAddress,contextFitViewport != viewport || contextFitConsole != console,
               editorAddress == nil,
               !(store.playback.playing && store.playbackFollow == .following),
               let fitted=orbitContextCamera(address) else{return false}
         // A browsing fit tracks its visible workspace; manual cameras never do.
-        contextFitViewport=viewport
+        contextFitViewport=viewport;contextFitConsole=console
         setCamera(fitted,manual:false)
         return true
     }
@@ -401,7 +422,7 @@ struct AlbumCanvas: NSViewRepresentable {
         // A restore may be processed during the first usable layout, before
         // the default album camera has initialized. Do not overwrite it later.
         if bounds.width>100,bounds.height>100 { initialized=true }
-        if manual {contextFitAddress=nil;contextFitViewport=nil;interruptPlaybackFollow()}
+        if manual {contextFitAddress=nil;contextFitViewport=nil;contextFitConsole=nil;interruptPlaybackFollow()}
         animation?.invalidate(); animation = nil
         animationDestination = nil
         if animated {
@@ -780,12 +801,13 @@ struct AlbumCanvas: NSViewRepresentable {
             return .init(endpoint:endpoint,anchor:CGPoint(x:handle.point.x,y:handle.point.y),size:CGSize(width:width,height:23),octant:handle.octant,priority:priority)
         }
         var obstacles=labelPlacements.map{$0.rect.insetBy(dx:-4,dy:-4)}
+        if let console=consoleObstruction {obstacles.append(console.insetBy(dx:-14,dy:-14))}
         obstacles += handles.map{CGRect(x:$0.point.x-10,y:$0.point.y-10,width:20,height:20)}
         if let editor {obstacles.append(editor.frame)}
         if let cableTools,!cableTools.isHidden {obstacles.append(cableTools.frame)}
         if let portTools,!portTools.isHidden {obstacles.append(portTools.frame)}
         if let node=store.selectedCircle,let point=visibleTimeHandle(node) {obstacles.append(CGRect(x:point.x-14,y:point.y-14,width:28,height:28))}
-        return CirclePortPresentation.labels(requests,within:workspaceViewport,avoiding:obstacles)
+        return CirclePortPresentation.labels(requests,within:canvasViewport,avoiding:obstacles)
     }
     func drawOverviewPortLabels() {
         for placement in overviewPortLabelPlacements() {
@@ -1002,7 +1024,10 @@ struct AlbumCanvas: NSViewRepresentable {
     }
     override func keyDown(with event:NSEvent) {
         if store.startupOpen {return}
-        if store.viewingMode {handleViewingKey(event);return}
+        if store.viewingMode {
+            if ViewingModeKeyRouting.passesToSystem(event) {super.keyDown(with:event);return}
+            handleViewingKey(event);return
+        }
         if store.outputPreferencesOpen || store.libraryOpen || store.soundPickerRequest != nil || store.arrangementPickerRequest != nil || store.commandPalette != nil || store.navigationOpen || store.keyboardHelp {return}
         if event.keyCode==53,event.modifierFlags.intersection([.command,.control,.option,.shift]).isEmpty,let draft=store.midiImportDraft {
             store.cancelMIDIImport(draft.id);return
@@ -1036,7 +1061,9 @@ struct AlbumCanvas: NSViewRepresentable {
             if selectedCable != nil {clearCableSelection();return}
             if store.connectionsOpen {store.connectionsOpen=false;return}
             store.hierarchySettingsOpen=false;store.hierarchyParent()
-        case 49: store.play()
+        case 49:
+            if PlaybackSpaceShortcut.accepts(event,in:window) {store.play()}
+            else {super.keyDown(with:event)}
         case 51,117:
             if selectedCable != nil {disconnectSelectedCable()} else {store.removeHierarchy()}
         case 3: store.hierarchyCommand=HierarchyCommand(action:.fit)

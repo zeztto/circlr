@@ -53,4 +53,63 @@ import CirclrCore
         canvas.update()
         XCTAssertEqual(canvas.camera.zoom,manualZoom,accuracy:0.000001)
     }
+    func testVisibleLowerRightCircleDoesNotJumpAboveConsoleOnKeyboardReveal() throws {
+        _=NSApplication.shared
+        var project=Project();project.circleLayout = .orbit
+        _=project.addTrack(name:"검증 악기")
+        _=project.addSection(name:"후렴",at:Point(),bars:4)
+        project.enableAlbum();project=try SectionGraphMigration.migrate(project)
+        let root=FileManager.default.temporaryDirectory.appendingPathComponent("circlr-l-fit-\(UUID().uuidString)")
+        defer{try? FileManager.default.removeItem(at:root)}
+        let store=AppStore(storageRootOverride:root);store.project=project;store.startupOpen=false
+        store.consoleBounds=CGRect(x:20,y:704,width:820,height:180)
+        let canvas=AlbumCanvasView(store:store);canvas.frame=NSRect(x:0,y:0,width:1440,height:900)
+        canvas.update();canvas.layout()
+        XCTAssertTrue(canvas.cablePointAvailable(Point(1050,740),labels:false))
+        XCTAssertFalse(canvas.cablePointAvailable(Point(100,740),labels:false))
+        let node=try XCTUnwrap(canvas.scene?.nodes.first{$0.role == .music && $0.childCount == 0})
+        let radius=node.outerRadius
+        XCTAssertLessThan(radius,200)
+        let destination=Point(1100,min(770,820-radius))
+        canvas.camera=HierarchyCamera(pan:Point(destination.x-node.center.x,destination.y-node.center.y),zoom:1)
+        let original=canvas.camera
+        canvas.contextFitAddress = node.id
+        XCTAssertTrue(CanvasWorkspaceGeometry.circlesVisible([
+            CanvasLabelCircle(id:node.id,center:CGPoint(x:node.center.x,y:node.center.y),radius:radius)
+        ],through:original,within:canvas.canvasViewport,avoiding:store.consoleBounds))
+        canvas.revealKeyboardSelection(node)
+        XCTAssertEqual(canvas.camera,original)
+        XCTAssertEqual(canvas.contextFitAddress,node.id)
+        let port=try XCTUnwrap(node.ports.first)
+        canvas.selectCanvasPort(CirclePortEndpoint(node:node.id,portID:port.id))
+        XCTAssertEqual(canvas.camera,original)
+    }
+    func testManuallyDistantSongSatelliteDoesNotCollapseLocalFit() throws {
+        _=NSApplication.shared
+        var project=Project();project.circleLayout = .orbit
+        _=project.addTrack(name:"검증 악기")
+        _=project.addSection(name:"가까운 벌스",at:Point(0,0),bars:4)
+        _=project.addSection(name:"가까운 후렴",at:Point(240,0),bars:4)
+        let remote=project.addSection(name:"먼 메모",at:Point(30_000,0),bars:4)
+        project.arrangements[project.activeIndex].layout.orbitLayoutVersion=1
+        project.arrangements[project.activeIndex].layout.orbitPositions=[remote:Point(30_000,0)]
+        project.enableAlbum();project=try SectionGraphMigration.migrate(project)
+        let root=FileManager.default.temporaryDirectory.appendingPathComponent("circlr-distant-fit-\(UUID().uuidString)")
+        defer{try? FileManager.default.removeItem(at:root)}
+        let store=AppStore(storageRootOverride:root);store.project=project;store.startupOpen=false
+        store.consoleBounds=CGRect(x:20,y:704,width:820,height:180)
+        let canvas=AlbumCanvasView(store:store);canvas.frame=NSRect(x:0,y:0,width:1440,height:900)
+        canvas.update();canvas.layout()
+        let scene=try XCTUnwrap(canvas.scene)
+        let song=try XCTUnwrap(scene.nodes.first{$0.role == .song})
+        let distant=scene.immediateSatellites(of:song.id).filter { child in
+            hypot(child.center.x-song.center.x,child.center.y-song.center.y)>song.radius*8+child.outerRadius
+        }
+        XCTAssertFalse(distant.isEmpty)
+        let local=try XCTUnwrap(canvas.orbitContextCamera(song.id))
+        let all=try XCTUnwrap(CanvasWorkspaceGeometry.fittingCamera(
+            circles:CanvasWorkspaceGeometry.contextCircles(song.id,in:scene),within:canvas.canvasViewport,
+            avoiding:store.consoleBounds,marginX:50,marginY:50))
+        XCTAssertGreaterThan(local.zoom,all.zoom*5)
+    }
 }

@@ -139,9 +139,15 @@ enum CanvasPlaybackLabelLOD {
 }
 
 extension AlbumCanvasView {
+    var canvasViewport:CGRect {
+        CanvasWorkspaceGeometry.viewport(width:bounds.width,height:bounds.height)
+    }
+    var consoleObstruction:CGRect? {
+        !store.viewingMode && store.consoleBounds.height>0 ? store.consoleBounds:nil
+    }
     var workspaceViewport:CGRect {
         CanvasWorkspaceGeometry.viewport(width:bounds.width,height:bounds.height,
-            console:!store.viewingMode && store.consoleBounds.height>0 ? store.consoleBounds:nil)
+            console:consoleObstruction)
     }
     var labelContext:CircleSceneNode? {
         if isDrawingFrame { return drawingLabelContext }
@@ -169,7 +175,7 @@ extension AlbumCanvasView {
             let blocksLabels = scene.isOrbit ? (node.role != .group || node.childCount == 0) : (node.childCount == 0 && (node.role == .music || node.role == .group))
             guard blocksLabels,isVisible(node),editorAddress != node.id else{return nil}
             let p=screen(node),r=node.radius*camera.zoom
-            guard CGRect(x:p.x-r,y:p.y-r,width:r*2,height:r*2).intersects(workspaceViewport) else{return nil}
+            guard CGRect(x:p.x-r,y:p.y-r,width:r*2,height:r*2).intersects(canvasViewport) else{return nil}
             return CanvasLabelCircle(id:node.id,center:p,radius:r)
         }
     }
@@ -182,7 +188,7 @@ extension AlbumCanvasView {
         // Reserve the same subtitle row at every state so hover can show
         // timing without moving a compact badge away from the pointer.
         let showsSubtitle = stableCompact || primary || hovered || node.radius*camera.zoom>=65
-        let width=min(workspaceViewport.width,maxWidth ?? (primary || hovered ? 340:248))
+        let width=min(canvasViewport.width,maxWidth ?? (primary || hovered ? 340:248))
         let key=CanvasLabelTextKey(address:node.id,title:title,primary:primary,
             showsSubtitle:showsSubtitle,subtitle:subtitle,availableWidth:Double(width),wrapTitle:wrapTitle)
         if let cached=labelTextCache[key] {return cached}
@@ -194,6 +200,7 @@ extension AlbumCanvasView {
     }
     var readableLabelObstacles:[CGRect] {
         var obstacles:[CGRect]=[]
+        if let console=consoleObstruction {obstacles.append(console.insetBy(dx:-14,dy:-14))}
         if !store.viewingMode,store.navigationBounds.height>0 {
             obstacles.append(store.navigationBounds.insetBy(dx:-8,dy:-8))
         }
@@ -229,7 +236,7 @@ extension AlbumCanvasView {
             let primary=node.id==store.hierarchySelection
             let selected=store.hierarchySelections.contains(node.id)
             let emphasized=primary || selected || activeFocus
-            guard bounds.contains(p) || node.id==context.id || (emphasized && CanvasLabelCircle(id:node.id,center:p,radius:radius).intersects(workspaceViewport)) else{continue}
+            guard bounds.contains(p) || node.id==context.id || (emphasized && CanvasLabelCircle(id:node.id,center:p,radius:radius).intersects(canvasViewport)) else{continue}
             guard activeFocus || node.id==context.id || direct || node.id==hoverAddress || (radius>=40 && node.depth<=context.depth+2) else{continue}
             let editingFocus=emphasized || node.id==hoverAddress || selectedCanvasPort?.node==node.id ||
                 selectedEdge?.from==node.id || selectedEdge?.to==node.id
@@ -240,11 +247,11 @@ extension AlbumCanvasView {
             let subtitle=timing ?? node.subtitle+(node.repeatCount>1 ? " · ×\(node.repeatCount)":"")
             let title=order.map{"\($0)  \(node.title)"} ?? node.title
             var text=readableLabelText(for:node,title:title,subtitle:subtitle)
-            let portraitSongSection=direct && node.role == .section && workspaceViewport.width<900
+            let portraitSongSection=direct && node.role == .section && canvasViewport.width<900
             // Keep the compact badge's dimensions stable under hover/selection:
             // otherwise it jumps away before the user can click it.
-            if portraitSongSection && p.x>workspaceViewport.midX {
-                let rightSpace=workspaceViewport.maxX-(p.x+radius+9)
+            if portraitSongSection && p.x>canvasViewport.midX {
+                let rightSpace=canvasViewport.maxX-(p.x+radius+9)
                 if rightSpace>=120 {
                     let plain=readableLabelText(for:node,title:title,subtitle:"",stableCompact:true)
                     if plain.size.width>180 {
@@ -259,7 +266,7 @@ extension AlbumCanvasView {
             // The playing section stays identifiable beside its orbit, ahead of selection and hover labels.
             requests.append(CanvasLabelRequest(id:node.id,anchor:p,size:text.size,radius:radius,expanded:expanded,priority:activeFocus ? 110:primary ? 100:node.id==hoverAddress ? 95:direct && ["MIDI","오디오"].contains(node.music?.content.label ?? "") ? 85:direct ? 70:20,allowsViewportAdjustment:emphasized || portraitSongSection,avoidsOwnRing:isTimelineRing(node)))
         }
-        labelPlacements=CanvasLabelLayout.place(requests,within:workspaceViewport,avoiding:readableLabelObstacles,circles:labelCircles)
+        labelPlacements=CanvasLabelLayout.place(requests,within:canvasViewport,avoiding:readableLabelObstacles,circles:labelCircles)
         for placement in labelPlacements {
             guard let node=scene.node(placement.id),let text=texts[placement.id] else{continue}
             let rect=placement.rect,selected=store.hierarchySelections.contains(node.id),hovered=hoverAddress==node.id

@@ -86,12 +86,7 @@ private final class CaptureAttempt:@unchecked Sendable {
     private var startReply:((Result<CaptureFormat,Error>)->Void)?
     private var timeoutTask:Task<Void,Never>?
     private let factory:@Sendable (InputDeviceSelection)->AudioCaptureBackend
-    public init(){factory={selection in
-        switch selection {
-        case .systemDefault:return InputCaptureWorkerBackend()
-        case .deviceUID:return UnavailableSelectedInputCapture(selection:selection)
-        }
-    }}
+    public init(){factory={selection in InputCaptureWorkerBackend(selection:selection)}}
     init(factory:@escaping @Sendable ()->AudioCaptureBackend){self.factory={_ in factory()}}
     init(selectionFactory:@escaping @Sendable (InputDeviceSelection)->AudioCaptureBackend){self.factory=selectionFactory}
     deinit {timeoutTask?.cancel();attempt?.abort();attempt?.finish{_ in}}
@@ -156,18 +151,6 @@ private final class CaptureAttempt:@unchecked Sendable {
             self.onChange?();completion(result)
         }}
     }
-}
-
-/// AUHAL instantiation can stall before an explicit device is bound on affected
-/// hosts. Keep selected capture closed until an isolated native path is verified.
-private final class UnavailableSelectedInputCapture:AudioCaptureBackend {
-    init(selection:InputDeviceSelection){}
-    func start(to:URL,maximumSeconds:Double,control:CaptureControl) throws -> CaptureFormat {
-        // Selected-device capture is unavailable in this build. Do not perform a
-        // synchronous HAL preflight in the parent, where a bad driver can hang UI recovery.
-        throw InputDeviceBindingError.selectedCaptureUnavailable
-    }
-    func stop() throws -> CapturedAudio? {nil}
 }
 
 final class EngineCaptureBackend:AudioCaptureBackend {
