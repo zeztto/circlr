@@ -388,5 +388,141 @@ class MCPTests(unittest.TestCase):
                 server.validate({**packet,'operations':[{**op,'automationPoints':[{**point,key:value}]}]},spec)
 
 
+class ContextTests(unittest.TestCase):
+    def snapshot(self):
+        return {
+            'projectID': 'project', 'revision': 7, 'layoutRevision': 9, 'name': 'Song',
+            'path': '/private/song.circlr', 'assets': [{'path': '/private/kick.wav'}],
+            'patterns': [{'notes': [{'pitch': 60, 'velocity': 127}]}],
+            'activeArrangementID': 'arr-19',
+            'album': {'compositions': [{'id': 'composition', 'name': 'Main',
+                                        'arrangementIDs': ['arr-19'], 'selectedArrangementID': 'arr-19'}]},
+            'selection': {'section': {'arrangementID': 'arr-19', 'useID': 'use-9'}},
+            'arrangements': [{'id': f'arr-{i}', 'name': f'Arrangement {i}',
+                              'uses': [{'id': f'use-{j}', 'name': f'Use {j}', 'sectionID': f'section-{j}'}
+                                       for j in range(10)]} for i in range(20)],
+            'tracks': [{'id': f'track-{i}', 'name': f'Track {i}', 'instrument': {'sample': '/private'}}
+                       for i in range(40)],
+            'runtime': {'version': '0.80.0', 'build': '233', 'runID': 'private-run',
+                        'agentEndpoint': '.rprivate', 'capabilities': {'playbackLoop': 1, 'jobCancellation': 1,
+                                                                     'unsupported': 0}},
+            'job': {'id': 'job', 'kind': 'bounce', 'state': 'running', 'progress': 0.25,
+                    'path': '/private/bounce.wav', 'message': 'includes private content'},
+            'playback': {'playing': True, 'seconds': 12.5, 'currentSection': {'private': '/private'},
+                         'labels': ['lots of data']},
+            'view': {'loopMode': 'section', 'follow': 'following', 'canvas': '/private'},
+            'recording': {'phase': 'idle', 'busy': False, 'recoveryPath': '/private/recovery.wav'},
+            'output': {'phase': 'ready', 'device': 'private device'},
+        }
+
+    def test_context_read_only_native_snapshot_projection_and_bounds(self):
+        native = self.snapshot()
+        original = json.dumps(native, sort_keys=True)
+        resolver = server.EndpointResolver('/tmp/qa/agent.sock')
+        with patch.object(server, 'rpc', return_value={'ok': True, 'requestID': 'native', 'result': native}) as ipc:
+            response = server.call_tool(resolver, 'circlr_context', {}, read_only=True)
+        self.assertFalse(response['isError'])
+        ipc.assert_called_once()
+        self.assertIs(ipc.call_args.args[0], resolver)
+        self.assertEqual(ipc.call_args.args[1]['method'], 'snapshot')
+        self.assertEqual(ipc.call_args.args[1]['arguments'], {})
+        self.assertEqual(original, json.dumps(native, sort_keys=True))
+        result = response['structuredContent']['result']
+        self.assertEqual(result['project'], {'id': 'project', 'revision': 7, 'layoutRevision': 9,
+                                              'name': 'Song'})
+        self.assertEqual({k: result['activeArrangement'][k] for k in ('id', 'name', 'compositionID', 'compositionName')},
+                         {'id': 'arr-19', 'name': 'Arrangement 19',
+                          'compositionID': 'composition', 'compositionName': 'Main'})
+        self.assertEqual(result['activeArrangement']['uses']['total'], 10)
+        self.assertTrue(result['activeArrangement']['uses']['truncated'])
+        self.assertEqual(result['activeArrangement']['uses']['items'][0], {'id': 'use-0', 'name': 'Use 0'})
+        self.assertEqual(result['selection']['use'], {'id': 'use-9', 'name': 'Use 9', 'arrangementID': 'arr-19'})
+        self.assertEqual(result['arrangements']['total'], 20)
+        self.assertTrue(result['arrangements']['truncated'])
+        self.assertLess(result['arrangements']['returned'], 20)
+        self.assertEqual(result['arrangements']['items'][0]['uses']['total'], 10)
+        self.assertTrue(result['arrangements']['items'][0]['uses']['truncated'])
+        self.assertEqual(result['tracks']['total'], 40)
+        self.assertTrue(result['tracks']['truncated'])
+        self.assertEqual(result['runtime']['capabilities'], {'playbackLoop': 1, 'jobCancellation': 1})
+        self.assertEqual(result['status']['job'], {'id': 'job', 'kind': 'bounce', 'state': 'running', 'progress': 0.25})
+        self.assertEqual(result['status']['playback'], {'playing': True, 'seconds': 12.5, 'loopMode': 'section'})
+        wire = json.dumps(response, ensure_ascii=False)
+        for forbidden in ('/private', 'patterns', 'notes', 'instrument', 'runID', 'agentEndpoint', 'includes private content'):
+            self.assertNotIn(forbidden, wire)
+
+    def test_context_input_rejection_and_native_error_are_fail_closed(self):
+        for bad in ({'path': '/tmp/private'}, {'limit': 1}, {'includeNotes': True}, None, []):
+            with self.subTest(bad=bad), patch.object(server, 'rpc') as ipc, self.assertRaises(ValueError):
+                server.call_tool('/unused.sock', 'circlr_context', bad, read_only=True)
+            ipc.assert_not_called()
+        with patch.object(server, 'rpc', return_value={'ok': False, 'error': 'not ready'}) as ipc:
+            response = server.call_tool('/qa.sock', 'circlr_context', {}, read_only=True)
+        self.assertTrue(response['isError'])
+        self.assertEqual(response['structuredContent']['error'], 'snapshot_unavailable')
+        ipc.assert_called_once()
+        with patch.object(server, 'rpc', return_value={'ok': True, 'result': {'path': '/private'}}):
+            response = server.call_tool('/qa.sock', 'circlr_context', {}, read_only=True)
+        self.assertTrue(response['isError'])
+        self.assertNotIn('/private', json.dumps(response))
+        with patch.object(server, 'rpc', side_effect=ValueError('target_changed: restart the MCP session for the new circlr app')):
+            response = server.call_tool('/qa.sock', 'circlr_context', {}, read_only=True)
+        self.assertTrue(response['isError'])
+        self.assertIn('target_changed:', response['structuredContent']['error'])
+        self.assertNotIn('socket', response['structuredContent'])
+
+    def test_context_accepts_real_swift_album_sound_and_group_addresses(self):
+        native = self.snapshot()
+        for address in ({'album': {}}, {'sound': {}},
+                        {'group': {'parent': {'album': {}}, 'id': 'group-1'}}):
+            with self.subTest(address=address):
+                native['selection'] = address
+                with patch.object(server, 'rpc', return_value={'ok': True, 'result': native}):
+                    response = server.call_tool('/qa.sock', 'circlr_context', {}, read_only=True)
+                self.assertFalse(response['isError'])
+                self.assertEqual(response['structuredContent']['result']['selection']['address'], address)
+        native['selection'] = {'album': {'leak': '/private'}}
+        with patch.object(server, 'rpc', return_value={'ok': True, 'result': native}):
+            response = server.call_tool('/qa.sock', 'circlr_context', {}, read_only=True)
+        self.assertTrue(response['isError'])
+        self.assertNotIn('/private', json.dumps(response))
+
+    def test_context_rejects_huge_numeric_snapshot_without_escaping_stdio(self):
+        for field in ('seconds', 'progress'):
+            native = self.snapshot()
+            if field == 'seconds':
+                native['playback']['seconds'] = 10 ** 500
+            else:
+                native['job']['progress'] = 10 ** 500
+            with self.subTest(field=field), patch.object(server, 'rpc', return_value={'ok': True, 'result': native}):
+                response = server.call_tool('/qa.sock', 'circlr_context', {}, read_only=True)
+            self.assertTrue(response['isError'])
+            self.assertEqual(response['structuredContent']['error'], 'invalid_snapshot')
+
+    def test_context_catalog_is_read_only_in_session(self):
+        entry = server.BY_NAME['circlr_context']
+        self.assertTrue(entry['annotations']['readOnlyHint'])
+        self.assertFalse(entry['annotations']['destructiveHint'])
+        self.assertEqual(entry['inputSchema']['additionalProperties'], False)
+        packets = [{'jsonrpc': '2.0', 'id': 1, 'method': 'initialize', 'params': {}},
+                   {'jsonrpc': '2.0', 'method': 'notifications/initialized'},
+                   {'jsonrpc': '2.0', 'id': 2, 'method': 'tools/list'}]
+        command = [sys.executable, str(Path(__file__).with_name('server.py')), '--read-only']
+        proc = subprocess.run(command, input='\n'.join(map(json.dumps, packets)) + '\n',
+                              text=True, capture_output=True, check=True)
+        listed = [json.loads(line) for line in proc.stdout.splitlines()][1]['result']['tools']
+        self.assertIn('circlr_context', [item['name'] for item in listed])
+
+    def test_context_is_mcp_only_not_a_new_native_request_method(self):
+        with tempfile.TemporaryDirectory() as temp:
+            packet = Path(temp) / 'context.json'
+            packet.write_text(json.dumps({'id': 'qa', 'method': 'context', 'arguments': {}}))
+            for flags in ([], ['--read-only']):
+                proc = subprocess.run([sys.executable, str(Path(__file__).with_name('server.py')),
+                                       *flags, '--request', str(packet)], text=True, capture_output=True)
+                self.assertEqual(proc.returncode, 2)
+                self.assertIn('MCP-only', proc.stderr)
+
+
 if __name__ == "__main__":
     unittest.main()

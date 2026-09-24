@@ -19,13 +19,19 @@ Run circlr, then register this stdio server in your MCP client. Replace `/absolu
 }
 ```
 
-Agent sequence: `circlr_snapshot` → `circlr_inspect` → revision-checked `circlr_apply` → `circlr_job` for asynchronous work → `circlr_save`. Inspect capabilities from the running app; never infer them from this README alone.
+Agent sequence: `circlr_context` for compact orientation → `circlr_snapshot` and `circlr_inspect` for the exact edit target → revision-checked `circlr_apply` → `circlr_job` for asynchronous work → `circlr_save`. Inspect capabilities from the running app; never infer them from this README alone.
 
 기본 연결은 `~/Library/Application Support/circlr/Agent/selected.json`이 선택한 socket으로 간다. 선택 정보가 없는 구버전 앱에만 `agent.sock`을 사용한다. 한 MCP 세션은 첫 응답의 실행 경로·socket inode에 고정된다. 앱을 재시작하거나 콘솔의 **이 앱에 새 연결**을 선택한 뒤에는 MCP 세션도 다시 시작한다. 선택 정보가 남았는데 socket이 없거나 바뀐 경우에는 구버전 경로로 자동 전환하지 않는다. 이때 다른 써클러 앱의 소켓이 열려 있으면 그 앱 콘솔에서 **이 앱을 기본 연결로 선택**하고 MCP 세션을 다시 시작한다. 폴더 권한은 0700, 선택 정보·socket 권한은 0600이고 앱은 연결한 프로세스의 UID도 확인한다.
 
 검증 앱은 `--socket` 또는 `CIRCLR_SOCKET`으로 격리된 표준 `agent.sock` 경로를 지정할 수 있다. 이 명시적 경로는 구버전 호환을 위한 raw JSON 방식이며 실행 ID·세션 고정을 제공하지 않는다. 격리 앱의 새 `.r` 연결 검증에는 그 QA 폴더의 `agent.sock`을 기준으로 `EndpointResolver`를 사용한다. `--socket`으로 `.r` 경로를 직접 지정해도 버전 2 연결은 만들어지지 않는다.
 
 ## 에이전트 작업 흐름
+
+`circlr_context`는 인자가 없는 read-only 도구다. 기존 native `snapshot`을 **한 번** 호출하고, 같은 실행에 고정된 MCP 연결을 통해 받은 응답에서 프로젝트 ID·음악/배치 revision·이름, 활성 편곡안, 현재 선택 주소와 선택된 섹션 use, 곡/악장·편곡안/use·트랙의 ID/이름, 활성 capability, 짧은 job·재생·녹음·출력 상태만 투영한다. 각 목록은 `total`, `returned`, `truncated`, `items`를 가진다. 편곡안 16개, 각 use 8개, 곡/악장 16개, 트랙 32개까지 표시한다. 활성 편곡안은 목록 밖에 있어도 별도로 ID/이름과 bounded use 목록을 제공하고, 선택된 use는 그 목록 밖에 있어도 별도로 식별한다. 전체 프로젝트 경로, asset, pattern, note, plugin state, 재생 시각화와 job 경로/메시지는 반환하지 않는다. 앱 snapshot이 오류이거나 필수 필드가 잘못되면 부분 데이터를 내보내지 않고 오류를 반환한다. read-only 세션에서도 사용 가능하며 편집 권한을 추가하지 않는다.
+
+이 도구는 MCP adapter에서만 제공한다. Native 앱 IPC의 새 `context` method는 없으며 CLI `--request`로 직접 호출할 수 없다.
+
+실제 `qa/generated/r80-qa232-model-native/preflight-snapshot.json` (SHA-256 `ad9273e07f520af0d4c92d4523170a942ef4bb267bdd69cec746f943cc6259a1`) 응답을 기준으로 compact JSON wire 크기는 전체 native snapshot **13,051 B**, 같은 requestID를 쓴 context 응답 **2,355 B**(82.0% 감소)였다. 원본 QA 파일은 pretty JSON으로 **23,454 B**다. 이는 한 응답의 byte 크기이며 모델 token 비용의 직접 측정치는 아니다. `circlr_context`만으로는 악기·노트·오디오·자동화 등 정확한 편집 대상을 알 수 없으므로, 변경 직전에는 최신 `circlr_snapshot`과 대상 `circlr_inspect`를 사용한다.
 
 build 62부터 `circlr_sounds`로 실제 음색을 조회한다. 먼저 snapshot.runtime의 `build`와 `capabilities.soundCatalog=1`을 확인한다. 같은 0.20.0 버전이라도 이전 build에는 이 도구가 없다. read-only 전문 역할도 조회할 수 있으며 문서·포커스·재생을 바꾸지 않는다.
 

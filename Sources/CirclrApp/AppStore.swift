@@ -42,6 +42,11 @@ import CirclrAudio
     }
 }
 
+private struct MIDIRecordingKey: Hashable {
+    let channel: UInt8
+    let pitch: Int
+}
+
 @MainActor final class AppStore: ObservableObject {
     @Published var project = Project() { didSet {
         if oldValue.id != project.id { stopTrustedAgentTurn() }
@@ -301,7 +306,9 @@ import CirclrAudio
     private var recordLaneID: ID?
     private var recordArrangementID: ID?
     private var recordedNotes: [Note] = []
-    private var heldNotes: [Int:(Double,Int)] = [:]
+    private var heldNotes: [MIDIRecordingKey:(Double,Int)] = [:]
+    /// Observes live recording preview commands before the asynchronous instrument boundary.
+    var onMIDIRecordingPreviewCommand: ((Int,Int,Bool)->Void)?
     private var recordIteration = 0
     private var recordingTrackID: ID?
     private var originalRecordProject: Project?
@@ -1104,13 +1111,25 @@ import CirclrAudio
     }
     func midi(status:UInt8,pitch:Int,velocity:Int,time:Double) {
         let type = status & 0xF0
-        guard type == 0x90 || type == 0x80 else { return }
+        guard (type == 0x90 || type == 0x80), (0...127).contains(pitch), (0...127).contains(velocity) else { return }
         let on = type == 0x90 && velocity > 0
-        audition(pitch:pitch,velocity:velocity,on:on)
-        guard midiRecording,let clock = recordClock else { return }
+        guard midiRecording,let clock = recordClock else { audition(pitch:pitch,velocity:velocity,on:on); return }
         let elapsed = max(0,time-recordStart)
-        if on { heldNotes[pitch] = (elapsed,velocity) }
-        else if let (start,v) = heldNotes.removeValue(forKey:pitch) { appendRecorded(pitch:pitch,velocity:v,start:start,end:elapsed,clock:clock) }
+        let key = MIDIRecordingKey(channel:status & 0x0F,pitch:pitch)
+        if on {
+            let previous = heldNotes.updateValue((elapsed,velocity),forKey:key)
+            if let (start,v) = previous { appendRecorded(pitch:pitch,velocity:v,start:start,end:elapsed,clock:clock) }
+            // The audition synth is pitch-based: every new attack rearticulates its voice,
+            // but only the last channel's release may silence this pitch.
+            previewRecordedMIDI(pitch:pitch,velocity:velocity,on:true)
+        } else if let (start,v) = heldNotes.removeValue(forKey:key) {
+            appendRecorded(pitch:pitch,velocity:v,start:start,end:elapsed,clock:clock)
+            if !heldNotes.keys.contains(where:{ $0.pitch == pitch }) { previewRecordedMIDI(pitch:pitch,velocity:velocity,on:false) }
+        }
+    }
+    private func previewRecordedMIDI(pitch:Int,velocity:Int,on:Bool) {
+        onMIDIRecordingPreviewCommand?(pitch,velocity,on)
+        audition(pitch:pitch,velocity:velocity,on:on)
     }
     private func appendRecorded(pitch:Int,velocity:Int,start:Double,end:Double,clock:MusicClock) {
         let first = Int(start/clock.seconds),last = Int(max(start,end-0.000001)/clock.seconds)
@@ -1188,7 +1207,9 @@ import CirclrAudio
         guard midiRecording || audioRecording,let useID = recordUseID,let trackID = recordingTrackID,let clock = recordClock else { return }
         let elapsed = ProcessInfo.processInfo.systemUptime-recordStart
         if midiRecording {
-            for (pitch,(start,v)) in heldNotes { appendRecorded(pitch:pitch,velocity:v,start:start,end:elapsed,clock:clock) }; heldNotes = [:]
+            for (key,(start,v)) in heldNotes { appendRecorded(pitch:key.pitch,velocity:v,start:start,end:elapsed,clock:clock) }
+            for pitch in Set(heldNotes.keys.map(\.pitch)) { previewRecordedMIDI(pitch:pitch,velocity:0,on:false) }
+            heldNotes = [:]
             let all = recordedNotes; midiRecording = false
             meter.update(seconds:playback.seconds,playing:playback.playing)
             let iterations = max(1,Int(ceil(elapsed/clock.seconds)))

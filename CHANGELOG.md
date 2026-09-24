@@ -1,5 +1,13 @@
 # 변경 이력
 
+## 0.80.0 · build233 — 개발 중 · 출고 gate 미통과
+
+- MIDI 녹음에서 같은 음높이를 서로 다른 채널이 누르거나 같은 채널이 다시 누르면 기존 note가 사라지던 문제를 고쳤다. 채널+pitch로 유지음을 식별하고 재어택 시 앞 note를 닫는다. 마지막 활성 채널의 Note Off에만 미리 듣기를 해제하며 녹음 종료 시 남은 음을 정리한다. 합성 이벤트로 take·반복 경계·Undo와 preview 명령을 검사했다. 실제 MIDI 장치 청취와 helper 준비 중 빠른 입력은 별도 검증이다.
+- 좁은 창의 재생 팔로우 버튼에도 곡·섹션·고정 대상과 일시 중지/꺼짐 상태를 표시한다. VoiceOver 이름에도 대상과 누르면 할 동작을 넣는다.
+- 외부 MCP의 읽기 전용 `circlr_context`는 앱의 기존 snapshot 한 번에서 선택·편곡안/use·트랙·capability와 짧은 실행 상태만 추려 반환한다. 실제 저장된 QA 응답의 compact 크기는 13,051B→2,355B였고, raw 경로·asset·pattern·note를 포함하지 않는다. 정확한 편집 전에는 전체 snapshot/inspect와 revision 확인을 계속 사용한다. 제품 내부 Codex 계정 대화의 출시는 아니다. [계획](qa/0.80-build233-plan.md) · [검증](qa/0.80-build233.md).
+- 최종 전체 Swift **1,236개·15 skip·실패 0**, MCP Python **47개**, MCP QA Python **39개**를 통과했다. 패키지·격리 실제 앱 검증은 [build233 QA](qa/0.80-build233.md)에 별도 기록한다.
+- build233 arm64 앱·다섯 helper deep strict 서명과 동봉 데모·Codex kit hash를 확인했다. [격리 native QA](qa/0.80-build233-native.md)의 700/720/900/1440pt 지정 화면·팔로우 AX, 실제 read-only MCP context, 가로·세로 README 화면과 앱/helper/socket 종료가 통과했다. 앱 안에서만 내장 출력을 택했고 시스템 기본 Scarlett 설정은 그대로였다. 물리 청취·실제 입력 take·장시간 영상·제품 내부 계정 대화는 열려 있으므로 정식 0.80 Release는 보류한다.
+
 ## 0.80.0 · build232 — 개발 중 · 출고 gate 미통과
 
 - 콘솔에서 현재 내부 AI turn 소유 작업을 중단하면 lease·전용 socket·작업을 함께 닫는다. 일반 MCP job 취소는 작업에만 적용하고 DAW transport는 유지한다. 내부 Codex 계정 대화 기능이 출시된 것은 아니다. [build232 QA](qa/0.80-build232.md).

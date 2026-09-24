@@ -416,8 +416,29 @@ struct TransportControls:View {
     private var followButtonTitle:String {
         switch store.playbackFollow {
         case .suspended: return "\(followTargetTitle) 팔로우 재개"
-        case .off: return "팔로우 꺼짐"
+        case .off: return "\(followTargetTitle) 팔로우 끔"
         case .following: return "\(followTargetTitle) 팔로우"
+        }
+    }
+    private var followAccessibilityLabel:String {
+        switch store.playbackFollow {
+        case .suspended: return "\(followTargetTitle) 팔로우 재개"
+        case .off: return "\(followTargetTitle) 팔로우 켜기"
+        case .following: return "\(followTargetTitle) 팔로우 끄기"
+        }
+    }
+    private var compactFollowTitle:String {
+        switch store.playbackFollow {
+        case .suspended: return "\(followTargetTitle) 팔로우 재개"
+        case .off: return "\(followTargetTitle) 팔로우 끔"
+        case .following: return "\(followTargetTitle) 팔로우"
+        }
+    }
+    private var followSymbol:String {
+        switch store.playbackFollow {
+        case .suspended: return "pause.circle"
+        case .off: return "location.slash"
+        case .following: return "scope"
         }
     }
     var body:some View {
@@ -429,15 +450,15 @@ struct TransportControls:View {
                 footer:store.mediaImportTask != nil ? "Space로 취소":store.auditionStatus.pending ? store.auditionPresentation.footer:store.outputCanCancel ? "Space로 취소":store.playbackLoopCaption,
                 textColor:StudioTheme.text,secondaryColor:StudioTheme.secondary)
             Button { store.playbackFollow = store.playbackFollow.toggled() } label: {
-                HStack(spacing:6) {
-                    Image(systemName:store.playbackFollow == .following ? "scope":"location.slash")
-                    if !compact {Text(followButtonTitle)}
-                }.font(.system(size:12,weight:.medium)).lineLimit(1).fixedSize(horizontal:true,vertical:false)
-                    .foregroundStyle(store.playbackFollow == .following ? StudioTheme.accent : StudioTheme.secondary)
+                HStack(spacing:compact ? 4:6) {
+                    Image(systemName:followSymbol)
+                    Text(compact ? compactFollowTitle:followButtonTitle)
+                }.font(.system(size:compact ? 11:12,weight:.medium)).lineLimit(1).fixedSize(horizontal:true,vertical:false)
+                    .foregroundStyle(store.playbackFollow == .following ? StudioTheme.accent : store.playbackFollow == .suspended ? StudioTheme.text : StudioTheme.secondary)
             }
-            .accessibilityLabel(store.playbackFollow == .suspended ? followButtonTitle : "재생 팔로우")
+            .accessibilityLabel(followAccessibilityLabel)
             .accessibilityValue(store.playbackFollow == .following ? "켜짐" : store.playbackFollow == .off ? "꺼짐" : "일시 중지")
-            .help("선택한 대상을 따라갑니다. 화면을 직접 조작하면 일시 중지합니다")
+            .help(store.playbackFollow == .suspended ? "\(followTargetTitle) 팔로우 재개":"선택한 대상을 따라갑니다. 화면을 직접 조작하면 일시 중지합니다")
             Menu {
                 Button((store.playbackFollowSettings.target == .song ? "✓ ":"")+"현재 곡 서클"){store.choosePlaybackFollowTarget(.song)}
                 Button((store.playbackFollowSettings.target == .section ? "✓ ":"")+"현재 섹션 서클"){store.choosePlaybackFollowTarget(.section)}

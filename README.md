@@ -8,13 +8,13 @@ English · [한국어](README.ko.md)
 
 In circlr, a circle is a timeline. Build a song from sections, place MIDI, audio, instruments and effects on and around their orbits, and connect their inputs and outputs. Move between the whole arrangement and detailed editing on one zoomable canvas.
 
-![circlr build232 showing f0r h3r and seven readable song sections](docs/images/circlr-song-build232.png)
+![circlr build233 showing f0r h3r and seven readable song sections](docs/images/circlr-song-build233.png)
 
-*0.80.0 build232 development preview from an isolated native app. The latest public release is still 0.70.0. [Capture provenance](docs/images/README.md).*
+*0.80.0 build233 development preview from an isolated native app. The latest public release is still 0.70.0. [Capture provenance](docs/images/README.md).*
 
 > **0.70.0 · build180.** Smoother playback canvas and MP4 capture in the verified scenarios, with viewing mode beside Record. [Evidence and limits](docs/releases/0.70.0-qa.md).
 
-**In development:** [0.80.0](docs/releases/0.80.0.md) shows section order and timing on the song orbit, opens a single song at its section view, and keeps section labels clear of their timeline rings and console controls. Build232 names the playback-follow target when follow is paused and makes the console's AI stop revoke an app-owned turn, while public MCP job cancellation stays separate. An external Codex model completed a bounded MIDI edit, Undo and WAV export through MCP in an isolated build230 app; in-app account chat is not connected. Physical recording, listening and long-recording QA remain open; 0.70.0 is the latest release. [Current QA](qa/0.80-build232.md).
+**In development:** [0.80.0](docs/releases/0.80.0.md) shows section order and timing on the song orbit, opens a single song at its section view, and keeps section labels clear of their timeline rings and console controls. Build233 preserves overlapping MIDI notes from different channels and retriggers in recorded takes, shows the playback-follow target in compact windows, and adds a bounded `circlr_context` MCP read for agent orientation. An external Codex model completed a bounded MIDI edit, Undo and WAV export through MCP in an isolated build230 app; in-app account chat is not connected. Physical recording, listening and long-recording QA remain open; 0.70.0 is the latest release. [Current QA](qa/0.80-build233.md).
 
 ## What you can work with
 
@@ -24,9 +24,9 @@ In circlr, a circle is a timeline. Build a song from sections, place MIDI, audio
 - **Sound and motion:** instrument/effect routing, automation, bounce and source restoration; playback-follow and signal visualization controls.
 - **Local agents:** an MCP interface for inspecting and editing projects, generating MIDI, rendering and saving, with activity visible in the console.
 
-<img src="docs/images/circlr-song-portrait-build232.png" width="280" alt="circlr build232 showing seven section labels and clear orbit ticks in a portrait window">
+<img src="docs/images/circlr-song-portrait-build233.png" width="280" alt="circlr build233 showing seven section labels and clear orbit ticks in a portrait window">
 
-*The same build232 demo stopped in a 720×900 portrait window with the console open, showing the responsive toolbar, nearby section labels and all seven sections. [Capture details](docs/images/README.md).*
+*The same build233 demo stopped in a 720×900 portrait window with the console open, showing the visible playback-follow target, responsive toolbar and all seven sections. [Capture details](docs/images/README.md).*
 
 These are implemented development features, not a guarantee of compatibility with every audio device or plug-in. Artist profiles and a combined text, image and video workspace are the [longer-term direction](docs/21-artist-universe.md).
 

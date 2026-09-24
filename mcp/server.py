@@ -141,11 +141,12 @@ def tool(name, method, description, properties=None, required=(), write=False, d
         required = ("projectID", "expectedRevision", *required)
     return {"name": "circlr_" + name, "method": method, "description": description,
             "inputSchema": schema(properties, required),
-            "annotations": {"readOnlyHint": method in {"snapshot", "inspect", "ports", "sounds", "events", "job"}, "destructiveHint": write if destructive is None else destructive, "openWorldHint": False}}
+            "annotations": {"readOnlyHint": method in {"snapshot", "context", "inspect", "ports", "sounds", "events", "job"}, "destructiveHint": write if destructive is None else destructive, "openWorldHint": False}}
 
 
 TOOLS = [
     tool("snapshot", "snapshot", "Read current project IDs, revision, tracks, arrangements, selection and active job. Read before every edit."),
+    tool("context", "context", "Read a bounded project summary from the same native snapshot. Includes project/revisions, active arrangement, selection, arrangement/use and track IDs/names, enabled capabilities and short job/playback status. Lists report totals and truncation. Excludes project path, assets, patterns and notes. Use snapshot/inspect for detailed edits; context does not grant write authority."),
     tool("sounds", "sounds", "Search the actual built-in synth, Sound Bank and installed AU catalog without changing music, focus or playback. Requires snapshot.runtime.capabilities.soundCatalog=1. Read stable IDs and exact synthPatch, raw program/bankLSB/drums or plugin descriptors; names are data. A synth-preset item provides synthPatch: copy it to instrument.synth and set kind=synthesizer when applying; omit the operation synthVoice shortcut so it cannot replace the patch. Reuse catalogID and filters with nextOffset for pagination. Merge returned bank fields into the latest snapshot instrument before set_instrument to preserve inactive patches. Does not audition or certify audio compatibility.", {
         "soundTarget": {"type": "string", "enum": ["instrument", "effect"], "description": "Default instrument; effect lists AU effects."},
         "query": {"type": "string", "maxLength": 256, "description": "Name, Korean family, manufacturer or exact display #1–#128. Default empty."},
@@ -194,7 +195,174 @@ TOOLS = [
     tool("focus", "focus", "Optionally show a circle, including a group via node address (exclusive of other selectors). Omit targets for the album. With minimized=true/false, only minimize/restore the app window. With follow=true/false alone, resume/disable playback camera follow. Editing and rendering never require focus.", {**SCOPE, "node": PORT_ADDRESS, "compositionID": STRING, "nodeID": STRING, "detail": {"type": "boolean"}, "minimized": {"type": "boolean"}, "follow": {"type": "boolean"}}),
 ]
 BY_NAME = {entry["name"]: entry for entry in TOOLS}
-READ_METHODS = frozenset({"snapshot", "inspect", "ports", "sounds", "events", "job"})
+READ_METHODS = frozenset({"snapshot", "context", "inspect", "ports", "sounds", "events", "job"})
+
+CONTEXT_ARRANGEMENT_LIMIT = 16
+CONTEXT_USE_LIMIT = 8
+CONTEXT_TRACK_LIMIT = 32
+CONTEXT_COMPOSITION_LIMIT = 16
+
+
+def _context_string(value, field, maximum=256):
+    if not isinstance(value, str) or len(value) > maximum:
+        raise ValueError(f"Invalid snapshot {field}")
+    return value
+
+
+def _context_object(value, field):
+    if not isinstance(value, dict):
+        raise ValueError(f"Invalid snapshot {field}")
+    return value
+
+
+def _context_number(value, field, minimum, maximum):
+    if type(value) not in (int, float) or value < minimum or value > maximum or not math.isfinite(value):
+        raise ValueError(f"Invalid snapshot {field}")
+    return value
+
+
+def _context_items(value, field, limit, project):
+    if not isinstance(value, list):
+        raise ValueError(f"Invalid snapshot {field}")
+    items = [project(item) for item in value[:limit]]
+    return {"total": len(value), "returned": len(items), "truncated": len(value) > len(items), "items": items}
+
+
+def _context_named(item):
+    obj = _context_object(item, "item")
+    return {"id": _context_string(obj.get("id"), "item.id", 128),
+            "name": _context_string(obj.get("name"), "item.name")}
+
+
+def _context_address(value, depth=0):
+    if value is None:
+        return None
+    if depth >= 8 or not isinstance(value, dict) or len(value) != 1:
+        raise ValueError("Invalid snapshot selection")
+    kind, payload = next(iter(value.items()))
+    data = _context_object(payload, "selection address")
+    if kind in ("album", "sound") and not data:
+        return {kind: {}}
+    if kind in ("signal", "composition") and set(data) == {"_0"}:
+        return {kind: {"_0": _context_string(data["_0"], "selection ID", 128)}}
+    keys = {"section": {"arrangementID", "useID"},
+            "music": {"arrangementID", "useID", "nodeID"}}
+    if kind in keys and set(data) == keys[kind]:
+        return {kind: {key: _context_string(data[key], "selection ID", 128) for key in keys[kind]}}
+    if kind == "group" and set(data) == {"parent", "id"}:
+        return {"group": {"parent": _context_address(data["parent"], depth + 1),
+                          "id": _context_string(data["id"], "selection ID", 128)}}
+    raise ValueError("Invalid snapshot selection")
+
+
+def project_context(snapshot):
+    """Allowlist a bounded read-only view of one native snapshot response."""
+    state = _context_object(snapshot, "result")
+    project = {"id": _context_string(state.get("projectID"), "projectID", 128),
+               "name": _context_string(state.get("name"), "name")}
+    for key in ("revision", "layoutRevision"):
+        value = state.get(key)
+        if type(value) is not int or not 0 <= value <= 9223372036854775807:
+            raise ValueError(f"Invalid snapshot {key}")
+        project[key] = value
+    arrangements = state.get("arrangements")
+    tracks = state.get("tracks")
+    if not isinstance(arrangements, list) or not isinstance(tracks, list):
+        raise ValueError("Invalid snapshot music lists")
+    album = state.get("album")
+    compositions = [] if album is None else _context_object(album, "album").get("compositions")
+    if not isinstance(compositions, list):
+        raise ValueError("Invalid snapshot compositions")
+
+    def arrangement_item(item):
+        obj = _context_object(item, "arrangement")
+        return {**_context_named(obj), "uses": _context_items(obj.get("uses"), "uses", CONTEXT_USE_LIMIT, _context_named)}
+
+    def composition_item(item):
+        obj = _context_object(item, "composition")
+        return {**_context_named(obj),
+                "selectedArrangementID": (_context_string(obj["selectedArrangementID"], "selectedArrangementID", 128)
+                                          if obj.get("selectedArrangementID") is not None else None)}
+
+    active_id = _context_string(state.get("activeArrangementID"), "activeArrangementID", 128)
+    active = next((item for item in arrangements if isinstance(item, dict) and item.get("id") == active_id), None)
+    if active is None:
+        raise ValueError("Invalid snapshot active arrangement")
+    owner = next((item for item in compositions if isinstance(item, dict) and
+                  active_id in item.get("arrangementIDs", [])), None)
+    active_summary = {**_context_named(active),
+                      "uses": _context_items(active.get("uses"), "activeArrangement.uses", CONTEXT_USE_LIMIT, _context_named)}
+    if owner is not None:
+        active_summary.update({"compositionID": _context_string(owner.get("id"), "compositionID", 128),
+                               "compositionName": _context_string(owner.get("name"), "compositionName")})
+    else:
+        active_summary.update({"compositionID": None, "compositionName": None})
+
+    address = _context_address(state.get("selection"))
+    selection = {"address": address, "use": None, "composition": None}
+    selected_address = address
+    while isinstance(selected_address, dict) and "group" in selected_address:
+        selected_address = selected_address["group"]["parent"]
+    if isinstance(selected_address, dict):
+        if "composition" in selected_address:
+            selected_id = selected_address["composition"]["_0"]
+            found = next((item for item in compositions if isinstance(item, dict) and item.get("id") == selected_id), None)
+            selection["composition"] = _context_named(found) if found is not None else {"id": selected_id, "name": None}
+        section = selected_address.get("section") or selected_address.get("music")
+        if section is not None:
+            arrangement_id, use_id = section["arrangementID"], section["useID"]
+            source = next((item for item in arrangements if isinstance(item, dict) and item.get("id") == arrangement_id), None)
+            uses = source.get("uses") if source is not None else None
+            found = next((item for item in uses if isinstance(item, dict) and item.get("id") == use_id), None) if isinstance(uses, list) else None
+            selection["use"] = {**(_context_named(found) if found is not None else {"id": use_id, "name": None}),
+                                "arrangementID": arrangement_id}
+
+    runtime = _context_object(state.get("runtime"), "runtime")
+    native_capabilities = _context_object(runtime.get("capabilities"), "capabilities")
+    if len(native_capabilities) > 64:
+        raise ValueError("Invalid snapshot capabilities")
+    capabilities = {}
+    for key, value in native_capabilities.items():
+        key = _context_string(key, "capability", 64)
+        if type(value) is not int or value not in (0, 1):
+            raise ValueError("Invalid snapshot capability value")
+        if value == 1:
+            capabilities[key] = 1
+    playback = _context_object(state.get("playback"), "playback")
+    view = _context_object(state.get("view"), "view")
+    recording = _context_object(state.get("recording"), "recording")
+    output = _context_object(state.get("output"), "output")
+    playing = playback.get("playing")
+    seconds = playback.get("seconds")
+    busy = recording.get("busy")
+    if type(playing) is not bool or type(busy) is not bool:
+        raise ValueError("Invalid snapshot transport")
+    seconds = _context_number(seconds, "playback.seconds", 0, 1e12)
+    job = state.get("job")
+    job_summary = None
+    if job is not None:
+        job = _context_object(job, "job")
+        progress = job.get("progress")
+        progress = _context_number(progress, "job.progress", 0, 1)
+        job_summary = {"id": _context_string(job.get("id"), "job.id", 128),
+                       "kind": _context_string(job.get("kind"), "job.kind", 64),
+                       "state": _context_string(job.get("state"), "job.state", 64),
+                       "progress": progress}
+    return {"project": project,
+            "activeArrangement": active_summary,
+            "selection": selection,
+            "compositions": _context_items(compositions, "compositions", CONTEXT_COMPOSITION_LIMIT, composition_item),
+            "arrangements": _context_items(arrangements, "arrangements", CONTEXT_ARRANGEMENT_LIMIT, arrangement_item),
+            "tracks": _context_items(tracks, "tracks", CONTEXT_TRACK_LIMIT, _context_named),
+            "runtime": {"version": _context_string(runtime.get("version"), "runtime.version", 64),
+                        "build": _context_string(runtime.get("build"), "runtime.build", 64),
+                        "capabilities": capabilities},
+            "status": {"job": job_summary,
+                       "playback": {"playing": playing, "seconds": seconds,
+                                    "loopMode": _context_string(view.get("loopMode"), "loopMode", 32)},
+                       "recording": {"phase": _context_string(recording.get("phase"), "recording.phase", 64),
+                                     "busy": busy},
+                       "output": {"phase": _context_string(output.get("phase"), "output.phase", 64)}}}
 
 
 def validate(value, spec, path="arguments"):
@@ -439,7 +607,8 @@ def call_tool(path, name, arguments, read_only=False):
         ids = arguments.get("trackIDs")
         if ids is not None and len(set(ids)) != len(ids):
             raise ValueError("import_midi.trackIDs: duplicate IDs")
-    request = {"id": str(uuid.uuid4()), "method": entry["method"], "arguments": {k: v for k, v in arguments.items() if k not in REVISION}}
+    request = {"id": str(uuid.uuid4()), "method": "snapshot" if entry["method"] == "context" else entry["method"],
+               "arguments": {k: v for k, v in arguments.items() if k not in REVISION}}
     for key in REVISION:
         if key in arguments:
             request[key] = arguments[key]
@@ -489,8 +658,23 @@ def call_tool(path, name, arguments, read_only=False):
             if state.get("projectID") != request["projectID"] or type(state.get("revision")) is not int or state.get("revision") != request["expectedRevision"]:
                 raise ValueError("stale_revision: snapshot differs from projectID/expectedRevision")
         result = rpc(path, request)
+        if entry["method"] == "context":
+            if not isinstance(result, dict) or result.get("ok") is not True:
+                result = {"ok": False, "requestID": request["id"], "error": "snapshot_unavailable"}
+            else:
+                try:
+                    summary = project_context(result.get("result"))
+                except (TypeError, ValueError, OverflowError):
+                    result = {"ok": False, "requestID": request["id"], "error": "invalid_snapshot"}
+                else:
+                    result = {"ok": True, "requestID": request["id"], "result": summary}
     except (OSError, ValueError) as error:
-        result = {"ok": False, "requestID": request["id"], "error": str(error), "socket": str(path)}
+        if entry["method"] == "context":
+            message = str(error)
+            result = {"ok": False, "requestID": request["id"],
+                      "error": message if message.startswith("target_changed:") else "snapshot_unavailable"}
+        else:
+            result = {"ok": False, "requestID": request["id"], "error": str(error), "socket": str(path)}
     return {"content": [{"type": "text", "text": json.dumps(result, ensure_ascii=False, allow_nan=False)}], "structuredContent": result, "isError": not result.get("ok", False)}
 
 
@@ -543,13 +727,15 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--socket", help="Explicit socket path; uses the legacy JSON wire protocol.")
     parser.add_argument("--request", help="Send one native JSON request file and exit; omit to run MCP stdio.")
-    parser.add_argument("--read-only", action="store_true", help="Expose and accept only snapshot, inspect, ports, sounds, job and events.")
+    parser.add_argument("--read-only", action="store_true", help="Expose and accept only snapshot, context, inspect, ports, sounds, job and events.")
     args = parser.parse_args()
     path = args.socket if args.socket is not None else os.environ.get("CIRCLR_SOCKET")
     if path is None:
         path = EndpointResolver(Path.home() / "Library/Application Support/circlr/Agent/agent.sock")
     if args.request:
         request = json.loads(Path(args.request).read_text())
+        if request.get("method") == "context":
+            parser.error("context is MCP-only; use circlr_context through an MCP client")
         if args.read_only and request.get("method") not in READ_METHODS:
             parser.error("This circlr session is read-only")
         result = rpc(path, request)
