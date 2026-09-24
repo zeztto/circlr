@@ -14,6 +14,7 @@ import CirclrCore
         cancelDemoLoading();startupOpen=false;focusCanvas?()
     }
     func createStarter(_ id:String,name:String?,context:MusicContext? = nil) {
+        guard requireFinishedRecordingForDocumentAction() else{return}
         cancelDemoLoading()
         if let input=NSApp.keyWindow?.firstResponder as? NSTextView,input.hasMarkedText(){return}
         do {
@@ -22,7 +23,7 @@ import CirclrCore
             try ProjectStore.validateStructure(fresh)
             _ = try ArrangementCompiler.compile(fresh)
             _ = try AlbumCompiler.compile(fresh)
-            guard confirmDiscard() else{return}
+            guard confirmDiscard(),requireFinishedRecordingForDocumentAction() else{return}
             retireDemoCopy();stop();project=fresh;projectURL=nil;mediaRoot=nil
             selectedTrackID=fresh.tracks.first?.id
             resetSession();dirty=true

@@ -393,6 +393,89 @@ extension AppStore {
         guard path.hasPrefix("/"),!path.contains("\0") else {throw CirclrError("절대 경로를 사용하세요")}
         return URL(fileURLWithPath:path).standardizedFileURL
     }
+    /// An app-selected, already open document is the only trusted save target.
+    /// Media is staged away from the MainActor. STOP, a changed document, or a
+    /// later user edit prevents publication even if the copy worker finishes.
+    func beginTrustedAgentSave(_ request:AgentRequest,destination:URL,
+                               lease:AgentRunLease)throws->[String:Any] {
+        guard !preparing,!midiRecording,!audioRecordingBusy,!audioRecordPending else {
+            throw CirclrError("현재 작업 또는 녹음 마무리가 끝난 뒤 저장하세요")
+        }
+        guard let current=projectURL,
+              current.standardizedFileURL==destination.standardizedFileURL,
+              mediaRoot != nil else {
+            throw CirclrError("trusted_run_scope: 사용자가 선택한 현재 곡 위치가 필요합니다")
+        }
+        guard try ProjectStore.load(destination).project.id==project.id else {
+            throw CirclrError("trusted_run_scope: 선택한 곡의 ID가 현재 문서와 다릅니다")
+        }
+        captureViewport()
+        let snapshot=project,root=mediaRoot
+        let drain=takeProductionDrain()
+        let generation=productionGeneration,jobID=newID()
+        let jobLease=AgentJobCommitLease(projectID:snapshot.id,
+            revision:snapshot.musicRevision,generation:generation,jobID:jobID)
+        agentJob=AgentJob(id:jobID,kind:"save",state:"running",
+                          message:"선택한 곡 저장 준비 중")
+        preparing=true;progress=0;status="선택한 곡 저장 준비 중"
+        recordActivity("내장 AI","실행 · save · \(jobID)")
+        productionTask=Task { [weak self] in
+            await drain.wait()
+            guard let self,self.productionGeneration==generation,!Task.isCancelled else{return}
+            do {
+                let worker=Task.detached(priority:.userInitiated) {
+                    try ProjectStore.prepareSessionSave(snapshot,to:destination,
+                        mediaRoot:root,checkCancellation:{try Task.checkCancellation()})
+                }
+                let staged=try await withTaskCancellationHandler {
+                    try await worker.value
+                } onCancel: {
+                    worker.cancel()
+                }
+                defer {ProjectStore.discard(staged)}
+                try Task.checkCancellation()
+                try self.checkAgentJobCommit(jobLease,trustedLease:lease)
+                try AgentJobCommitLease.requireUnchanged(current:self.project,snapshot:snapshot)
+                guard self.mediaRoot==root,
+                      self.projectURL?.standardizedFileURL==destination.standardizedFileURL else {
+                    throw CancellationError()
+                }
+                let authorized=try self.trustedRun.authorizedOwnedFileJobDestination(
+                    for:request,lease:lease,jobID:jobID,
+                    ownedLease:self.trustedAgentJob?.lease,
+                    ownedJobID:self.trustedAgentJob?.id,
+                    project:self.project,document:self.currentTrustedDocument)
+                guard authorized==destination else {throw CancellationError()}
+                guard try ProjectStore.load(destination).project.id==snapshot.id else {
+                    throw CirclrError("저장 대상이 다른 곡으로 바뀌었습니다")
+                }
+                var cleanupWarning:String?
+                let saved=try ProjectStore.publishSessionSaveReportingCleanup(staged) {
+                    cleanupWarning=$0
+                }
+                // Publication and these session updates are synchronous on the
+                // MainActor: no agent turn can interleave after the final check.
+                self.project=saved
+                self.projectURL=destination
+                self.mediaRoot=destination
+                self.dirty=false
+                self.clearSavedRecovery()
+                self.preparing=false;self.progress=1
+                self.agentJob?.state="completed";self.agentJob?.progress=1
+                self.agentJob?.message=cleanupWarning ?? "저장 완료"
+                self.status=cleanupWarning ?? "내장 AI 저장 완료"
+                self.recordActivity("내장 AI","완료 · save · \(jobID)")
+            } catch {
+                guard self.productionGeneration==generation else{return}
+                self.preparing=false
+                self.agentJob?.state=error is CancellationError ? "cancelled":"failed"
+                self.agentJob?.message=error.localizedDescription
+                self.status=error.localizedDescription
+                self.recordActivity("내장 AI","실패 · save · \(jobID)")
+            }
+        }
+        return ["jobID":jobID,"state":"running"]
+    }
     func beginAgentOpen(_ request:AgentRequest,source:String)throws->[String:Any] {
         cancelDemoLoading()
         guard !dirty else {throw CirclrError("저장되지 않은 편집이 있습니다. 먼저 save하세요")}
@@ -430,7 +513,8 @@ extension AppStore {
         return ["jobID":jobID,"state":"running"]
     }
     func beginAgentRender(_ request:AgentRequest,source:String,
-                          trustedLease:AgentRunLease?=nil)throws->[String:Any] {
+                          trustedLease:AgentRunLease?=nil,
+                          trustedDestination:URL?=nil)throws->[String:Any] {
         guard !preparing else {throw CirclrError("이미 실행 중인 렌더 작업이 있습니다")}
         guard !playbackLoopChangeBusy,playbackLoopDrainTask == nil else {
             throw CirclrError("루프 전환 렌더가 끝난 뒤 에이전트 렌더를 시작하세요")
@@ -438,7 +522,30 @@ extension AppStore {
         let args=request.arguments ?? AgentArguments(),snapshot=project,root=mediaRoot
         let isBounce=request.method=="bounce",arrangementID=args.arrangementID ?? project.activeArrangementID
         let file:URL?
-        if isBounce{file=nil}else{guard let path=args.path,path.hasSuffix(".wav") else {throw CirclrError(".wav 절대 경로가 필요합니다")};file=try agentPath(path);guard !FileManager.default.fileExists(atPath:file!.path) else {throw CirclrError("기존 파일을 보존하려면 새 WAV 이름을 사용하세요")}}
+        let approvedExport:TrustedExportPublisher.Destination?
+        if isBounce {
+            file=nil;approvedExport=nil
+        } else if let trustedLease {
+            guard let trustedDestination,args.path == nil,
+                  trustedRun.active==trustedLease,
+                  let selected=trustedExportDestination,
+                  selected.url==trustedDestination else {
+                throw CirclrError("trusted_run_scope: 앱이 선택한 WAV 위치가 필요합니다")
+            }
+            var isDirectory:ObjCBool=false
+            guard FileManager.default.fileExists(
+                atPath:trustedDestination.deletingLastPathComponent().path,
+                isDirectory:&isDirectory),isDirectory.boolValue else {
+                throw CirclrError("trusted_run_scope: 선택한 WAV 폴더를 찾을 수 없습니다")
+            }
+            file=trustedDestination;approvedExport=selected
+        } else {
+            guard let path=args.path,path.hasSuffix(".wav") else {throw CirclrError(".wav 절대 경로가 필요합니다")}
+            file=try agentPath(path);approvedExport=nil
+        }
+        if let file,FileManager.default.fileExists(atPath:file.path) {
+            throw CirclrError("기존 파일을 보존하려면 새 WAV 이름을 사용하세요")
+        }
         let use=project.arrangements.first{$0.id==arrangementID}?.uses.first{$0.id==args.useID}
         // Resolve once before allocating a job, then render and persist that exact policy.
         // In particular, an omitted MCP value never reads the UI session preference.
@@ -537,16 +644,50 @@ extension AppStore {
                         throw error
                     }
                 }else if let file{
-                    let parent=file.deletingLastPathComponent();try FileManager.default.createDirectory(at:parent,withIntermediateDirectories:true)
-                    let stage=parent.appendingPathComponent(".circlr-agent-\(jobID).wav")
-                    do {
+                    if let approvedExport,let trustedLease {
+                        // The encoder writes outside the selected folder. Its
+                        // pinned parent is opened by descriptor for staging and
+                        // the final exclusive publication.
+                        let stage=FileManager.default.temporaryDirectory
+                            .appendingPathComponent(".circlr-agent-\(jobID)-\(newID()).wav")
+                        defer {try? FileManager.default.removeItem(at:stage)}
                         try await self.writeAgentWAVStage(pcm,to:stage)
-                        try Task.checkCancellation();try self.checkAgentJobCommit(lease,trustedLease:trustedLease)
-                        try AgentProjectEditing.check(request,project:self.project)
-                        guard !FileManager.default.fileExists(atPath:file.path) else {throw CirclrError("렌더 중 같은 이름의 파일이 생성되었습니다")}
-                        try FileManager.default.moveItem(at:stage,to:file)
-                    }catch{try? FileManager.default.removeItem(at:stage);throw error}
-                    self.agentJob?.path=file.path
+                        let publisher=Task.detached(priority:.userInitiated) {
+                            try TrustedExportPublisher.prepare(source:stage,
+                                destination:approvedExport,
+                                checkCancellation:{try Task.checkCancellation()})
+                        }
+                        let prepared=try await withTaskCancellationHandler {
+                            try await publisher.value
+                        } onCancel: {
+                            publisher.cancel()
+                        }
+                        defer {prepared.discard()}
+                        try Task.checkCancellation()
+                        try prepared.publish {
+                            try Task.checkCancellation()
+                            try self.checkAgentJobCommit(lease,trustedLease:trustedLease)
+                            try AgentProjectEditing.check(request,project:self.project)
+                            let authorized=try self.trustedRun.authorizedOwnedFileJobDestination(
+                                for:request,lease:trustedLease,jobID:jobID,
+                                ownedLease:self.trustedAgentJob?.lease,
+                                ownedJobID:self.trustedAgentJob?.id,
+                                project:self.project,document:self.currentTrustedDocument)
+                            guard authorized==file else {throw CancellationError()}
+                        }
+                    } else {
+                        let parent=file.deletingLastPathComponent()
+                        try FileManager.default.createDirectory(at:parent,withIntermediateDirectories:true)
+                        let stage=parent.appendingPathComponent(".circlr-agent-\(jobID).wav")
+                        do {
+                            try await self.writeAgentWAVStage(pcm,to:stage)
+                            try Task.checkCancellation();try self.checkAgentJobCommit(lease)
+                            try AgentProjectEditing.check(request,project:self.project)
+                            guard !FileManager.default.fileExists(atPath:file.path) else {throw CirclrError("렌더 중 같은 이름의 파일이 생성되었습니다")}
+                            try FileManager.default.moveItem(at:stage,to:file)
+                        }catch{try? FileManager.default.removeItem(at:stage);throw error}
+                        self.agentJob?.path=file.path
+                    }
                 }
                 self.preparing=false;self.progress=1;self.agentJob?.state="completed";self.agentJob?.progress=1;self.agentJob?.message=self.agentJob?.endWindowHasSignal == true ? "완료 · 마지막 0.1초에 신호가 남아 있습니다. 여운 길이를 확인하세요":"완료"
                 self.status="\(request.method) 완료";self.recordActivity(source,"완료 · \(request.method) · \(jobID)")

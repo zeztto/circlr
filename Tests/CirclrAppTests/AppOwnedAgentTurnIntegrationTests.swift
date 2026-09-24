@@ -179,6 +179,129 @@ private func appTurnRoundTrip(path: String, packet: Data) throws -> [String: Any
             .first { $0.id == laneID }).notes
     }
 
+    private func selectSavedDocument(_ store:AppStore,root:URL) throws -> URL {
+        let target=root.appendingPathComponent("Agent Song.circlr",isDirectory:true)
+        store.project=try ProjectStore.saveSession(store.project,to:target,mediaRoot:nil)
+        store.projectURL=target
+        store.mediaRoot=target
+        store.dirty=false
+        return target
+    }
+
+    private func waitForOwnedJob(_ store:AppStore,id:ID) async throws {
+        for _ in 0..<400 where store.agentJob?.id==id && store.agentJob?.state=="running" {
+            try await Task.sleep(for:.milliseconds(50))
+        }
+        XCTAssertEqual(store.agentJob?.id,id)
+        XCTAssertEqual(store.agentJob?.state,"completed",store.agentJob?.message ?? "")
+    }
+
+    func testTrustedEditSaveReopenAndExportUseAppSelectedDestinations() async throws {
+        let (store,root,arrangement,use,lane,_)=try makeStore()
+        defer {cleanUp(store,root:root)}
+        let document=try selectSavedDocument(store,root:root)
+        let output=root.appendingPathComponent("approved-render.wav")
+        let ingress=try store.startAppOwnedTrustedAgentTurn(exportDestination:output)
+        XCTAssertTrue(store.trustedRun.active?.methods.contains("save") == true)
+        XCTAssertTrue(store.trustedRun.active?.methods.contains("export") == true)
+        var forged=request("save",store:store,id:"forged-save-path")
+        var forgedArgs=AgentArguments();forgedArgs.path=root.appendingPathComponent("other.circlr").path
+        forged.arguments=forgedArgs
+        let denied=try await send(forged,via:ingress)
+        XCTAssertEqual(denied["ok"] as? Bool,false)
+        XCTAssertFalse(FileManager.default.fileExists(atPath:forgedArgs.path!))
+        let edit=try await send(apply(store,arrangement:arrangement,use:use,lane:lane,
+                                      id:"notes-before-save"),via:ingress)
+        XCTAssertEqual(edit["ok"] as? Bool,true)
+
+        let saveReply=try await send(request("save",store:store,id:"save-selected-document"),via:ingress)
+        XCTAssertEqual(saveReply["ok"] as? Bool,true)
+        let savedReceipt=try XCTUnwrap(saveReply["result"] as? [String:Any])
+        XCTAssertNil(savedReceipt["path"])
+        let saveJob=try XCTUnwrap(savedReceipt["jobID"] as? ID)
+        try await waitForOwnedJob(store,id:saveJob)
+        let reopened=try ProjectStore.load(document)
+        let savedUse=try XCTUnwrap(reopened.project.active.uses.first{$0.id==use})
+        let savedSection=try XCTUnwrap(reopened.project.sections.first{$0.id==savedUse.sectionID})
+        let savedLane=try XCTUnwrap(ArrangementCompiler.effectiveLanes(
+            section:savedSection,use:savedUse).first{$0.id==lane})
+        XCTAssertEqual(savedLane.notes.count,1)
+        XCTAssertEqual(savedLane.notes.first?.pitch,64)
+        XCTAssertFalse(store.dirty)
+
+        let exportReply=try await send(request("export",store:store,id:"export-selected-wav"),via:ingress)
+        XCTAssertEqual(exportReply["ok"] as? Bool,true)
+        let exportedReceipt=try XCTUnwrap(exportReply["result"] as? [String:Any])
+        XCTAssertNil(exportedReceipt["path"])
+        let exportJob=try XCTUnwrap(exportedReceipt["jobID"] as? ID)
+        try store.completeTrustedAgentTurn(try XCTUnwrap(store.trustedRun.active))
+        try await waitForOwnedJob(store,id:exportJob)
+        let audio=try AVAudioFile(forReading:output)
+        XCTAssertGreaterThan(audio.length,0)
+        let count=AVAudioFrameCount(min(audio.length,48_000))
+        let buffer=try XCTUnwrap(AVAudioPCMBuffer(pcmFormat:audio.processingFormat,
+                                                 frameCapacity:count))
+        try audio.read(into:buffer)
+        let samples=try XCTUnwrap(buffer.floatChannelData)
+        XCTAssertTrue((0..<Int(buffer.frameLength)).contains{abs(samples[0][$0])>0.0001})
+        XCTAssertFalse(FileManager.default.fileExists(atPath:ingress.path))
+    }
+
+    func testTrustedSaveStopBeforeStagingPreservesSelectedDocument() async throws {
+        let (store,root,arrangement,use,lane,_)=try makeStore()
+        defer {cleanUp(store,root:root)}
+        let document=try selectSavedDocument(store,root:root)
+        let manifest=document.appendingPathComponent("manifest.json")
+        let original=try Data(contentsOf:manifest)
+        let ingress=try store.startAppOwnedTrustedAgentTurn()
+        _=try await send(apply(store,arrangement:arrangement,use:use,lane:lane,
+                               id:"edit-before-stop"),via:ingress)
+        let gate=AppTurnRenderGate()
+        let priorWorker=Task.detached(priority:.utility) { () throws -> PCM in
+            await gate.wait()
+            return PCM(frames:48)
+        }
+        store.productionWorker=priorWorker
+        store.productionTask=Task {_ = try? await priorWorker.value}
+        let accepted=try await send(request("save",store:store,id:"save-then-stop"),via:ingress)
+        XCTAssertEqual(accepted["ok"] as? Bool,true)
+        XCTAssertEqual(store.agentJob?.state,"running")
+        let acceptedTask=store.productionTask
+        store.stopTrustedAgentTurn()
+        await gate.release()
+        if let acceptedTask {await acceptedTask.value}
+        XCTAssertEqual(try Data(contentsOf:manifest),original)
+        XCTAssertEqual(try notes(store,useID:use,laneID:lane).count,1)
+        XCTAssertEqual(store.agentJob?.state,"cancelled")
+        let entries=try FileManager.default.contentsOfDirectory(atPath:root.path)
+        XCTAssertFalse(entries.contains{$0.hasPrefix(".circlr-save-")})
+        try await assertSocketClosed(ingress,store:store)
+    }
+
+    func testTrustedExportRejectsReplacementOfSelectedFolder() async throws {
+        let (store,root,_,_,_,_)=try makeStore()
+        defer {cleanUp(store,root:root)}
+        _=try selectSavedDocument(store,root:root)
+        let selected=root.appendingPathComponent("selected-exports",isDirectory:true)
+        let moved=root.appendingPathComponent("moved-exports",isDirectory:true)
+        try FileManager.default.createDirectory(at:selected,withIntermediateDirectories:true)
+        let output=selected.appendingPathComponent("approved.wav")
+        let ingress=try store.startAppOwnedTrustedAgentTurn(exportDestination:output)
+        try FileManager.default.moveItem(at:selected,to:moved)
+        try FileManager.default.createDirectory(at:selected,withIntermediateDirectories:true)
+        let accepted=try await send(request("export",store:store,id:"replaced-folder"),via:ingress)
+        XCTAssertEqual(accepted["ok"] as? Bool,true)
+        let jobID=try XCTUnwrap((accepted["result"] as? [String:Any])?["jobID"] as? ID)
+        for _ in 0..<400 where store.agentJob?.id==jobID && store.agentJob?.state=="running" {
+            try await Task.sleep(for:.milliseconds(50))
+        }
+        XCTAssertEqual(store.agentJob?.id,jobID)
+        XCTAssertEqual(store.agentJob?.state,"failed")
+        XCTAssertFalse(FileManager.default.fileExists(atPath:output.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath:moved.appendingPathComponent("approved.wav").path))
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath:selected.path),[])
+    }
+
     func testOwnedSocketEditsUndoAndCompletedBounceProducesSignal() async throws {
         let (store, root, arrangement, use, lane, track) = try makeStore()
         defer { cleanUp(store, root: root) }

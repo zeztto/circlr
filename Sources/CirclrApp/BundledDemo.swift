@@ -50,6 +50,19 @@ enum BundledDemo {
 }
 
 extension AppStore {
+    @discardableResult func applyLoadedBundledDemo(_ loaded:BundledDemo.Copy)->Bool {
+        guard requireFinishedRecordingForDocumentAction() else {
+            _ = loaded.lease?.releaseIfPristine(project:loaded.project,recoveryPresent:false)
+            return false
+        }
+        retireDemoCopy();stop()
+        project=loaded.project;projectURL=nil;mediaRoot=loaded.root
+        selectedTrackID=project.tracks.first?.id
+        resetSession();dirty=true;scheduleViewportRecovery()
+        demoCopyLease=loaded.lease
+        status="데모곡 불러오기 완료 · 편집한 곡은 새 위치에 저장하세요"
+        return true
+    }
     func cancelDemoLoading() {
         guard demoLoading || demoLoadTask != nil || demoLoadWorker != nil else {return}
         demoLoadGeneration += 1
@@ -57,8 +70,9 @@ extension AppStore {
         demoLoadTask=nil;demoLoadWorker=nil;demoLoading=false
     }
     func openBundledDemo(id:String="f0r-h3r") {
+        guard requireFinishedRecordingForDocumentAction() else{return}
         cancelDemoLoading()
-        guard confirmDiscard() else { return }
+        guard confirmDiscard(),requireFinishedRecordingForDocumentAction() else { return }
         demoLoadGeneration += 1
         let generation=demoLoadGeneration
         let ticket=DemoLoadTicket(generation:generation,project:project,
@@ -83,12 +97,7 @@ extension AppStore {
                     return
                 }
                 self.demoLoading=false;self.demoLoadTask=nil;self.demoLoadWorker=nil
-                self.retireDemoCopy();self.stop()
-                self.project=loaded.project;self.projectURL=nil;self.mediaRoot=loaded.root
-                self.selectedTrackID=self.project.tracks.first?.id
-                self.resetSession();self.dirty=true;self.scheduleViewportRecovery()
-                self.demoCopyLease=loaded.lease
-                self.status="데모곡 불러오기 완료 · 편집한 곡은 새 위치에 저장하세요"
+                self.applyLoadedBundledDemo(loaded)
             } catch {
                 guard let self,self.demoLoadGeneration == generation else{return}
                 self.demoLoading=false;self.demoLoadTask=nil;self.demoLoadWorker=nil

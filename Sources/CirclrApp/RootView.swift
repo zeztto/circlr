@@ -456,7 +456,12 @@ struct TransportControls:View {
             else if store.midiRecording {Button("녹음 정지"){store.stop()}.foregroundStyle(.red)}
         }
     }
-    var time:String {let t=max(0,store.audioRecording ? store.audioInputSeconds:meter.seconds);return String(format:"%02d:%04.1f",Int(t)/60,t.truncatingRemainder(dividingBy:60))}
+    var time:String {
+        let seconds=store.audioRecording ? store.audioInputSeconds
+            :store.midiRecording ? store.midiRecordingElapsedSeconds:meter.seconds
+        let t=max(0,seconds)
+        return String(format:"%02d:%04.1f",Int(t)/60,t.truncatingRemainder(dividingBy:60))
+    }
 }
 struct CanvasButtonStyle:ButtonStyle {
     func makeBody(configuration:Configuration)->some View {StudioButtonBody(configuration:configuration)}

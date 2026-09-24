@@ -10,11 +10,14 @@ public extension ProjectStore {
     }
 
     static func saveSessionReportingCleanup(_ project:Project,to target:URL,mediaRoot:URL?,onCleanupWarning:(String)->Void)throws->Project {
-        var saved=try saveReportingCleanup(project,to:target,mediaRoot:mediaRoot,onCleanupWarning:onCleanupWarning)
-        let localPaths=Dictionary(uniqueKeysWithValues:project.assets.filter{$0.path.hasPrefix("/")}.map{($0.id,$0.path)})
-        for i in saved.assets.indices {
-            if let source=localPaths[saved.assets[i].id] {saved.assets[i].path=source}
-        }
-        return saved
+        let staged = try prepareSessionSave(project,to:target,mediaRoot:mediaRoot)
+        defer { discard(staged) }
+        return try publishSessionSaveReportingCleanup(staged,onCleanupWarning:onCleanupWarning)
+    }
+
+    /// The returned value keeps absolute local media paths in `savedProject`
+    /// for Undo/Redo, while its staged package contains portable relative paths.
+    static func prepareSessionSave(_ project:Project,to target:URL,mediaRoot:URL?)throws->StagedProjectSave {
+        try prepareSave(project,to:target,mediaRoot:mediaRoot,preserveLocalAssetPaths:true)
     }
 }

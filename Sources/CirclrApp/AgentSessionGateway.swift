@@ -30,7 +30,7 @@ enum TrustedAgentReply {
 
     /// A bounded app-selected turn. No model request can choose the document,
     /// targets, methods, lifetime, or the private socket endpoint.
-    func startAppOwnedTrustedAgentTurn() throws -> TrustedAgentIngress {
+    func startAppOwnedTrustedAgentTurn(exportDestination:URL?=nil) throws -> TrustedAgentIngress {
         guard agentStartupReady,!agentBridgeShuttingDown,!editOriginal,editPatternID == nil,
               let use=selectedUse,let trackID=selectedTrackID,
               let lane=currentLane,lane.trackID==trackID else {
@@ -49,9 +49,24 @@ enum TrustedAgentReply {
             .lane(arrangementID:arrangementID,useID:use.id,laneID:lane.id),
             .track(trackID)
         ]
+        var methods:Set<String>=["snapshot","inspect","apply","bounce","job"]
+        var fileGrants:[AgentRunFileGrant]=[]
+        // projectURL comes from an earlier user open/save. A new or unsaved
+        // document has no AI save destination.
+        if projectURL != nil,
+           let grant=try? AgentRunFileGrant.saveCurrentProject(document:currentTrustedDocument) {
+            methods.insert("save")
+            fileGrants.append(grant)
+        }
+        // Only an app-owned caller may supply the user's selected destination.
+        // No agent request may choose or infer this path.
+        if let exportDestination {
+            fileGrants.append(try AgentRunFileGrant.exportWAV(
+                to:exportDestination,document:currentTrustedDocument))
+            methods.insert("export")
+        }
         let lease=try beginTrustedAgentTurn(sessionID:newID(),turnID:newID(),
-            methods:["snapshot","inspect","apply","bounce","job"],
-            targets:targets,ttl:300)
+            methods:methods,targets:targets,fileGrants:fileGrants,ttl:300)
         do {
             let directory=productionMediaRoot.deletingLastPathComponent()
                 .appendingPathComponent("Agent",isDirectory:true)
@@ -68,12 +83,16 @@ enum TrustedAgentReply {
     /// treat the same-UID external MCP socket as a trusted Codex session.
     func beginTrustedAgentTurn(sessionID: ID,turnID: ID,
                                methods: Set<String>,targets: Set<AgentRunTarget>,
+                               fileGrants:[AgentRunFileGrant]=[],
                                ttl: TimeInterval = 300) throws -> AgentRunLease {
+        let exportDestination=try fileGrants.first(where:{$0.kind == .export})
+            .map { try TrustedExportPublisher.capture(destination:$0.destinationURL) }
         stopTrustedAgentTurn()
         trustedAgentJob=nil
         let lease=try trustedRun.issue(sessionID:sessionID,turnID:turnID,
                                        document:currentTrustedDocument,methods:methods,
-                                       targets:targets,ttl:ttl)
+                                       targets:targets,fileGrants:fileGrants,ttl:ttl)
+        trustedExportDestination=exportDestination
         trustedDocumentBinding=currentTrustedDocument
         trustedAgentExpiryTask=Task { [weak self] in
             try? await Task.sleep(for:.seconds(ttl))
@@ -99,6 +118,7 @@ enum TrustedAgentReply {
         let owned=trustedAgentJob
         trustedRun.revoke()
         trustedDocumentBinding=nil
+        trustedExportDestination=nil
         trustedReplies=AgentRunReplayLedger()
         let ingress=trustedAgentIngress
         trustedAgentIngress=nil
@@ -177,7 +197,22 @@ enum TrustedAgentReply {
                 // executeAgent retains the explicit external MCP contract,
                 // which returns raw agentState (including local media paths).
                 // Trusted callers receive a small path-free receipt instead.
-                let native=try executeAgent(request,source:"내장 AI",trustedLease:lease)
+                let native:[String:Any]
+                if request.method=="save" {
+                    let destination=try trustedRun.authorizedFileDestination(for:request,
+                        lease:lease,project:project,document:currentTrustedDocument)
+                    native=try beginTrustedAgentSave(request,destination:destination,lease:lease)
+                } else if request.method=="export" {
+                    let destination=try trustedRun.authorizedFileDestination(for:request,
+                        lease:lease,project:project,document:currentTrustedDocument)
+                    guard !midiRecording,!audioRecordingBusy else {
+                        throw CirclrError("녹음 마무리 후 내보내세요")
+                    }
+                    native=try beginAgentRender(request,source:"내장 AI",
+                        trustedLease:lease,trustedDestination:destination)
+                } else {
+                    native=try executeAgent(request,source:"내장 AI",trustedLease:lease)
+                }
                 result=try AgentRunReplyProjection.afterWrite(method:request.method,
                                                                native:native,project:project)
             }

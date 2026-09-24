@@ -1,5 +1,11 @@
 # 변경 이력
 
+## 0.80.0 · build230 — 개발 중 · 출고 gate 미통과
+
+- MIDI·오디오 녹음 준비/진행/마무리 중 프로젝트 교체·저장을 차단하고, 비동기 데모 로드의 실제 적용 직전에도 녹음 상태를 재검사한다. MIDI 녹음 시간은 별도 단조 시계로 표시하고 종료 뒤 재생 시계로 복귀한다.
+- 앱 소유 내부 AI turn은 이미 선택된 `.circlr` 문서의 save와 별도로 앱이 선택한 `.wav` export만 허용한다. 모델의 경로 지정·다른 문서·stale revision·STOP 이후 게시를 거절한다. 저장 stage의 미디어 복사·checksum은 취소 가능하며 교체된 stage 폴더의 다른 파일을 재귀 삭제하지 않는다. WAV는 선택 시점의 폴더 identity를 고정해 기존 파일을 덮어쓰지 않고 게시한다. 실제 Codex 계정 대화는 공개 기능이 아니다.
+- 전체 Swift **1,229개 실행·14 skip·실패 0**, 지정 통합·계약 **49개**, Python **50개**, arm64 앱·다섯 helper의 strict deep 서명을 통과했다. 격리 native 앱의 가로·세로 데모 7섹션과 MIDI 녹음 시계 00:00.4→00:25.6, 녹음 중 새 앨범 차단·종료 후 복귀를 확인하고 한영 README 화면을 갱신했다. [build230 QA](qa/0.80-build230.md) · [native](qa/0.80-build230-native.md). 구형 Scarlett의 물리 입출력, 실제 take·청취 및 장시간 MP4는 미검증이며 정식 tag/Release를 만들지 않는다.
+
 ## 0.80.0 · build229 — 개발 중 · 출고 gate 미통과
 
 - 곡 궤도의 섹션 이름표가 자기 타임라인·마디 눈금과 하단 navigation을 가리지 않도록 배치한다. 세로 창의 긴 06 제목은 들어갈 때만 가까운 두 줄 배지로 표시하고 hover·선택 때 크기를 고정한다. [build229 QA](qa/0.80-build229.md) · [native 화면](qa/0.80-build229-native.md).

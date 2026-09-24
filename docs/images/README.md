@@ -1,5 +1,11 @@
 # Screenshots · 실행 화면
 
+## 0.80.0 build230 development preview
+
+`circlr-song-build230.png` (2880×1800px, SHA-256 `05baec715da6d34c72d97b223720a07c8570e0db05965869048f65516d163d34`) and `circlr-song-portrait-build230.png` (1440×1800px, SHA-256 `46a92d3ea8d9d1187011c17c9a7bfa1179ca51364282d089f751294233aa7e8b`) are byte-identical copies of full-window, uncropped PNG conversions from the isolated **0.80.0/build230** native app. Original JPEGs and the converted PNGs remain in ignored `qa/generated/r80-build230-native/`: `landscape-1440x900.source.jpg` SHA-256 `0a0dfe75f4f64d9dee22f86eaa120b6a45a7fd6bb097f5ff26e66562ec1cecbc` and `portrait-720x900.source.jpg` SHA-256 `3836deccfd29ece0af428b6a29cfc2ea3a540fbc853859188b27fe4eeb887960`. The stopped bundled **f0r h3r** copy shows seven sections and responsive controls; these images do not verify playback, physical listening, recording input, or 0.80 release readiness. Original packaged executable SHA-256: `68541bd055c9a52494ee9b7c059e79996b59c4a4a8a9a3f73c6b591d15227b2c`. [build230 native QA](../../qa/0.80-build230-native.md).
+
+두 PNG는 격리된 실제 build230 앱의 가로 1440×900pt·세로 720×900pt 전체 창 JPEG를 자르거나 크기 변경하지 않고 변환해 복사했습니다. 정지한 **f0r h3r** 사본의 일곱 섹션과 반응형 상단을 보여 주며, 실제 재생·Scarlett 호환성·입력 take·정식 출고의 증거는 아닙니다.
+
 ## 0.80.0 build229 development preview
 
 `circlr-song-build229.png` (2880×1800px, SHA-256 `4d25c8b6507dd0448e6d3143a56a32f4898ca350dff55568b174138ca216873e`) and `circlr-song-portrait-build229.png` (1440×1800px, SHA-256 `2f06ffc37169ba71784153d584c85e38d55042890aab9bdcdafe65eede10892a`) are full-window PNG conversions of the isolated native **0.80.0/build229** app. The uncropped JPEG sources and byte-identical converted PNGs are in ignored `qa/generated/r80-build229-native/` as `landscape-1440x900` and `default-720x900`. CUA source JPEG hashes: `a72ab963297ddfa69d10f1b7c57a701decf15a4d7fb242ea10daf2426bab4ccf` and `3f20309c13ecd6bfb27c9e7a748d0865761e037a1e82d8056cd332a2323b4d17`. The portrait shows the default 122pt console; the landscape is a 1440×900pt QA window after returning from a section and zooming the song into view. Both show the stopped bundled **f0r h3r** copy, not a playback or listening result. Packaged executable SHA-256: `3a016e2058f4bdbaa47392c092dca4c5764b888a73a517de6d4c201d3edf1f80`. [build229 native QA](../../qa/0.80-build229-native.md).

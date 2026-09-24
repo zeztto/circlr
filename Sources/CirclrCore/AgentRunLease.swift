@@ -12,14 +12,17 @@ public struct AgentRunLease: Equatable, Sendable {
     public let expiresAt: Date
     public let methods: Set<String>
     public let targets: Set<AgentRunTarget>
+    /// File destinations are app-selected capabilities, never model arguments.
+    /// A turn may retain one destination for each file operation.
+    public let fileGrants: [AgentRunFileGrant]
 
     fileprivate init(id: ID, sessionID: ID, turnID: ID, document: AgentRunDocumentBinding,
                      generation: Int, expiresAt: Date, methods: Set<String>,
-                     targets: Set<AgentRunTarget>) {
+                     targets: Set<AgentRunTarget>, fileGrants: [AgentRunFileGrant]) {
         self.id=id;self.sessionID=sessionID;self.turnID=turnID
         self.projectID=document.projectID;self.document=document
         self.generation=generation;self.expiresAt=expiresAt
-        self.methods=methods;self.targets=targets
+        self.methods=methods;self.targets=targets;self.fileGrants=fileGrants
     }
 }
 
@@ -35,6 +38,69 @@ public struct AgentRunDocumentBinding: Equatable, Sendable {
         self.projectID=projectID
         self.projectURL=projectURL?.standardizedFileURL.path
         self.mediaRoot=mediaRoot?.standardizedFileURL.path
+    }
+}
+
+/// A path-bearing capability selected by the app, not decoded from a model
+/// request. The containing lease binds it to one document, turn and lifetime.
+/// Saving may only reuse the already selected project URL; export requires a
+/// separately selected WAV destination. The app must still stage writes and
+/// recheck the lease, project revision and destination before publication.
+public struct AgentRunFileGrant: Equatable, Sendable {
+    public enum Kind: String, Sendable {
+        case save, export
+    }
+
+    public let id: ID
+    public let kind: Kind
+    public let document: AgentRunDocumentBinding
+    private let destinationPath: String
+
+    public var destinationURL: URL { URL(fileURLWithPath: destinationPath) }
+
+    private init(kind: Kind, document: AgentRunDocumentBinding, destinationPath: String) {
+        id=newID();self.kind=kind;self.document=document
+        self.destinationPath=destinationPath
+    }
+
+    public static func saveCurrentProject(document: AgentRunDocumentBinding) throws -> Self {
+        guard let path=document.projectURL,
+              let url=validatedFileURL(URL(fileURLWithPath:path),extension:"circlr"),
+              url.path==path else {
+            throw CirclrError("trusted_run_scope: 사용자가 선택한 현재 .circlr 문서가 필요합니다")
+        }
+        return Self(kind:.save,document:document,destinationPath:url.path)
+    }
+
+    public static func exportWAV(to destination: URL,
+                                 document: AgentRunDocumentBinding) throws -> Self {
+        guard let url=validatedFileURL(destination,extension:"wav"),
+              !isInsideCurrentPackage(url,document:document) else {
+            throw CirclrError("trusted_run_scope: 사용자가 선택한 .wav 내보내기 위치가 필요합니다")
+        }
+        return Self(kind:.export,document:document,destinationPath:url.path)
+    }
+
+    private static func validatedFileURL(_ url: URL, extension expected: String) -> URL? {
+        guard url.isFileURL,url.path.hasPrefix("/"),!url.path.isEmpty else {return nil}
+        let standardized=url.standardizedFileURL
+        guard standardized.pathExtension==expected,
+              standardized.path != "/" else {return nil}
+        return standardized
+    }
+
+    fileprivate static func isInsideCurrentPackage(_ destination: URL,
+                                                   document: AgentRunDocumentBinding) -> Bool {
+        guard let packagePath=document.projectURL else {return false}
+        let package=URL(fileURLWithPath:packagePath).standardizedFileURL
+        if destination.path.hasPrefix(package.path + "/") {return true}
+        // A Save panel may return a path through a symlink to the package.
+        // The app must repeat this check at publication because links can move.
+        let physicalPackage=package.resolvingSymlinksInPath().standardizedFileURL
+        let physicalParent=destination.deletingLastPathComponent()
+            .resolvingSymlinksInPath().standardizedFileURL
+        let physicalDestination=physicalParent.appendingPathComponent(destination.lastPathComponent)
+        return physicalDestination.path.hasPrefix(physicalPackage.path + "/")
     }
 }
 
@@ -57,20 +123,25 @@ public struct AgentRunLeaseController {
     public mutating func issue(sessionID: ID, turnID: ID,
                                document: AgentRunDocumentBinding,
                                methods: Set<String>, targets: Set<AgentRunTarget>,
+                               fileGrants: [AgentRunFileGrant] = [],
                                ttl: TimeInterval, now: Date = Date()) throws -> AgentRunLease {
-        let supported: Set<String> = ["snapshot", "inspect", "job", "apply", "bounce"]
+        let supported: Set<String> = ["snapshot", "inspect", "job", "apply", "bounce", "save", "export"]
+        let fileMethods=methods.intersection(["save", "export"])
         guard Self.safeIdentifier(sessionID),Self.safeIdentifier(turnID),
               Self.safeIdentifier(document.projectID),
               ttl.isFinite, (0...3600).contains(ttl), ttl > 0,
               !methods.isEmpty, methods.isSubset(of: supported),
-              methods.isDisjoint(with: ["apply", "bounce"]) || !targets.isEmpty else {
+              methods.isDisjoint(with: ["apply", "bounce"]) || !targets.isEmpty,
+              fileGrants.count==fileMethods.count,
+              Set(fileGrants.map{ $0.kind.rawValue })==fileMethods,
+              fileGrants.allSatisfy({ $0.document==document }) else {
             throw CirclrError("trusted_run_scope: 세션, 대상, 허용 명령과 만료 시간을 확인하세요")
         }
         revoke()
         let lease=AgentRunLease(id:newID(),sessionID:sessionID,turnID:turnID,
                                 document:document,generation:generation,
                                 expiresAt:now.addingTimeInterval(ttl),
-                                methods:methods,targets:targets)
+                                methods:methods,targets:targets,fileGrants:fileGrants)
         active=lease;turnCompleted=false
         return lease
     }
@@ -99,6 +170,53 @@ public struct AgentRunLeaseController {
                                       now:Date=Date()) -> Bool {
         ownedLease==lease && ownedJobID==jobID &&
         permitsCommit(lease,document:document,now:now)
+    }
+
+    /// Resolves the app-selected destination for a new request. An accepted
+    /// asynchronous job must use authorizedOwnedFileJobDestination at publish.
+    public func authorizedFileDestination(for request: AgentRequest,
+                                          lease: AgentRunLease,
+                                          project: Project,
+                                          document: AgentRunDocumentBinding,
+                                          now: Date = Date()) throws -> URL {
+        try authorize(request,lease:lease,project:project,document:document,now:now)
+        return try fileDestination(for:request,lease:lease,document:document)
+    }
+
+    /// An accepted asynchronous save/export job can finish after its turn has
+    /// completed, but never after STOP, document change, expiry or a competing
+    /// music edit. Revalidate this immediately before publishing staged bytes.
+    public func authorizedOwnedFileJobDestination(for request: AgentRequest,
+                                                  lease: AgentRunLease, jobID: ID,
+                                                  ownedLease: AgentRunLease?, ownedJobID: ID?,
+                                                  project: Project,
+                                                  document: AgentRunDocumentBinding,
+                                                  now: Date = Date()) throws -> URL {
+        guard project.id==document.projectID,
+              permitsOwnedJobCommit(lease,jobID:jobID,ownedLease:ownedLease,
+                                    ownedJobID:ownedJobID,document:document,now:now),
+              lease.methods.contains(request.method) else {
+            throw CirclrError("trusted_run_stale: 파일 작업이 중단, 교체 또는 만료되었습니다")
+        }
+        try AgentProjectEditing.check(request,project:project)
+        guard try Self.targets(for:request).isSubset(of:lease.targets) else {
+            throw CirclrError("trusted_run_scope: 파일 작업 대상이 허용 범위를 벗어났습니다")
+        }
+        return try fileDestination(for:request,lease:lease,document:document)
+    }
+
+    private func fileDestination(for request: AgentRequest,
+                                 lease: AgentRunLease,
+                                 document: AgentRunDocumentBinding) throws -> URL {
+        guard let kind=AgentRunFileGrant.Kind(rawValue:request.method),
+              let grant=lease.fileGrants.first(where:{$0.kind==kind && $0.document==document}) else {
+            throw CirclrError("trusted_run_scope: 파일 목적지가 허용되지 않았습니다")
+        }
+        if kind == .export,
+           AgentRunFileGrant.isInsideCurrentPackage(grant.destinationURL,document:document) {
+            throw CirclrError("trusted_run_scope: WAV 내보내기는 현재 곡 폴더 밖에 저장하세요")
+        }
+        return grant.destinationURL
     }
 
     public func authorize(_ request: AgentRequest, lease: AgentRunLease,
@@ -170,6 +288,20 @@ public struct AgentRunLeaseController {
             }
             try requireOnlyArguments(args,["arrangementID","useID","trackID","tailSeconds"],decodedKeys:request.decodedArgumentKeys)
             return [.section(arrangementID:arrangementID,useID:useID),.track(trackID)]
+        case "save":
+            if let args=request.arguments {
+                try requireOnlyArguments(args,[],decodedKeys:request.decodedArgumentKeys)
+            }
+            return []
+        case "export":
+            if let args=request.arguments {
+                try requireOnlyArguments(args,["tailSeconds"],decodedKeys:request.decodedArgumentKeys)
+                guard !(request.decodedArgumentKeys?.contains("tailSeconds") == true && args.tailSeconds == nil),
+                      args.tailSeconds.map({ $0.isFinite && (0...120).contains($0) }) ?? true else {
+                    throw CirclrError("trusted_run_scope: export의 tailSeconds는 0–120초여야 합니다")
+                }
+            }
+            return []
         case "apply":
             guard let args=request.arguments, let operations=args.operations,
                   !operations.isEmpty,operations.count<=128 else {
@@ -451,7 +583,7 @@ public enum AgentRunReplyProjection {
         case "apply":
             return ["state":"applied","projectID":project.id,
                     "revision":project.musicRevision]
-        case "bounce":
+        case "bounce", "save", "export":
             guard let jobID=native["jobID"] as? ID,
                   !jobID.isEmpty,jobID.utf8.count<=128 else {
                 throw CirclrError("trusted_run_job: 작업 ID를 받지 못했습니다")

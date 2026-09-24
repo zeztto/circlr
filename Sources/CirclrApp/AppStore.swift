@@ -200,6 +200,7 @@ import CirclrAudio
     var trustedAgentExpiryTask:Task<Void,Never>?
     var trustedDocumentBinding:AgentRunDocumentBinding?
     var trustedAgentJob:TrustedAgentJob?
+    var trustedExportDestination:TrustedExportPublisher.Destination?
     var trustedReplies=AgentRunReplayLedger<TrustedAgentReply>()
     @Published var errorMessage: String? {didSet{if errorMessage != nil,viewingMode {_ = setViewingMode(false)}}}
     @Published var progress = 0.0
@@ -233,6 +234,18 @@ import CirclrAudio
     @Published var outputPreferencesOpen=false
     @Published var outputStatus=PlaybackOutputStatus()
     let recorder = AudioRecorder()
+    /// A document switch must not discard a take while its writer is still finishing.
+    var recordingBlocksDocumentAction:Bool {
+        midiRecording || audioRecordingBusy ||
+            [.starting,.recording,.cancelling,.finishing].contains(audioCapturePhase)
+    }
+    @discardableResult func requireFinishedRecordingForDocumentAction()->Bool {
+        guard !recordingBlocksDocumentAction else {
+            status="녹음 정지와 파일 마무리 후 다시 시도하세요"
+            return false
+        }
+        return true
+    }
     var prepared: PreparedAudio?
     var preparedKey = ""
     var renderTask: Task<Void,Never>?
@@ -388,6 +401,9 @@ import CirclrAudio
         return cachedPlan
     }
     var isPlaying: Bool { playback.playing }
+    var midiRecordingElapsedSeconds:Double {
+        midiRecording ? max(0,ProcessInfo.processInfo.systemUptime-recordStart):0
+    }
     var hasPendingMusic: Bool { playback.playing && prepared?.plan.revision != project.musicRevision }
     deinit {auditionOutput.shutdown()}
     func tick() {
@@ -400,7 +416,10 @@ import CirclrAudio
         refreshAuditionStatus()
         refreshOutputStatus()
         refreshPlaybackLoopTransition()
-        meter.update(seconds:playback.seconds,playing:playback.playing)
+        // Publishing the monotonic MIDI clock keeps the transport readout live
+        // without presenting recording as playback to other meter consumers.
+        meter.update(seconds:midiRecording ? midiRecordingElapsedSeconds:playback.seconds,
+                     playing:!midiRecording && playback.playing)
         captureMovieTick()
         if recorder.recording {
             audioInputSeconds=recorder.seconds;audioInputLevel=recorder.takePeak()
@@ -825,12 +844,14 @@ import CirclrAudio
         }
     }
     func save(as saveAs:Bool = false) {
+        guard requireFinishedRecordingForDocumentAction() else{return}
         cancelDemoLoading()
         guard nameEditing.resolve() else{return}
         captureViewport()
         var target = projectURL
         if saveAs || target == nil { let panel = NSSavePanel(); panel.nameFieldStringValue = project.name+".circlr"; panel.title = "앨범 저장"; guard panel.runModal() == .OK else { return }; target = panel.url }
         guard let target else { return }
+        guard requireFinishedRecordingForDocumentAction() else{return}
         do {
             var cleanupWarning: String?
             let saved=try ProjectStore.saveSessionReportingCleanup(project,to:target,mediaRoot:mediaRoot) { cleanupWarning = $0 }
@@ -909,14 +930,26 @@ import CirclrAudio
         guard dirty else { return true }; let a = NSAlert(); a.messageText = "저장하지 않은 변경이 있습니다"; a.informativeText = "현재 곡을 저장한 뒤 계속하거나 변경을 버릴 수 있습니다."; a.addButton(withTitle:"저장"); a.addButton(withTitle:"취소"); a.addButton(withTitle:"변경 버리기")
         let r = a.runModal(); if r == .alertFirstButtonReturn { save(); return !dirty }; return r == .alertThirdButtonReturn
     }
-    func newProject() { cancelDemoLoading(); guard confirmDiscard() else { return }; retireDemoCopy(); stop(); var p = Project(); selectedTrackID = p.addTrack(name:"악기 1"); _ = p.addTrack(name:"드럼",drums:true); p.enableAlbum(); p.name = "새 앨범"; project = p; projectURL = nil; mediaRoot = nil; resetSession(); status = "새 앨범" }
+    func newProject() {
+        guard requireFinishedRecordingForDocumentAction() else{return}
+        cancelDemoLoading()
+        guard confirmDiscard(),requireFinishedRecordingForDocumentAction() else{return}
+        retireDemoCopy();stop()
+        var p=Project()
+        selectedTrackID=p.addTrack(name:"악기 1")
+        _=p.addTrack(name:"드럼",drums:true)
+        p.enableAlbum();p.name="새 앨범"
+        project=p;projectURL=nil;mediaRoot=nil
+        resetSession();status="새 앨범"
+    }
     func open(_ url:URL? = nil) {
+        guard requireFinishedRecordingForDocumentAction() else{return}
         cancelDemoLoading()
         let startupWasPending = !startupRecoveryHandled
         projectOpenDepth+=1
         defer { projectOpenDepth-=1;if startupWasPending { startAgentBridge() } }
         guard offerRecovery(startBridgeWhenReady:false) else { return }
-        guard confirmDiscard() else { return }; var target = url
+        guard confirmDiscard(),requireFinishedRecordingForDocumentAction() else { return }; var target = url
         if target == nil { let panel = NSOpenPanel(); panel.message = ".circlr 곡 폴더를 선택하세요. manifest.json을 고르면 폴더 접근을 다시 확인합니다."; panel.canChooseDirectories = true; panel.canChooseFiles = true; panel.allowsMultipleSelection = false; guard panel.runModal() == .OK else { return }; target = panel.url }
         guard let target else { return }
         do {
@@ -940,6 +973,7 @@ import CirclrAudio
             try DemoCopyLease.retainIfManaged(root)
             let loaded = try ProjectStore.load(root)
             var migrated = loaded.project; migrated.enableAlbum(); migrated = try SectionGraphMigration.migrate(migrated)
+            guard requireFinishedRecordingForDocumentAction() else{return}
             retireDemoCopy(); stop(); project = migrated; projectURL = migrated == loaded.project ? loaded.root : nil; mediaRoot = loaded.root
             selectedTrackID = project.tracks.first?.id; resetSession(); dirty = migrated != loaded.project
             status = dirty ? "앨범으로 확장했습니다 · 새 위치에 저장하세요" : "\(project.name) 열기 완료"
@@ -1156,6 +1190,7 @@ import CirclrAudio
         if midiRecording {
             for (pitch,(start,v)) in heldNotes { appendRecorded(pitch:pitch,velocity:v,start:start,end:elapsed,clock:clock) }; heldNotes = [:]
             let all = recordedNotes; midiRecording = false
+            meter.update(seconds:playback.seconds,playing:playback.playing)
             let iterations = max(1,Int(ceil(elapsed/clock.seconds)))
             mutate("MIDI take 저장") { p in
                 for iteration in 0..<iterations {

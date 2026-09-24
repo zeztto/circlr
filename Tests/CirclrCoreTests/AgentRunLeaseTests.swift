@@ -251,6 +251,179 @@ final class AgentRunLeaseTests: XCTestCase {
         XCTAssertFalse(controller.permitsCommit(lease,document:mediaMoved,now:now))
     }
 
+    func testSaveRequiresAppSelectedCurrentDocumentAndRejectsModelPaths() throws {
+        let project=Project(),now=Date(timeIntervalSince1970:100)
+        let unsaved=binding(project)
+        XCTAssertThrowsError(try AgentRunFileGrant.saveCurrentProject(document:unsaved))
+        let document=binding(project,"/tmp/song.circlr")
+        let grant=try AgentRunFileGrant.saveCurrentProject(document:document)
+        XCTAssertEqual(grant.destinationURL.path,document.projectURL)
+        var controller=AgentRunLeaseController()
+        XCTAssertThrowsError(try controller.issue(sessionID:"session",turnID:"turn",document:document,
+                                                   methods:["save"],targets:[],ttl:60,now:now))
+        let lease=try controller.issue(sessionID:"session",turnID:"turn",document:document,
+                                       methods:["save"],targets:[],fileGrants:[grant],ttl:60,now:now)
+        let save=request("save",project)
+        XCTAssertEqual(try controller.authorizedFileDestination(for:save,lease:lease,
+            project:project,document:document,now:now).path,"/tmp/song.circlr")
+
+        var withPath=save;var args=AgentArguments();args.path="/tmp/other.circlr"
+        withPath.arguments=args
+        XCTAssertThrowsError(try controller.authorizedFileDestination(for:withPath,lease:lease,
+            project:project,document:document,now:now))
+        let nullPath=try JSONDecoder().decode(AgentRequest.self,
+            from:Data("""
+                {"id":"save-null","method":"save","projectID":"\(project.id)","expectedRevision":\(project.musicRevision),"arguments":{"path":null}}
+                """.utf8))
+        XCTAssertThrowsError(try controller.authorizedFileDestination(for:nullPath,lease:lease,
+            project:project,document:document,now:now))
+
+        let savedAs=binding(project,"/tmp/song-copy.circlr")
+        XCTAssertThrowsError(try controller.authorizedFileDestination(for:save,lease:lease,
+            project:project,document:savedAs,now:now))
+        XCTAssertThrowsError(try controller.authorizedFileDestination(for:save,lease:lease,
+            project:project,document:document,now:now.addingTimeInterval(60)))
+        controller.revoke()
+        XCTAssertThrowsError(try controller.authorizedFileDestination(for:save,lease:lease,
+            project:project,document:document,now:now))
+    }
+
+    func testFileGrantFollowsCurrentObservedRevisionAfterOwnEditButRejectsStaleRevision() throws {
+        var project=Project();let now=Date(timeIntervalSince1970:100)
+        let document=binding(project,"/tmp/song.circlr")
+        let grant=try AgentRunFileGrant.saveCurrentProject(document:document)
+        var controller=AgentRunLeaseController()
+        let lease=try controller.issue(sessionID:"session",turnID:"turn",document:document,
+            methods:["save"],targets:[],fileGrants:[grant],ttl:60,now:now)
+        let stale=request("save",project)
+        project.musicRevision += 1 // an earlier authorized apply committed in this turn
+        XCTAssertThrowsError(try controller.authorizedFileDestination(for:stale,lease:lease,
+            project:project,document:document,now:now))
+        let fresh=request("save",project)
+        XCTAssertNoThrow(try controller.authorizedFileDestination(for:fresh,lease:lease,
+            project:project,document:document,now:now))
+    }
+
+    func testCompletedTurnCanPublishOnlyItsPreviouslyAcceptedFileJob() throws {
+        let project=Project(),now=Date(timeIntervalSince1970:100)
+        let document=binding(project,"/tmp/song.circlr")
+        let grant=try AgentRunFileGrant.saveCurrentProject(document:document)
+        var controller=AgentRunLeaseController()
+        let lease=try controller.issue(sessionID:"session",turnID:"turn",document:document,
+            methods:["save"],targets:[],fileGrants:[grant],ttl:60,now:now)
+        let save=request("save",project)
+        try controller.complete(lease)
+        XCTAssertThrowsError(try controller.authorizedFileDestination(for:save,lease:lease,
+            project:project,document:document,now:now))
+        XCTAssertEqual(try controller.authorizedOwnedFileJobDestination(for:save,lease:lease,
+            jobID:"save-job",ownedLease:lease,ownedJobID:"save-job",project:project,
+            document:document,now:now).path,"/tmp/song.circlr")
+        XCTAssertThrowsError(try controller.authorizedOwnedFileJobDestination(for:save,lease:lease,
+            jobID:"save-job",ownedLease:lease,ownedJobID:"other-job",project:project,
+            document:document,now:now))
+        XCTAssertThrowsError(try controller.authorizedOwnedFileJobDestination(for:save,lease:lease,
+            jobID:"save-job",ownedLease:lease,ownedJobID:"save-job",project:project,
+            document:document,now:now.addingTimeInterval(60)))
+        var changed=project;changed.musicRevision += 1
+        XCTAssertThrowsError(try controller.authorizedOwnedFileJobDestination(for:save,lease:lease,
+            jobID:"save-job",ownedLease:lease,ownedJobID:"save-job",project:changed,
+            document:document,now:now))
+        controller.revoke()
+        XCTAssertThrowsError(try controller.authorizedOwnedFileJobDestination(for:save,lease:lease,
+            jobID:"save-job",ownedLease:lease,ownedJobID:"save-job",project:project,
+            document:document,now:now))
+    }
+
+    func testExportRequiresSeparateAppDestinationAndStopsBeforeStagedPublish() throws {
+        let project=Project(),now=Date(timeIntervalSince1970:100)
+        let document=binding(project,"/tmp/song.circlr")
+        XCTAssertThrowsError(try AgentRunFileGrant.exportWAV(to:URL(string:"https://example.com/song.wav")!,document:document))
+        XCTAssertThrowsError(try AgentRunFileGrant.exportWAV(to:URL(fileURLWithPath:"/tmp/song.mp3"),document:document))
+        let folder=FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at:folder,withIntermediateDirectories:true)
+        defer{try? FileManager.default.removeItem(at:folder)}
+        let output=folder.appendingPathComponent("mix.wav")
+        let grant=try AgentRunFileGrant.exportWAV(to:output,document:document)
+        var controller=AgentRunLeaseController()
+        XCTAssertThrowsError(try controller.issue(sessionID:"session",turnID:"turn",document:document,
+            methods:["export"],targets:[],ttl:60,now:now))
+        let lease=try controller.issue(sessionID:"session",turnID:"turn",document:document,
+            methods:["export"],targets:[],fileGrants:[grant],ttl:60,now:now)
+        var export=request("export",project)
+        var args=AgentArguments();args.tailSeconds=2
+        export.arguments=args
+        XCTAssertEqual(try controller.authorizedFileDestination(for:export,lease:lease,
+            project:project,document:document,now:now),output)
+        export.arguments?.path="/tmp/other.wav"
+        XCTAssertThrowsError(try controller.authorizedFileDestination(for:export,lease:lease,
+            project:project,document:document,now:now))
+        export.arguments?.path=nil
+        let nullPath=try JSONDecoder().decode(AgentRequest.self,
+            from:Data("""
+                {"id":"export-null","method":"export","projectID":"\(project.id)","expectedRevision":\(project.musicRevision),"arguments":{"path":null}}
+                """.utf8))
+        XCTAssertThrowsError(try controller.authorizedFileDestination(for:nullPath,lease:lease,
+            project:project,document:document,now:now))
+        let stage=folder.appendingPathComponent(".staged.wav")
+        try Data([0x52,0x49,0x46,0x46]).write(to:stage)
+        controller.revoke()
+        if (try? controller.authorizedFileDestination(for:export,lease:lease,
+            project:project,document:document,now:now)) != nil {
+            try FileManager.default.moveItem(at:stage,to:output)
+        } else {
+            try FileManager.default.removeItem(at:stage)
+        }
+        XCTAssertFalse(FileManager.default.fileExists(atPath:output.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath:stage.path))
+    }
+
+    func testExportGrantCannotPlaceUnownedWAVInsideCurrentProjectPackage() throws {
+        let project=Project()
+        let folder=FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let package=folder.appendingPathComponent("song.circlr",isDirectory:true)
+        try FileManager.default.createDirectory(at:package,withIntermediateDirectories:true)
+        defer{try? FileManager.default.removeItem(at:folder)}
+        let document=AgentRunDocumentBinding(projectID:project.id,
+            projectURL:package,mediaRoot:package)
+        XCTAssertThrowsError(try AgentRunFileGrant.exportWAV(
+            to:package.appendingPathComponent("mix.wav"),document:document))
+        XCTAssertThrowsError(try AgentRunFileGrant.exportWAV(
+            to:package.appendingPathComponent("nested/mix.wav"),document:document))
+        let alias=folder.appendingPathComponent("alias")
+        try FileManager.default.createSymbolicLink(at:alias,withDestinationURL:package)
+        XCTAssertThrowsError(try AgentRunFileGrant.exportWAV(
+            to:alias.appendingPathComponent("mix.wav"),document:document))
+        XCTAssertNoThrow(try AgentRunFileGrant.exportWAV(
+            to:folder.appendingPathComponent("mix.wav"),document:document))
+    }
+
+    func testExportGrantRechecksMovedDirectoryAliasBeforePublication() throws {
+        let project=Project(),now=Date(timeIntervalSince1970:100)
+        let folder=FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let package=folder.appendingPathComponent("song.circlr",isDirectory:true)
+        let outside=folder.appendingPathComponent("outside",isDirectory:true)
+        try FileManager.default.createDirectory(at:package,withIntermediateDirectories:true)
+        try FileManager.default.createDirectory(at:outside,withIntermediateDirectories:true)
+        defer{try? FileManager.default.removeItem(at:folder)}
+        let alias=folder.appendingPathComponent("chosen-folder")
+        try FileManager.default.createSymbolicLink(at:alias,withDestinationURL:outside)
+        let document=AgentRunDocumentBinding(projectID:project.id,
+            projectURL:package,mediaRoot:package)
+        let grant=try AgentRunFileGrant.exportWAV(to:alias.appendingPathComponent("mix.wav"),
+                                                   document:document)
+        var controller=AgentRunLeaseController()
+        let lease=try controller.issue(sessionID:"session",turnID:"turn",document:document,
+            methods:["export"],targets:[],fileGrants:[grant],ttl:60,now:now)
+        let export=request("export",project)
+        XCTAssertNoThrow(try controller.authorizedFileDestination(for:export,lease:lease,
+            project:project,document:document,now:now))
+        try FileManager.default.removeItem(at:alias)
+        try FileManager.default.createSymbolicLink(at:alias,withDestinationURL:package)
+        XCTAssertThrowsError(try controller.authorizedOwnedFileJobDestination(for:export,
+            lease:lease,jobID:"job",ownedLease:lease,ownedJobID:"job",project:project,
+            document:document,now:now))
+    }
+
     func testTrustedWriteProjectionAndFailureNeverReturnNestedNativePaths() throws {
         let project=Project(),secret="/Users/private-session/secret-source.wav"
         let unsafe:[String:Any]=["jobID":"job-1","path":secret,
@@ -260,7 +433,11 @@ final class AgentRunLeaseTests: XCTestCase {
                                                             project:project)
         let bounced=try AgentRunReplyProjection.afterWrite(method:"bounce",native:unsafe,
                                                             project:project)
-        for reply in [applied,bounced] {
+        let saved=try AgentRunReplyProjection.afterWrite(method:"save",native:unsafe,
+                                                          project:project)
+        let exported=try AgentRunReplyProjection.afterWrite(method:"export",native:unsafe,
+                                                             project:project)
+        for reply in [applied,bounced,saved,exported] {
             let data=try JSONSerialization.data(withJSONObject:reply)
             let text=String(decoding:data,as:UTF8.self)
             XCTAssertFalse(text.contains(secret))
@@ -268,6 +445,9 @@ final class AgentRunLeaseTests: XCTestCase {
         }
         XCTAssertEqual(applied["state"] as? String,"applied")
         XCTAssertEqual(bounced["jobID"] as? String,"job-1")
+        XCTAssertEqual(saved["state"] as? String,"running")
+        XCTAssertEqual(exported["jobID"] as? String,"job-1")
+        XCTAssertThrowsError(try AgentRunReplyProjection.afterWrite(method:"save",native:[:],project:project))
         XCTAssertEqual(AgentRunReplyProjection.safeFailure(CirclrError(secret)),
                        "trusted_run_execution_failed")
     }

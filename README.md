@@ -8,13 +8,13 @@ English · [한국어](README.ko.md)
 
 In circlr, a circle is a timeline. Build a song from sections, place MIDI, audio, instruments and effects on and around their orbits, and connect their inputs and outputs. Move between the whole arrangement and detailed editing on one zoomable canvas.
 
-![circlr build229 showing f0r h3r and seven readable song sections](docs/images/circlr-song-build229.png)
+![circlr build230 showing f0r h3r and seven readable song sections](docs/images/circlr-song-build230.png)
 
-*0.80.0 build229 development preview from an isolated native app. The latest public release is still 0.70.0. [Capture provenance](docs/images/README.md).*
+*0.80.0 build230 development preview from an isolated native app. The latest public release is still 0.70.0. [Capture provenance](docs/images/README.md).*
 
 > **0.70.0 · build180.** Smoother playback canvas and MP4 capture in the verified scenarios, with viewing mode beside Record. [Evidence and limits](docs/releases/0.70.0-qa.md).
 
-**In development:** [0.80.0](docs/releases/0.80.0.md) shows section order and timing on the song orbit, opens a single song at its section view, and keeps section labels clear of their timeline rings and console controls. Full production, listening and long-recording QA remain open; 0.70.0 is the latest release. [Current QA](qa/0.80-build229.md).
+**In development:** [0.80.0](docs/releases/0.80.0.md) shows section order and timing on the song orbit, opens a single song at its section view, and keeps section labels clear of their timeline rings and console controls. Build230 also protects in-progress recordings from project switches and adds tested, app-selected save/export boundaries for an internal agent turn. Account chat is not connected. Physical recording, listening and long-recording QA remain open; 0.70.0 is the latest release. [Current QA](qa/0.80-build230.md).
 
 ## What you can work with
 
@@ -24,9 +24,9 @@ In circlr, a circle is a timeline. Build a song from sections, place MIDI, audio
 - **Sound and motion:** instrument/effect routing, automation, bounce and source restoration; playback-follow and signal visualization controls.
 - **Local agents:** an MCP interface for inspecting and editing projects, generating MIDI, rendering and saving, with activity visible in the console.
 
-<img src="docs/images/circlr-song-portrait-build229.png" width="280" alt="circlr build229 showing seven section labels and clear orbit ticks in a portrait window">
+<img src="docs/images/circlr-song-portrait-build230.png" width="280" alt="circlr build230 showing seven section labels and clear orbit ticks in a portrait window">
 
-*The same build229 demo stopped in a 720×900 portrait window with the console open, showing the responsive toolbar, nearby section labels and all seven sections. [Capture details](docs/images/README.md).*
+*The same build230 demo stopped in a 720×900 portrait window with the console open, showing the responsive toolbar, nearby section labels and all seven sections. [Capture details](docs/images/README.md).*
 
 These are implemented development features, not a guarantee of compatibility with every audio device or plug-in. Artist profiles and a combined text, image and video workspace are the [longer-term direction](docs/21-artist-universe.md).
 
