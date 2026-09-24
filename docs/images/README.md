@@ -1,5 +1,11 @@
 # Screenshots · 실행 화면
 
+## 0.80.0 build231 development preview
+
+`circlr-song-build231.png` (2880×1800px, SHA-256 `37ef15a03e5c84a105ebd8266064f77de2814f3e1b5e91dc6bdcad44d70e5b0c`) and `circlr-song-portrait-build231.png` (1440×1800px, SHA-256 `d1938f888e2f218082a508a79252dccd667ccfe85b10001f2404289cade49447`) are byte-identical copies of full-window, uncropped PNG conversions from the isolated **0.80.0/build231** native app. Original JPEGs and PNGs remain in ignored `qa/generated/r80-build231-native/`; the windows were 1440×900pt and 720×900pt. The stopped bundled **f0r h3r** copy shows all seven sections and the responsive toolbar, with the console open. Packaged executable SHA-256: `ca1d6ff1df3ef88aa1e8f1767a08be10eea1382261d584052d6ef07cf1e1bbaa`. These screenshots do not establish playback sound, Scarlett compatibility, physical recording, or 0.80 release readiness. [build231 native QA](../../qa/0.80-build231-native.md).
+
+두 PNG는 격리된 실제 build231 앱의 가로·세로 전체 창을 자르거나 크기 변경하지 않고 변환해 복사했습니다. 정지한 **f0r h3r**의 일곱 섹션과 반응형 상단·열린 콘솔을 보여 줍니다. 물리 청취·녹음·구형 Scarlett 호환성·정식 출시의 증거는 아닙니다.
+
 ## 0.80.0 build230 development preview
 
 `circlr-song-build230.png` (2880×1800px, SHA-256 `05baec715da6d34c72d97b223720a07c8570e0db05965869048f65516d163d34`) and `circlr-song-portrait-build230.png` (1440×1800px, SHA-256 `46a92d3ea8d9d1187011c17c9a7bfa1179ca51364282d089f751294233aa7e8b`) are byte-identical copies of full-window, uncropped PNG conversions from the isolated **0.80.0/build230** native app. Original JPEGs and the converted PNGs remain in ignored `qa/generated/r80-build230-native/`: `landscape-1440x900.source.jpg` SHA-256 `0a0dfe75f4f64d9dee22f86eaa120b6a45a7fd6bb097f5ff26e66562ec1cecbc` and `portrait-720x900.source.jpg` SHA-256 `3836deccfd29ece0af428b6a29cfc2ea3a540fbc853859188b27fe4eeb887960`. The stopped bundled **f0r h3r** copy shows seven sections and responsive controls; these images do not verify playback, physical listening, recording input, or 0.80 release readiness. Original packaged executable SHA-256: `68541bd055c9a52494ee9b7c059e79996b59c4a4a8a9a3f73c6b591d15227b2c`. [build230 native QA](../../qa/0.80-build230-native.md).

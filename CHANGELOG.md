@@ -1,5 +1,11 @@
 # 변경 이력
 
+## 0.80.0 · build231 — 개발 중 · 출고 gate 미통과
+
+- 재생 팔로우를 다시 켜도 선택한 케이블의 전면 강조선이 편집 도구막대와 함께 사라지지 않게 했다. 영상 캡처에서는 첫 프레임을 포함해 편집 도구·강조선·끝점 핸들을 제외한다. [UI 감사](qa/0.80-qa232-ui-density.md) · [build231 QA](qa/0.80-build231.md).
+- 실제 ChatGPT 로그인 Codex CLI 모델이 **격리된 build230 QA 앱**에 MCP로 네 MIDI note를 만들고 Undo·저장/재열기·70초 WAV를 완료했다. 앱 내부 계정 대화 기능으로 해석하지 않는다. [모델 QA](qa/0.80-qa232-model-native.md).
+- 최종 소스 Swift **1,231개·15 skip·실패 0**, Python MCP **41개**·QA **17개** 통과. build231 arm64 앱·5 helper strict deep 서명, Codex kit 25개 hash, 동봉 데모 manifest 일치를 확인했다. 격리 native 앱의 케이블 선택·팔로우 재개·MP4 첫 프레임과 가로·세로 화면을 검사했지만 팔로우 뒤 로컬 케이블 가시성·물리 청취·녹음 take·장시간 영상은 열려 있다. 구형 Scarlett 정상 출력은 별도 호환성 항목이며 정식 tag/Release를 만들지 않는다. [native QA](qa/0.80-build231-native.md).
+
 ## 0.80.0 · build230 — 개발 중 · 출고 gate 미통과
 
 - MIDI·오디오 녹음 준비/진행/마무리 중 프로젝트 교체·저장을 차단하고, 비동기 데모 로드의 실제 적용 직전에도 녹음 상태를 재검사한다. MIDI 녹음 시간은 별도 단조 시계로 표시하고 종료 뒤 재생 시계로 복귀한다.

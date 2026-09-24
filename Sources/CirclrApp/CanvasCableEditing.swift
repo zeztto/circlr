@@ -81,7 +81,8 @@ extension AlbumCanvasView {
     func refreshCableTools() {
         defer { refreshPortTools() }
         guard selectedCableProjectID==store.project.id,let id=selectedCable,let edge=selectedSceneCable,
-              let a=scene?.node(edge.from),let b=scene?.node(edge.to),isVisible(a),isVisible(b),let curve=connectionCurve(edge),store.movieWriter==nil,
+              let a=scene?.node(edge.from),let b=scene?.node(edge.to),isVisible(a),isVisible(b),let curve=connectionCurve(edge),
+              store.movieWriter==nil,movieCaptureDepth==0,
               !(store.playback.playing && store.playbackFollow == .following),workspaceViewport.width>320 else {
             if selectedCableProjectID != store.project.id || selectedSceneCable==nil {selectedCable=nil}
             cableTools?.removeFromSuperview();cableTools=nil;return
@@ -123,7 +124,9 @@ extension AlbumCanvasView {
         }.min{$0.1<$1.1}?.0
     }
     func cableEndpointHandles()->[(CirclePortDirection,CirclePortHandle)] {
-        guard let edge=selectedSceneCable,
+        guard !store.viewingMode,store.movieWriter == nil,movieCaptureDepth==0,
+              !(store.playback.playing && store.playbackFollow == .following),
+              let edge=selectedSceneCable,
               let curve=connectionCurve(edge),cableTools != nil else{return []}
         let time = store.selectedCircle.flatMap { visibleTimeHandle($0) }
         return [(CirclePortDirection.output,CirclePortHandle(endpoint:.init(node:edge.from,portID:edge.fromPortID),octant:edge.placement.from,point:curve.from)),
@@ -185,8 +188,15 @@ extension AlbumCanvasView {
             menu.popUp(positioning:nil,at:point,in:self)
         } else {store.status="호환되는 포트를 선택하세요. 기존 연결은 유지됩니다"}
     }
+    func selectedCableAccentCurve()->CirclePortCurve? {
+        guard !store.viewingMode,store.movieWriter == nil,movieCaptureDepth==0,
+              selectedCableProjectID == store.project.id,
+              let edge=selectedSceneCable,let a=scene?.node(edge.from),let b=scene?.node(edge.to),
+              isVisible(a),isVisible(b) else{return nil}
+        return connectionCurve(edge)
+    }
     func drawCableEditing() {
-        if cableTools != nil,let edge=selectedSceneCable,let curve=connectionCurve(edge) {wire(curve,color:StudioTheme.accentNS)}
+        if let curve=selectedCableAccentCurve() {wire(curve,color:StudioTheme.accentNS)}
         for (direction,handle) in cableEndpointHandles() {
             let p=NSPoint(x:handle.point.x,y:handle.point.y)
             StudioTheme.canvasNS.setFill();NSBezierPath(ovalIn:NSRect(x:p.x-10,y:p.y-10,width:20,height:20)).fill()
