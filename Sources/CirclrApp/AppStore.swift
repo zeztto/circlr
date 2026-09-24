@@ -1117,6 +1117,9 @@ private struct MIDIRecordingKey: Hashable {
         let elapsed = max(0,time-recordStart)
         let key = MIDIRecordingKey(channel:status & 0x0F,pitch:pitch)
         if on {
+            // The main run loop may deliver a MIDI callback before its overdue stop tick.
+            // Never preview or retain a new attack beyond the requested repeat window.
+            guard elapsed < clock.seconds * Double(recordRepeats) else { return }
             let previous = heldNotes.updateValue((elapsed,velocity),forKey:key)
             if let (start,v) = previous { appendRecorded(pitch:pitch,velocity:v,start:start,end:elapsed,clock:clock) }
             // The audition synth is pitch-based: every new attack rearticulates its voice,
@@ -1132,15 +1135,25 @@ private struct MIDIRecordingKey: Hashable {
         audition(pitch:pitch,velocity:velocity,on:on)
     }
     private func appendRecorded(pitch:Int,velocity:Int,start:Double,end:Double,clock:MusicClock) {
-        let first = Int(start/clock.seconds),last = Int(max(start,end-0.000001)/clock.seconds)
+        let limit = clock.seconds * Double(recordRepeats)
+        let boundedStart = max(0,start), boundedEnd = min(limit,end)
+        guard boundedStart < limit, boundedEnd > boundedStart else { return }
+        let first = Int(boundedStart/clock.seconds)
+        let last = min(recordRepeats-1,Int(max(boundedStart,boundedEnd-0.000001)/clock.seconds))
         for iteration in first...max(first,last) {
-            let s = max(0,start-Double(iteration)*clock.seconds), e = min(clock.seconds,end-Double(iteration)*clock.seconds)
-            if e > s { recordedNotes.append(Note(beat:Double(iteration)*clock.beats+clock.beat(atSeconds:s),length:max(0.03125,clock.beat(atSeconds:e)-clock.beat(atSeconds:s)),pitch:pitch,velocity:velocity)) }
+            let s = max(0,boundedStart-Double(iteration)*clock.seconds)
+            let e = min(clock.seconds,boundedEnd-Double(iteration)*clock.seconds)
+            guard e > s else { continue }
+            let beat = clock.beat(atSeconds:s), endBeat = clock.beat(atSeconds:e)
+            // A minimum note length must not extend the final take beyond its orbit.
+            let length = min(clock.beats-beat,max(0.03125,endBeat-beat))
+            if length > 0 { recordedNotes.append(Note(beat:Double(iteration)*clock.beats+beat,length:length,pitch:pitch,velocity:velocity)) }
         }
     }
     func startMIDIRecording() {
-        guard !recorder.busy else{status="오디오 녹음을 먼저 정지하고 파일 마무리를 기다리세요";return}
         if midiRecording { stopRecording(); return }
+        guard !audioRecordingBusy else{status="오디오 녹음을 먼저 정지하고 파일 마무리를 기다리세요";return}
+        guard !moviePreparing,movieWriter == nil,movieFinalizing == nil else{status="영상 녹화를 마친 뒤 테이크를 녹음하세요";return}
         guard let use = selectedUse,let clock = recordingClock,let track = selectedTrackID else { status = "녹음할 서클과 트랙을 선택하세요"; return }
         stop(); recordClock = clock; recordUseID = use.id; recordLaneID = selectedLaneID; recordArrangementID = project.activeArrangementID; recordingTrackID = track; originalRecordProject = project
         recordRepeats = selectedMusic?.repeatCount ?? use.repeatCount; recordedNotes = []; heldNotes = [:]; recordStart = ProcessInfo.processInfo.systemUptime; midiRecording = true; status = "MIDI 녹음 중 · MIDI 장치 또는 화면 건반을 연주하세요"
@@ -1161,6 +1174,8 @@ private struct MIDIRecordingKey: Hashable {
         if audioRecording {stopRecording();return}
         if audioRecordPending {cancelRecordingRequest();status="녹음 시작 취소";return}
         guard !recorder.busy else{status=recorder.message;return}
+        guard !midiRecording else{status="MIDI 녹음을 먼저 정지하세요";return}
+        guard !moviePreparing,movieWriter == nil,movieFinalizing == nil else{status="영상 녹화를 마친 뒤 테이크를 녹음하세요";return}
         guard editPatternID==nil,let use=selectedUse,let clock=recordingClock,let address=hierarchySelection,let track=selectedTrackID else {status="녹음할 서클과 트랙을 선택하세요";return}
         stop()
         let request=recordingAuthorization.begin(projectID:project.id,revision:project.musicRevision,address:address,trackID:track,laneID:selectedLaneID)
@@ -1205,14 +1220,14 @@ private struct MIDIRecordingKey: Hashable {
         cancelRecordingRequest()
         if audioRecording {finishAudioRecording();return}
         guard midiRecording || audioRecording,let useID = recordUseID,let trackID = recordingTrackID,let clock = recordClock else { return }
-        let elapsed = ProcessInfo.processInfo.systemUptime-recordStart
+        let elapsed = min(ProcessInfo.processInfo.systemUptime-recordStart,clock.seconds*Double(recordRepeats))
         if midiRecording {
             for (key,(start,v)) in heldNotes { appendRecorded(pitch:key.pitch,velocity:v,start:start,end:elapsed,clock:clock) }
             for pitch in Set(heldNotes.keys.map(\.pitch)) { previewRecordedMIDI(pitch:pitch,velocity:0,on:false) }
             heldNotes = [:]
             let all = recordedNotes; midiRecording = false
             meter.update(seconds:playback.seconds,playing:playback.playing)
-            let iterations = max(1,Int(ceil(elapsed/clock.seconds)))
+            let iterations = max(1,min(recordRepeats,Int(ceil(elapsed/clock.seconds))))
             mutate("MIDI take 저장") { p in
                 for iteration in 0..<iterations {
                     let notes = all.filter{ $0.beat >= Double(iteration)*clock.beats && $0.beat < Double(iteration+1)*clock.beats }.map{ n -> Note in var copy = n; copy.beat -= Double(iteration)*clock.beats; return copy }

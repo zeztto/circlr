@@ -4,12 +4,18 @@ import CirclrAudio
 import CirclrCore
 
 extension AppStore {
+    private var movieStartConflictsWithTake:Bool {
+        movieFinalizing != nil || preparing || midiRecording || audioRecording || audioRecordPending || recorder.busy
+    }
     func toggleMovieRecording() {
         if moviePreparing {stop();return}
         if movieWriter != nil {finishMovieRecording();return}
-        guard movieFinalizing==nil,!preparing,!midiRecording,!audioRecording else{status="현재 작업을 마친 뒤 영상 녹화를 시작하세요";return}
+        guard !movieStartConflictsWithTake else{status="현재 작업을 마친 뒤 영상 녹화를 시작하세요";return}
         let panel=NSSavePanel();panel.allowedContentTypes=[.mpeg4Movie];panel.nameFieldStringValue=project.name+".mp4"
         guard panel.runModal() == .OK,let url=panel.url else{return}
+        // A modal save panel runs its own event loop; input authorization or an
+        // alternate record command may have started while the panel was open.
+        guard !movieStartConflictsWithTake else{status="현재 작업을 마친 뒤 영상 녹화를 시작하세요";return}
         guard !FileManager.default.fileExists(atPath:url.path) else{fail(CirclrError("기존 영상을 보존하려면 새 파일 이름을 지정하세요"));return}
         if playback.playing {stop()}
         movieGeneration+=1;let generation=movieGeneration

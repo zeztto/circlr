@@ -79,6 +79,18 @@ enum TrustedAgentReply {
         }
     }
 
+    /// Internal offline MCP transport. The caller owns the model/client; this
+    /// does not establish a Codex account session or expose a public socket.
+    func startAppOwnedTrustedMCPHelperTurn(executable: URL?=nil) throws -> TrustedMCPHelperSession {
+        let ingress=try startAppOwnedTrustedAgentTurn()
+        do {
+            return try ingress.startHelper(executable:executable)
+        } catch {
+            stopTrustedAgentTurn()
+            throw error
+        }
+    }
+
     /// Only an app-owned authenticated session may call this API. This does not
     /// treat the same-UID external MCP socket as a trusted Codex session.
     func beginTrustedAgentTurn(sessionID: ID,turnID: ID,
@@ -251,6 +263,12 @@ enum TrustedAgentReply {
     }
 
     func checkTrustedAgentJobCommit(_ lease:AgentRunLease,jobID: ID) throws {
+        if !trustedRun.turnCompleted,
+           let helper=trustedAgentIngress?.helperSession,
+           !helper.isRunning {
+            stopTrustedAgentTurn()
+            throw CancellationError()
+        }
         guard let owned=trustedAgentJob,owned.id==jobID,owned.lease==lease else {
             throw CancellationError()
         }

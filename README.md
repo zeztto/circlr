@@ -8,13 +8,13 @@ English · [한국어](README.ko.md)
 
 In circlr, a circle is a timeline. Build a song from sections, place MIDI, audio, instruments and effects on and around their orbits, and connect their inputs and outputs. Move between the whole arrangement and detailed editing on one zoomable canvas.
 
-![circlr build233 showing f0r h3r and seven readable song sections](docs/images/circlr-song-build233.png)
+![circlr build234 showing f0r h3r, seven song sections and separate take and video recording controls](docs/images/circlr-song-build234.png)
 
-*0.80.0 build233 development preview from an isolated native app. The latest public release is still 0.70.0. [Capture provenance](docs/images/README.md).*
+*0.80.0 build234 development preview from an isolated native app. The latest public release is still 0.70.0. [Capture provenance](docs/images/README.md).*
 
 > **0.70.0 · build180.** Smoother playback canvas and MP4 capture in the verified scenarios, with viewing mode beside Record. [Evidence and limits](docs/releases/0.70.0-qa.md).
 
-**In development:** [0.80.0](docs/releases/0.80.0.md) shows section order and timing on the song orbit, opens a single song at its section view, and keeps section labels clear of their timeline rings and console controls. Build233 preserves overlapping MIDI notes from different channels and retriggers in recorded takes, shows the playback-follow target in compact windows, and adds a bounded `circlr_context` MCP read for agent orientation. An external Codex model completed a bounded MIDI edit, Undo and WAV export through MCP in an isolated build230 app; in-app account chat is not connected. Physical recording, listening and long-recording QA remain open; 0.70.0 is the latest release. [Current QA](qa/0.80-build233.md).
+**In development:** [0.80.0](docs/releases/0.80.0.md) shows section order and timing on the song orbit, opens a single song at its section view, and keeps section labels clear of their timeline rings and console controls. Build234 caps late MIDI recording events at the requested loop count and separates MIDI/audio take recording from MP4 capture in the toolbar. It also packages an app-owned offline MCP helper for narrowly scoped MIDI edits and bounce; this is not in-app Codex account chat. An external Codex model completed a bounded MIDI edit, Undo and WAV export through MCP in an isolated earlier app. Physical recording, listening and long-recording QA remain open; 0.70.0 is the latest release. [Current QA](qa/0.80-build234.md).
 
 ## What you can work with
 
@@ -24,9 +24,9 @@ In circlr, a circle is a timeline. Build a song from sections, place MIDI, audio
 - **Sound and motion:** instrument/effect routing, automation, bounce and source restoration; playback-follow and signal visualization controls.
 - **Local agents:** an MCP interface for inspecting and editing projects, generating MIDI, rendering and saving, with activity visible in the console.
 
-<img src="docs/images/circlr-song-portrait-build233.png" width="280" alt="circlr build233 showing seven section labels and clear orbit ticks in a portrait window">
+<img src="docs/images/circlr-song-portrait-build234.png" width="280" alt="circlr build234 in a portrait window, with seven section labels and distinct take and video controls">
 
-*The same build233 demo stopped in a 720×900 portrait window with the console open, showing the visible playback-follow target, responsive toolbar and all seven sections. [Capture details](docs/images/README.md).*
+*The same build234 demo stopped in a 720×900 portrait window with the console open, showing the playback-follow target, responsive recording controls and all seven sections. [Capture details](docs/images/README.md).*
 
 These are implemented development features, not a guarantee of compatibility with every audio device or plug-in. Artist profiles and a combined text, image and video workspace are the [longer-term direction](docs/21-artist-universe.md).
 
@@ -49,7 +49,7 @@ cd circlr
 open 'dist/써클러.app'
 ```
 
-The build packages the app, its five audio helpers and the agent kit together. Local packages use ad-hoc signing and are not notarized. Keep a separate copy of important projects when trying development builds.
+The build packages the app, five audio helpers, an internal trusted MCP helper and the agent kit together. Local packages use ad-hoc signing and are not notarized. Keep a separate copy of important projects when trying development builds.
 
 Choose a synth circle, then **음색·악기 찾기** to search the built-in patches. The same patches are available through MCP `sounds`; apply the returned `synthPatch` to `instrument.synth`. Existing saved sounds are preserved until explicitly changed. [Release notes](docs/releases/0.70.0-notes.md).
 

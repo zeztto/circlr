@@ -1,5 +1,14 @@
 # 변경 이력
 
+## 0.80.0 · build234 — 개발 중 · 출고 gate 미통과
+
+- MIDI 반복 녹음의 메인 루프가 늦어도 요청한 반복 횟수까지만 take를 만든다. 종료 시 유지 중인 음과 늦은 Note Off는 마지막 궤도 경계에서 자르고, 경계 뒤 Note On은 기록·미리 듣기에서 제외한다. 합성 timestamp의 수정 전 실패→수정 후 통과와 take·Undo를 [build234 QA](qa/0.80-build234.md)에 기록한다.
+- 상단에서 MIDI/오디오 **테이크 녹음**과 캔버스 **영상 녹화**를 분리해 표시한다. 대상 미선택·마이크 준비·저장·정리 상태를 설명하고, 기존 단축키·에디터·메뉴 등 다른 진입 경로에도 녹음 종류 간 충돌 방지를 적용한다. 활성 녹음 중 선택한 트랙이 바뀌어도 새 선택을 실제 take 대상으로 잘못 표시하지 않는다.
+- 앱이 직접 시작하는 내부 `circlr-trusted-mcp-helper`를 별도 프로세스로 패키징한다. turn마다 비공개 socket·capability를 앱 소유 stdin bootstrap으로 전달하고, 선택 MIDI 범위의 snapshot/inspect/apply/bounce/job만 허용한다. 실제 자식 프로세스에서 편집→Undo→재편집→nonzero WAV, STOP·완료·만료·문서 교체·child 실패 경계를 검사한다. 이 구현은 **오프라인 내부 권한 경계**이며 사용자 Codex 계정 로그인·대화 UI의 출시는 아니다.
+- 시스템 기본 `Scarlett 6i6 USB`는 유지하고 앱 전용 Mac 내장 출력을 0.80 오디오 QA 기준으로 둔다. Focusrite의 macOS 26 세대별 호환성 표와 로컬 장치 인식을 대조했지만, 현재 장치 세대·물리 청취·HAL timeout 원인은 확정하지 않았다. [출력 조사](qa/0.80-output-investigation.md).
+- 최종 전체 Swift **1,253개·15 skip·실패 0**, MCP Python **47개**, MCP QA Python **39개**를 통과했다. arm64 앱·오디오 helper 5개·내부 MCP helper의 strict deep 서명과 Codex kit 25/25·데모 26/26 manifest hash를 확인했다. 실제 앱 결과와 남은 출고 gate는 [build234 QA](qa/0.80-build234.md)에 구분한다.
+- [격리 native QA](qa/0.80-build234-native.md)에서 700/720/900/1440pt 상단의 테이크·영상·감상·서클 추가와 AX를 확인하고, 실제 MIDI 녹음 시작/정지(입력 0개)와 앱 전용 내장 스피커 재생 시계 00:00.3→00:12.3을 관찰했다. 한영 README 화면을 최종 패키지의 가로·세로 전체 곡 캡처로 갱신했다. 시스템 기본 Scarlett UID는 불변이고 종료 후 QA 앱/helper/socket은 없었다. 실제 입력·청취·MP4 출력과 0.80 전체 gate는 열려 있어 정식 Release를 만들지 않는다.
+
 ## 0.80.0 · build233 — 개발 중 · 출고 gate 미통과
 
 - MIDI 녹음에서 같은 음높이를 서로 다른 채널이 누르거나 같은 채널이 다시 누르면 기존 note가 사라지던 문제를 고쳤다. 채널+pitch로 유지음을 식별하고 재어택 시 앞 note를 닫는다. 마지막 활성 채널의 Note Off에만 미리 듣기를 해제하며 녹음 종료 시 남은 음을 정리한다. 합성 이벤트로 take·반복 경계·Undo와 preview 명령을 검사했다. 실제 MIDI 장치 청취와 helper 준비 중 빠른 입력은 별도 검증이다.

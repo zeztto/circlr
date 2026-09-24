@@ -31,6 +31,7 @@ private func trustedCapabilityMatches(_ provided: String, _ expected: String) ->
     private let capability: String
     private var active = true
     private var socket: AgentSocket?
+    private(set) var helperSession: TrustedMCPHelperSession?
     let path: String
 
     /// Pass this only to the app-owned IPC client, outside model tool arguments.
@@ -83,13 +84,45 @@ private func trustedCapabilityMatches(_ provided: String, _ expected: String) ->
         closeSocket()
     }
 
+    /// A child exit after normal completion must not revoke its accepted job.
+    /// Explicit STOP above remains available even after completion.
+    func helperDidExitUnexpectedly() {
+        guard active else { return }
+        stop()
+    }
+
     /// Socket-only teardown. AppStore owns lease revocation and accepted jobs.
     func closeSocket() {
         active = false
+        helperSession?.stop()
+        helperSession = nil
         socket = nil
     }
 
+    func startHelper(executable: URL? = nil) throws -> TrustedMCPHelperSession {
+        guard active, socket != nil, helperSession == nil else {
+            throw CirclrError("trusted_run_stale: helper를 시작할 수 없습니다")
+        }
+        let session = try TrustedMCPHelperSession(ingress: self, executable: executable)
+        guard active, socket != nil, store?.trustedRun.active == lease,
+              session.isRunning else {
+            session.stop()
+            throw CirclrError("trusted_run_stale: helper 시작 중 turn이 종료됐습니다")
+        }
+        helperSession = session
+        return session
+    }
+
+    func acceptsHelperResult(_ session: TrustedMCPHelperSession) -> Bool {
+        active && socket != nil && helperSession === session &&
+            store?.trustedRun.active == lease && store?.trustedRun.turnCompleted == false
+    }
+
     private func handle(_ data: Data) -> Data {
+        if let helperSession, !helperSession.isRunning {
+            helperDidExitUnexpectedly()
+            return Self.encode(error: "trusted_run_stale")
+        }
         guard active, socket != nil, let store,
               store.trustedRun.active == lease,
               store.trustedRun.permitsCommit(lease, document: store.currentTrustedDocument),

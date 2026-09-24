@@ -127,4 +127,50 @@ import CirclrCore
         XCTAssertTrue(second.lane.notes.allSatisfy { $0.beat >= 0 && $0.beat < clock.beats })
         XCTAssertEqual(store.project.takes?.last?.id, second.id)
     }
+
+    func testDelayedStopRejectsEventsPastRepeatLimitAndClampsHeldNotesToLastBoundary() throws {
+        let (store, root, _, _, _) = try makeStore(tempo: 999, repeats: 2)
+        defer { store.stop(); try? FileManager.default.removeItem(at: root) }
+        let clock = try XCTUnwrap(store.recordingClock)
+        let limit = clock.seconds * 2
+        store.startMIDIRecording()
+        var commands: [String] = []
+        store.onMIDIRecordingPreviewCommand = { pitch, _, on in
+            commands.append("\(pitch):\(on ? "on" : "off")")
+        }
+        let sampledNow = ProcessInfo.processInfo.systemUptime
+        let start = sampledNow - store.midiRecordingElapsedSeconds
+        send(store, channel: 0, pitch: 60, velocity: 80, on: true, at: start + 0.18)
+
+        // A blocked main run loop can deliver both MIDI callbacks and the 30 Hz timer
+        // after the selected repeats end. Their source timestamps still identify a
+        // short final-boundary note and a later attack that must never enter a take.
+        Thread.sleep(forTimeInterval: limit + 0.12)
+        send(store, channel: 1, pitch: 63, velocity: 93, on: true, at: start + limit - 0.001)
+        send(store, channel: 2, pitch: 65, velocity: 105, on: true, at: start + limit + 0.02)
+        send(store, channel: 1, pitch: 63, velocity: 0, on: false, at: start + limit + 0.05)
+        store.stopRecording()
+
+        XCTAssertFalse(store.midiRecording)
+        XCTAssertEqual(store.auditionOutput.status.heldNotes, 0)
+        XCTAssertFalse(commands.contains("65:on"), "선택한 반복 밖의 새 attack은 preview도 시작하지 않아야 합니다")
+        XCTAssertTrue(commands.contains("60:off"), "마지막 note가 stop 시점까지 눌려 있어도 audition을 해제해야 합니다")
+        XCTAssertTrue(commands.contains("63:off"), "늦게 전달된 Note Off도 audition을 해제해야 합니다")
+        let takes = try XCTUnwrap(store.project.takes)
+        XCTAssertEqual(takes.count, 2, "늦은 tick/stop이 세 번째 반복 take를 만들면 안 됩니다")
+        XCTAssertEqual(takes.flatMap(\.lane.notes).filter { $0.pitch == 65 }.count, 0)
+        let finalNotes = try XCTUnwrap(takes.last?.lane.notes)
+        XCTAssertEqual(Set(finalNotes.map(\.pitch)), [60, 63])
+        XCTAssertTrue(finalNotes.allSatisfy { $0.beat >= 0 && $0.beat + $0.length <= clock.beats + 0.000001 })
+        XCTAssertEqual(try XCTUnwrap(finalNotes.first { $0.pitch == 60 }).beat + XCTUnwrap(finalNotes.first { $0.pitch == 60 }).length,
+                       clock.beats, accuracy: 0.000001)
+        let edgeNote = try XCTUnwrap(finalNotes.first { $0.pitch == 63 })
+        XCTAssertLessThan(edgeNote.length, 0.03125, "최소 note 길이가 선택한 마지막 반복의 경계를 넘겨서는 안 됩니다")
+        XCTAssertEqual(edgeNote.beat + edgeNote.length,
+                       clock.beats, accuracy: 0.000001)
+        store.undo() // take activation
+        XCTAssertEqual(store.project.takes?.count, 2)
+        store.undo() // take creation
+        XCTAssertEqual(store.project.takes?.count ?? 0, 0)
+    }
 }

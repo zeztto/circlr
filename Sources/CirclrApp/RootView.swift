@@ -125,7 +125,7 @@ struct RootView: View {
                 }.frame(height:58)
                 HStack(spacing:10) {
                     TransportControls(store:store,meter:store.meter,compact:true).layoutPriority(1)
-                    recordingAndViewingControls
+                    recordingAndViewingControls(compact:chrome.width<900)
                     Spacer(minLength:8)
                     utilityMenu
                 }.frame(height:58)
@@ -135,7 +135,7 @@ struct RootView: View {
                     projectMenu.frame(width:160)
                     Rectangle().fill(StudioTheme.line).frame(width:1,height:24)
                     TransportControls(store:store,meter:store.meter,compact:chrome.compactTransport)
-                    recordingAndViewingControls
+                    recordingAndViewingControls(compact:false)
                     Spacer(minLength:8)
                     utilityMenu
                     globalSettings(compact:chrome.compactTransport)
@@ -160,7 +160,7 @@ struct RootView: View {
                 Divider();Button("앨범 WAV 내보내기…"){store.export()};Button("트랙별 stems 내보내기…"){store.export(stems:true)}
             }label:{HStack(spacing:7){Text(store.project.name).lineLimit(1);if store.dirty{Circle().fill(StudioTheme.accent).frame(width:4,height:4)}}.frame(maxWidth:.infinity,alignment:.leading)}
     }
-    private var movieButton:some View {
+    private func movieButton(compact:Bool)->some View {
         let recording=store.movieWriter != nil && !store.moviePreparing
         let finalizing=store.movieFinalizing != nil
         return Button{store.toggleMovieRecording()}label:{
@@ -171,7 +171,10 @@ struct RootView: View {
                     Image(systemName:recording ? "stop.circle.fill":"record.circle")
                         .font(.system(size:15,weight:.medium))
                 }
-                Text(finalizing ? "저장 중":store.moviePreparing ? "준비 중":recording ? "녹화 중":"녹화")
+                Text(finalizing ? (compact ? "영상 저장":"영상 저장 중")
+                    :store.moviePreparing ? (compact ? "영상 준비":"영상 준비 중")
+                    :recording ? (compact ? "영상 중":"영상 녹화 중")
+                    :compact ? "영상":"영상 녹화")
                     .font(.system(size:11,weight:.semibold))
                     .fixedSize(horizontal:true,vertical:false)
             }
@@ -180,13 +183,14 @@ struct RootView: View {
             .padding(.horizontal,7)
             .background(recording ? Color.red.opacity(0.12):StudioTheme.raised,in:RoundedRectangle(cornerRadius:6))
         }
-        .help(finalizing ? "영상 파일을 저장하고 있습니다":store.moviePreparing ? "녹화 준비 중 · 누르면 취소":recording ? "영상 녹화 마치기":"캔버스와 음악을 MP4로 녹화")
+        .help(finalizing ? "영상 파일을 저장하고 있습니다":store.moviePreparing ? "녹화 준비 중 · 누르면 취소":recording ? "영상 녹화 마치기":store.midiRecording || store.audioRecordingBusy ? "테이크 녹음을 마친 뒤 영상 녹화를 시작하세요":"캔버스와 음악을 MP4로 녹화")
         .accessibilityLabel(finalizing ? "영상 저장 중":store.moviePreparing ? "영상 녹화 준비 취소":recording ? "영상 녹화 마치기":"영상 녹화 시작")
-        .disabled(finalizing)
+        .disabled(!recording && !store.moviePreparing && (finalizing || store.midiRecording || store.audioRecordingBusy))
     }
-    private var recordingAndViewingControls:some View {
+    private func recordingAndViewingControls(compact:Bool)->some View {
         HStack(spacing:2) {
-            movieButton
+            TakeRecordingMenu(store:store,compact:compact)
+            movieButton(compact:compact)
             viewingModeButton
         }.fixedSize(horizontal:true,vertical:false)
     }
