@@ -81,8 +81,9 @@ enum TrustedAgentReply {
 
     /// Internal offline MCP transport. The caller owns the model/client; this
     /// does not establish a Codex account session or expose a public socket.
-    func startAppOwnedTrustedMCPHelperTurn(executable: URL?=nil) throws -> TrustedMCPHelperSession {
-        let ingress=try startAppOwnedTrustedAgentTurn()
+    func startAppOwnedTrustedMCPHelperTurn(exportDestination: URL?=nil,
+                                           executable: URL?=nil) throws -> TrustedMCPHelperSession {
+        let ingress=try startAppOwnedTrustedAgentTurn(exportDestination:exportDestination)
         do {
             return try ingress.startHelper(executable:executable)
         } catch {

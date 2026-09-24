@@ -7,11 +7,290 @@ struct AgentConsoleBoundsKey:PreferenceKey {
     static func reduce(value:inout CGRect,nextValue:()->CGRect){let next=nextValue();if next.width>0{value=next}}
 }
 
+private struct AgentConsoleScrollGeometry:Equatable {
+    var anchorY:CGFloat?
+    var bottomY:CGFloat?
+}
+
+private struct AgentConsoleScrollGeometryKey:PreferenceKey {
+    static var defaultValue=AgentConsoleScrollGeometry()
+    static func reduce(value:inout AgentConsoleScrollGeometry,nextValue:()->AgentConsoleScrollGeometry){
+        let next=nextValue()
+        if let anchorY=next.anchorY {value.anchorY=anchorY}
+        if let bottomY=next.bottomY {value.bottomY=bottomY}
+    }
+}
+
+/// Observe wheel input only inside the log viewport; return the event unchanged so the native
+/// ScrollView keeps all normal scrolling and momentum behavior.
+private struct AgentConsoleInputObserver:NSViewRepresentable {
+    var onWheel:()->Void
+    var onScrollKey:()->Void
+    var logFocused:Bool
+
+    final class Coordinator {
+        weak var view:NSView?
+        var onWheel:()->Void
+        var onScrollKey:()->Void
+        var logFocused:Bool
+        var monitor:Any?
+        init(onWheel:@escaping ()->Void,onScrollKey:@escaping ()->Void,logFocused:Bool){
+            self.onWheel=onWheel;self.onScrollKey=onScrollKey;self.logFocused=logFocused
+        }
+        func install() {
+            guard monitor == nil else{return}
+            monitor=NSEvent.addLocalMonitorForEvents(matching:[.scrollWheel,.keyDown]) {[weak self] event in
+                guard let self,let view=self.view,let window=view.window,event.window === window else{return event}
+                switch event.type {
+                case .scrollWheel:
+                    let point=view.convert(event.locationInWindow,from:nil)
+                    if view.bounds.contains(point),event.scrollingDeltaY != 0 {self.onWheel()}
+                case .keyDown:
+                    // Arrow Up, Home and Page Up can scroll a focused log without a wheel event.
+                    if self.logFocused,[UInt16(126),115,116].contains(event.keyCode) {self.onScrollKey()}
+                default:break
+                }
+                return event
+            }
+        }
+        func remove() {
+            if let monitor {NSEvent.removeMonitor(monitor);self.monitor=nil}
+        }
+        deinit {remove()}
+    }
+
+    func makeCoordinator()->Coordinator {Coordinator(onWheel:onWheel,onScrollKey:onScrollKey,logFocused:logFocused)}
+    func makeNSView(context:Context)->NSView {
+        let view=NSView(frame:.zero)
+        context.coordinator.view=view
+        context.coordinator.install()
+        return view
+    }
+    func updateNSView(_ nsView:NSView,context:Context) {
+        context.coordinator.view=nsView
+        context.coordinator.onWheel=onWheel
+        context.coordinator.onScrollKey=onScrollKey
+        context.coordinator.logFocused=logFocused
+    }
+    static func dismantleNSView(_ nsView:NSView,coordinator:Coordinator) {
+        coordinator.remove()
+        coordinator.view=nil
+    }
+}
+
+private struct AgentConsoleEventRow:View,Equatable {
+    let event:ActivityEvent
+    static func ==(lhs:Self,rhs:Self)->Bool {lhs.event.id==rhs.event.id}
+    var body:some View {
+        HStack(alignment:.top,spacing:10) {
+            Text(event.time.formatted(.dateTime.hour(.twoDigits(amPM:.omitted)).minute(.twoDigits).second(.twoDigits)))
+                .foregroundStyle(StudioTheme.secondary).frame(width:67,alignment:.leading).lineLimit(1)
+            Text(event.source).foregroundStyle(event.source=="에이전트" ? StudioTheme.accent:StudioTheme.secondary)
+                .frame(width:48,alignment:.leading)
+            Text(event.message).textSelection(.enabled).frame(maxWidth:.infinity,alignment:.leading)
+        }.font(.system(size:11,design:.monospaced))
+    }
+}
+
+struct ConsoleScrollScheduler {
+    private var viewGeneration=0
+    private var queuedGeneration:Int?
+    mutating func didAppear() {
+        viewGeneration+=1
+        queuedGeneration=nil
+    }
+    mutating func didDisappear() {
+        viewGeneration+=1
+        queuedGeneration=nil
+    }
+    mutating func schedule()->Int? {
+        guard queuedGeneration==nil else{return nil}
+        queuedGeneration=viewGeneration
+        return viewGeneration
+    }
+    mutating func consume(_ generation:Int)->Bool {
+        guard generation==viewGeneration,queuedGeneration==generation else{return false}
+        queuedGeneration=nil
+        return true
+    }
+}
+
+/// Keep the rendered log frozen while the user reads older events. AppStore retains only 500
+/// events, so a snapshot is necessary to avoid moving or deleting the visible scroll anchor.
+struct ConsoleLogFollowState {
+    static let eagerTailLimit=64
+    private(set) var displayedEvents:[ActivityEvent]=[]
+    var lazyPrefixEvents:ArraySlice<ActivityEvent> {displayedEvents.dropLast(min(displayedEvents.count,Self.eagerTailLimit))}
+    var eagerTailEvents:ArraySlice<ActivityEvent> {displayedEvents.suffix(Self.eagerTailLimit)}
+    private var newestEvents:[ActivityEvent]=[]
+    private var lastSequence=0
+    private var initialized=false
+    private(set) var isFollowing=true
+    private(set) var unreadCount=0
+    private var automaticScrollPending=true
+    private(set) var scrollGeneration=0
+    private var observedBottomY:CGFloat?
+    private var observedViewportHeight:CGFloat?
+    private var observedAnchorY:CGFloat?
+    private(set) var anchorEventID:Int?
+    private var awaitingWheelOutcome=false
+
+    mutating func load(_ events:[ActivityEvent],sequence:Int) {
+        let snapshot=Array(events.suffix(500))
+        displayedEvents=snapshot
+        newestEvents=snapshot
+        lastSequence=sequence
+        initialized=true
+        isFollowing=true
+        unreadCount=0
+        automaticScrollPending=true
+        scrollGeneration+=1
+        observedBottomY=nil
+        observedViewportHeight=nil
+        observedAnchorY=nil
+        anchorEventID=snapshot.last?.id
+        awaitingWheelOutcome=false
+    }
+
+    mutating func receive(_ events:[ActivityEvent],sequence:Int) {
+        guard initialized else {load(events,sequence:sequence);return}
+        newestEvents=Array(events.suffix(500))
+        let newCount=max(0,sequence-lastSequence)
+        lastSequence=sequence
+        if isFollowing {
+            displayedEvents=newestEvents
+            if !eagerTailEvents.contains(where:{$0.id==anchorEventID}) {
+                anchorEventID=newestEvents.last?.id
+                observedAnchorY=nil
+            }
+            unreadCount=0
+            automaticScrollPending=true
+            scrollGeneration+=1
+        }else{
+            unreadCount+=newCount
+        }
+    }
+
+    mutating func jumpToLatest() {
+        displayedEvents=newestEvents
+        isFollowing=true
+        unreadCount=0
+        automaticScrollPending=true
+        scrollGeneration+=1
+        awaitingWheelOutcome=false
+        anchorEventID=newestEvents.last?.id
+        observedAnchorY=nil
+    }
+
+    mutating func userDidScroll() {
+        guard initialized else{return}
+        isFollowing=false
+        automaticScrollPending=false
+        awaitingWheelOutcome=true
+    }
+
+    /// A wheel at the bottom may have had no effect. Once that input settles, resume following
+    /// only if the last measured viewport is still at the bottom.
+    mutating func finishUserScroll()->Bool {
+        guard awaitingWheelOutcome else{return false}
+        awaitingWheelOutcome=false
+        guard let bottomY=observedBottomY,let viewportHeight=observedViewportHeight,
+              bottomY <= viewportHeight+4 else{return false}
+        jumpToLatest()
+        return true
+    }
+
+    mutating func automaticScrollIssued(generation:Int) {
+        guard generation==scrollGeneration else{return}
+        observedBottomY=nil
+        observedViewportHeight=nil
+    }
+
+    mutating func automaticScrollCompleted(generation:Int) {
+        guard generation==scrollGeneration else{return}
+        automaticScrollPending=false
+        if let bottomY=observedBottomY,let viewportHeight=observedViewportHeight,
+           bottomY > viewportHeight+4 {
+            isFollowing=false
+        }
+    }
+
+    mutating func viewportChanged(anchorY:CGFloat?=nil,bottomY:CGFloat,viewportHeight:CGFloat) {
+        guard initialized,bottomY.isFinite,bottomY > -1_000_000 else{return}
+        let movedTowardOlderEvents:Bool
+        if let anchorY,anchorY.isFinite,let previous=observedAnchorY {
+            movedTowardOlderEvents=anchorY > previous+2
+        }else{movedTowardOlderEvents=false}
+        if let anchorY,anchorY.isFinite {observedAnchorY=anchorY}
+        observedBottomY=bottomY
+        observedViewportHeight=viewportHeight
+        let atBottom=bottomY <= viewportHeight+4
+        // A retained event keeps its screen position when older rows are evicted or new rows
+        // append. Keyboard and accessibility scrolling move that event toward the bottom,
+        // even while events renew the automatic-scroll generation before its timer can run.
+        if movedTowardOlderEvents && !atBottom && isFollowing {
+            isFollowing=false
+            automaticScrollPending=false
+            awaitingWheelOutcome=false
+            return
+        }
+        if awaitingWheelOutcome {
+            if !atBottom {awaitingWheelOutcome=false}
+            return
+        }
+        if atBottom {
+            if isFollowing {automaticScrollPending=false}
+            else {jumpToLatest()}
+        }else if isFollowing && !automaticScrollPending {
+            isFollowing=false
+        }
+    }
+}
+
 struct AgentConsole:View {
     @ObservedObject var store:AppStore
     @State private var command=""
     @State private var resizeStart:Double?
+    @State private var logFollow=ConsoleLogFollowState()
+    @State private var wheelGeneration=0
+    @State private var scrollScheduler=ConsoleScrollScheduler()
     @FocusState private var inputFocused:Bool
+    @FocusState private var logFocused:Bool
+    private func logRow(_ event:ActivityEvent)->some View {
+        AgentConsoleEventRow(event:event).equatable().id(event.id)
+            .background {
+                if event.id==logFollow.anchorEventID {
+                    GeometryReader { geometry in
+                        Color.clear.preference(key:AgentConsoleScrollGeometryKey.self,
+                                               value:AgentConsoleScrollGeometry(anchorY:geometry.frame(in:.named("agent-console-log")).minY))
+                    }
+                }
+            }
+    }
+    private func scrollToLatest(_ proxy:ScrollViewProxy) {
+        guard let viewGeneration=scrollScheduler.schedule() else{return}
+        DispatchQueue.main.asyncAfter(deadline:.now()+1.0/60.0) {
+            guard scrollScheduler.consume(viewGeneration),store.consoleOpen else{return}
+            let generation=logFollow.scrollGeneration
+            guard logFollow.isFollowing else{return}
+            logFollow.automaticScrollIssued(generation:generation)
+            proxy.scrollTo("agent-console-bottom",anchor:.bottom)
+            // Geometry preferences can remain numerically unchanged after replacing 500
+            // equally sized rows. Release the guard even without a new preference update.
+            DispatchQueue.main.asyncAfter(deadline:.now()+0.1) {
+                logFollow.automaticScrollCompleted(generation:generation)
+            }
+        }
+    }
+    private func noteUserWheel(_ proxy:ScrollViewProxy) {
+        logFollow.userDidScroll()
+        wheelGeneration+=1
+        let generation=wheelGeneration
+        DispatchQueue.main.asyncAfter(deadline:.now()+0.15) {
+            guard store.consoleOpen,wheelGeneration==generation else{return}
+            if logFollow.finishUserScroll() {scrollToLatest(proxy)}
+        }
+    }
     private var connectionStatus:String {
         if store.agentSocket != nil {
             return store.agentBridgeDefaultSelected ? "MCP 연결 가능 · 기본 선택":"MCP 연결 가능 · 기본 미선택"
@@ -116,19 +395,71 @@ struct AgentConsole:View {
                 }
                 Rectangle().fill(StudioTheme.line).frame(height:1)
                 ScrollViewReader { proxy in
-                    ScrollView {
-                        LazyVStack(alignment:.leading,spacing:5) {
-                            ForEach(store.activity.suffix(100)) {event in
-                                HStack(alignment:.top,spacing:10) {
-                                    Text(event.time.formatted(.dateTime.hour(.twoDigits(amPM:.omitted)).minute(.twoDigits).second(.twoDigits))).foregroundStyle(StudioTheme.secondary).frame(width:67,alignment:.leading).lineLimit(1)
-                                    Text(event.source).foregroundStyle(event.source=="에이전트" ? StudioTheme.accent:StudioTheme.secondary).frame(width:48,alignment:.leading)
-                                    Text(event.message).textSelection(.enabled).frame(maxWidth:.infinity,alignment:.leading)
-                                }.font(.system(size:11,design:.monospaced)).id(event.id)
+                    VStack(spacing:0) {
+                        ScrollView {
+                            VStack(alignment:.leading,spacing:5) {
+                                if !logFollow.lazyPrefixEvents.isEmpty {
+                                    LazyVStack(alignment:.leading,spacing:5) {
+                                        ForEach(logFollow.lazyPrefixEvents) {event in logRow(event)}
+                                    }
+                                }
+                                VStack(alignment:.leading,spacing:5) {
+                                    ForEach(logFollow.eagerTailEvents) {event in logRow(event)}
+                                }
                             }
-                        }.padding(.horizontal,14).padding(.vertical,10)
-                    }.frame(height:store.consoleLogHeight)
-                        .onAppear{DispatchQueue.main.async{if let id=store.activity.last?.id{proxy.scrollTo(id,anchor:.bottom)}}}
-                        .onChange(of:store.activitySequence){ if let id=store.activity.last?.id{proxy.scrollTo(id,anchor:.bottom)}}
+                            .padding(.horizontal,14).padding(.vertical,10)
+                            GeometryReader { geometry in
+                                Color.clear.preference(key:AgentConsoleScrollGeometryKey.self,
+                                                       value:AgentConsoleScrollGeometry(bottomY:geometry.frame(in:.named("agent-console-log")).maxY))
+                            }.frame(height:1).id("agent-console-bottom")
+                        }
+                        .coordinateSpace(name:"agent-console-log")
+                        .frame(height:store.consoleLogHeight)
+                        .focusable().focused($logFocused)
+                        .background(AgentConsoleInputObserver(onWheel:{noteUserWheel(proxy)},
+                                                              onScrollKey:{noteUserWheel(proxy)},
+                                                              logFocused:logFocused && !inputFocused))
+                        if logFollow.unreadCount>0 {
+                            HStack(spacing:0) {
+                                Spacer(minLength:0)
+                                Button {
+                                    logFollow.jumpToLatest()
+                                    scrollToLatest(proxy)
+                                } label: {
+                                    Label("최신 로그 \(logFollow.unreadCount > 999 ? "999+" : String(logFollow.unreadCount))",
+                                          systemImage:"arrow.down.to.line")
+                                        .font(.system(size:11)).lineLimit(1)
+                                }
+                                .buttonStyle(.borderedProminent)
+                                .tint(StudioTheme.accent)
+                                .controlSize(.small)
+                                .accessibilityLabel("최신 로그로 이동")
+                                .accessibilityValue("\(logFollow.unreadCount)개의 새 로그")
+                                .help("새 로그 \(logFollow.unreadCount)개 · Tab으로 버튼 선택 후 Return")
+                            }
+                            .padding(.horizontal,8).padding(.vertical,3)
+                            .background(StudioTheme.raised)
+                        }
+                    }
+                    .onAppear {
+                        scrollScheduler.didAppear()
+                        logFollow.receive(store.activity,sequence:store.activitySequence)
+                        if logFollow.isFollowing {scrollToLatest(proxy)}
+                    }
+                    .onDisappear {
+                        scrollScheduler.didDisappear()
+                        wheelGeneration+=1
+                    }
+                    .onChange(of:store.activitySequence) {_,sequence in
+                        logFollow.receive(store.activity,sequence:sequence)
+                        if logFollow.isFollowing {scrollToLatest(proxy)}
+                    }
+                    .onPreferenceChange(AgentConsoleScrollGeometryKey.self) { geometry in
+                        guard let bottomY=geometry.bottomY else{return}
+                        let wasFollowing=logFollow.isFollowing
+                        logFollow.viewportChanged(anchorY:geometry.anchorY,bottomY:bottomY,viewportHeight:store.consoleLogHeight)
+                        if !wasFollowing && logFollow.isFollowing {scrollToLatest(proxy)}
+                    }
                 }
                 HStack(spacing:8) {
                     Text(">").foregroundStyle(StudioTheme.accent)

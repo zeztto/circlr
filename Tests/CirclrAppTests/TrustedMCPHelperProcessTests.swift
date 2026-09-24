@@ -121,6 +121,30 @@ private func queuedTrustedRequest(path: String, capability: String,
         try? FileManager.default.removeItem(at: root)
     }
 
+    private func selectSavedDocument(_ store: AppStore, root: URL) throws -> URL {
+        let document = root.appendingPathComponent("Agent Song.circlr", isDirectory: true)
+        store.project = try ProjectStore.saveSession(store.project, to: document, mediaRoot: nil)
+        store.projectURL = document
+        store.mediaRoot = document
+        store.dirty = false
+        return document
+    }
+
+    private func listedMethods(_ helper: TrustedMCPHelperSession) async throws -> Set<String> {
+        let reply = try await helper.request(["jsonrpc": "2.0", "id": UUID().uuidString,
+                                              "method": "tools/list"])
+        let tools = try XCTUnwrap((reply["result"] as? [String: Any])?["tools"] as? [[String: Any]])
+        return Set(tools.compactMap { $0["name"] as? String })
+    }
+
+    private func waitForOwnedJob(_ store: AppStore, id: ID) async throws {
+        for _ in 0..<400 where store.agentJob?.id == id && store.agentJob?.state == "running" {
+            try await Task.sleep(for: .milliseconds(50))
+        }
+        XCTAssertEqual(store.agentJob?.id, id)
+        XCTAssertEqual(store.agentJob?.state, "completed", store.agentJob?.message ?? "")
+    }
+
     private func request(_ method: String, store: AppStore, id: String) -> AgentRequest {
         var request = AgentRequest(method: method, id: id)
         request.projectID = store.project.id
@@ -210,6 +234,9 @@ private func queuedTrustedRequest(path: String, capability: String,
         let unknown = try await helper.request(["jsonrpc": "2.0", "id": "unknown",
             "method": "tools/call", "params": ["name": "circlr_save", "arguments": ["request": [:]]]])
         XCTAssertNotNil(unknown["error"])
+        let ungrantedExport = try await helper.request(tool("export", request: request("export",
+            store: store, id: "ungranted-export"), rpcID: "ungranted-export"))
+        XCTAssertNotNil(ungrantedExport["error"])
         let disguised = try await helper.request(["jsonrpc": "2.0", "id": "disguised",
             "method": "tools/call", "params": ["name": "circlr_extra_snapshot",
                 "arguments": ["request": [:]]]])
@@ -295,6 +322,145 @@ private func queuedTrustedRequest(path: String, capability: String,
         XCTAssertEqual(store.playback.playing, wasPlaying)
         await XCTAssertThrowsErrorAsync(try await helper.request(["jsonrpc": "2.0",
             "id": "late", "method": "tools/list"]))
+    }
+
+    func testAppGrantedFileToolsEditSaveReopenAndExportAudibleWAV() async throws {
+        let binary = try helperBinary()
+        let (store, root, arrangement, use, lane, _, _) = try makeStore()
+        defer { cleanUp(store, root: root) }
+        let document = try selectSavedDocument(store, root: root)
+        let output = root.appendingPathComponent("app-selected.wav")
+
+        let saveOnly = try store.startAppOwnedTrustedMCPHelperTurn(executable: binary)
+        let saveMethods = try await listedMethods(saveOnly)
+        XCTAssertEqual(saveMethods, ["circlr_snapshot", "circlr_inspect",
+            "circlr_apply", "circlr_bounce", "circlr_job", "circlr_save"])
+        let ungranted = try await saveOnly.request(tool("export", request: request("export",
+            store: store, id: "export-without-grant"), rpcID: "no-export"))
+        XCTAssertNotNil(ungranted["error"])
+        store.stopTrustedAgentTurn()
+        try await assertChildExited(saveOnly)
+
+        let helper = try store.startAppOwnedTrustedMCPHelperTurn(exportDestination: output,
+                                                                 executable: binary)
+        let ingress = try XCTUnwrap(store.trustedAgentIngress)
+        let fileMethods = try await listedMethods(helper)
+        XCTAssertEqual(fileMethods, ["circlr_snapshot", "circlr_inspect",
+            "circlr_apply", "circlr_bounce", "circlr_job", "circlr_save", "circlr_export"])
+        let forged = request("export", store: store, id: "forged-file-path")
+        var forgedWithPath = forged
+        var forgedArgs = AgentArguments()
+        forgedArgs.path = root.appendingPathComponent("model-chosen.wav").path
+        forgedWithPath.arguments = forgedArgs
+        let pathReply = try await helper.request(tool("export", request: forgedWithPath,
+                                                      rpcID: "forged-path"))
+        XCTAssertNotNil(pathReply["error"])
+        XCTAssertFalse(FileManager.default.fileExists(atPath: forgedArgs.path!))
+        for forbiddenKey in ["path", "socket", "capability", "destination"] {
+            var packet = try tool("export", request: forged, rpcID: "forged-\(forbiddenKey)")
+            var params = try XCTUnwrap(packet["params"] as? [String: Any])
+            var arguments = try XCTUnwrap(params["arguments"] as? [String: Any])
+            var modelRequest = try XCTUnwrap(arguments["request"] as? [String: Any])
+            modelRequest[forbiddenKey] = "model-chosen-value"
+            arguments["request"] = modelRequest
+            params["arguments"] = arguments
+            packet["params"] = params
+            let rejected = try await helper.request(packet)
+            XCTAssertNotNil(rejected["error"], forbiddenKey)
+        }
+        let reply = try result(await helper.request(tool("apply", request: apply(store,
+            arrangement: arrangement, use: use, lane: lane, id: "file-seed"), rpcID: "seed")))
+        XCTAssertNotNil(reply["revision"])
+
+        let save = try result(await helper.request(tool("save", request: request("save",
+            store: store, id: "save-current"), rpcID: "save")))
+        let saveID = try XCTUnwrap(save["jobID"] as? ID)
+        XCTAssertNil(save["path"])
+        XCTAssertFalse(String(describing: save).contains(document.path))
+        try await waitForOwnedJob(store, id: saveID)
+        let reopened = try ProjectStore.load(document)
+        let savedUse = try XCTUnwrap(reopened.project.active.uses.first { $0.id == use })
+        let section = try XCTUnwrap(reopened.project.sections.first { $0.id == savedUse.sectionID })
+        let savedLane = try XCTUnwrap(ArrangementCompiler.effectiveLanes(
+            section: section, use: savedUse).first { $0.id == lane })
+        XCTAssertEqual(savedLane.notes.map(\.pitch), [64])
+
+        let exported = try result(await helper.request(tool("export", request: request("export",
+            store: store, id: "export-selected"), rpcID: "export")))
+        let exportID = try XCTUnwrap(exported["jobID"] as? ID)
+        XCTAssertNil(exported["path"])
+        XCTAssertFalse(String(describing: exported).contains(output.path))
+        try store.completeTrustedAgentTurn(try XCTUnwrap(store.trustedRun.active))
+        try await assertChildExited(helper)
+        try await waitForOwnedJob(store, id: exportID)
+        let audio = try AVAudioFile(forReading: output)
+        XCTAssertGreaterThan(audio.length, 0)
+        let frames = AVAudioFrameCount(min(audio.length, 48_000))
+        let pcm = try XCTUnwrap(AVAudioPCMBuffer(pcmFormat: audio.processingFormat,
+                                                frameCapacity: frames))
+        try audio.read(into: pcm)
+        let samples = try XCTUnwrap(pcm.floatChannelData)
+        XCTAssertTrue((0..<Int(pcm.frameLength)).contains { abs(samples[0][$0]) > 0.0001 })
+        XCTAssertFalse(FileManager.default.fileExists(atPath: ingress.path))
+    }
+
+    func testHelperListsOnlyMethodsFromRestrictedAppLease() async throws {
+        let binary = try helperBinary()
+        let (store, root, arrangement, use, lane, _, _) = try makeStore()
+        defer { cleanUp(store, root: root) }
+        let lease = try store.beginTrustedAgentTurn(sessionID: UUID().uuidString,
+            turnID: UUID().uuidString, methods: ["snapshot"], targets: [])
+        let ingress = try TrustedAgentIngress(store: store, lease: lease,
+            directory: root.appendingPathComponent("Agent", isDirectory: true))
+        store.trustedAgentIngress = ingress
+        let helper = try ingress.startHelper(executable: binary)
+        let methods = try await listedMethods(helper)
+        XCTAssertEqual(methods, ["circlr_snapshot"])
+        let ungranted = try await helper.request(tool("apply", request: apply(store,
+            arrangement: arrangement, use: use, lane: lane, id: "not-granted"), rpcID: "deny"))
+        XCTAssertNotNil(ungranted["error"])
+        XCTAssertEqual(store.undoCount, 0)
+        store.stopTrustedAgentTurn()
+        try await assertChildExited(helper)
+    }
+
+    func testFileToolLatePublicationAfterStopOrDocumentChangeIsRejected() async throws {
+        let binary = try helperBinary()
+        for method in ["save", "export"] {
+            let (store, root, arrangement, use, lane, _, _) = try makeStore()
+            defer { cleanUp(store, root: root) }
+            let document = try selectSavedDocument(store, root: root)
+            let manifest = document.appendingPathComponent("manifest.json")
+            let before = try Data(contentsOf: manifest)
+            let output = root.appendingPathComponent("late.wav")
+            let helper = try store.startAppOwnedTrustedMCPHelperTurn(exportDestination: output,
+                                                                     executable: binary)
+            _ = try result(await helper.request(tool("apply", request: apply(store,
+                arrangement: arrangement, use: use, lane: lane, id: "late-seed"), rpcID: "seed")))
+            let gate = HelperRenderGate()
+            let priorWorker = Task.detached(priority: .utility) { () throws -> PCM in
+                await gate.wait()
+                return PCM(frames: 48)
+            }
+            store.productionWorker = priorWorker
+            store.productionTask = Task { _ = try? await priorWorker.value }
+            let accepted = try result(await helper.request(tool(method, request: request(method,
+                store: store, id: "late-\(method)"), rpcID: "accepted")))
+            let jobID = try XCTUnwrap(accepted["jobID"] as? ID)
+            let jobTask = store.productionTask
+            if method == "save" {
+                store.projectURL = root.appendingPathComponent("another.circlr")
+            } else {
+                store.stopTrustedAgentTurn()
+            }
+            try await assertChildExited(helper)
+            await gate.release()
+            if let jobTask { await jobTask.value }
+            XCTAssertEqual(store.agentJob?.id, jobID)
+            XCTAssertEqual(store.agentJob?.state, "cancelled")
+            XCTAssertEqual(try Data(contentsOf: manifest), before)
+            XCTAssertFalse(FileManager.default.fileExists(atPath: output.path))
+        }
     }
 
     func testDocumentSwapAndCompletedTurnCloseChild() async throws {

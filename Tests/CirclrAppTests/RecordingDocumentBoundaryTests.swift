@@ -72,6 +72,10 @@ import CirclrCore
         try await Task.sleep(for:.milliseconds(30))
         XCTAssertGreaterThan(store.midiRecordingElapsedSeconds,first)
         store.stopRecording()
+        let deadline=ProcessInfo.processInfo.systemUptime+2
+        while store.midiRecording && ProcessInfo.processInfo.systemUptime<deadline {
+            try await Task.sleep(for:.milliseconds(10))
+        }
         XCTAssertEqual(store.midiRecordingElapsedSeconds,0)
         XCTAssertEqual(store.meter.seconds,store.playback.seconds)
         XCTAssertFalse(store.meter.playing)

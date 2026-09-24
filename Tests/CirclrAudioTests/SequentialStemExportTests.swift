@@ -3,6 +3,12 @@ import XCTest
 @testable import CirclrAudio
 import CirclrCore
 
+private actor StemStopCompletion {
+    private var finished=false
+    func mark() {finished=true}
+    func value() -> Bool {finished}
+}
+
 final class SequentialStemExportTests:XCTestCase {
     private func fixture() throws -> (Project,ID,ID) {
         var project=Project()
@@ -38,6 +44,10 @@ final class SequentialStemExportTests:XCTestCase {
         try Data("old".utf8).write(to:url.appendingPathComponent("내보내기 정보.txt"))
         try PCM(frames:480).writeWAV(url.appendingPathComponent("전체 mix.wav"))
         try PCM(frames:480).writeWAV(url.appendingPathComponent("기존-ABCDEF.wav"))
+    }
+    private func snapshot(_ url:URL) throws -> [String:Data] {
+        try Dictionary(uniqueKeysWithValues:FileManager.default.contentsOfDirectory(atPath:url.path)
+            .sorted().map { name in (name,try Data(contentsOf:url.appendingPathComponent(name))) })
     }
     func testSequentialStemsMatchOriginalSidechainAndManifest() async throws {
         let root=try directory();defer{try? FileManager.default.removeItem(at:root)}
@@ -120,6 +130,58 @@ final class SequentialStemExportTests:XCTestCase {
             XCTFail("Expected cancellation")
         } catch is CancellationError {}
         XCTAssertEqual(try Data(contentsOf:output.appendingPathComponent("기존-ABCDEF.wav")),prior)
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath:root.path).sorted(),["stems"])
+    }
+    func testStopAtPrePublishBoundaryPreservesEveryPreviousStemByte() async throws {
+        let root=try directory();defer{try? FileManager.default.removeItem(at:root)}
+        let (project,lead,duck)=try fixture(),plan=try ArrangementCompiler.compile(project)
+        let output=root.appendingPathComponent("stems")
+        try seedOldExport(output,plan:plan)
+        let original=try snapshot(output),gate=WAVExportCommitGate()
+        let release=DispatchSemaphore(value:0)
+        let staged=expectation(description:"all stems staged before publication")
+        let worker=Task.detached { () throws -> Void in
+            try await AudioExport.saveStems(project:project,root:nil,plan:plan,to:output,
+                stemNames:[lead:"리드",duck:"검출"],commitGate:gate,
+                beforePublish:{staged.fulfill();release.wait()},afterCommitStarted:{})
+        }
+        await fulfillment(of:[staged],timeout:10)
+        XCTAssertEqual(try snapshot(output),original)
+        gate.cancel()
+        release.signal()
+        do {try await worker.value;XCTFail("STOP published stems")}
+        catch is CancellationError {}
+        XCTAssertEqual(try snapshot(output),original)
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath:root.path).sorted(),["stems"])
+    }
+    func testStopWaitsWhenStemPublicationAlreadyEnteredGate() async throws {
+        let root=try directory();defer{try? FileManager.default.removeItem(at:root)}
+        let (project,lead,duck)=try fixture(),plan=try ArrangementCompiler.compile(project)
+        let output=root.appendingPathComponent("stems")
+        try seedOldExport(output,plan:plan)
+        let original=try snapshot(output),gate=WAVExportCommitGate()
+        let release=DispatchSemaphore(value:0)
+        let publishing=expectation(description:"stem publication entered gate")
+        let worker=Task.detached { () throws -> Void in
+            try await AudioExport.saveStems(project:project,root:nil,plan:plan,to:output,
+                stemNames:[lead:"리드",duck:"검출"],commitGate:gate,
+                beforePublish:{},afterCommitStarted:{publishing.fulfill();release.wait()})
+        }
+        await fulfillment(of:[publishing],timeout:10)
+        XCTAssertEqual(try snapshot(output),original)
+        let completion=StemStopCompletion()
+        let stopping=expectation(description:"STOP attempted")
+        let stopper=Task.detached {stopping.fulfill();gate.cancel();await completion.mark()}
+        await fulfillment(of:[stopping],timeout:2)
+        try await Task.sleep(for:.milliseconds(30))
+        let returnedBeforePublish=await completion.value()
+        XCTAssertFalse(returnedBeforePublish)
+        release.signal()
+        try await worker.value
+        await stopper.value
+        let returnedAfterPublish=await completion.value()
+        XCTAssertTrue(returnedAfterPublish)
+        XCTAssertNotEqual(try snapshot(output),original)
         XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath:root.path).sorted(),["stems"])
     }
     func testExistingExportIsAtomicallyReplaced() async throws {

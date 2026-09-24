@@ -6,7 +6,9 @@ import Darwin
 private enum Bridge {
     static let maxBootstrap = 4096
     static let maxFrame = 1_048_576
-    static let methods: Set<String> = ["snapshot", "inspect", "apply", "bounce", "job"]
+    static let supportedMethods: Set<String> = [
+        "snapshot", "inspect", "apply", "bounce", "job", "save", "export"
+    ]
     static var input = Data()
 
     static func line(limit: Int) throws -> Data? {
@@ -45,13 +47,17 @@ private enum Bridge {
     struct Bootstrap {
         let socket: String
         let capability: String
+        let methods: Set<String>
         init(_ data: Data) throws {
             guard let object = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-                  Set(object.keys) == ["version", "socket", "capability", "parentPID"],
+                  Set(object.keys) == ["version", "socket", "capability", "parentPID", "methods"],
                   object["version"] as? Int == 1,
                   object["parentPID"] as? Int32 == getppid(),
                   let socket = object["socket"] as? String,
                   let capability = object["capability"] as? String,
+                  let methods = object["methods"] as? [String],
+                  !methods.isEmpty, Set(methods).count == methods.count,
+                  Set(methods).isSubset(of: supportedMethods),
                   capability.count == 64,
                   capability.utf8.allSatisfy({ (48...57).contains($0) || (97...102).contains($0) }),
                   socket.utf8.count < 104,
@@ -65,6 +71,7 @@ private enum Bridge {
                   info.st_uid == getuid() else { throw Failure.bootstrap }
             self.socket = socket
             self.capability = capability
+            self.methods = Set(methods)
         }
     }
 
@@ -163,12 +170,12 @@ private enum Bridge {
                 "capabilities": ["tools": [:]],
                 "serverInfo": ["name": "circlr-trusted-internal", "version": "1"]])
         case "tools/list":
-            return success(id: id, result: ["tools": methods.sorted().map(tool)])
+            return success(id: id, result: ["tools": bootstrap.methods.sorted().map(tool)])
         case "tools/call":
             guard let params = call["params"] as? [String: Any],
                   Set(params.keys) == ["name", "arguments"],
                   let name = params["name"] as? String,
-                  let requestedMethod = methods.first(where: { name == "circlr_\($0)" }),
+                  let requestedMethod = bootstrap.methods.first(where: { name == "circlr_\($0)" }),
                   let args = params["arguments"] as? [String: Any],
                   Set(args.keys) == ["request"],
                   let request = args["request"] as? [String: Any],

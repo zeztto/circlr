@@ -35,6 +35,10 @@ import CirclrCore
         store.midi(status:0x80,pitch:60,velocity:0,time:now+0.05)
         try await Task.sleep(for:.milliseconds(100))
         store.stopRecording()
+        let deadline=ProcessInfo.processInfo.systemUptime+2
+        while store.midiRecording && ProcessInfo.processInfo.systemUptime<deadline {
+            try await Task.sleep(for:.milliseconds(10))
+        }
         XCTAssertFalse(store.midiRecording)
         XCTAssertEqual(store.takeRecordingStatusTitle,"테이크 녹음")
         XCTAssertEqual(store.project.takes?.last?.lane.trackID,originalTrackID)

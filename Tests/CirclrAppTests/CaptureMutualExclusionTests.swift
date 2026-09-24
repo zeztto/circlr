@@ -106,12 +106,16 @@ import CirclrCore
         XCTAssertTrue(store.status.contains("현재 작업"))
     }
 
-    func testAnActiveCaptureCanStillStopOrCancelItself() {
+    func testAnActiveCaptureCanStillStopOrCancelItself() async throws {
         let (store,root)=makeStore()
         defer {store.stop();try? FileManager.default.removeItem(at:root)}
         store.startMIDIRecording()
         XCTAssertTrue(store.midiRecording)
         store.startMIDIRecording()
+        let deadline=ProcessInfo.processInfo.systemUptime+2
+        while store.midiRecording && ProcessInfo.processInfo.systemUptime<deadline {
+            try await Task.sleep(for:.milliseconds(10))
+        }
         XCTAssertFalse(store.midiRecording)
 
         store.audioRecordPending=true

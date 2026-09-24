@@ -2,7 +2,7 @@ import Foundation
 import Darwin
 import CirclrCore
 
-/// STOP and the final WAV rename share this gate. If STOP wins, publication
+/// STOP and the final WAV or stem rename share this gate. If STOP wins, publication
 /// cannot begin; if publication wins, STOP waits for that rename to finish.
 public final class WAVExportCommitGate: @unchecked Sendable {
     private let lock=NSLock()
@@ -21,7 +21,16 @@ public enum AudioExport {
     /// Render each stem directly into a hidden sibling directory, then publish the complete set.
     public static func saveStems(project:Project,root:URL?,plan:ExecutionPlan,to url:URL,
                                  stemNames:[ID:String],
+                                 commitGate:WAVExportCommitGate? = nil,
                                  progress:@escaping (String,Double)->Void = {_,_ in}) async throws {
+        try await saveStems(project:project,root:root,plan:plan,to:url,stemNames:stemNames,
+                            commitGate:commitGate,beforePublish:{},afterCommitStarted:{},progress:progress)
+    }
+    /// Internal hooks make the STOP/publication ordering deterministic in tests.
+    static func saveStems(project:Project,root:URL?,plan:ExecutionPlan,to url:URL,
+                          stemNames:[ID:String],commitGate:WAVExportCommitGate?,
+                          beforePublish:()->Void,afterCommitStarted:()->Void,
+                          progress:@escaping (String,Double)->Void = {_,_ in}) async throws {
         let fm = FileManager.default
         let parent = url.deletingLastPathComponent()
         try fm.createDirectory(at:parent,withIntermediateDirectories:true)
@@ -45,8 +54,12 @@ public enum AudioExport {
         let stagedWAVs = try fm.contentsOfDirectory(atPath:stage.path).filter{$0.hasSuffix(".wav")}
         guard stagedWAVs.count == project.tracks.count + 1 else { throw CirclrError("Stem 파일 수가 트랙 수와 일치하지 않습니다") }
         try Task.checkCancellation()
-        try validateStemTarget(url)
-        try publishDirectory(stage,to:url)
+        beforePublish()
+        try (commitGate ?? WAVExportCommitGate()).publish {
+            try validateStemTarget(url)
+            afterCommitStarted()
+            try publishDirectory(stage,to:url)
+        }
     }
     public static func save(_ audio:PreparedAudio,to url:URL,stemNames:[ID:String]? = nil) throws {
         guard let names=stemNames else {try saveWAV(audio,to:url);return}

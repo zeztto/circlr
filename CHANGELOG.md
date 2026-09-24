@@ -1,5 +1,21 @@
 # 변경 이력
 
+## 0.80.0 · build237 — 내부계수 native QA 통과 · 출고 gate 미통과
+
+- build236 격리 실제 앱에서 700×900pt 창·40pt 콘솔·500행 보관 상태로 재생 중 read-only 로그 100건/15.28초가 유입되자 앱 내부 `playback.frameCount` 증가율이 무입력 약 **51.7 count/s**에서 **10.9 count/s**로 떨어졌다. 같은 입력률의 콘솔 펼침/접힘 A/B도 **10.66/52.76 count/s**였다. 이는 실제 화면 FPS가 아니라 앱 내부 계수이며, build236 native 성능 gate는 **FAIL**이다. [build236 native QA](qa/0.80-build236-native.md).
+- build237은 콘솔의 로그 배치·스크롤 갱신 비용을 줄이는 수정 후보이다. 첫 전체 Swift 실행은 원인 미확정의 간헐 `SIGPIPE`로 중단됐다. 단독 20회와 7개 test class 묶음 5회가 통과했고, 동일 소스 전체 재실행은 **1,298개·15 skip·실패 0**이었다. Python MCP 서버 **47개**·프로젝트 **39개**·agent kit **9개**도 통과했다. 첫 중단을 성공으로 덮어쓰거나 원인을 확정하지 않는다.
+- 0.80.0/build237 arm64 앱과 **7개 arm64 helper**의 strict deep 서명, Demos **27/27**, Codex kit **26/26**, `LICENSE`·`THIRD_PARTY_NOTICES` **2/2**의 소스 byte 일치를 확인했다. 주 실행 파일 SHA-256은 `c5f85c5fb5a7fe5f4f405cc00a1d0af5c8a34d0a97b03b842a273df210a5542d`다. 전체 Swift 재실행 로그 `/tmp/circlr-build237-swift-retry.log` SHA-256 `6d5166b820b5dcacbe9b4e1367145bb4008964d47fd73ea571aa14d33ad6cea8`, 패키지 로그 `/tmp/circlr-build237-package.log` SHA-256 `1773b8ac778fa651cf614ad51756abaf5978ec7dcd364137a3fc199bdc29fac5`.
+- build237 격리 실제 앱의 **700×900pt·40pt 콘솔·500행**, 앱 전용 Mac Studio 스피커에서 무입력 기준은 내부 `playback.frameCount` **57.49 count/s**였다. read-only 로그 각 100건/약 15.39초(약 6.5건/s)의 펼침/접힘 A/B 1회는 **43.67/53.22 count/s·82.05%**, 경계 근접으로 반복한 2회는 **42.96/53.16 count/s·80.80%**였다. 앱 내부 기준인 펼침 **≥40 count/s·접힘 대비 ≥80%·시계/실시간 차이 ≤1초**를 두 번 충족했지만 마지막 비율 여유는 **0.80%p**여서 출고 위험으로 남긴다. 두 측정 동안 시계는 약 15.4–15.5초 진행했고 프로젝트 ID/revision/path/dirty는 불변이었다. 실제 compositor FPS·물리 청취의 증거는 아니다. `⌘Q → 변경 버리기` 뒤 QA 앱/helper/socket 0, 원본·QA 서명과 원본 실행 파일·57개 Resource·7 helper·데모 SHA 및 시스템 기본 Scarlett 입출력 불변을 확인했다. 한영 README용 build237 가로·세로 전체 창의 픽셀동일 출처도 기록했다. [build237 native QA](qa/0.80-build237-native.md). 구형 Scarlett의 세대·실제 입출력, 실제 마이크·물리 청취·긴 영상·Codex 계정 G0는 열려 있다. 최신 정식판은 `v0.70.0`이며 `v0.80.0` tag/GitHub Release는 만들지 않는다.
+
+## 0.80.0 · build236 — 개발 중 · 출고 gate 미통과
+
+- 앱 소유 오프라인 `circlr-trusted-mcp-helper`가 turn별 lease에 포함된 `save`/`export`만 노출하도록 확장했다. 저장은 현재 선택된 프로젝트에, WAV는 앱이 고른 목적지에 한정되며 모델이 지정한 경로·socket·capability는 받아들이지 않는다. 실제 자식 프로세스의 허용·거절·STOP/문서 교체 경계를 집중 검증했고 독립 보안 재검토에서 새 P0–P3 지적은 없었다. 사용자 Codex 계정 로그인·대화는 여전히 G0 NO-GO다.
+- CoreMIDI packet의 host timestamp를 수신 시 연주 시점으로 변환해 파서·메인 큐 지연이 녹음 beat를 밀지 않게 했다. 마지막 반복 경계 직전 이벤트를 종료 전에 회수하고 경계 뒤 입력은 버린다. 독립 DAW 리뷰의 초기 입력 source별 running status 혼합·분할 메시지 시점 P2/P3를 수정하고 재검토했다. 가상 MIDI 지연·0/future timestamp, take·Undo·재열기 집중 테스트를 통과했으며 물리 MIDI 장치 입력·hotplug는 아직 검증하지 않았다.
+- 사용자가 콘솔의 과거 로그를 읽는 동안 새 이벤트가 와도 표시 목록을 고정하고, 미확인 수와 `최신 로그` 조작으로 현재 작업으로 돌아가게 했다. 500행 절단·빠른 휠 입력·키보드와 접근성 동작은 상태 테스트를 통과했고, 실제 앱에서도 읽기 위치 유지·최신 복귀와 700pt/40pt 버튼의 픽셀·AX를 확인했다. 그러나 재생 중 고밀도 로그에서는 아래 native 성능 회귀가 드러났다. VoiceOver 음성·키보드 로그 포커스 동선은 미확인이다.
+- Stem 폴더의 최종 게시를 STOP과 같은 commit gate에 묶었다. STOP이 먼저면 기존 stem 폴더를 보존하고, 게시가 먼저면 교체 완료까지 STOP이 기다리는 파일 회귀를 통과했다. 최종 앱의 대형 GUI stems/STOP 경합과 독립 청취는 아직 열린다.
+- 최종 동일 소스 Swift **1,296개·15 skip·실패 0**, Python MCP 서버 **47개**·프로젝트 **39개**·agent kit **9개**가 통과했다. 0.80.0/build236 arm64 앱과 **7개 arm64 helper**의 strict deep 서명, Demos 27/27·manifest 26/26, kit 26/26·manifest 25/25, 권리 고지 2/2의 소스 byte 일치를 확인했다. [build236 QA](qa/0.80-build236.md).
+- 이 단계는 **개발 checkpoint이며 native 성능 gate는 FAIL**이다. 700×900pt·40pt·500행에서 재생 중 로그 100건/15.28초 유입 시 앱 내부 `playback.frameCount` 증가는 약 **10.9 count/s**, 무입력 구간은 약 **51.7 count/s**였다. 재생 시계와 앱 전용 Mac 내장 출력 상태는 진행했고 한영 README 전체 창 화면은 촬영했으나, 스크린샷은 이 실패의 해결 증거가 아니다. 구형 Scarlett 6i6의 정확한 세대와 물리 입출력도 미확인이고 시스템 기본 장치는 변경하지 않았다. 실제 입력·물리 청취·긴 MP4·Codex 계정 G0가 열려 있다. 최신 정식판은 `v0.70.0`; `v0.80.0` tag/GitHub Release는 만들지 않는다. [build236 QA](qa/0.80-build236.md).
+
 ## 0.80.0 · build235 — 개발 중 · 출고 gate 미통과
 
 - 축소한 곡 궤도에서 섹션을 선택하면 재생 순서를 앞·뒤로 한 칸 이동하는 조작을 가로·세로 도구 모음과 세로 `서클 도구` 메뉴에 표시한다. 자유 배치의 공간 이동 키를 음악 순서 단축키로 잘못 안내하지 않으며, 분기·경계·녹음/영상 잠금과 Undo를 유지한다.

@@ -1,5 +1,6 @@
 import Foundation
 import AVFAudio
+import CoreAudio
 import CoreMIDI
 import CirclrRealtime
 import CirclrCore
@@ -225,6 +226,65 @@ public final class TakeWriter {
     }
 }
 
+/// CoreMIDI packet timestamps are mach host ticks. Resolve them at receipt,
+/// before either parser or UI queue latency can change the musical position.
+enum MIDIHostClock {
+    static func occurrenceUptime(timeStamp: MIDITimeStamp, receivedHostTime: UInt64,
+                                 receivedUptime: Double) -> Double? {
+        guard receivedUptime.isFinite, receivedUptime >= 0 else { return nil }
+        // A zero timestamp means "now" at the receiving callback, including
+        // virtual sources that do not replace zero with a current host tick.
+        guard timeStamp != 0 else { return receivedUptime }
+        if timeStamp > receivedHostTime {
+            let futureTicks = timeStamp - receivedHostTime
+            // Absorb only sub-5ms clock skew; a scheduled future event has not
+            // happened yet and must not be placed into an earlier recording.
+            return futureTicks <= AudioConvertNanosToHostTime(5_000_000) ? receivedUptime : nil
+        }
+        let ageTicks = receivedHostTime - timeStamp
+        guard ageTicks <= AudioConvertNanosToHostTime(30_000_000_000) else { return nil }
+        return max(0, receivedUptime - Double(AudioConvertHostTimeToNanos(ageTicks)) / 1_000_000_000)
+    }
+}
+
+/// MIDI 1.0 running status belongs to one source's byte stream. A message may
+/// cross packet boundaries; its musical time is that of its first byte.
+struct MIDIMessageParser {
+    private struct SourceState {
+        var runningStatus:UInt8 = 0
+        var pending:[UInt8] = []
+        var firstByteTime:Double?
+    }
+    private var states:[UInt:SourceState] = [:]
+
+    mutating func reset(sourceKey:UInt) {states.removeValue(forKey:sourceKey)}
+
+    mutating func parse(_ bytes:[UInt8],time:Double,sourceKey:UInt,
+                        emit:(UInt8,UInt8,UInt8,Double)->Void) {
+        var state=states[sourceKey] ?? SourceState()
+        for byte in bytes {
+            if byte >= 0xF8 { continue }
+            if byte >= 0x80 {
+                state.runningStatus = byte < 0xF0 ? byte : 0
+                state.pending.removeAll(keepingCapacity:true)
+                state.firstByteTime = byte < 0xF0 ? time : nil
+                continue
+            }
+            guard state.runningStatus != 0 else { continue }
+            if state.firstByteTime == nil {state.firstByteTime=time}
+            state.pending.append(byte)
+            let needed = [0xC0,0xD0].contains(state.runningStatus & 0xF0) ? 1 : 2
+            if state.pending.count == needed {
+                emit(state.runningStatus,state.pending[0],needed == 2 ? state.pending[1] : 0,
+                     state.firstByteTime ?? time)
+                state.pending.removeAll(keepingCapacity:true)
+                state.firstByteTime=nil
+            }
+        }
+        states[sourceKey]=state
+    }
+}
+
 public final class MIDIInput {
     // CoreMIDI can shut down MIDIServer after the last client is disposed. On
     // this macOS, recreating a client later in the same process returns -2.
@@ -242,42 +302,69 @@ public final class MIDIInput {
         return client
     }
     private var port = MIDIPortRef(), destination = MIDIEndpointRef()
-    public var onMessage: ((UInt8, UInt8, UInt8, UInt64) -> Void)?
+    // CoreMIDI echoes each connection's opaque context to the read block.
+    // Distinct stable addresses keep running status local to one input source.
+    private var sourceContexts: [UnsafeMutableRawPointer] = []
+    public var onMessage: ((UInt8, UInt8, UInt8, Double) -> Void)?
     public private(set) var endpointName = "써클러 MIDI 입력"
     public init(endpointName:String = "써클러 MIDI 입력") throws {
         self.endpointName = endpointName
         let client = try Self.acquireClient()
         var status: OSStatus
-        status = MIDIInputPortCreateWithBlock(client,"입력" as CFString,&port) { [weak self] list,_ in self?.receive(list) }
+        status = MIDIInputPortCreateWithBlock(client,"입력" as CFString,&port) { [weak self] list,sourceContext in
+            self?.receive(list,sourceKey:sourceContext.map { UInt(bitPattern:$0) } ?? 0)
+        }
         guard status == noErr else { throw CirclrError("MIDI 입력 생성 실패: \(status)") }
-        for i in 0..<MIDIGetNumberOfSources() { MIDIPortConnectSource(port,MIDIGetSource(i),nil) }
-        status = MIDIDestinationCreateWithBlock(client,endpointName as CFString,&destination) { [weak self] list,_ in self?.receive(list) }
-        guard status == noErr else { throw CirclrError("가상 MIDI 입력 생성 실패: \(status)") }
+        for i in 0..<MIDIGetNumberOfSources() {
+            let context=UnsafeMutableRawPointer.allocate(byteCount:1,alignment:1)
+            if MIDIPortConnectSource(port,MIDIGetSource(i),context) == noErr {sourceContexts.append(context)}
+            else {context.deallocate()}
+        }
+        status = MIDIDestinationCreateWithBlock(client,endpointName as CFString,&destination) { [weak self] list,_ in
+            self?.receive(list,sourceKey:0)
+        }
+        guard status == noErr else {
+            MIDIPortDispose(port);port=0
+            for context in sourceContexts {context.deallocate()}
+            sourceContexts=[]
+            throw CirclrError("가상 MIDI 입력 생성 실패: \(status)")
+        }
     }
-    deinit { if destination != 0 { MIDIEndpointDispose(destination) }; if port != 0 { MIDIPortDispose(port) } }
-    private var runningStatus:UInt8 = 0
-    private var pending:[UInt8] = []
+    deinit {
+        if destination != 0 { MIDIEndpointDispose(destination) }
+        if port != 0 { MIDIPortDispose(port) }
+        for context in sourceContexts {context.deallocate()}
+    }
+    private var parser=MIDIMessageParser()
     private let parserQueue = DispatchQueue(label:"circlr.midi-parser")
-    private func receive(_ list:UnsafePointer<MIDIPacketList>) {
+    /// Enqueue a MainActor barrier after every packet already accepted by the
+    /// parser. The short grace captures callbacks arriving at a stop boundary.
+    /// AppStore also has a finite fallback if a hostile parser never drains.
+    public func drain(after grace: DispatchTimeInterval = .milliseconds(30), completion: @escaping () -> Void) {
+        parserQueue.asyncAfter(deadline: .now() + grace) {
+            DispatchQueue.main.async(execute: completion)
+        }
+    }
+    private func receive(_ list:UnsafePointer<MIDIPacketList>,sourceKey:UInt) {
+        let receivedHostTime = AudioGetCurrentHostTime()
+        let receivedUptime = ProcessInfo.processInfo.systemUptime
         let raw = UnsafeRawPointer(list).advanced(by:MemoryLayout<MIDIPacketList>.offset(of:\.packet)!)
         var packet = raw.assumingMemoryBound(to:MIDIPacket.self)
         for _ in 0..<list.pointee.numPackets {
-            let time = packet.pointee.timeStamp
+            let time = MIDIHostClock.occurrenceUptime(timeStamp: packet.pointee.timeStamp,
+                                                       receivedHostTime: receivedHostTime,
+                                                       receivedUptime: receivedUptime)
             let data = UnsafeRawPointer(packet).advanced(by:MemoryLayout<MIDIPacket>.offset(of:\.data)!).assumingMemoryBound(to:UInt8.self)
             let bytes = Array(UnsafeBufferPointer(start:data,count:Int(packet.pointee.length)))
-            parserQueue.async { [weak self] in self?.parse(bytes,time:time) }
+            if let time { parserQueue.async { [weak self] in self?.parse(bytes,time:time,sourceKey:sourceKey) } }
+            else {parserQueue.async { [weak self] in self?.parser.reset(sourceKey:sourceKey) }}
             packet = UnsafePointer(MIDIPacketNext(packet))
         }
     }
 
-    private func parse(_ bytes:[UInt8],time:UInt64) {
-        for byte in bytes {
-            if byte >= 0xF8 { continue }
-            if byte >= 0x80 { runningStatus = byte < 0xF0 ? byte : 0; pending = []; continue }
-            guard runningStatus != 0 else { continue }
-            pending.append(byte)
-            let needed = [0xC0,0xD0].contains(runningStatus & 0xF0) ? 1 : 2
-            if pending.count == needed { onMessage?(runningStatus,pending[0],needed == 2 ? pending[1] : 0,time); pending = [] }
+    private func parse(_ bytes:[UInt8],time:Double,sourceKey:UInt) {
+        parser.parse(bytes,time:time,sourceKey:sourceKey) { [weak self] status,pitch,velocity,occurrence in
+            self?.onMessage?(status,pitch,velocity,occurrence)
         }
     }
 }

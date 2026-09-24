@@ -134,7 +134,8 @@ private actor TrustedMCPHelperIO {
             let bootstrap: [String: Any] = [
                 "version": 1, "socket": ingress.path,
                 "capability": ingress.clientCapability,
-                "parentPID": Int(getpid())
+                "parentPID": Int(getpid()),
+                "methods": ingress.helperMethods.sorted()
             ]
             let packet = try JSONSerialization.data(withJSONObject: bootstrap, options: [.sortedKeys])
             guard packet.count <= 4096 else {

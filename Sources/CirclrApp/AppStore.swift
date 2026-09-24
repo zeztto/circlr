@@ -302,6 +302,9 @@ private struct MIDIRecordingKey: Hashable {
     private var recordingAuthorization=RecordingAuthorization()
     private var recordStart: Double = 0
     private var recordClock: MusicClock?
+    private var midiStopCutoff: Double?
+    private var midiStopSerial = 0
+    private var lastMIDIStopCutoff = 0.0
     private var recordUseID: ID?
     private var recordLaneID: ID?
     private var recordArrangementID: ID?
@@ -355,9 +358,14 @@ private struct MIDIRecordingKey: Hashable {
         if let timer {RunLoop.main.add(timer,forMode:.common)}
         do {
             let input = try MIDIInput()
-            input.onMessage = { [weak self] status,pitch,velocity,_ in
-                let now = ProcessInfo.processInfo.systemUptime
-                Task { @MainActor in self?.midi(status:status,pitch:Int(pitch),velocity:Int(velocity),time:now) }
+            input.onMessage = { [weak self] status,pitch,velocity,occurrence in
+                // MIDIInput emits on one parser queue. FIFO dispatch to main
+                // keeps its note events ahead of the stop/drain barrier.
+                DispatchQueue.main.async {
+                    MainActor.assumeIsolated {
+                        self?.midi(status:status,pitch:Int(pitch),velocity:Int(velocity),time:occurrence)
+                    }
+                }
             }
             midiInput = input
         } catch { status = error.localizedDescription }
@@ -409,7 +417,7 @@ private struct MIDIRecordingKey: Hashable {
     }
     var isPlaying: Bool { playback.playing }
     var midiRecordingElapsedSeconds:Double {
-        midiRecording ? max(0,ProcessInfo.processInfo.systemUptime-recordStart):0
+        midiRecording ? max(0,(midiStopCutoff ?? ProcessInfo.processInfo.systemUptime)-recordStart):0
     }
     var hasPendingMusic: Bool { playback.playing && prepared?.plan.revision != project.musicRevision }
     deinit {auditionOutput.shutdown()}
@@ -778,6 +786,8 @@ private struct MIDIRecordingKey: Hashable {
                 guard plan.duration > 0 else { throw CirclrError("섹션을 먼저 만드세요") }
                 renderGeneration += 1; let generation=renderGeneration
                 wavExportGate?.cancel();wavExportGate=nil
+                let gate=WAVExportCommitGate()
+                wavExportGate=gate
                 let drain=RenderDrain(task:renderTask,worker:renderWorker)
                 drain.cancel();renderWorker=nil
                 cancelPlaybackLoopTransition()
@@ -798,7 +808,8 @@ private struct MIDIRecordingKey: Hashable {
                         guard self.renderGeneration == generation,!Task.isCancelled else{return}
                         self.meter.update(seconds:0,playing:false)
                         let worker=Task.detached(priority:.userInitiated) {
-                            try await AudioExport.saveStems(project:snapshot,root:root,plan:plan,to:url,stemNames:names) { message,value in
+                            try await AudioExport.saveStems(project:snapshot,root:root,plan:plan,to:url,
+                                                            stemNames:names,commitGate:gate) { message,value in
                                 DispatchQueue.main.async { [weak self] in
                                     guard let self,self.renderGeneration == generation else{return}
                                     self.status=message;self.progress=value
@@ -807,9 +818,11 @@ private struct MIDIRecordingKey: Hashable {
                         }
                         try await withTaskCancellationHandler { try await worker.value } onCancel: { worker.cancel() }
                         guard self.renderGeneration == generation,!Task.isCancelled else{return}
+                        if self.wavExportGate === gate {self.wavExportGate=nil}
                         self.preparing=false;self.status="내보내기 완료 · \(url.lastPathComponent)"
                     } catch {
                         guard self.renderGeneration == generation else{return}
+                        if self.wavExportGate === gate {self.wavExportGate=nil}
                         self.preparing=false;self.fail(error)
                     }
                 }
@@ -1111,9 +1124,13 @@ private struct MIDIRecordingKey: Hashable {
     }
     func midi(status:UInt8,pitch:Int,velocity:Int,time:Double) {
         let type = status & 0xF0
-        guard (type == 0x90 || type == 0x80), (0...127).contains(pitch), (0...127).contains(velocity) else { return }
+        guard time.isFinite,time >= 0,(type == 0x90 || type == 0x80), (0...127).contains(pitch), (0...127).contains(velocity) else { return }
         let on = type == 0x90 && velocity > 0
-        guard midiRecording,let clock = recordClock else { audition(pitch:pitch,velocity:velocity,on:on); return }
+        guard midiRecording,let clock = recordClock else {
+            if time > lastMIDIStopCutoff { audition(pitch:pitch,velocity:velocity,on:on) }
+            return
+        }
+        guard time >= recordStart, midiStopCutoff.map({time <= $0}) ?? true else { return }
         let elapsed = max(0,time-recordStart)
         let key = MIDIRecordingKey(channel:status & 0x0F,pitch:pitch)
         if on {
@@ -1124,7 +1141,7 @@ private struct MIDIRecordingKey: Hashable {
             if let (start,v) = previous { appendRecorded(pitch:pitch,velocity:v,start:start,end:elapsed,clock:clock) }
             // The audition synth is pitch-based: every new attack rearticulates its voice,
             // but only the last channel's release may silence this pitch.
-            previewRecordedMIDI(pitch:pitch,velocity:velocity,on:true)
+            if midiStopCutoff == nil { previewRecordedMIDI(pitch:pitch,velocity:velocity,on:true) }
         } else if let (start,v) = heldNotes.removeValue(forKey:key) {
             appendRecorded(pitch:pitch,velocity:v,start:start,end:elapsed,clock:clock)
             if !heldNotes.keys.contains(where:{ $0.pitch == pitch }) { previewRecordedMIDI(pitch:pitch,velocity:velocity,on:false) }
@@ -1156,7 +1173,7 @@ private struct MIDIRecordingKey: Hashable {
         guard !moviePreparing,movieWriter == nil,movieFinalizing == nil else{status="영상 녹화를 마친 뒤 테이크를 녹음하세요";return}
         guard let use = selectedUse,let clock = recordingClock,let track = selectedTrackID else { status = "녹음할 서클과 트랙을 선택하세요"; return }
         stop(); recordClock = clock; recordUseID = use.id; recordLaneID = selectedLaneID; recordArrangementID = project.activeArrangementID; recordingTrackID = track; originalRecordProject = project
-        recordRepeats = selectedMusic?.repeatCount ?? use.repeatCount; recordedNotes = []; heldNotes = [:]; recordStart = ProcessInfo.processInfo.systemUptime; midiRecording = true; status = "MIDI 녹음 중 · MIDI 장치 또는 화면 건반을 연주하세요"
+        recordRepeats = selectedMusic?.repeatCount ?? use.repeatCount; recordedNotes = []; heldNotes = [:]; midiStopSerial += 1; midiStopCutoff = nil; recordStart = ProcessInfo.processInfo.systemUptime; midiRecording = true; status = "MIDI 녹음 중 · MIDI 장치 또는 화면 건반을 연주하세요"
     }
     private func recordingStateChanged() {
         audioCapturePhase=recorder.phase;audioCaptureMessage=recorder.message;audioRecording=recorder.recording;audioInputFormat=recorder.format
@@ -1219,24 +1236,41 @@ private struct MIDIRecordingKey: Hashable {
     func stopRecording() {
         cancelRecordingRequest()
         if audioRecording {finishAudioRecording();return}
-        guard midiRecording || audioRecording,let useID = recordUseID,let trackID = recordingTrackID,let clock = recordClock else { return }
-        let elapsed = min(ProcessInfo.processInfo.systemUptime-recordStart,clock.seconds*Double(recordRepeats))
-        if midiRecording {
-            for (key,(start,v)) in heldNotes { appendRecorded(pitch:key.pitch,velocity:v,start:start,end:elapsed,clock:clock) }
-            for pitch in Set(heldNotes.keys.map(\.pitch)) { previewRecordedMIDI(pitch:pitch,velocity:0,on:false) }
-            heldNotes = [:]
-            let all = recordedNotes; midiRecording = false
-            meter.update(seconds:playback.seconds,playing:playback.playing)
-            let iterations = max(1,min(recordRepeats,Int(ceil(elapsed/clock.seconds))))
-            mutate("MIDI take 저장") { p in
-                for iteration in 0..<iterations {
-                    let notes = all.filter{ $0.beat >= Double(iteration)*clock.beats && $0.beat < Double(iteration+1)*clock.beats }.map{ n -> Note in var copy = n; copy.beat -= Double(iteration)*clock.beats; return copy }
-                    if !notes.isEmpty { var lane = Lane(trackID:trackID); lane.notes = notes; var takes = p.takes ?? []; var take=RecordedTake(useID:useID,name:"MIDI \(Date().formatted(date:.omitted,time:.shortened)) · \(iteration+1)회",lane:lane); take.targetLaneID=self.recordLaneID; take.arrangementID=self.recordArrangementID; takes.append(take); p.takes = takes }
-                }
-            }
-            if !all.isEmpty,let take = project.takes?.last(where:{$0.useID == useID && $0.lane.trackID == trackID}) { activateTake(take) }
-            status = "MIDI 녹음 저장 · \(all.count)개 note"
+        guard midiRecording,let clock = recordClock,midiStopCutoff == nil else { return }
+        let cutoff = min(ProcessInfo.processInfo.systemUptime,recordStart+clock.seconds*Double(recordRepeats))
+        midiStopCutoff=cutoff; midiStopSerial += 1
+        let serial=midiStopSerial
+        let complete: (Bool) -> Void = { [weak self] timedOut in
+            MainActor.assumeIsolated { self?.completeMIDIStop(serial:serial,cutoff:cutoff,drainTimedOut:timedOut) }
         }
+        if let midiInput {
+            midiInput.drain { complete(false) }
+            // Never leave recording locked if a damaged MIDI source stalls the
+            // parser. The serial check makes this fallback and barrier one-shot.
+            DispatchQueue.main.asyncAfter(deadline: DispatchTime.now() + .milliseconds(300)) { complete(true) }
+        } else { complete(false) }
+    }
+    private func completeMIDIStop(serial:Int,cutoff:Double,drainTimedOut:Bool) {
+        guard serial == midiStopSerial,midiRecording,midiStopCutoff == cutoff,
+              let useID = recordUseID,let trackID = recordingTrackID,let clock = recordClock else { return }
+        let elapsed=max(0,cutoff-recordStart)
+        for (key,(start,v)) in heldNotes { appendRecorded(pitch:key.pitch,velocity:v,start:start,end:elapsed,clock:clock) }
+        for pitch in Set(heldNotes.keys.map(\.pitch)) { previewRecordedMIDI(pitch:pitch,velocity:0,on:false) }
+        heldNotes = [:]
+        let all = recordedNotes; midiRecording = false; midiStopCutoff=nil; lastMIDIStopCutoff=cutoff
+        meter.update(seconds:playback.seconds,playing:playback.playing)
+        let iterations = max(1,min(recordRepeats,Int(ceil(elapsed/clock.seconds))))
+        mutate("MIDI take 저장") { p in
+            for iteration in 0..<iterations {
+                let notes = all.filter{ $0.beat >= Double(iteration)*clock.beats && $0.beat < Double(iteration+1)*clock.beats }.map{ n -> Note in var copy = n; copy.beat -= Double(iteration)*clock.beats; return copy }
+                if !notes.isEmpty { var lane = Lane(trackID:trackID); lane.notes = notes; var takes = p.takes ?? []; var take=RecordedTake(useID:useID,name:"MIDI \(Date().formatted(date:.omitted,time:.shortened)) · \(iteration+1)회",lane:lane); take.targetLaneID=self.recordLaneID; take.arrangementID=self.recordArrangementID; takes.append(take); p.takes = takes }
+            }
+        }
+        if !all.isEmpty,let take = project.takes?.last(where:{$0.useID == useID && $0.lane.trackID == trackID}) { activateTake(take) }
+        status = drainTimedOut
+            ? "MIDI 입력 지연 · \(all.count)개 note 저장, 늦은 입력은 누락될 수 있습니다"
+            : "MIDI 녹음 저장 · \(all.count)개 note"
+        if drainTimedOut { recordActivity("앱",status) }
         recordClock = nil; recordUseID = nil; originalRecordProject = nil
     }
     func activateTake(_ take:RecordedTake) {

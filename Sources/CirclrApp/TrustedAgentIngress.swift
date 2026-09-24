@@ -36,6 +36,8 @@ private func trustedCapabilityMatches(_ provided: String, _ expected: String) ->
 
     /// Pass this only to the app-owned IPC client, outside model tool arguments.
     var clientCapability: String { capability }
+    /// The helper's visible tools are exactly this app-issued lease's methods.
+    var helperMethods: Set<String> { lease.methods }
 
     init(store: AppStore, lease: AgentRunLease, directory: URL) throws {
         guard store.trustedRun.active == lease,
