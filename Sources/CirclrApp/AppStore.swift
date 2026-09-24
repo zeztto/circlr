@@ -199,7 +199,7 @@ import CirclrAudio
     var trustedAgentIngress:TrustedAgentIngress?
     var trustedAgentExpiryTask:Task<Void,Never>?
     var trustedDocumentBinding:AgentRunDocumentBinding?
-    var trustedAgentJob:TrustedAgentJob?
+    @Published var trustedAgentJob:TrustedAgentJob?
     var trustedExportDestination:TrustedExportPublisher.Destination?
     var trustedReplies=AgentRunReplayLedger<TrustedAgentReply>()
     @Published var errorMessage: String? {didSet{if errorMessage != nil,viewingMode {_ = setViewingMode(false)}}}

@@ -374,7 +374,7 @@ private func appTurnRoundTrip(path: String, packet: Data) throws -> [String: Any
                       "A completed bounce must contain actual nonzero audio")
     }
 
-    func testAIStopClosesOwnedSocketAndBlocksLateBounce() async throws {
+    func testConsoleAIStopClosesOwnedSocketAndBlocksLateBounce() async throws {
         let (store, root, arrangement, use, lane, track) = try makeStore()
         defer { cleanUp(store, root: root) }
         let first = try store.startAppOwnedTrustedAgentTurn()
@@ -400,7 +400,7 @@ private func appTurnRoundTrip(path: String, packet: Data) throws -> [String: Any
         XCTAssertEqual(store.agentJob?.state, "running",
                        "The accepted bounce must still be waiting at the deterministic drain checkpoint")
         let acceptedTask = store.productionTask
-        store.stopTrustedAgentTurn()
+        try store.cancelConsoleAgentJob(try XCTUnwrap(store.agentJob?.id))
         await drainGate.release()
         if let acceptedTask { await acceptedTask.value }
         XCTAssertNil(store.trustedRun.active)
@@ -430,6 +430,45 @@ private func appTurnRoundTrip(path: String, packet: Data) throws -> [String: Any
         }
         store.resetSession()
         try await assertSocketClosed(second, store: store)
+    }
+
+    func testConsolePublicJobCancelLeavesTrustedTurnAndTransportUntouched() async throws {
+        let (store, root, arrangement, use, lane, track) = try makeStore()
+        defer { cleanUp(store, root: root) }
+        let trusted = try store.startAppOwnedTrustedAgentTurn()
+        _ = try await send(apply(store, arrangement: arrangement, use: use,
+                                 lane: lane, id: "public-seed-note"), via: trusted)
+        let drainGate = AppTurnRenderGate()
+        let priorWorker = Task.detached(priority: .utility) { () throws -> PCM in
+            await drainGate.wait()
+            return PCM(frames: 48)
+        }
+        store.productionWorker = priorWorker
+        store.productionTask = Task { _ = try? await priorWorker.value }
+        let priorPlaying = store.playback.playing
+        let accepted: [String: Any]
+        do {
+            accepted = try store.executeAgent(bounce(store, arrangement: arrangement,
+                use: use, track: track, id: "public-bounce"), source: "외부 MCP")
+        } catch {
+            await drainGate.release()
+            throw error
+        }
+        let jobID = try XCTUnwrap(accepted["jobID"] as? ID)
+        XCTAssertEqual(store.agentJob?.state, "running")
+        let acceptedTask = store.productionTask
+
+        try store.cancelConsoleAgentJob(jobID)
+        await drainGate.release()
+        if let acceptedTask { await acceptedTask.value }
+
+        XCTAssertEqual(store.agentJob?.state, "cancelled")
+        XCTAssertNotNil(store.trustedRun.active)
+        XCTAssertNotNil(store.trustedAgentIngress)
+        XCTAssertEqual(store.playback.playing, priorPlaying)
+        let snapshot = try await send(request("snapshot", store: store, id: "trusted-still-active"),
+                                      via: trusted)
+        XCTAssertEqual(snapshot["ok"] as? Bool, true)
     }
 
     func testDocumentAndTerminationCloseOwnedIngress() async throws {

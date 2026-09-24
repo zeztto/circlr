@@ -1,5 +1,11 @@
 # Screenshots · 실행 화면
 
+## 0.80.0 build232 development preview
+
+`circlr-song-build232.png` (2880×1800px, SHA-256 `8607b588fab51d3297c9da56c0b9ab22d3880fb29ca44c652f4070418b56c9c9`) and `circlr-song-portrait-build232.png` (1440×1800px, SHA-256 `1ba1b5d5f424f8f54c6b175d11ac7ec5be368257a6b33e506b4dbaea4a7d9f5b`) are byte-identical copies of full-window, uncropped PNG conversions from the isolated **0.80.0/build232** native app. Original JPEGs and PNGs remain in ignored `qa/generated/r80-build232-native/`: `landscape-1440x900.source.jpg` SHA-256 `5a218c224f0cca3a2c22b0088cab2e25705961b2fda647214a69b12c3c0a2eab` and `portrait-720x900.source.jpg` SHA-256 `8331f7838229f091a9d3015003bf3570733dd1d146b1b15a8be5a7cf55c23680`. The stopped bundled **f0r h3r** copy shows all seven sections, the responsive toolbar and the open console. Packaged executable SHA-256: `3cd92ae515f5726701365c621d09e5b5169ef8b20b28c2001bdf68e752729ee5`. These screenshots do not establish playback sound, Scarlett compatibility, physical recording or 0.80 release readiness. [build232 native QA](../../qa/0.80-build232-native.md).
+
+두 PNG는 격리된 실제 build232 앱의 가로 1440×900pt·세로 720×900pt 전체 창을 자르거나 크기를 변경하지 않고 변환해 복사했습니다. 정지한 **f0r h3r**의 일곱 섹션과 반응형 상단·열린 콘솔을 보여 줍니다. 물리 청취·녹음·구형 Scarlett 호환성·정식 출시의 증거는 아닙니다.
+
 ## 0.80.0 build231 development preview
 
 `circlr-song-build231.png` (2880×1800px, SHA-256 `37ef15a03e5c84a105ebd8266064f77de2814f3e1b5e91dc6bdcad44d70e5b0c`) and `circlr-song-portrait-build231.png` (1440×1800px, SHA-256 `d1938f888e2f218082a508a79252dccd667ccfe85b10001f2404289cade49447`) are byte-identical copies of full-window, uncropped PNG conversions from the isolated **0.80.0/build231** native app. Original JPEGs and PNGs remain in ignored `qa/generated/r80-build231-native/`; the windows were 1440×900pt and 720×900pt. The stopped bundled **f0r h3r** copy shows all seven sections and the responsive toolbar, with the console open. Packaged executable SHA-256: `ca1d6ff1df3ef88aa1e8f1767a08be10eea1382261d584052d6ef07cf1e1bbaa`. These screenshots do not establish playback sound, Scarlett compatibility, physical recording, or 0.80 release readiness. [build231 native QA](../../qa/0.80-build231-native.md).

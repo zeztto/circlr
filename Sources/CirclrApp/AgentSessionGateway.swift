@@ -128,6 +128,26 @@ enum TrustedAgentReply {
         }
     }
 
+    func isCurrentTrustedAgentJob(_ id: ID) -> Bool {
+        guard let owned=trustedAgentJob else {return false}
+        return owned.id==id && trustedRun.active==owned.lease
+    }
+
+    /// The console's AI stop revokes the whole turn; public MCP cancellation
+    /// remains limited to its job and never stops the DAW transport.
+    func cancelConsoleAgentJob(_ id: ID) throws {
+        if isCurrentTrustedAgentJob(id) {
+            guard agentJob?.id==id,agentJob?.state=="running" else {
+                throw CirclrError("현재 실행 중인 AI 작업이 아닙니다")
+            }
+            let kind=agentJob?.kind ?? "작업"
+            stopTrustedAgentTurn()
+            status="AI 작업 중단 · \(kind)"
+        } else {
+            _=try cancelAgentJob(id,source:"콘솔")
+        }
+    }
+
     /// This is the only ingress for the future trusted session. A request must
     /// carry the revision it observed; the gateway never refreshes it for AI.
     func executeTrustedAgent(_ request: AgentRequest, lease: AgentRunLease) throws -> [String:Any] {

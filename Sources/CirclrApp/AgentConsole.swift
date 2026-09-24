@@ -53,11 +53,17 @@ struct AgentConsole:View {
                         Text(job.tail.map{String(format:"바운스 · 여운 %.1f초",$0.effectiveSeconds)} ?? "바운스 여운 계산 중")
                             .font(.system(size:11)).lineLimit(1).help(job.message)
                         ProgressView().controlSize(.small)
-                        Button("취소"){_ = try? store.cancelAgentJob(job.id,source:"콘솔")}.accessibilityLabel("바운스 취소")
+                        Button(store.isCurrentTrustedAgentJob(job.id) ? "AI 중단":"취소") {
+                            try? store.cancelConsoleAgentJob(job.id)
+                        }.accessibilityLabel(store.isCurrentTrustedAgentJob(job.id) ? "AI 작업 중단":"바운스 취소")
+                            .help(store.isCurrentTrustedAgentJob(job.id) ? "AI 권한을 철회하고 작업을 취소합니다":"이 바운스 작업만 취소합니다")
                     }else{
                         Text(job.kind).font(.system(size:11,design:.monospaced))
                         ProgressView(value:job.progress).frame(width:65)
-                        Button("취소"){_ = try? store.cancelAgentJob(job.id,source:"콘솔")}.accessibilityLabel("\(job.kind) 작업 취소")
+                        Button(store.isCurrentTrustedAgentJob(job.id) ? "AI 중단":"취소") {
+                            try? store.cancelConsoleAgentJob(job.id)
+                        }.accessibilityLabel(store.isCurrentTrustedAgentJob(job.id) ? "AI 작업 중단":"\(job.kind) 작업 취소")
+                            .help(store.isCurrentTrustedAgentJob(job.id) ? "AI 권한을 철회하고 작업을 취소합니다":"이 작업만 취소합니다")
                     }
                 } else if let job=store.agentJob,job.state=="completed" {
                     if let tail=job.tail {
