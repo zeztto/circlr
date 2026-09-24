@@ -4,22 +4,25 @@ import CirclrCore
 struct CanvasLabelText {
     let title:NSAttributedString
     let titleHeight:CGFloat
+    let titleFits:Bool
     let showsSubtitle:Bool
     let subtitle:String
     let size:CGSize
-    init(_ text:String,primary:Bool,showsSubtitle:Bool,subtitle:String,availableWidth:CGFloat) {
+    init(_ text:String,primary:Bool,showsSubtitle:Bool,subtitle:String,availableWidth:CGFloat,wrapTitle:Bool=false) {
         let font=NSFont.systemFont(ofSize:primary ? StudioTheme.canvasSelectedTitleSize:StudioTheme.canvasTitleSize,weight:primary ? .semibold:.medium)
         let subtitleFont=NSFont.systemFont(ofSize:StudioTheme.canvasSubtitleSize,weight:.medium)
         let titleWidth=ceil((text as NSString).size(withAttributes:[.font:font]).width)+20
         let subtitleWidth=showsSubtitle ? ceil((subtitle as NSString).size(withAttributes:[.font:subtitleFont]).width)+20:0
         let width=min(availableWidth,max(80,max(titleWidth,subtitleWidth)))
         let style=NSMutableParagraphStyle();style.alignment = .center
-        style.lineBreakMode = primary ? .byWordWrapping:.byTruncatingTail
-        if primary {style.lineBreakStrategy = .hangulWordPriority}
+        style.lineBreakMode = primary || wrapTitle ? .byWordWrapping:.byTruncatingTail
+        if primary || wrapTitle {style.lineBreakStrategy = .hangulWordPriority}
         style.minimumLineHeight=20;style.maximumLineHeight=20
         title=NSAttributedString(string:text,attributes:[.font:font,.foregroundColor:StudioTheme.textNS,.paragraphStyle:style])
         let measured=title.boundingRect(with:CGSize(width:max(1,width-20),height:.greatestFiniteMagnitude),options:[.usesLineFragmentOrigin,.usesFontLeading]).height
-        titleHeight=primary ? min(60,max(20,ceil(measured/20)*20)):20
+        let measuredHeight=max(20,ceil(measured/20)*20)
+        titleHeight=primary ? min(60,measuredHeight):wrapTitle ? min(40,measuredHeight):20
+        titleFits = !wrapTitle || measuredHeight<=40
         self.showsSubtitle=showsSubtitle
         self.subtitle=subtitle
         size=CGSize(width:width,height:titleHeight+16+(showsSubtitle ? 18:0))
@@ -33,6 +36,7 @@ struct CanvasLabelTextKey: Hashable {
     let showsSubtitle:Bool
     let subtitle:String
     let availableWidth:Double
+    let wrapTitle:Bool
 }
 
 /// Song-form order comes from compiled orbit intervals, not the satellites' free positions.
@@ -136,7 +140,8 @@ enum CanvasPlaybackLabelLOD {
 
 extension AlbumCanvasView {
     var workspaceViewport:CGRect {
-        CanvasWorkspaceGeometry.viewport(width:bounds.width,height:bounds.height,console:!store.viewingMode && store.consoleBounds.height>0 ? store.consoleBounds:nil)
+        CanvasWorkspaceGeometry.viewport(width:bounds.width,height:bounds.height,
+            console:!store.viewingMode && store.consoleBounds.height>0 ? store.consoleBounds:nil)
     }
     var labelContext:CircleSceneNode? {
         if isDrawingFrame { return drawingLabelContext }
@@ -168,23 +173,30 @@ extension AlbumCanvasView {
             return CanvasLabelCircle(id:node.id,center:p,radius:r)
         }
     }
-    func readableLabelText(for node:CircleSceneNode,title:String,subtitle:String)->CanvasLabelText {
-        let primary=store.hierarchySelections.contains(node.id) ||
+    func readableLabelText(for node:CircleSceneNode,title:String,subtitle:String,
+                           maxWidth:CGFloat?=nil,wrapTitle:Bool=false,stableCompact:Bool=false)->CanvasLabelText {
+        let primary = !stableCompact && (store.hierarchySelections.contains(node.id) ||
             (store.playback.playing && !visualFrame.stale &&
-             (node.id==visualFrame.focus || visualFrame.activeSections.contains(node.id)))
-        let hovered=node.id==hoverAddress
-        let showsSubtitle=primary || hovered || node.radius*camera.zoom>=65
-        let width=min(workspaceViewport.width,primary || hovered ? 340:248)
+             (node.id==visualFrame.focus || visualFrame.activeSections.contains(node.id))))
+        let hovered = !stableCompact && node.id==hoverAddress
+        // Reserve the same subtitle row at every state so hover can show
+        // timing without moving a compact badge away from the pointer.
+        let showsSubtitle = stableCompact || primary || hovered || node.radius*camera.zoom>=65
+        let width=min(workspaceViewport.width,maxWidth ?? (primary || hovered ? 340:248))
         let key=CanvasLabelTextKey(address:node.id,title:title,primary:primary,
-            showsSubtitle:showsSubtitle,subtitle:subtitle,availableWidth:Double(width))
+            showsSubtitle:showsSubtitle,subtitle:subtitle,availableWidth:Double(width),wrapTitle:wrapTitle)
         if let cached=labelTextCache[key] {return cached}
-        let text=CanvasLabelText(title,primary:primary,showsSubtitle:showsSubtitle,subtitle:subtitle,availableWidth:width)
+        let text=CanvasLabelText(title,primary:primary,showsSubtitle:showsSubtitle,subtitle:subtitle,
+            availableWidth:width,wrapTitle:wrapTitle)
         if labelTextCache.count>=512 {labelTextCache.removeAll(keepingCapacity:true)}
         labelTextCache[key]=text
         return text
     }
     var readableLabelObstacles:[CGRect] {
         var obstacles:[CGRect]=[]
+        if !store.viewingMode,store.navigationBounds.height>0 {
+            obstacles.append(store.navigationBounds.insetBy(dx:-8,dy:-8))
+        }
         if let editor {obstacles.append(editor.frame.insetBy(dx:-8,dy:-8))}
         if let cableTools,!cableTools.isHidden {obstacles.append(cableTools.frame.insetBy(dx:-8,dy:-8))}
         if let portTools,!portTools.isHidden {obstacles.append(portTools.frame.insetBy(dx:-8,dy:-8))}
@@ -226,12 +238,26 @@ extension AlbumCanvasView {
             let order=songTimeline.orderLabel(for:node.id)
             let timing=(selected || node.id==hoverAddress || activeFocus) ? songTimeline.badgeTiming(for:node.id):nil
             let subtitle=timing ?? node.subtitle+(node.repeatCount>1 ? " · ×\(node.repeatCount)":"")
-            let text=readableLabelText(for:node,title:order.map{"\($0)  \(node.title)"} ?? node.title,subtitle:subtitle)
+            let title=order.map{"\($0)  \(node.title)"} ?? node.title
+            var text=readableLabelText(for:node,title:title,subtitle:subtitle)
+            let portraitSongSection=direct && node.role == .section && workspaceViewport.width<900
+            // Keep the compact badge's dimensions stable under hover/selection:
+            // otherwise it jumps away before the user can click it.
+            if portraitSongSection && p.x>workspaceViewport.midX {
+                let rightSpace=workspaceViewport.maxX-(p.x+radius+9)
+                if rightSpace>=120 {
+                    let plain=readableLabelText(for:node,title:title,subtitle:"",stableCompact:true)
+                    if plain.size.width>180 {
+                        let compact=readableLabelText(for:node,title:title,subtitle:subtitle,
+                            maxWidth:min(132,rightSpace),wrapTitle:true,stableCompact:true)
+                        if compact.titleFits {text=compact}
+                    }
+                }
+            }
             texts[node.id]=text
             let expanded=node.childCount>0 && scene.children(of:node.id).contains(where:isVisible)
             // The playing section stays identifiable beside its orbit, ahead of selection and hover labels.
-            let portraitSongSection=direct && node.role == .section && workspaceViewport.width<900
-            requests.append(CanvasLabelRequest(id:node.id,anchor:p,size:text.size,radius:radius,expanded:expanded,priority:activeFocus ? 110:primary ? 100:node.id==hoverAddress ? 95:direct && ["MIDI","오디오"].contains(node.music?.content.label ?? "") ? 85:direct ? 70:20,allowsViewportAdjustment:emphasized || portraitSongSection))
+            requests.append(CanvasLabelRequest(id:node.id,anchor:p,size:text.size,radius:radius,expanded:expanded,priority:activeFocus ? 110:primary ? 100:node.id==hoverAddress ? 95:direct && ["MIDI","오디오"].contains(node.music?.content.label ?? "") ? 85:direct ? 70:20,allowsViewportAdjustment:emphasized || portraitSongSection,avoidsOwnRing:isTimelineRing(node)))
         }
         labelPlacements=CanvasLabelLayout.place(requests,within:workspaceViewport,avoiding:readableLabelObstacles,circles:labelCircles)
         for placement in labelPlacements {

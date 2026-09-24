@@ -226,20 +226,35 @@ public final class TakeWriter {
 }
 
 public final class MIDIInput {
-    private var client = MIDIClientRef(), port = MIDIPortRef(), destination = MIDIEndpointRef()
+    // CoreMIDI can shut down MIDIServer after the last client is disposed. On
+    // this macOS, recreating a client later in the same process returns -2.
+    // Keep one client for the process and dispose each input's own endpoints.
+    private static let clientLock = NSLock()
+    private static var processClient = MIDIClientRef()
+    private static func acquireClient() throws -> MIDIClientRef {
+        clientLock.lock()
+        defer { clientLock.unlock() }
+        if processClient != 0 { return processClient }
+        var client = MIDIClientRef()
+        let status = MIDIClientCreateWithBlock("circlr" as CFString, &client, nil)
+        guard status == noErr else { throw CirclrError("MIDI client 생성 실패: \(status)") }
+        processClient = client
+        return client
+    }
+    private var port = MIDIPortRef(), destination = MIDIEndpointRef()
     public var onMessage: ((UInt8, UInt8, UInt8, UInt64) -> Void)?
     public private(set) var endpointName = "써클러 MIDI 입력"
     public init(endpointName:String = "써클러 MIDI 입력") throws {
         self.endpointName = endpointName
-        var status = MIDIClientCreateWithBlock("circlr" as CFString,&client,nil)
-        guard status == noErr else { throw CirclrError("MIDI client 생성 실패: \(status)") }
+        let client = try Self.acquireClient()
+        var status: OSStatus
         status = MIDIInputPortCreateWithBlock(client,"입력" as CFString,&port) { [weak self] list,_ in self?.receive(list) }
         guard status == noErr else { throw CirclrError("MIDI 입력 생성 실패: \(status)") }
         for i in 0..<MIDIGetNumberOfSources() { MIDIPortConnectSource(port,MIDIGetSource(i),nil) }
         status = MIDIDestinationCreateWithBlock(client,endpointName as CFString,&destination) { [weak self] list,_ in self?.receive(list) }
         guard status == noErr else { throw CirclrError("가상 MIDI 입력 생성 실패: \(status)") }
     }
-    deinit { if destination != 0 { MIDIEndpointDispose(destination) }; if port != 0 { MIDIPortDispose(port) }; if client != 0 { MIDIClientDispose(client) } }
+    deinit { if destination != 0 { MIDIEndpointDispose(destination) }; if port != 0 { MIDIPortDispose(port) } }
     private var runningStatus:UInt8 = 0
     private var pending:[UInt8] = []
     private let parserQueue = DispatchQueue(label:"circlr.midi-parser")

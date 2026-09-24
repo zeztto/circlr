@@ -9,9 +9,11 @@ public struct CanvasLabelRequest {
     public var expanded:Bool
     public var priority:Int
     public var allowsViewportAdjustment:Bool
-    public init(id:CircleAddress,anchor:CGPoint,size:CGSize,radius:Double,expanded:Bool=false,priority:Int=0,allowsViewportAdjustment:Bool=false) {
+    public var avoidsOwnRing:Bool
+    public init(id:CircleAddress,anchor:CGPoint,size:CGSize,radius:Double,expanded:Bool=false,priority:Int=0,allowsViewportAdjustment:Bool=false,avoidsOwnRing:Bool=false) {
         self.id=id;self.anchor=anchor;self.size=size;self.radius=radius;self.expanded=expanded;self.priority=priority
         self.allowsViewportAdjustment=allowsViewportAdjustment
+        self.avoidsOwnRing=avoidsOwnRing
     }
 }
 public struct CanvasLabelPlacement {
@@ -32,6 +34,16 @@ public struct CanvasLabelCircle {
 }
 /// Screen-space labels keep a readable size while the musical orbits retain their true geometry.
 public enum CanvasLabelLayout {
+    /// A label can sit wholly inside a large orbit or wholly outside it, but
+    /// must leave the time-bearing ring and its bar ticks visible.
+    public static func obscuresRing(_ rect:CGRect,center:CGPoint,radius:Double,clearance:Double=8)->Bool {
+        let nearX=max(rect.minX,min(rect.maxX,center.x))-center.x
+        let nearY=max(rect.minY,min(rect.maxY,center.y))-center.y
+        let farX=max(abs(rect.minX-center.x),abs(rect.maxX-center.x))
+        let farY=max(abs(rect.minY-center.y),abs(rect.maxY-center.y))
+        let outer=radius+clearance,inner=max(0,radius-clearance)
+        return nearX*nearX+nearY*nearY<outer*outer && farX*farX+farY*farY>inner*inner
+    }
     public static func place(_ requests:[CanvasLabelRequest],within viewport:CGRect,avoiding obstacles:[CGRect]=[],circles:[CanvasLabelCircle]=[])->[CanvasLabelPlacement] {
         guard viewport.minX.isFinite,viewport.minY.isFinite,viewport.width.isFinite,viewport.height.isFinite,viewport.width>0,viewport.height>0 else{return []}
         var occupied=obstacles,result:[CanvasLabelPlacement]=[]
@@ -75,7 +87,10 @@ public enum CanvasLabelLayout {
                     return da==db ? a.offset<b.offset:da<db
                 }.map{CGRect(origin:$0.element,size:request.size)}
             }
-            if let rect=candidates.first(where:{candidate in viewport.contains(candidate) && !occupied.contains(where:{$0.intersects(candidate)}) && !circles.contains(where:{$0.id != request.id && $0.intersects(candidate)})}) {
+            if let rect=candidates.first(where:{candidate in viewport.contains(candidate) &&
+                !(request.avoidsOwnRing && obscuresRing(candidate,center:p,radius:r)) &&
+                !occupied.contains(where:{$0.intersects(candidate)}) &&
+                !circles.contains(where:{$0.id != request.id && $0.intersects(candidate)})}) {
                 result.append(CanvasLabelPlacement(id:request.id,rect:rect,anchor:p));occupied.append(rect.insetBy(dx:-4,dy:-4))
             }
         }

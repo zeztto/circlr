@@ -174,6 +174,7 @@ import CirclrAudio
     @Published var viewingMode = false
     var viewingModeDidChange: (() -> Void)?
     @Published var consoleBounds = CGRect.zero
+    @Published var navigationBounds = CGRect.zero
     @Published var agentJob:AgentJob? {didSet{if let job=agentJob {
         if agentJobs[job.id]==nil {agentJobOrder.append(job.id)}
         agentJobs[job.id]=job

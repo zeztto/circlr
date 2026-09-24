@@ -1,5 +1,11 @@
 # 변경 이력
 
+## 0.80.0 · build229 — 개발 중 · 출고 gate 미통과
+
+- 곡 궤도의 섹션 이름표가 자기 타임라인·마디 눈금과 하단 navigation을 가리지 않도록 배치한다. 세로 창의 긴 06 제목은 들어갈 때만 가까운 두 줄 배지로 표시하고 hover·선택 때 크기를 고정한다. [build229 QA](qa/0.80-build229.md) · [native 화면](qa/0.80-build229-native.md).
+- CoreMIDI client를 프로세스 수명 동안 공유해 idle 뒤 MIDI 입력 재진입 오류 `-2`를 막고, 실제 Note On packet 회귀를 추가했다. 최종 Swift 1,202개·14 skip·실패 0, Python 50개 통과. arm64 앱·다섯 helper의 strict deep 서명 통과. [CoreMIDI 조사](qa/0.80-build226-coremidi.md).
+- 공개 앱 안의 Codex 계정 대화는 [공식 App Server의 현재 production 미지원 상태](qa/0.80-build226-codex-g0.md)에 따라 G0 NO-GO다. 구형 Scarlett 정상 입출력·물리 청취·녹음 take·장시간 MP4 등 남은 0.80 gate를 완료하기 전에는 tag/Release를 만들지 않는다.
+
 ## 0.80.0 · build225 — 개발 중 · 출고 gate 미통과
 
 - 앱이 선택된 MIDI 섹션의 한 AI turn을 전용 socket·대상·만료 시간과 함께 소유한다. 완료·STOP·문서 교체·종료에서 연결을 닫고, 완료 전 수락된 바운스만 제한적으로 마치게 한다. 실제 Codex 계정·대화 UI는 아직 연결하지 않았다. [AI QA](qa/0.80-build225-ai.md).

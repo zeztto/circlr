@@ -1,5 +1,11 @@
 # Screenshots · 실행 화면
 
+## 0.80.0 build229 development preview
+
+`circlr-song-build229.png` (2880×1800px, SHA-256 `4d25c8b6507dd0448e6d3143a56a32f4898ca350dff55568b174138ca216873e`) and `circlr-song-portrait-build229.png` (1440×1800px, SHA-256 `2f06ffc37169ba71784153d584c85e38d55042890aab9bdcdafe65eede10892a`) are full-window PNG conversions of the isolated native **0.80.0/build229** app. The uncropped JPEG sources and byte-identical converted PNGs are in ignored `qa/generated/r80-build229-native/` as `landscape-1440x900` and `default-720x900`. CUA source JPEG hashes: `a72ab963297ddfa69d10f1b7c57a701decf15a4d7fb242ea10daf2426bab4ccf` and `3f20309c13ecd6bfb27c9e7a748d0865761e037a1e82d8056cd332a2323b4d17`. The portrait shows the default 122pt console; the landscape is a 1440×900pt QA window after returning from a section and zooming the song into view. Both show the stopped bundled **f0r h3r** copy, not a playback or listening result. Packaged executable SHA-256: `3a016e2058f4bdbaa47392c092dca4c5764b888a73a517de6d4c201d3edf1f80`. [build229 native QA](../../qa/0.80-build229-native.md).
+
+두 PNG는 격리된 실제 build229 앱의 전체 창 원본 JPEG를 자르거나 크기 변경하지 않고 변환했습니다. 세로 화면은 기본 122pt 콘솔이 열린 상태이며 가로 화면은 섹션에서 곡으로 돌아와 곡 전체를 보이도록 확대율을 조절한 상태입니다. 두 화면 모두 정지한 **f0r h3r** 사본을 보여주며, 실제 재생·Scarlett 호환성·물리 청취·0.80 정식 출고 증거는 아닙니다.
+
 ## 0.80.0 build224 development preview
 
 `circlr-song-build224.png` (1440×900, SHA-256 `0b3cf8f58fdadc7e7704db6cb02b4d70d819a5a94432da1bd7fb9422627d65f5`) and `circlr-song-portrait-build224.png` (720×900, SHA-256 `b137de47ed182f3018a4af74bd6d6054dbf632ad28dc93e1b230fbae1d17a67a`) are byte-for-byte copies of uncropped full-window PNG conversions from isolated native **0.80.0/build224**. The original CUA JPEGs and converted PNGs remain in ignored `qa/generated/r80-build224-native/` as `demo-first-load-1440x900` and `console-collapsed-720x900`. The portrait has its console collapsed; both show the stopped bundled **f0r h3r** with all seven section labels visible. Packaged executable SHA-256: `f35c111594cb4ddd2cf3ec490a5dc6520fcac90466184ad0675a1676dbbfd0e9`. These screenshots verify the UI in the captured states, not playback, physical listening, recording input or 0.80 release readiness. [build224 native QA](../../qa/0.80-build224-native.md).

@@ -96,4 +96,15 @@ final class CanvasSongTimelineTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(label.size.width-20,ceil(measured))
         XCTAssertLessThanOrEqual(label.size.width,340)
     }
+    func testLongPortraitSectionTitleFitsTwoLinesBesideOrbit() {
+        let label=CanvasLabelText("06  너의 도시 · Final Chorus",primary:false,showsSubtitle:true,
+            subtitle:"8 bars",availableWidth:132,wrapTitle:true)
+        XCTAssertTrue(label.titleFits)
+        XCTAssertEqual(label.size.width,132)
+        XCTAssertEqual(label.titleHeight,40)
+        XCTAssertEqual(label.size.height,74)
+        let timing=CanvasLabelText("06  너의 도시 · Final Chorus",primary:false,showsSubtitle:true,
+            subtitle:"06 · 1:04.0–1:20.0 · 길이 0:16.0",availableWidth:132,wrapTitle:true)
+        XCTAssertEqual(timing.size,label.size)
+    }
 }

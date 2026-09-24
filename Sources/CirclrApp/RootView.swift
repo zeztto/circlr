@@ -2,6 +2,11 @@ import SwiftUI
 import AppKit
 import CirclrCore
 
+private struct CanvasNavigationBoundsKey:PreferenceKey {
+    static var defaultValue=CGRect.zero
+    static func reduce(value:inout CGRect,nextValue:()->CGRect){let next=nextValue();if next.width>0{value=next}}
+}
+
 struct RootView: View {
     private static let appVersion=Bundle.main.object(forInfoDictionaryKey:"CFBundleShortVersionString") as? String ?? "development"
     private static let appBuild=Bundle.main.object(forInfoDictionaryKey:"CFBundleVersion") as? String ?? "development"
@@ -35,6 +40,7 @@ struct RootView: View {
                 }
                 .coordinateSpace(name:"albumCanvas")
                 .onPreferenceChange(AgentConsoleBoundsKey.self){if store.consoleBounds != $0 {store.consoleBounds=$0}}
+                .onPreferenceChange(CanvasNavigationBoundsKey.self){if store.navigationBounds != $0 {store.navigationBounds=$0}}
         }
         .disabled(store.outputPreferencesOpen)
         .accessibilityHidden(store.outputPreferencesOpen || store.libraryOpen || store.navigationOpen || store.soundPickerRequest != nil || store.arrangementPickerRequest != nil)
@@ -393,6 +399,7 @@ struct RootView: View {
             Button{store.hierarchyParent()}label:{Image(systemName:"arrow.up.backward")}.help("상위 서클")
             Button{store.hierarchySettingsOpen=false;store.hierarchyCommand=HierarchyCommand(action:.fit)}label:{Image(systemName:"arrow.up.left.and.arrow.down.right")}.help("전체 앨범 · F")
         }.padding(4).background(StudioTheme.surface,in:RoundedRectangle(cornerRadius:7)).overlay(RoundedRectangle(cornerRadius:7).strokeBorder(StudioTheme.line))
+            .background(GeometryReader{geometry in Color.clear.preference(key:CanvasNavigationBoundsKey.self,value:geometry.frame(in:.named("albumCanvas")))})
     }
 }
 struct TransportControls:View {

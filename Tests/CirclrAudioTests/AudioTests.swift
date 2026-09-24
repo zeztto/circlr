@@ -45,6 +45,48 @@ final class AudioTests:XCTestCase {
         let processed=try await ArrangementRenderer.render(project:project,root:nil,plan:ArrangementCompiler.compile(project),tailSeconds:0)
         XCTAssertEqual(processed.mix.rms,second.mix.rms/4,accuracy:0.0001)
     }
+    func testVirtualMIDIReopensAfterIdleWithoutLosingCoreMIDIClient() throws {
+        do {
+            let input = try MIDIInput(endpointName:"circlr-idle-first-\(UUID().uuidString)")
+            XCTAssertTrue((0..<MIDIGetNumberOfDestinations()).map { MIDIGetDestination($0) }.contains { endpoint in
+                var name: Unmanaged<CFString>?
+                MIDIObjectGetStringProperty(endpoint, kMIDIPropertyName, &name)
+                return (name?.takeRetainedValue() as String?) == input.endpointName
+            })
+        }
+        // This exceeds the observed MIDIServer idle teardown interval after
+        // its last client is disposed, without touching physical MIDI devices.
+        Thread.sleep(forTimeInterval: 8)
+        let reopened = try MIDIInput(endpointName:"circlr-idle-second-\(UUID().uuidString)")
+        let destination = (0..<MIDIGetNumberOfDestinations()).map { MIDIGetDestination($0) }.first { endpoint in
+            var name: Unmanaged<CFString>?
+            MIDIObjectGetStringProperty(endpoint, kMIDIPropertyName, &name)
+            return (name?.takeRetainedValue() as String?) == reopened.endpointName
+        }
+        let endpoint = try XCTUnwrap(destination)
+        let received = expectation(description:"MIDI input still receives packets after idle")
+        reopened.onMessage = { status, pitch, velocity, _ in
+            if status & 0xF0 == 0x90 && pitch == 69 && velocity == 100 { received.fulfill() }
+        }
+        var sender = MIDIClientRef(), output = MIDIPortRef()
+        XCTAssertEqual(MIDIClientCreate("circlr idle sender" as CFString, nil, nil, &sender), noErr)
+        guard sender != 0 else { return }
+        defer { if output != 0 { MIDIPortDispose(output) }; MIDIClientDispose(sender) }
+        XCTAssertEqual(MIDIOutputPortCreate(sender, "idle output" as CFString, &output), noErr)
+        guard output != 0 else { return }
+        let raw = UnsafeMutableRawPointer.allocate(byteCount: 1024, alignment: 8)
+        defer { raw.deallocate() }
+        let list = raw.bindMemory(to: MIDIPacketList.self, capacity: 1)
+        let packet = MIDIPacketListInit(list)
+        let bytes: [UInt8] = [0x90, 69, 100]
+        let added = bytes.withUnsafeBufferPointer {
+            MIDIPacketListAdd(list, 1024, packet, 0, 3, $0.baseAddress!)
+        }
+        guard added != nil else { XCTFail("MIDI packet buffer append failed"); return }
+        XCTAssertEqual(MIDISend(output, endpoint, list), noErr)
+        wait(for: [received], timeout: 3)
+        withExtendedLifetime(reopened) {}
+    }
     func testVirtualMIDIReceivesMultiplePackets() throws {
         let input=try MIDIInput(endpointName:"circlr-test-\(UUID().uuidString)"),done=expectation(description:"three actual MIDI messages");done.expectedFulfillmentCount=3
         let lock=NSLock();var pitches:[UInt8]=[]
