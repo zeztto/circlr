@@ -10,11 +10,11 @@
 
 ![build241의 f0r h3r와 일곱 곡 섹션](docs/images/circlr-song-build241.png)
 
-*0.80.0 build241 개발 미리보기: 격리된 실제 앱 화면입니다. 최신 정식판은 0.70.0입니다. [촬영 정보](docs/images/README.md).*
+*0.80.0 build241 실제 앱 UI 화면입니다. 출고 build242에서는 영상 시계만 변경했으며 화면의 build 출처를 별도로 표시합니다. [촬영 정보](docs/images/README.md).*
 
-> **0.70.0 · build180.** 검증한 조건에서 재생 캔버스와 MP4 캡처를 개선하고, 감상 모드를 녹화 버튼 옆에 놓았습니다. [증거와 제한](docs/releases/0.70.0-qa.md).
+> **0.80.0 · build242.** 한 곡 제작과 외부 Codex→MCP 편집을 제한된 실제 앱 동선에서 검증했습니다. [릴리스 노트와 제한](docs/releases/0.80.0-notes.md).
 
-**개발 중:** [0.80.0](docs/releases/0.80.0.md)은 궤도 캔버스, 좁은 창 조작, 앱 전용 오디오 입력과 키보드 탐색을 개선합니다. 격리 QA에서 외부 Codex→MCP의 MIDI 한 스텝 편집과 콘솔 활동, 빈 곡 제작, CalDigit take의 저장·재열기·WAV 지속성을 확인했습니다. build242의 자동 테스트·서명 패키지는 통과했고, 1080p·10분 영상의 긴 프레임 간격은 3곳에서 1곳으로 줄었습니다. 남은 70ms 한 곳이 사전 상한을 넘고 실제 표시 FPS·물리 청취도 미검증이므로 **최신 정식판은 0.70.0**입니다. [QA](qa/0.80-build242.md) · [출고 gate](qa/0.80-release-gates.md).
+이번 버전은 궤도 캔버스, 좁은 창 조작, 앱 전용 오디오 입력과 키보드 탐색을 개선합니다. 1080p·10분 영상에는 **70ms**의 프레임 간격 한 곳이 남아 **66.67ms** 목표를 넘습니다. 물리 청취와 실제 표시 FPS도 미검증이며, 원 판정을 유지한 채 [0.90](docs/releases/0.90.0.md)으로 이월합니다. [QA](qa/0.80-build242.md) · [출고 결정](qa/0.80-release-gates.md).
 
 ## 할 수 있는 작업
 
@@ -32,7 +32,7 @@
 
 ## 시작하기
 
-**0.70.0 build180** Apple Silicon 패키지를 [GitHub Releases](https://github.com/zeztto/circlr/releases/tag/v0.70.0)에서 내려받으세요. 소스는 `main`에서 빌드할 수 있습니다.
+**0.80.0 build242** Apple Silicon 패키지를 [GitHub Releases](https://github.com/zeztto/circlr/releases/tag/v0.80.0)에서 내려받으세요. 소스 빌드도 가능합니다.
 
 다운로드한 앱은 ad-hoc 서명이며 Apple 공증을 받지 않았습니다. 첫 실행이 차단되면 다운로드를 확인한 뒤 **시스템 설정 → 개인정보 보호 및 보안 → 그래도 열기**를 사용하세요. [macOS 설치·첫 실행 안내](docs/install-macos.md#한국어).
 
@@ -43,7 +43,7 @@
 **소스 빌드 환경:** macOS 14 이상, 활성 개발자 디렉터리로 선택된 Xcode 26 이상, Python 3. 현재 native 검증 환경은 Apple Silicon입니다. 앱 UI는 한국어이며 README는 한국어와 영어로 제공합니다.
 
 ```sh
-git clone --branch main https://github.com/zeztto/circlr.git
+git clone --branch v0.80.0 https://github.com/zeztto/circlr.git
 cd circlr
 ./scripts/build-app.sh
 open 'dist/써클러.app'
@@ -51,7 +51,7 @@ open 'dist/써클러.app'
 
 이 개발 브랜치의 빌드는 앱·오디오 helper 6개·내부 trusted MCP helper·에이전트 키트를 함께 패키징합니다. 로컬 패키지는 ad-hoc 서명이며 공증되지 않았습니다. 개발 버전을 시험할 때 중요한 프로젝트는 사본으로 보관하세요.
 
-악기 서클에서 **음색·악기 찾기**를 열어 내장 프리셋을 검색하세요. MCP `sounds`에서도 같은 patch를 조회할 수 있습니다. 기존 저장 음색은 직접 변경하기 전까지 보존됩니다. [릴리스 노트](docs/releases/0.70.0-notes.md).
+악기 서클에서 **음색·악기 찾기**를 열어 내장 프리셋을 검색하세요. MCP `sounds`에서도 같은 patch를 조회할 수 있습니다. 기존 저장 음색은 직접 변경하기 전까지 보존됩니다. [릴리스 노트](docs/releases/0.80.0-notes.md).
 
 ## 첫 작업
 

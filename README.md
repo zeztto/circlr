@@ -10,11 +10,11 @@ In circlr, a circle is a timeline. Build a song from sections, place MIDI, audio
 
 ![circlr build241 showing f0r h3r and its seven song sections](docs/images/circlr-song-build241.png)
 
-*0.80.0 build241 development preview from an isolated native app. The latest public release is still 0.70.0. [Capture provenance](docs/images/README.md).*
+*0.80.0 build241 native UI capture. Release build242 changes movie timing; this image's build is stated separately. [Capture provenance](docs/images/README.md).*
 
-> **0.70.0 · build180.** Smoother playback canvas and MP4 capture in the verified scenarios, with viewing mode beside Record. [Evidence and limits](docs/releases/0.70.0-qa.md).
+> **0.80.0 · build242.** Native song production and an external Codex→MCP edit were verified in bounded journeys. [Release notes and limits](docs/releases/0.80.0-notes.md).
 
-**In development:** [0.80.0](docs/releases/0.80.0.md) improves the orbital canvas, narrow-window controls, app-only audio input and keyboard navigation. Isolated QA has completed one external Codex→MCP MIDI edit with console activity, a blank-song production journey, and a CalDigit take preserved through save/reopen and WAV export. Build242 reduced rare long frame gaps in a ten-minute 1080p recording from three to one; automated tests and the signed Apple Silicon package pass, but the remaining 70ms gap exceeds the preset limit. Displayed FPS and physical listening remain unverified, so **0.70.0 is still the latest public release**. [QA](qa/0.80-build242.md) · [Release gates](qa/0.80-release-gates.md).
+The release improves the orbital canvas, narrow-window controls, app-only audio input and keyboard navigation. A ten-minute 1080p movie still has one **70ms** frame interval above the **66.67ms** target; physical listening and actual displayed FPS remain unverified. These are carried into [0.90](docs/releases/0.90.0.md) without changing their QA result. [QA](qa/0.80-build242.md) · [Release decision](qa/0.80-release-gates.md).
 
 ## What you can work with
 
@@ -32,7 +32,7 @@ These are implemented development features, not a guarantee of compatibility wit
 
 ## Getting started
 
-Download **0.70.0 build180** for Apple Silicon from [GitHub Releases](https://github.com/zeztto/circlr/releases/tag/v0.70.0), or build from `main` for source development.
+Download **0.80.0 build242** for Apple Silicon from [GitHub Releases](https://github.com/zeztto/circlr/releases/tag/v0.80.0), or build from source.
 
 The downloaded app is ad-hoc signed and not notarized by Apple. If macOS blocks its first launch, verify the download, then use **System Settings → Privacy & Security → Open Anyway**. [macOS installation and first launch](docs/install-macos.md#english).
 
@@ -43,7 +43,7 @@ The colored **f0r h3r v6** demo is included. Choose **File → 데모곡 불러�
 **Source build requirements:** macOS 14+, Xcode 26+ selected as the active developer directory, and Python 3. Native validation currently covers Apple Silicon. The interface is currently in Korean; this README is available in both languages.
 
 ```sh
-git clone --branch main https://github.com/zeztto/circlr.git
+git clone --branch v0.80.0 https://github.com/zeztto/circlr.git
 cd circlr
 ./scripts/build-app.sh
 open 'dist/써클러.app'
@@ -51,7 +51,7 @@ open 'dist/써클러.app'
 
 The build on this development branch packages the app, six audio helpers, an internal trusted MCP helper and the agent kit together. Local packages use ad-hoc signing and are not notarized. Keep a separate copy of important projects when trying development builds.
 
-Choose a synth circle, then **음색·악기 찾기** to search the built-in patches. The same patches are available through MCP `sounds`; apply the returned `synthPatch` to `instrument.synth`. Existing saved sounds are preserved until explicitly changed. [Release notes](docs/releases/0.70.0-notes.md).
+Choose a synth circle, then **음색·악기 찾기** to search the built-in patches. The same patches are available through MCP `sounds`; apply the returned `synthPatch` to `instrument.synth`. Existing saved sounds are preserved until explicitly changed. [Release notes](docs/releases/0.80.0-notes.md).
 
 ## First session
 

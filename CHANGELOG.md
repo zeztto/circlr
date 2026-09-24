@@ -1,9 +1,10 @@
 # 변경 이력
 
-## 0.80.0 · build242 — 장시간 영상 프레임 간격 보정 · 검증 중
+## 0.80.0 · build242 — 송폼 DAW·외부 Codex MCP · 정식 출고
 
 - build241 실제 앱의 1920×1080·600.012초 MP4에서 길이·오디오 연속성은 통과했지만 영상 PTS 간격 71.7·78.3·70.0ms 세 곳이 사전 66.67ms 상한을 넘어 성능 gate가 실패했다. 늦은 출력 시각 보고를 한 번만 최대 20ms 보간하고, 보고가 계속 멈추면 캡처를 중단하도록 수정했다. [실패 증거](qa/0.80-build241-performance.md) · [build242 후보](qa/0.80-build242.md).
 - 같은 소스 Swift **1,340개·15 skip·실패 0**, Python MCP **47+39개**와 agent kit/모델 trace **23개**를 통과했다. 0.80.0/build242 Apple Silicon 본체·7 helper의 strict deep 서명과 Demos 27/27·kit 26/26·권리 파일 2/2 byte 일치를 확인했다. 실제 1080p·약 600초 MP4는 평균29.983fps와 AAC 연속성을 확인했지만 최대 PTS gap **70.0ms 한 곳**이 남아 영상 gate는 FAIL이다. 앱별 compositor FPS·물리 청취도 출고 gate로 남는다.
+- 2026-09-25 사용자 결정에 따라 핵심 DAW 제작과 외부 Codex→MCP 실제 작업의 제한된 native 검증을 기준으로 0.80을 닫는다. 위 영상 FAIL과 표시 FPS·물리 청취·IME 등 OPEN은 합격으로 바꾸지 않고 [0.90 계획](docs/releases/0.90.0.md)으로 이월한다. [출고 결정](qa/0.80-release-gates.md) · [한영 노트](docs/releases/0.80.0-notes.md).
 
 ## 0.80.0 · build241 — 재생 단축키·대형 미디어 목록 안정화 · 검증 중
 
