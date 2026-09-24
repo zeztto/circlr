@@ -1,5 +1,4 @@
 import AVFAudio
-import CoreAudio
 import Foundation
 import CirclrCore
 
@@ -24,23 +23,47 @@ protocol AudioCaptureBackend:AnyObject {
 private final class CaptureAttempt:@unchecked Sendable {
     let id=UUID(),control:CaptureControl
     private let queue=DispatchQueue(label:"circlr.audio-capture",qos:.userInitiated)
+    private let lock=NSLock()
     private let factory:@Sendable (InputDeviceSelection)->AudioCaptureBackend
+    private let onDelayedReap:@Sendable (UUID)->Void
     private let selection:InputDeviceSelection
     private var backend:AudioCaptureBackend?
+    var reaped:Bool {lock.lock();defer{lock.unlock()};return (backend as? InterruptibleAudioCaptureBackend)?.reaped ?? true}
+    var telemetry:InputCaptureTelemetry? {lock.lock();defer{lock.unlock()};return (backend as? InterruptibleAudioCaptureBackend)?.telemetry}
+    func takePeak()->Float? {lock.lock();defer{lock.unlock()};return (backend as? InterruptibleAudioCaptureBackend)?.takePeak()}
+    func abort() {control.disable();lock.lock();let value=backend as? InterruptibleAudioCaptureBackend;lock.unlock();value?.cancel()}
     init(control:CaptureControl,selection:InputDeviceSelection,
-         factory:@escaping @Sendable (InputDeviceSelection)->AudioCaptureBackend) {
-        self.control=control;self.selection=selection;self.factory=factory
+         factory:@escaping @Sendable (InputDeviceSelection)->AudioCaptureBackend,
+         onDelayedReap:@escaping @Sendable (UUID)->Void) {
+        self.control=control;self.selection=selection;self.factory=factory;self.onDelayedReap=onDelayedReap
     }
     func start(to url:URL,maximumSeconds:Double,reply:@escaping @Sendable (Result<CaptureFormat,Error>)->Void) {
         queue.async {
-            let backend=self.factory(self.selection);self.backend=backend
+            guard self.control.enabled else{reply(.failure(CancellationError()));return}
+            let backend=self.factory(self.selection)
+            (backend as? InterruptibleAudioCaptureBackend)?.onDelayedReap {[weak self] in
+                guard let self else{return};self.onDelayedReap(self.id)
+            }
+            self.lock.lock();self.backend=backend;let enabled=self.control.enabled;self.lock.unlock()
+            if !enabled {(backend as? InterruptibleAudioCaptureBackend)?.cancel()}
             do {reply(.success(try backend.start(to:url,maximumSeconds:maximumSeconds,control:self.control)))}
-            catch {self.control.disable();_ = try? backend.stop();self.backend=nil;reply(.failure(error))}
+            catch {
+                self.control.disable()
+                if !(backend is InterruptibleAudioCaptureBackend){_ = try? backend.stop()}
+                self.lock.lock()
+                if (backend as? InterruptibleAudioCaptureBackend)?.reaped ?? true {self.backend=nil}
+                self.lock.unlock();reply(.failure(error))
+            }
         }
     }
     func finish(reply:@escaping @Sendable (Result<CapturedAudio?,Error>)->Void) {
         control.disable()
-        queue.async {defer{self.backend=nil};reply(Result{try self.backend?.stop()})}
+        queue.async {
+            self.lock.lock();let backend=self.backend;self.lock.unlock()
+            let result=Result{try backend?.stop()}
+            self.lock.lock();if (backend as? InterruptibleAudioCaptureBackend)?.reaped ?? true {self.backend=nil};self.lock.unlock()
+            reply(result)
+        }
     }
 }
 
@@ -53,11 +76,11 @@ private final class CaptureAttempt:@unchecked Sendable {
     public var onChange:(()->Void)?
     public var busy:Bool {attempt != nil}
     public var recording:Bool {phase == .recording}
-    public var frames:UInt64 {attempt?.control.frames ?? completedFrames}
+    public var frames:UInt64 {attempt?.telemetry?.frames ?? attempt?.control.frames ?? completedFrames}
     public var seconds:Double {format.map{Double(frames)/$0.sampleRate} ?? 0}
-    public var reachedLimit:Bool {attempt?.control.reachedLimit ?? false}
-    public var interrupted:Bool {attempt?.control.interrupted ?? false}
-    public func takePeak()->Float {attempt?.control.takePeak() ?? 0}
+    public var reachedLimit:Bool {attempt?.telemetry?.reachedLimit ?? attempt?.control.reachedLimit ?? false}
+    public var interrupted:Bool {attempt?.telemetry?.interrupted ?? attempt?.control.interrupted ?? false}
+    public func takePeak()->Float {attempt?.takePeak() ?? attempt?.control.takePeak() ?? 0}
     private var attempt:CaptureAttempt?
     private var completedFrames:UInt64=0
     private var startReply:((Result<CaptureFormat,Error>)->Void)?
@@ -65,19 +88,21 @@ private final class CaptureAttempt:@unchecked Sendable {
     private let factory:@Sendable (InputDeviceSelection)->AudioCaptureBackend
     public init(){factory={selection in
         switch selection {
-        case .systemDefault:return EngineCaptureBackend()
+        case .systemDefault:return InputCaptureWorkerBackend()
         case .deviceUID:return UnavailableSelectedInputCapture(selection:selection)
         }
     }}
     init(factory:@escaping @Sendable ()->AudioCaptureBackend){self.factory={_ in factory()}}
     init(selectionFactory:@escaping @Sendable (InputDeviceSelection)->AudioCaptureBackend){self.factory=selectionFactory}
-    deinit {timeoutTask?.cancel();attempt?.finish{_ in}}
+    deinit {timeoutTask?.cancel();attempt?.abort();attempt?.finish{_ in}}
     public func start(to url:URL,maximumSeconds:Double,selection:InputDeviceSelection = .systemDefault,
                       timeout:Double=10,completion:@escaping (Result<CaptureFormat,Error>)->Void)throws {
         guard attempt==nil else{throw CirclrError("이전 입력 장치를 정리하고 있습니다")}
         guard maximumSeconds.isFinite,maximumSeconds>0,maximumSeconds<=86400,timeout.isFinite,timeout>0,timeout<=60 else{throw CirclrError("녹음 시간 범위를 확인하세요")}
         try selection.validate()
-        let next=CaptureAttempt(control:try CaptureControl(),selection:selection,factory:factory)
+        let next=CaptureAttempt(control:try CaptureControl(),selection:selection,factory:factory) {[weak self] id in
+            Task{@MainActor in self?.delayedReap(id)}
+        }
         attempt=next;format=nil;completedFrames=0;startReply=completion;phase = .starting;message="입력 장치 연결 중";onChange?()
         next.start(to:url,maximumSeconds:maximumSeconds){[weak self] result in Task{@MainActor in self?.started(next.id,result:result)}}
         timeoutTask=Task{[weak self] in
@@ -91,18 +116,27 @@ private final class CaptureAttempt:@unchecked Sendable {
         timeoutTask?.cancel();timeoutTask=nil;let reply=startReply;startReply=nil
         switch result {
         case .success(let value):format=value;phase = .recording;message="오디오 녹음 중"
-        case .failure(let error):attempt=nil;phase = .failed;message=error.localizedDescription
+        case .failure(let error):
+            if attempt?.reaped ?? true {attempt=nil}
+            phase = .failed
+            message=(attempt == nil ? error.localizedDescription : error.localizedDescription+" · 입력 worker 종료 확인 전 재시도 불가")
         }
         onChange?();reply?(result)
     }
+    private func delayedReap(_ id:UUID) {
+        guard let current=attempt,current.id==id,current.reaped,phase == .failed else{return}
+        completedFrames=current.telemetry?.frames ?? current.control.frames
+        attempt=nil;message += " · 입력 worker 종료 완료, 다시 녹음할 수 있습니다";onChange?()
+    }
     public func cancelStart(reason:Error?=nil) {
         guard let current=attempt,phase == .starting else{return}
-        current.control.disable();timeoutTask?.cancel();timeoutTask=nil
+        current.abort();timeoutTask?.cancel();timeoutTask=nil
         phase = .cancelling;message=reason?.localizedDescription ?? "녹음 시작 취소 · 장치 정리 중";onChange?()
         let reply=startReply;startReply=nil;reply?(.failure(reason ?? CancellationError()))
         current.finish{[weak self] result in Task{@MainActor in
             guard let self,self.attempt?.id==current.id else{return}
-            self.completedFrames=current.control.frames;self.attempt=nil
+            self.completedFrames=current.telemetry?.frames ?? current.control.frames
+            if current.reaped{self.attempt=nil}
             if case .failure(let error)=result {self.phase = .failed;self.message=error.localizedDescription}
             else {self.phase=reason == nil ? .idle:.failed;self.message=reason?.localizedDescription ?? "녹음 시작 취소"}
             self.onChange?()
@@ -113,7 +147,8 @@ private final class CaptureAttempt:@unchecked Sendable {
         current.control.disable();phase = .finishing;message="녹음 파일 마무리 중";onChange?()
         current.finish{[weak self] result in Task{@MainActor in
             guard let self,self.attempt?.id==current.id else{return}
-            self.completedFrames=current.control.frames;self.attempt=nil
+            self.completedFrames=current.telemetry?.frames ?? current.control.frames
+            if current.reaped{self.attempt=nil}
             switch result {
             case .success(let audio):self.phase=audio == nil ? .failed:.idle;self.message=audio == nil ? "입력 오디오가 없어 take를 만들지 않았습니다":"녹음 파일 저장 완료"
             case .failure(let error):self.phase = .failed;self.message=error.localizedDescription
@@ -126,22 +161,16 @@ private final class CaptureAttempt:@unchecked Sendable {
 /// AUHAL instantiation can stall before an explicit device is bound on affected
 /// hosts. Keep selected capture closed until an isolated native path is verified.
 private final class UnavailableSelectedInputCapture:AudioCaptureBackend {
-    private let selection:InputDeviceSelection
-    init(selection:InputDeviceSelection){self.selection=selection}
+    init(selection:InputDeviceSelection){}
     func start(to:URL,maximumSeconds:Double,control:CaptureControl) throws -> CaptureFormat {
-        guard case .deviceUID(let uid)=selection else{throw InputDeviceBindingError.invalidSelection}
-        let access=CoreAudioInputDeviceAccess()
-        let id=try access.resolveUID(uid)
-        guard id != kAudioObjectUnknown else{throw InputDeviceBindingError.missingDevice}
-        guard try access.isAlive(id) else{throw InputDeviceBindingError.unavailableDevice}
-        guard try access.hasInput(id) else{throw InputDeviceBindingError.noInput}
-        guard try access.descriptor(id).uid==uid else{throw InputDeviceBindingError.changedDevice}
+        // Selected-device capture is unavailable in this build. Do not perform a
+        // synchronous HAL preflight in the parent, where a bad driver can hang UI recovery.
         throw InputDeviceBindingError.selectedCaptureUnavailable
     }
     func stop() throws -> CapturedAudio? {nil}
 }
 
-private final class EngineCaptureBackend:AudioCaptureBackend {
+final class EngineCaptureBackend:AudioCaptureBackend {
     private var engine:AVAudioEngine?,input:AVAudioInputNode?,writer:TakeWriter?,control:CaptureControl?
     private var tapInstalled=false
     private var configurationObserver:NSObjectProtocol?

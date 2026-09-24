@@ -4,11 +4,13 @@
 
 > 2026-09-23 재확인: 공식 [App Server 문서](https://learn.chatgpt.com/docs/app-server)는 현재 `codex app-server` 명령을 experimental·production 미지원으로 표시한다. 공개 0.80 계정 콘솔은 [G0 판단](releases/0.80.0.md)에 따라 보류한다. 아래 설계의 API와 패키징 가정은 지원 상태가 바뀌고 실제 macOS 격리·배포 QA가 끝나기 전까지 제품 계약이 아니다.
 
+2026-09-24 공식 문서 재확인: [OpenAI의 Codex 플랫폼 안내](https://developers.openai.com/blog/codex-as-a-platform)는 제품 내 지속 대화에 App Server를 권하고, [SDK](https://learn.chatgpt.com/docs/codex-sdk)는 자체 앱 통합과 stable Python 패키지를 설명한다. 그러나 [App Server 문서](https://learn.chatgpt.com/docs/app-server)는 명령과 WebSocket transport의 production 미지원을 계속 명시한다. SDK 패키지 안정성을 circlr의 배포형 계정 콘솔 지원으로 전이하지 않는다. 내부 비공개 통합 시험은 진행하되 공개 G0는 지원·재배포 조건 확인까지 NO-GO다.
+
 2026-09-24 [AI/MCP 경로 감사](../qa/0.80-agent-journey-audit.md)는 외부 MCP의 계약 테스트와 앱 내부 trusted socket/STOP 테스트를 분리해 기록했다. 이후 [build230 QA](../qa/0.80-build230.md)에서 **앱이 이미 선택한 현재 `.circlr` 문서의 trusted `save`와 앱이 지정한 WAV 목적지의 trusted `export`**를 내부 turn 계약에 추가하고 실제 파일·STOP·문서/폴더 변경을 시험했다. 모델이 임의 경로를 정하는 `open`은 여전히 허용하지 않는다. 앱 target에는 `CirclrCodex` 계정 세션과 trusted turn을 시작하는 사용자 대화 경로가 연결되지 않았으므로, 이 설계의 대화→편집→저장/출력을 실제 앱의 완성된 AI 작업 흐름으로 표시하지 않는다. [build231 경로 감사](../qa/0.80-build231-ai-audit.md)는 내부 테스트 경로와 외부 MCP 사용자 경로를 구분한다.
 
 **사용자가 자신의 ChatGPT 계정으로 Codex에 로그인하고, circlr의 접이식 콘솔에서 대화하며 곡을 편집한다.** circlr가 로컬 Codex App Server를 관리하고, Codex는 circlr MCP를 통해 기존 음악 명령을 실행한다. 로그인 과정의 공식 브라우저를 제외하면 별도의 Codex 앱·터미널을 열 필요가 없는 경험을 목표로 한다.
 
-이 문서는 아키텍처 결정과 구현 순서다. 0.80 개발 후보에는 앱 실행 파일과 분리된 `CirclrCodex` 프로토콜 코어, 범위 제한 `AgentRunLease`, 그리고 한 turn에만 묶이는 앱 내부 `TrustedAgentIngress` socket이 있다. 실제 Unix socket에서 편집·중단·완료 후 늦은 요청을 검증했지만, 이 ingress는 앱의 Codex 세션이나 MCP helper에 아직 연결되지 않았다. build210은 내부 프로토콜에 계정 상태 조회·모델 목록·읽기 전용 thread 생성과 명시적 turn 모델을 추가했다. build211은 보안 리뷰에 따라 자식 환경·작업 디렉터리 설정을 host 생성 시 필수로 만들고, 관리형 reducer에서 승인된 canonical 디렉터리와 열린 읽기 전용 thread ID에 turn을 묶었다. 설치 CLI와의 계정·한 turn smoke는 **앱 밖**에서만 수행했다. 앱 안의 계정 연결·모델 대화·런타임 설치·자연어 UI와 인증된 운영 호출자는 구현·검증되지 않았다. 아래의 파일·정책은 항목별 실제 코드와 QA가 확인될 때까지 완료로 보지 않는다.
+이 문서는 아키텍처 결정과 구현 순서다. 0.80 개발 후보에는 앱 실행 파일과 분리된 `CirclrCodex` 프로토콜 코어, 범위 제한 `AgentRunLease`, 그리고 한 turn에만 묶이는 앱 내부 `TrustedAgentIngress` socket이 있다. 실제 Unix socket에서 편집·중단·완료 후 늦은 요청을 검증했지만, build234에서는 앱이 시작한 오프라인 MCP helper가 turn마다 이 ingress에 연결되고 실제 자식 프로세스에서 선택 MIDI 편집·Undo·nonzero WAV를 검증했다. Codex 계정 세션에는 아직 연결되지 않았다. build210은 내부 프로토콜에 계정 상태 조회·모델 목록·읽기 전용 thread 생성과 명시적 turn 모델을 추가했다. build211은 보안 리뷰에 따라 자식 환경·작업 디렉터리 설정을 host 생성 시 필수로 만들고, 관리형 reducer에서 승인된 canonical 디렉터리와 열린 읽기 전용 thread ID에 turn을 묶었다. 설치 CLI와의 계정·한 turn smoke는 **앱 밖**에서만 수행했다. 앱 안의 계정 연결·모델 대화·런타임 설치·자연어 UI와 인증된 운영 호출자는 구현·검증되지 않았다. 아래의 파일·정책은 항목별 실제 코드와 QA가 확인될 때까지 완료로 보지 않는다.
 
 ## 1. 공식 근거와 선택
 
@@ -35,7 +37,7 @@ App Server 문서는 실험적 기능과 WebSocket의 production 제한을 명�
 | `Sources/CirclrApp/AgentConsole.swift` | 명령 입력, 실제 activity 표시, 접이식 overlay | 자연어 대화·계정·작업 상태를 같은 overlay에 추가 |
 | `Sources/CirclrApp/AgentWorkspace.swift` | native dispatcher, revision 확인, batch·job·이벤트·재전송 처리 | 내부 Codex 호출의 실행 범위와 출처 확인을 앞단에 추가 |
 | `Sources/CirclrApp/AgentSocket.swift` | 현재 사용자만 접근하는 Unix socket | 기존 외부 MCP 호환성을 유지하면서 내장 세션의 전용 연결을 추가 |
-| `Sources/CirclrApp/TrustedAgentIngress.swift` | turn 전용 socket·capability 사전 검사·고정 lease를 통한 내부 gateway 호출 | 앱이 소유한 helper의 프로세스 신원 및 credential 전달을 검증한 뒤 연결 |
+| `Sources/CirclrApp/TrustedAgentIngress.swift` | turn 전용 socket·capability 사전 검사·고정 lease를 통한 내부 gateway 호출 | build234 앱 소유 helper의 프로세스 신원·비밀 전달을 검증함. Codex 계정 런타임 연결은 미완료 |
 | `Sources/CirclrCore/AgentProtocol.swift` | typed 편집 명령, 원자적 적용 | 음악 명령의 원본 계약 유지 |
 | `Sources/CirclrApp/AppStore.swift` | 문서·Undo·녹음·렌더 generation | 세션과 문서의 연결, 작업별 취소 경계 |
 | `mcp/server.py` | Python stdio adapter와 typed 음악 도구 | 외부 개발용으로 유지. 배포용 Swift helper와 계약을 공유 |
@@ -159,7 +161,7 @@ MCP의 설명·annotation이나 모델의 약속만으로 편집 권한을 보�
 
 현재 socket의 0700/0600·peer UID는 다른 OS 사용자를 차단하는 경계다. 같은 UID의 악성 프로세스까지 격리하는 것으로 표현하지 않는다. 내장 Codex의 일반 파일/프로세스 도구 제한, 전용 작업 폴더, helper 경로 검증과 함께 집행해야 한다. 기존 외부 MCP 모드는 명시적으로 연결한 로컬 자동화 기능으로 유지한다.
 
-0.80 build185의 일반 MCP `cancel_job`은 정확한 running jobID를 취소하고 음악 재생과 분리하지만, 현재 프로젝트의 같은 UID MCP 클라이언트가 jobID를 알면 호출할 수 있고 이후 쓰기 권한도 남는다. 기존 `stop`은 여전히 DAW 전체 정지다. build230의 **내부 trusted turn**은 AI STOP에서 자신의 lease와 job 권한을 철회하고 bounce·save·export의 게시 직전 문서/revision/목적지를 재검사한다. 실제 Codex 세션·helper가 이 경계로 연결된 것은 아니므로 일반 MCP의 취소를 AI 전용 STOP으로 표시하지 않는다. 로그의 `turnID → native requestID → transactionID/jobID` 관계도 운영 연결에서 별도로 검증한다.
+0.80 build185의 일반 MCP `cancel_job`은 정확한 running jobID를 취소하고 음악 재생과 분리하지만, 현재 프로젝트의 같은 UID MCP 클라이언트가 jobID를 알면 호출할 수 있고 이후 쓰기 권한도 남는다. 기존 `stop`은 여전히 DAW 전체 정지다. build230의 **내부 trusted turn**은 AI STOP에서 자신의 lease와 job 권한을 철회하고 bounce·save·export의 게시 직전 문서/revision/목적지를 재검사한다. 실제 Codex 계정 세션은 이 경계로 연결되지 않았으므로 일반 MCP의 취소를 AI 전용 STOP으로 표시하지 않는다. 로그의 `turnID → native requestID → transactionID/jobID` 관계도 운영 연결에서 별도로 검증한다.
 
 모델의 turn 완료와 오디오 job 완료는 별개다. 완료한 turn에는 새 쓰기를 허용하지 않으며, 이미 시작된 job은 제한된 완료 권한으로 추적한다. 콘솔에 남은 job의 중단 동작을 유지하고 로그아웃·문서 교체·권한 만료 때 이 권한도 회수한다. build230의 내부 trusted 저장은 파일 준비를 background에서 수행한 뒤 commit 직전에 권한을 재검증하는 job으로 분리했다. 실제 계정 turn과 연결된 UI가 취소 입력에 응답하는지는 별도 native QA가 필요하다.
 
@@ -211,7 +213,7 @@ Codex 설정의 MCP allowlist, `features.shell_tool`, `features.unified_exec`, `
 | P4 · UI/UX → native UI | `Sources/CirclrApp/AgentConsole.swift`, `CodexApprovalView.swift`, `CodexConversationView.swift`, `RootView.swift` | 한 overlay에서 대화·진행·질문·중단·사용량. 기존 canvas gesture와 명령 유지. Korean IME·VoiceOver·키보드·최소화 검증 |
 | P5 · infra/QA/review | `scripts/package-app.py`, `scripts/build-app.sh`, `Resources/Info.plist`, 향후 `qa/codex-console-review.md`, `README.md`, `CHANGELOG.md` | 깨끗한 Mac의 앱 단독 설치·로그인·편집·복원. 서명·notarization·runtime 교체/rollback. 실제 음악 E2E 증거 후 버전 갱신 |
 
-P1의 Foundation codec·상태기계는 build189에서 착수하고 build190에서 내부 테스트 대상으로 보강했다. 분할 UTF-8 JSONL, 요청 ID·세대, 초기화·turn·중단, 응답보다 먼저 도착한 이벤트와 승인 요청, 늦은 이벤트와 연결 교체를 fixture로 검사한다. turn ID가 없어 소유 대화를 확정할 수 없는 MCP elicitation은 거절한다. build210에는 같은 요청 ID 공간의 `account/read`, `model/list`, `thread/start`와 명시적 `turn/start.model`을 추가했다. build210에서 자식 프로세스의 환경 allowlist·canonical 작업 디렉터리를 host에 넣었다. build211에서는 환경 설정의 생략 경로를 제거하고, 관리형 reducer의 승인 canonical cwd·서버가 연 읽기 전용 thread ID 외의 turn을 거절했다. 기존 비관리형 turn-only 프로토콜 경로는 앱과 연결되지 않았으며 운영 계정 콘솔로 재사용하면 안 된다. 향후 통합자는 host의 승인 workspace와 reducer의 `authorizedThreadCWD`를 같은 신뢰된 선택에서 주입해야 한다. 단, 아직 앱 target에는 연결되지 않았고, 자식에게 전달한 `CODEX_HOME`이 이후 모델·shell에서 비밀로 유지되는지는 검증하지 않았다. P3의 앱 내부 lease·typed save/export·작업 취소 계약은 build230까지 부분 구현됐지만 실제 helper 신원과 계정 세션 연결은 없다. P2·P4와 P3의 운영 연결은 G0가 확정된 뒤 계약을 소비하며, 지원되는 요청에 대한 신뢰된 승인 UI·재배포 런타임은 아직 필요하다. 코드 수정 뒤 native/code/security 검토와 QA를 거친다. `.circlr` 음악 schema 변경은 이 기능의 전제 조건이 아니다.
+P1의 Foundation codec·상태기계는 build189에서 착수하고 build190에서 내부 테스트 대상으로 보강했다. 분할 UTF-8 JSONL, 요청 ID·세대, 초기화·turn·중단, 응답보다 먼저 도착한 이벤트와 승인 요청, 늦은 이벤트와 연결 교체를 fixture로 검사한다. turn ID가 없어 소유 대화를 확정할 수 없는 MCP elicitation은 거절한다. build210에는 같은 요청 ID 공간의 `account/read`, `model/list`, `thread/start`와 명시적 `turn/start.model`을 추가했다. build210에서 자식 프로세스의 환경 allowlist·canonical 작업 디렉터리를 host에 넣었다. build211에서는 환경 설정의 생략 경로를 제거하고, 관리형 reducer의 승인 canonical cwd·서버가 연 읽기 전용 thread ID 외의 turn을 거절했다. 기존 비관리형 turn-only 프로토콜 경로는 앱과 연결되지 않았으며 운영 계정 콘솔로 재사용하면 안 된다. 향후 통합자는 host의 승인 workspace와 reducer의 `authorizedThreadCWD`를 같은 신뢰된 선택에서 주입해야 한다. 단, 아직 앱 target에는 연결되지 않았고, 자식에게 전달한 `CODEX_HOME`이 이후 모델·shell에서 비밀로 유지되는지는 검증하지 않았다. P3의 앱 내부 lease·typed save/export·작업 취소 계약은 build230까지 부분 구현됐다. build234는 실제 앱 소유 helper의 신원·capability와 MIDI→Undo→WAV 경계를 오프라인 자식 프로세스로 검증했지만 계정 세션 연결은 없다. P2·P4와 P3의 운영 연결은 G0가 확정된 뒤 계약을 소비하며, 지원되는 요청에 대한 신뢰된 승인 UI·재배포 런타임은 아직 필요하다. 코드 수정 뒤 native/code/security 검토와 QA를 거친다. `.circlr` 음악 schema 변경은 이 기능의 전제 조건이 아니다.
 
 개발 build212의 내부 `CodexOfflineSessionCoordinator`는 실제 계정 대신 가짜 JSONL 자식을 host와 reducer에 연결한다. 승인 요청은 오류로 거절하고, 모델 목록을 전부 확인하기 전에는 thread를 열지 않는다. 취소 뒤 대기 중인 텍스트, 느린 observer의 출력 폭주, 재시작 뒤 늦은 이벤트를 제한하는 fixture를 통과했다. 이 코드는 앱 target과 로그인 UI에 연결되지 않았으며 G0의 production 지원·인증 격리·런타임 재배포 판정을 바꾸지 않는다.
 

@@ -7,6 +7,103 @@ private struct CanvasNavigationBoundsKey:PreferenceKey {
     static func reduce(value:inout CGRect,nextValue:()->CGRect){let next=nextValue();if next.width>0{value=next}}
 }
 
+/// The visible song-form controls use the same preview and guarded command as
+/// the orbit handle, context menu, and keyboard shortcut.
+struct SectionReorderToolbarState {
+    let address:CircleAddress
+    let projectID:ID
+    let revision:Int
+    let canMoveEarlier:Bool
+    let canMoveLater:Bool
+    let blockedReason:String?
+    let orbitShortcuts:Bool
+    let isFirst:Bool
+    let isLast:Bool
+
+    @MainActor init?(store:AppStore) {
+        guard let address=store.hierarchySelection,case .section(let arrangementID,let useID)=address,
+              store.hierarchySelections.count==1,store.hierarchySelections.contains(address) else{return nil}
+        self.address=address
+        projectID=store.project.id
+        revision=store.project.musicRevision
+        orbitShortcuts=store.project.usesOrbits
+        var seen=Set<ID>()
+        let order=(try? ArrangementCompiler.compile(store.project,arrangementID:arrangementID))?.occurrences
+            .compactMap{seen.insert($0.use.id).inserted ? $0.use.id:nil} ?? []
+        isFirst=order.first==useID
+        isLast=order.last==useID
+        if store.viewingMode || store.startupOpen {
+            blockedReason="편집 화면에서 순서를 이동하세요"
+        } else if store.midiRecording || store.audioRecordingBusy || store.audioRecordPending {
+            blockedReason="테이크 녹음을 마친 뒤 순서를 이동하세요"
+        } else if store.moviePreparing || store.movieWriter != nil || store.movieFinalizing != nil {
+            blockedReason="영상 녹화를 마친 뒤 순서를 이동하세요"
+        } else {
+            blockedReason=nil
+        }
+        canMoveEarlier=blockedReason == nil && CanvasSectionReorder.placement(for:address,direction:.earlier,in:store.project) != nil
+        canMoveLater=blockedReason == nil && CanvasSectionReorder.placement(for:address,direction:.later,in:store.project) != nil
+    }
+
+    @MainActor @discardableResult func move(_ direction:CanvasSectionReorder.Direction,on store:AppStore)->Bool {
+        let enabled:Bool
+        switch direction {case .earlier:enabled=canMoveEarlier;case .later:enabled=canMoveLater}
+        guard store.hierarchySelection==address,
+              store.hierarchySelections.count==1,store.hierarchySelections.contains(address),
+              !(store.viewingMode || store.startupOpen || store.recordingBlocksDocumentAction ||
+                store.audioRecordPending || store.moviePreparing || store.movieWriter != nil || store.movieFinalizing != nil),
+              enabled else{return false}
+        return store.moveSectionOccurrence(address,direction:direction,
+                                           expectedProjectID:projectID,expectedRevision:revision)
+    }
+
+    func help(for direction:CanvasSectionReorder.Direction)->String {
+        let title:String,enabled:Bool
+        switch direction {
+        case .earlier:title="선택 섹션 재생 순서 앞으로 한 칸";enabled=canMoveEarlier
+        case .later:title="선택 섹션 재생 순서 뒤로 한 칸";enabled=canMoveLater
+        }
+        let shortcut:String
+        if orbitShortcuts {
+            switch direction {case .earlier:shortcut=" · ⇧⌥←";case .later:shortcut=" · ⇧⌥→"}
+        } else {shortcut=""}
+        guard !enabled else{return title+shortcut}
+        let reason:String
+        if let blockedReason {reason=blockedReason}
+        else {
+            switch direction {
+            case .earlier:reason=isFirst ? "첫 섹션이라 앞에 놓을 수 없습니다":"분기·전환 때문에 이 방향으로 순서를 옮길 수 없습니다"
+            case .later:reason=isLast ? "마지막 섹션이라 뒤에 놓을 수 없습니다":"분기·전환 때문에 이 방향으로 순서를 옮길 수 없습니다"
+            }
+        }
+        return title+shortcut+" · "+reason
+    }
+}
+
+private struct SectionReorderToolbar:View {
+    @ObservedObject var store:AppStore
+    let state:SectionReorderToolbarState
+
+    var body:some View {
+        HStack(spacing:2) {
+            Text("순서").font(.system(size:11,weight:.medium)).foregroundStyle(StudioTheme.secondary)
+                .accessibilityHidden(true)
+            Button{state.move(.earlier,on:store)}label:{Image(systemName:"arrow.left").frame(width:22,height:26)}
+                .disabled(!state.canMoveEarlier)
+                .help(state.help(for:.earlier))
+                .accessibilityLabel("선택 섹션 재생 순서 앞으로 한 칸")
+                .accessibilityHint(state.help(for:.earlier))
+            Button{state.move(.later,on:store)}label:{Image(systemName:"arrow.right").frame(width:22,height:26)}
+                .disabled(!state.canMoveLater)
+                .help(state.help(for:.later))
+                .accessibilityLabel("선택 섹션 재생 순서 뒤로 한 칸")
+                .accessibilityHint(state.help(for:.later))
+        }.fixedSize(horizontal:true,vertical:false)
+            .padding(.horizontal,4)
+            .background(StudioTheme.canvas.opacity(0.94),in:RoundedRectangle(cornerRadius:6))
+    }
+}
+
 struct RootView: View {
     private static let appVersion=Bundle.main.object(forInfoDictionaryKey:"CFBundleShortVersionString") as? String ?? "development"
     private static let appBuild=Bundle.main.object(forInfoDictionaryKey:"CFBundleVersion") as? String ?? "development"
@@ -312,6 +409,9 @@ struct RootView: View {
                     Button{store.play(onlySelection:true)}label:{Image(systemName:"play.circle")}.help("선택 섹션 듣기")
                     Button{store.reuse()}label:{Image(systemName:"plus.square.on.square")}.help("섹션 재사용")
                 }
+                if let reorder=SectionReorderToolbarState(store:store) {
+                    SectionReorderToolbar(store:store,state:reorder)
+                }
             }
             Menu {
                 Toggle("궤도 타임라인",isOn:Binding(get:{store.project.usesOrbits},set:{value in
@@ -340,7 +440,11 @@ struct RootView: View {
         }.disabled(store.hierarchyAutoLayoutLocked || store.hierarchyAutoLayoutScope()==nil)
     }
     private var compactActions:some View {
-        Menu {
+        HStack(spacing:5) {
+            if let reorder=SectionReorderToolbarState(store:store) {
+                SectionReorderToolbar(store:store,state:reorder)
+            }
+            Menu {
             if let owner=store.arrangementPickerOwner {
                 Button("현재 곡의 편곡안…"){store.showArrangementPicker(compositionID:owner.id)}
             }
@@ -351,6 +455,13 @@ struct RootView: View {
             if store.selectedUse != nil {
                 Button("선택 섹션 듣기"){store.play(onlySelection:true)}
                 Button("섹션 재사용"){store.reuse()}
+            }
+            if let reorder=SectionReorderToolbarState(store:store) {
+                Divider()
+                Button("재생 순서 앞으로 한 칸"){reorder.move(.earlier,on:store)}
+                    .disabled(!reorder.canMoveEarlier).help(reorder.help(for:.earlier))
+                Button("재생 순서 뒤로 한 칸"){reorder.move(.later,on:store)}
+                    .disabled(!reorder.canMoveLater).help(reorder.help(for:.later))
             }
             Divider()
             Toggle("궤도 타임라인",isOn:Binding(get:{store.project.usesOrbits},set:{store.setCanvasViewPreferences(layout:$0 ? .orbit:.freeform)}))
@@ -366,10 +477,11 @@ struct RootView: View {
                 Button("그룹 해제"){store.ungroupHierarchy()}
             }
             Button("전체 앨범 맞추기"){store.hierarchyCommand=HierarchyCommand(action:.fit)}
-        }label:{Label("서클 도구",systemImage:"slider.horizontal.3")}
-            .menuStyle(.borderlessButton).fixedSize().padding(3)
-            .background(StudioTheme.canvas.opacity(0.94),in:RoundedRectangle(cornerRadius:6))
-            .accessibilityLabel("선택 서클 도구")
+            }label:{Label("서클 도구",systemImage:"slider.horizontal.3")}
+                .menuStyle(.borderlessButton).fixedSize().padding(3)
+                .background(StudioTheme.canvas.opacity(0.94),in:RoundedRectangle(cornerRadius:6))
+                .accessibilityLabel("선택 서클 도구")
+        }
     }
     @ViewBuilder private func footer(_ chrome:WorkspaceChromeLayout)->some View {
         if chrome.compactOverlays {

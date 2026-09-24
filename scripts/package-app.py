@@ -84,6 +84,9 @@ def main():
     trusted_mcp_helper = args.binary.with_name("circlr-trusted-mcp-helper")
     if not trusted_mcp_helper.is_file():
         raise ValueError("Build circlr-trusted-mcp-helper beside the app binary before packaging")
+    input_worker = args.binary.with_name("circlr-input-worker")
+    if not input_worker.is_file():
+        raise ValueError("Build circlr-input-worker beside the app binary before packaging")
     subprocess.run([sys.executable, str(root / 'scripts/build-agent-kit.py')], check=True)
     bundle_info = plistlib.loads((root / 'Resources/Info.plist').read_bytes())
     icon_name = bundle_info['CFBundleIconFile']
@@ -111,6 +114,7 @@ def main():
         shutil.copy2(au_instrument_worker, stage / 'Contents/MacOS/circlr-au-instrument-worker')
         shutil.copy2(output_device_catalog, stage / 'Contents/MacOS/circlr-output-device-catalog')
         shutil.copy2(trusted_mcp_helper, stage / 'Contents/MacOS/circlr-trusted-mcp-helper')
+        shutil.copy2(input_worker, stage / 'Contents/MacOS/circlr-input-worker')
         shutil.copy2(root / 'Resources/Info.plist', stage / 'Contents/Info.plist')
         shutil.copy2(icon_source, stage / 'Contents/Resources' / icon_name)
         shutil.copy2(catalog_source, stage / 'Contents/Resources/Assets.car')
@@ -140,10 +144,12 @@ def main():
         subprocess.run(['codesign', '--force', '--sign', '-', str(stage / 'Contents/MacOS/circlr-au-instrument-worker')], check=True)
         subprocess.run(['codesign', '--force', '--sign', '-', str(stage / 'Contents/MacOS/circlr-output-device-catalog')], check=True)
         subprocess.run(['codesign', '--force', '--sign', '-', str(stage / 'Contents/MacOS/circlr-trusted-mcp-helper')], check=True)
+        subprocess.run(['codesign', '--force', '--sign', '-', str(stage / 'Contents/MacOS/circlr-input-worker')], check=True)
         subprocess.run(['codesign', '--verify', '--strict', str(stage / 'Contents/MacOS/circlr-au-effect-worker')], check=True)
         subprocess.run(['codesign', '--verify', '--strict', str(stage / 'Contents/MacOS/circlr-au-instrument-worker')], check=True)
         subprocess.run(['codesign', '--verify', '--strict', str(stage / 'Contents/MacOS/circlr-output-device-catalog')], check=True)
         subprocess.run(['codesign', '--verify', '--strict', str(stage / 'Contents/MacOS/circlr-trusted-mcp-helper')], check=True)
+        subprocess.run(['codesign', '--verify', '--strict', str(stage / 'Contents/MacOS/circlr-input-worker')], check=True)
         subprocess.run(['codesign', '--force', '--sign', '-', str(stage)], check=True)
         subprocess.run(['codesign', '--verify', '--deep', '--strict', str(stage)], check=True)
         if app.exists():

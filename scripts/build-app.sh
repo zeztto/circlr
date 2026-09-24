@@ -9,4 +9,5 @@ CIRCLR_MODULE_CACHE_PATH="$PWD/.build/app-release/module-cache" ./scripts/swift-
 CIRCLR_MODULE_CACHE_PATH="$PWD/.build/app-release/module-cache" ./scripts/swift-local.sh build -c release --scratch-path .build/app-release --product circlr-output-device-catalog
 CIRCLR_MODULE_CACHE_PATH="$PWD/.build/app-release/module-cache" ./scripts/swift-local.sh build -c release --scratch-path .build/app-release --product circlr-audition-worker
 CIRCLR_MODULE_CACHE_PATH="$PWD/.build/app-release/module-cache" ./scripts/swift-local.sh build -c release --scratch-path .build/app-release --product circlr-trusted-mcp-helper
+CIRCLR_MODULE_CACHE_PATH="$PWD/.build/app-release/module-cache" ./scripts/swift-local.sh build -c release --scratch-path .build/app-release --product circlr-input-worker
 python3 scripts/package-app.py .build/app-release/release/circlr

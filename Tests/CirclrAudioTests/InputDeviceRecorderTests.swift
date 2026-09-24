@@ -80,10 +80,10 @@ private final class SelectionRecorderFactory:@unchecked Sendable {
         XCTAssertTrue(factory.selections.isEmpty)
         XCTAssertFalse(recorder.busy)
     }
-    func testProductionSelectedInputFailsClosedUntilNativePathIsVerified() async throws {
+    func testProductionSelectedInputFailsClosedWithoutParentHALLookup() async throws {
         let recorder=AudioRecorder()
         do {_=try await start(recorder,selection:.deviceUID("circlr-missing-input-uid"));XCTFail("Missing input capture started")}
-        catch {XCTAssertEqual(error as? InputDeviceBindingError,.missingDevice)}
+        catch {XCTAssertEqual(error as? InputDeviceBindingError,.selectedCaptureUnavailable)}
         XCTAssertEqual(recorder.phase,.failed)
         XCTAssertFalse(recorder.busy)
     }

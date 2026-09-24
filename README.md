@@ -8,13 +8,13 @@ English · [한국어](README.ko.md)
 
 In circlr, a circle is a timeline. Build a song from sections, place MIDI, audio, instruments and effects on and around their orbits, and connect their inputs and outputs. Move between the whole arrangement and detailed editing on one zoomable canvas.
 
-![circlr build234 showing f0r h3r, seven song sections and separate take and video recording controls](docs/images/circlr-song-build234.png)
+![circlr build235 showing f0r h3r and its seven song sections](docs/images/circlr-song-build235.png)
 
-*0.80.0 build234 development preview from an isolated native app. The latest public release is still 0.70.0. [Capture provenance](docs/images/README.md).*
+*0.80.0 build235 development preview from an isolated native app. The latest public release is still 0.70.0. [Capture provenance](docs/images/README.md).*
 
 > **0.70.0 · build180.** Smoother playback canvas and MP4 capture in the verified scenarios, with viewing mode beside Record. [Evidence and limits](docs/releases/0.70.0-qa.md).
 
-**In development:** [0.80.0](docs/releases/0.80.0.md) shows section order and timing on the song orbit, opens a single song at its section view, and keeps section labels clear of their timeline rings and console controls. Build234 caps late MIDI recording events at the requested loop count and separates MIDI/audio take recording from MP4 capture in the toolbar. It also packages an app-owned offline MCP helper for narrowly scoped MIDI edits and bounce; this is not in-app Codex account chat. An external Codex model completed a bounded MIDI edit, Undo and WAV export through MCP in an isolated earlier app. Physical recording, listening and long-recording QA remain open; 0.70.0 is the latest release. [Current QA](qa/0.80-build234.md).
+**In development:** [0.80.0](docs/releases/0.80.0.md) shows section order and timing on the song orbit and lets you move a selected section earlier or later from the toolbar, including narrow windows. Build235 also isolates default-input recording in an app-owned process so a stalled device cannot indefinitely block the app's recording control, and bounds local AI socket requests. Its offline MCP helper can edit selected MIDI and bounce; it is not Codex account chat. Physical recording, listening, long-recording and account-console QA remain open. An older Scarlett's normal operation is not assumed; 0.70.0 remains the latest release. [Current QA](qa/0.80-build235.md).
 
 ## What you can work with
 
@@ -24,9 +24,9 @@ In circlr, a circle is a timeline. Build a song from sections, place MIDI, audio
 - **Sound and motion:** instrument/effect routing, automation, bounce and source restoration; playback-follow and signal visualization controls.
 - **Local agents:** an MCP interface for inspecting and editing projects, generating MIDI, rendering and saving, with activity visible in the console.
 
-<img src="docs/images/circlr-song-portrait-build234.png" width="280" alt="circlr build234 in a portrait window, with seven section labels and distinct take and video controls">
+<img src="docs/images/circlr-song-portrait-build235.png" width="280" alt="circlr build235 in a portrait window with seven song sections and responsive controls">
 
-*The same build234 demo stopped in a 720×900 portrait window with the console open, showing the playback-follow target, responsive recording controls and all seven sections. [Capture details](docs/images/README.md).*
+*The same build235 demo stopped in a 720×900 portrait window, showing the responsive section controls and all seven sections. [Capture details](docs/images/README.md).*
 
 These are implemented development features, not a guarantee of compatibility with every audio device or plug-in. Artist profiles and a combined text, image and video workspace are the [longer-term direction](docs/21-artist-universe.md).
 
@@ -49,7 +49,7 @@ cd circlr
 open 'dist/써클러.app'
 ```
 
-The build packages the app, five audio helpers, an internal trusted MCP helper and the agent kit together. Local packages use ad-hoc signing and are not notarized. Keep a separate copy of important projects when trying development builds.
+The build on this development branch packages the app, six audio helpers, an internal trusted MCP helper and the agent kit together. Local packages use ad-hoc signing and are not notarized. Keep a separate copy of important projects when trying development builds.
 
 Choose a synth circle, then **음색·악기 찾기** to search the built-in patches. The same patches are available through MCP `sounds`; apply the returned `synthPatch` to `instrument.synth`. Existing saved sounds are preserved until explicitly changed. [Release notes](docs/releases/0.70.0-notes.md).
 
