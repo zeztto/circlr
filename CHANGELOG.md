@@ -1,5 +1,17 @@
 # 변경 이력
 
+## 0.80.0 · build224 — 개발 중
+
+- 720×900 창에서 직접 섹션 이름표가 빠지지 않도록 가까운 배치가 막히면 화면 안의 빈 위치를 찾는다. 서클·도구·다른 이름표와 겹치지 않으며 가로·세로 README 화면을 build224 실제 앱으로 갱신했다. [build224 QA](qa/0.80-build224.md) · [native](qa/0.80-build224-native.md).
+- 마지막 소스의 Swift 1,189개 중 14 skip·실패0, arm64 앱·다섯 helper·agent kit의 strict deep 서명 통과. 0.80의 실제 녹음·물리 청취·장시간 영상·완전한 제작/AI 경로 gate는 계속 열려 있다.
+
+## 0.80.0 · build223 — 개발 중
+
+- 저장된 화면이 없는 단일 곡을 열면 앨범 개요 대신 곡의 섹션 궤도를 먼저 보여 준다. 저장된 사용자 화면과 여러 곡 앨범의 첫 화면은 그대로 유지한다. [build222 native](qa/0.80-build222-native.md).
+- 창 너비나 하단 콘솔 높이가 바뀌면 현재 곡의 context-fit을 보이는 영역에 다시 맞춘다. 사용자가 조작한 zoom/pan과 재생 팔로우는 보존한다. 최종 Swift 1,189개 중 14 skip·실패0, arm64 앱/5 helper·strict deep 서명 통과. [build223 QA](qa/0.80-build223.md).
+- 실제 입력 take·물리 청취·장시간 녹화·앱 내 Codex 계정 대화는 0.80 출고 gate로 남아 있다. 구형 Scarlett의 세대와 호환성은 미확정이며 [오디오 감사](qa/0.80-daw-audio-audit.md)와 [AI/MCP 감사](qa/0.80-agent-journey-audit.md)를 분리해 기록했다.
+- 격리 앱의 720×900 창에서 04·06·07 섹션 라벨이 가려졌다. 원과 AX 항목은 유지됐지만 build223은 세로 화면 사용성 **FAIL**이며 build224의 라벨 배치 보강으로 이어간다. [native QA](qa/0.80-build223-native.md).
+
 ## 0.80.0 · build221 — 개발 중
 
 - build220의 동일 앱/곡은 `/tmp`에서 manifest 선택 저장이 약 0.7초, Documents에서 `.circlr` 폴더 선택 저장이 약 0.6초였으나 Documents의 manifest 한 파일 선택 뒤 저장만 멈췄다. GUI에서 manifest를 선택하면 같은 곡 폴더를 한 번 더 명시적으로 선택해 미디어 접근을 확보하도록 한다. macOS Documents 접근 설명도 앱에 추가했다. [build220 통제 QA](qa/0.80-build220-temp-native.md) · [build221 QA](qa/0.80-build221.md).

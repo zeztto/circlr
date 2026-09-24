@@ -46,8 +46,9 @@ public enum CanvasLabelLayout {
             // Alternate rows let dense, simultaneous starts remain individually selectable.
             for offset in [h+5,-h-5,2*h+10,-2*h-10] {origins.append(CGPoint(x:p.x+r+9,y:p.y-h/2+offset));origins.append(CGPoint(x:p.x-r-w-9,y:p.y-h/2+offset))}
             var candidates=origins.map{CGRect(origin:$0,size:request.size)}
-            // Preserve normal placements first. Only the primary selection may move inward at an edge.
-            // Never shrink the label or pull an unrelated, off-screen circle into the viewport.
+            // Preserve normal placements first. Selected nodes and direct song sections
+            // in narrow views may use spare viewport space without moving music circles.
+            // Never shrink the label or pull an unrelated, off-screen circle into view.
             if request.allowsViewportAdjustment,w<=viewport.width,h<=viewport.height,
                viewport.contains(p) || CanvasLabelCircle(id:request.id,center:p,radius:r).intersects(viewport,clearance:0) {
                 candidates += origins.map{CGRect(x:max(viewport.minX,min(viewport.maxX-w,$0.x)),y:max(viewport.minY,min(viewport.maxY-h,$0.y)),width:w,height:h)}
@@ -60,6 +61,17 @@ public enum CanvasLabelLayout {
                            CGPoint(x:viewport.minX,y:viewport.maxY-h),CGPoint(x:viewport.maxX-w,y:viewport.maxY-h)]
                 candidates += edges.enumerated().sorted{a,b in
                     let da=hypot(a.element.x+w/2-p.x,a.element.y+h/2-p.y),db=hypot(b.element.x+w/2-p.x,b.element.y+h/2-p.y)
+                    return da==db ? a.offset<b.offset:da<db
+                }.map{CGRect(origin:$0.element,size:request.size)}
+                // A crowded orbit can block the four nearest edges. Search a small,
+                // deterministic lattice only after the familiar local positions.
+                let fractions:[Double]=[0,0.25,0.5,0.75,1]
+                let lattice=fractions.flatMap { fy in fractions.map { fx in
+                    CGPoint(x:viewport.minX+(viewport.width-w)*fx,y:viewport.minY+(viewport.height-h)*fy)
+                }}
+                candidates += lattice.enumerated().sorted { a,b in
+                    let da=hypot(a.element.x+w/2-p.x,a.element.y+h/2-p.y)
+                    let db=hypot(b.element.x+w/2-p.x,b.element.y+h/2-p.y)
                     return da==db ? a.offset<b.offset:da<db
                 }.map{CGRect(origin:$0.element,size:request.size)}
             }

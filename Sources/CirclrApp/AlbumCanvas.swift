@@ -20,6 +20,8 @@ struct AlbumCanvas: NSViewRepresentable {
     var commandID: UUID?
     var initialized = false
     var previousSize = NSSize.zero
+    var contextFitAddress: CircleAddress?
+    var contextFitViewport: CGRect?
     var animation: Timer?
     var animationDestination: HierarchyCamera?
     var scrollMonitor: Any?
@@ -233,12 +235,20 @@ struct AlbumCanvas: NSViewRepresentable {
     override func layout() {
         super.layout()
         if !initialized, bounds.width > 100, let root = scene?.node(.album) { camera = orbitContextCamera(root.id) ?? camera.focused(on: root, width: bounds.width, height: bounds.height); initialized = true }
-        if previousSize.width > 0, previousSize != bounds.size {
-            camera.pan.x += (bounds.width-previousSize.width)/2
-            camera.pan.y += (bounds.height-previousSize.height)/2
+        let oldSize=previousSize
+        let resized=oldSize.width>0 && oldSize != bounds.size
+        previousSize = bounds.size
+        if resized {
+            if !refitContextIfNeeded() {
+                camera.pan.x += (bounds.width-oldSize.width)/2
+                camera.pan.y += (bounds.height-oldSize.height)/2
+            }
             followedSection = nil
         }
-        previousSize = bounds.size
+        // SwiftUI may send the initial restore before this view has a usable
+        // size. Keep the command pending until focus can compute its camera.
+        if let command=store.hierarchyCommand,command.id != commandID,
+           bounds.width>100,bounds.height>100 { update() }
         placeEditor(); needsDisplay = true
     }
     override func updateTrackingAreas() {
@@ -266,6 +276,9 @@ struct AlbumCanvas: NSViewRepresentable {
             visualSelection = store.hierarchySelection; playbackVisibilityFocus = nil
         }
         if renderedRevision != store.hierarchyRevision {
+            if let renderedProjectID,renderedProjectID != store.project.id {
+                contextFitAddress=nil;contextFitViewport=nil
+            }
             labelTextCache.removeAll(keepingCapacity:true)
             let anchor=editorAddress ?? store.hierarchySelection ?? .album
             let previous=renderedProjectID==store.project.id && renderedOrbits != nil && renderedOrbits != store.project.usesOrbits ? scene?.node(anchor):nil
@@ -281,7 +294,8 @@ struct AlbumCanvas: NSViewRepresentable {
                 setCamera(camera.preserving(previous,in:next))
             }
         }
-        if let command = store.hierarchyCommand, command.id != commandID {
+        if let command = store.hierarchyCommand, command.id != commandID,
+           bounds.width>100,bounds.height>100 {
             commandID = command.id
             switch command.action {
             case .focus(let address, let detail): focus(address, detail: detail)
@@ -301,7 +315,10 @@ struct AlbumCanvas: NSViewRepresentable {
                     } else {
                         store.restoreStudioWorkspace(.init());focus(selection)
                     }
-                } else {store.selectHierarchy(.album);store.hierarchySettingsOpen=false;focus(.album)}
+                } else {
+                    let opening=StudioWorkspace.openingSelection(in:store.project)
+                    store.selectHierarchy(opening);store.hierarchySettingsOpen=false;focus(opening)
+                }
             case .zoom(let factor): setCamera(camera.zoomed(to: camera.zoom*factor, around: Point(bounds.midX, bounds.midY)), animated: true)
             }
         }
@@ -310,6 +327,8 @@ struct AlbumCanvas: NSViewRepresentable {
             if store.playbackFollow != .following { animation?.invalidate(); animation = nil }
             if store.playback.playing { updatePlaybackFrame() }
         }
+        // The console is an overlay: its height can change without resizing NSView.
+        _=refitContextIfNeeded()
         placeEditor(); needsDisplay = true
     }
     func focus(_ address: CircleAddress, detail: Bool = false) {
@@ -317,7 +336,9 @@ struct AlbumCanvas: NSViewRepresentable {
         // Explicit editor commands need a precision-scale orbit. Context framing is
         // for browsing only; fitting satellites can leave the owner below the editor gate.
         if scene.isOrbit, !detail, let target=orbitContextCamera(address,in:scene) {
-            setCamera(target,animated:true);return
+            setCamera(target,animated:true)
+            contextFitAddress=address;contextFitViewport=workspaceViewport
+            return
         }
         if !detail,node.role == .section,
            let target=PlaybackFraming.camera(for:node,in:scene,viewport:workspaceViewport) {
@@ -365,8 +386,22 @@ struct AlbumCanvas: NSViewRepresentable {
     func isTimelineRing(_ node:CircleSceneNode)->Bool {
         store.project.usesOrbits && node.role != .music && node.signal == nil
     }
+    @discardableResult func refitContextIfNeeded()->Bool {
+        let viewport=workspaceViewport
+        guard let address=contextFitAddress,contextFitViewport != viewport,
+              editorAddress == nil,
+              !(store.playback.playing && store.playbackFollow == .following),
+              let fitted=orbitContextCamera(address) else{return false}
+        // A browsing fit tracks its visible workspace; manual cameras never do.
+        contextFitViewport=viewport
+        setCamera(fitted,manual:false)
+        return true
+    }
     func setCamera(_ target: HierarchyCamera, animated: Bool = false, manual: Bool = true) {
-        if manual { interruptPlaybackFollow() }
+        // A restore may be processed during the first usable layout, before
+        // the default album camera has initialized. Do not overwrite it later.
+        if bounds.width>100,bounds.height>100 { initialized=true }
+        if manual {contextFitAddress=nil;contextFitViewport=nil;interruptPlaybackFollow()}
         animation?.invalidate(); animation = nil
         animationDestination = nil
         if animated {

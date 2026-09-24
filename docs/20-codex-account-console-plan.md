@@ -4,6 +4,8 @@
 
 > 2026-09-23 재확인: 공식 [App Server 문서](https://learn.chatgpt.com/docs/app-server)는 현재 `codex app-server` 명령을 experimental·production 미지원으로 표시한다. 공개 0.80 계정 콘솔은 [G0 판단](releases/0.80.0.md)에 따라 보류한다. 아래 설계의 API와 패키징 가정은 지원 상태가 바뀌고 실제 macOS 격리·배포 QA가 끝나기 전까지 제품 계약이 아니다.
 
+2026-09-24 [AI/MCP 경로 감사](../qa/0.80-agent-journey-audit.md)는 외부 MCP의 계약 테스트와 앱 내부 trusted socket/STOP 테스트를 분리해 통과로 기록했다. 앱 target에는 아직 `CirclrCodex` 계정 세션이 연결되지 않았으며, trusted lease의 `save`·`export`·`open`도 미구현이다. 따라서 이 설계의 대화→편집→저장/출력을 실제 앱의 완성된 AI 작업 흐름으로 표시하지 않는다.
+
 **사용자가 자신의 ChatGPT 계정으로 Codex에 로그인하고, circlr의 접이식 콘솔에서 대화하며 곡을 편집한다.** circlr가 로컬 Codex App Server를 관리하고, Codex는 circlr MCP를 통해 기존 음악 명령을 실행한다. 로그인 과정의 공식 브라우저를 제외하면 별도의 Codex 앱·터미널을 열 필요가 없는 경험을 목표로 한다.
 
 이 문서는 아키텍처 결정과 구현 순서다. 0.80 개발 후보에는 앱 실행 파일과 분리된 `CirclrCodex` 프로토콜 코어, 범위 제한 `AgentRunLease`, 그리고 한 turn에만 묶이는 앱 내부 `TrustedAgentIngress` socket이 있다. 실제 Unix socket에서 편집·중단·완료 후 늦은 요청을 검증했지만, 이 ingress는 앱의 Codex 세션이나 MCP helper에 아직 연결되지 않았다. build210은 내부 프로토콜에 계정 상태 조회·모델 목록·읽기 전용 thread 생성과 명시적 turn 모델을 추가했다. build211은 보안 리뷰에 따라 자식 환경·작업 디렉터리 설정을 host 생성 시 필수로 만들고, 관리형 reducer에서 승인된 canonical 디렉터리와 열린 읽기 전용 thread ID에 turn을 묶었다. 설치 CLI와의 계정·한 turn smoke는 **앱 밖**에서만 수행했다. 앱 안의 계정 연결·모델 대화·런타임 설치·자연어 UI와 인증된 운영 호출자는 구현·검증되지 않았다. 아래의 파일·정책은 항목별 실제 코드와 QA가 확인될 때까지 완료로 보지 않는다.

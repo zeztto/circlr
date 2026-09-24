@@ -230,7 +230,8 @@ extension AlbumCanvasView {
             texts[node.id]=text
             let expanded=node.childCount>0 && scene.children(of:node.id).contains(where:isVisible)
             // The playing section stays identifiable beside its orbit, ahead of selection and hover labels.
-            requests.append(CanvasLabelRequest(id:node.id,anchor:p,size:text.size,radius:radius,expanded:expanded,priority:activeFocus ? 110:primary ? 100:node.id==hoverAddress ? 95:direct && ["MIDI","오디오"].contains(node.music?.content.label ?? "") ? 85:direct ? 70:20,allowsViewportAdjustment:emphasized))
+            let portraitSongSection=direct && node.role == .section && workspaceViewport.width<900
+            requests.append(CanvasLabelRequest(id:node.id,anchor:p,size:text.size,radius:radius,expanded:expanded,priority:activeFocus ? 110:primary ? 100:node.id==hoverAddress ? 95:direct && ["MIDI","오디오"].contains(node.music?.content.label ?? "") ? 85:direct ? 70:20,allowsViewportAdjustment:emphasized || portraitSongSection))
         }
         labelPlacements=CanvasLabelLayout.place(requests,within:workspaceViewport,avoiding:readableLabelObstacles,circles:labelCircles)
         for placement in labelPlacements {

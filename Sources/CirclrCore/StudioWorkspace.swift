@@ -72,4 +72,16 @@ public struct StudioWorkspace:Codable,Equatable {
         }
         return .album
     }
+
+    /// A first visit to a single song should show its form. An explicit saved
+    /// viewport, including one that cannot currently be restored, owns its
+    /// own fallback and must not be replaced with a guessed camera target.
+    public static func openingSelection(in project:Project)->CircleAddress {
+        guard project.hierarchyView == nil,
+              let album=project.album,album.children.count == 1,
+              let id=album.children.first,let composition=album.composition(id),
+              composition.kind == .song,composition.children.isEmpty,
+              composition.selectedArrangementID != nil else {return .album}
+        return .composition(id)
+    }
 }

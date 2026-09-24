@@ -35,6 +35,17 @@ final class SavedWorkspaceTests:XCTestCase {
         XCTAssertEqual(StudioWorkspace.restoredSelection(.composition("missing"),in:p),.album)
         XCTAssertEqual(StudioWorkspace.restoredSelection(.music(arrangementID:"missing",useID:"missing",nodeID:"missing"),in:p),.album)
     }
+    func testOpeningSelectionShowsSingleUnsavedSongButPreservesAlbumCases()throws {
+        var project=try fixture()
+        let songID=try XCTUnwrap(project.album?.children.first)
+        XCTAssertEqual(StudioWorkspace.openingSelection(in:project),.composition(songID))
+
+        project.hierarchyView=viewport(.album)
+        XCTAssertEqual(StudioWorkspace.openingSelection(in:project),.album)
+        project.hierarchyView=nil
+        _=try AlbumEditing.add(name:"두 번째 곡",kind:.song,in:&project)
+        XCTAssertEqual(StudioWorkspace.openingSelection(in:project),.album)
+    }
     func testUnselectedArrangementDoesNotReopenItsHiddenChild()throws {
         var p=try fixture();var alternative=p.active;alternative.id=newID();p.arrangements.append(alternative)
         p.album?.compositions[0].arrangementIDs.append(alternative.id)

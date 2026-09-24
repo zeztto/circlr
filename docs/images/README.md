@@ -1,5 +1,11 @@
 # Screenshots · 실행 화면
 
+## 0.80.0 build224 development preview
+
+`circlr-song-build224.png` (1440×900, SHA-256 `0b3cf8f58fdadc7e7704db6cb02b4d70d819a5a94432da1bd7fb9422627d65f5`) and `circlr-song-portrait-build224.png` (720×900, SHA-256 `b137de47ed182f3018a4af74bd6d6054dbf632ad28dc93e1b230fbae1d17a67a`) are byte-for-byte copies of uncropped full-window PNG conversions from isolated native **0.80.0/build224**. The original CUA JPEGs and converted PNGs remain in ignored `qa/generated/r80-build224-native/` as `demo-first-load-1440x900` and `console-collapsed-720x900`. The portrait has its console collapsed; both show the stopped bundled **f0r h3r** with all seven section labels visible. Packaged executable SHA-256: `f35c111594cb4ddd2cf3ec490a5dc6520fcac90466184ad0675a1676dbbfd0e9`. These screenshots verify the UI in the captured states, not playback, physical listening, recording input or 0.80 release readiness. [build224 native QA](../../qa/0.80-build224-native.md).
+
+두 PNG는 별도 build224 실제 앱의 가로·세로 전체 창을 자르거나 크기 변경하지 않고 변환한 화면입니다. 세로 화면은 콘솔을 접어 일곱 섹션 라벨을 보여줍니다. 재생·실제 청취·녹음 take·정식 출고의 증거는 아닙니다.
+
 ## 0.80.0 build221 development preview
 
 `circlr-song-build221.png` (1440×900, SHA-256 `a085a5812e88fd37e64463e3be3e4e35f456018ccb03f2f1267e6581780ad24e`) and `circlr-song-portrait-build221.png` (720×900, SHA-256 `f5d4efc9ed6967a8c2b9880f5cfb15367531fd2a4af153f200dfad906b9b270a`) show the stopped **f0r h3r** song orbit in an isolated **0.80.0/build221** native app. The CUA full-window JPEG sources remain in ignored `qa/generated/r80-build221-native/` (SHA-256 `85f97d2b46925a4747a4573c9165eb9b0b015cbb42065ecb5b9b7684e9ccf57a` and `217edd47891dbafc26a41544a76894a6d75cc30283feb2c1b54987a88e441e8e`). The PNGs preserve the full 1440×900 and 720×900 windows without cropping or resizing. Packaged executable SHA-256: `19d7a61907905c5c635136e0d8a77a1d107cbb42e4c50e5ebeecd5237be8d032`. The rightmost satellite is partly outside the portrait viewport; these images do not prove playback, physical listening or 0.80 release readiness. [build221 native QA](../../qa/0.80-build221-native.md).

@@ -203,6 +203,7 @@ struct PlaybackVisualFrame {
         // Only real section-use changes get the excursion, never initial focus or a loop of one use.
         let changesSection=settings.target == .section && followedSection != nil && target != followedSection && lastFollowSettings.target == .section
         followedSection=target;lastFollowSettings=settings
+        contextFitAddress=nil;contextFitViewport=nil
         playbackVisibilityFocus=target;playbackFollowViewport=viewport
         animatePlaybackFollow(to:next,changesSection:changesSection)
     }
