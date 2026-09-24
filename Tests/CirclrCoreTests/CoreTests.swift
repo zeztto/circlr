@@ -1,4 +1,5 @@
 import XCTest
+import Darwin
 @testable import CirclrCore
 
 final class CoreTests: XCTestCase {
@@ -101,7 +102,8 @@ final class CoreTests: XCTestCase {
     func testPackageRoundtripPreservesAssetBytesAndRejectsEscape() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(newID())
         try FileManager.default.createDirectory(at:root,withIntermediateDirectories:true); defer { try? FileManager.default.removeItem(at:root) }
-        let source = root.appendingPathComponent("recorded.bin"), bytes = Data([0,5,9,255,17])
+        let source = root.appendingPathComponent("recorded.bin")
+        let bytes = Data((0..<1_048_593).map { UInt8($0 % 251) })
         try bytes.write(to:source)
         var p = song(); p.assets = [Asset(name:"원본",path:source.path,duration:1,sampleRate:48000)]
         let url = root.appendingPathComponent("song.circlr")
@@ -109,9 +111,65 @@ final class CoreTests: XCTestCase {
         XCTAssertEqual(try Data(contentsOf:source),bytes)
         let loaded = try ProjectStore.load(url)
         XCTAssertEqual(saved,loaded.project)
+        let manifestLoaded = try ProjectStore.load(url.appendingPathComponent("manifest.json"))
+        XCTAssertEqual(manifestLoaded.project,saved)
+        XCTAssertEqual(manifestLoaded.root.path,url.path)
+        XCTAssertThrowsError(try ProjectStore.load(source)) { error in
+            XCTAssertTrue(error.localizedDescription.contains(".circlr 곡 폴더"))
+        }
+        XCTAssertThrowsError(try ProjectStore.load(root)) { error in
+            XCTAssertTrue(error.localizedDescription.contains("manifest.json"))
+        }
         XCTAssertEqual(try Data(contentsOf:ProjectStore.assetURL(saved.assets[0],root:url)),bytes)
         _ = try ProjectStore.save(saved,to:url,mediaRoot:url)
         var invalid = saved.assets[0]; invalid.path = "../../escape"
         XCTAssertThrowsError(try ProjectStore.assetURL(invalid,root:url))
+    }
+
+    func testSaveRefusesToReplaceUnownedFilesBesideManifest() throws {
+        let parent = FileManager.default.temporaryDirectory.appendingPathComponent(newID())
+        try FileManager.default.createDirectory(at: parent, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: parent) }
+        let folder = parent.appendingPathComponent("ordinary-folder")
+        let project = try ProjectStore.save(song(), to: folder, mediaRoot: nil)
+        let manifest = folder.appendingPathComponent("manifest.json")
+        let original = try Data(contentsOf: manifest)
+        let note = folder.appendingPathComponent("notes.txt")
+        let noteBytes = Data("keep this note".utf8)
+        try noteBytes.write(to: note)
+        XCTAssertEqual(try ProjectStore.load(manifest).project, project)
+        XCTAssertThrowsError(try ProjectStore.save(project, to: folder, mediaRoot: folder)) { error in
+            XCTAssertTrue(error.localizedDescription.contains("프로젝트 외 파일"), error.localizedDescription)
+        }
+        XCTAssertEqual(try Data(contentsOf: note), noteBytes)
+        XCTAssertEqual(try Data(contentsOf: manifest), original)
+        XCTAssertFalse(try FileManager.default.contentsOfDirectory(atPath: parent.path)
+            .contains { $0.hasPrefix(".circlr-save-") || $0.hasPrefix(".circlr-backup-") })
+    }
+
+    func testManifestSpecialFileIsRejectedWithoutWaitingForWriter() throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(newID())
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let manifest = folder.appendingPathComponent("manifest.json")
+        XCTAssertEqual(Darwin.mkfifo(manifest.path, mode_t(0o600)), 0)
+        XCTAssertThrowsError(try ProjectStore.load(manifest)) { error in
+            XCTAssertTrue(error.localizedDescription.contains("일반 파일"))
+        }
+    }
+
+    func testSaveRejectsSpecialMediaWithoutWaitingForWriter() throws {
+        let parent = FileManager.default.temporaryDirectory.appendingPathComponent(newID())
+        try FileManager.default.createDirectory(at: parent, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: parent) }
+        let fifo = parent.appendingPathComponent("untrusted.wav")
+        XCTAssertEqual(Darwin.mkfifo(fifo.path, mode_t(0o600)), 0)
+        var project = song()
+        project.assets = [Asset(name:"특수 미디어",path:fifo.path,duration:1,sampleRate:48000)]
+        let target = parent.appendingPathComponent("target.circlr")
+        XCTAssertThrowsError(try ProjectStore.save(project, to: target, mediaRoot: nil)) { error in
+            XCTAssertTrue(error.localizedDescription.contains("일반 파일"), error.localizedDescription)
+        }
+        XCTAssertFalse(FileManager.default.fileExists(atPath: target.path))
     }
 }

@@ -304,11 +304,15 @@ extension AppStore {
             let url=try agentPath(path)
             if FileManager.default.fileExists(atPath:url.path),try ProjectStore.load(url).project.id != project.id {throw CirclrError("다른 프로젝트를 덮어쓸 수 없습니다")}
             captureViewport()
-            let saved=try ProjectStore.saveSession(project,to:url,mediaRoot:mediaRoot)
+            var cleanupWarning: String?
+            let saved=try ProjectStore.saveSessionReportingCleanup(project,to:url,mediaRoot:mediaRoot) { cleanupWarning = $0 }
             if let lease=demoCopyLease,url.standardizedFileURL == lease.root {
                 try? DemoCopyLease.retainIfManaged(lease.root);demoCopyLease=nil
             } else {retireDemoCopy()}
-            project=saved;projectURL=url;mediaRoot=url;dirty=false;clearSavedRecovery();status="에이전트 저장 완료";return agentState()
+            project=saved;projectURL=url;mediaRoot=url;dirty=false;clearSavedRecovery();status=cleanupWarning ?? "에이전트 저장 완료"
+            var result=agentState()
+            if let cleanupWarning { result["warning"] = cleanupWarning }
+            return result
         case "open":
             return try beginAgentOpen(request,source:source)
         case "import_midi":return try beginAgentMIDIImport(request,source:source)
@@ -403,7 +407,7 @@ extension AppStore {
         preparing=true;progress=0;status="프로젝트 읽는 중 · macOS 접근 요청이 있으면 확인하세요"
         productionTask=Task { [weak self] in
             guard let self else{return}
-            let worker=Task.detached(priority:.userInitiated){try Task.checkCancellation();try DemoCopyLease.retainIfManaged(url);let loaded=try ProjectStore.load(url);try Task.checkCancellation();return loaded}
+            let worker=Task.detached(priority:.userInitiated){try Task.checkCancellation();let root=try ProjectStore.rootURL(for:url);try DemoCopyLease.retainIfManaged(root);let loaded=try ProjectStore.load(root);try Task.checkCancellation();return loaded}
             self.agentOpenWorker=worker
             do {
                 let loaded=try await worker.value

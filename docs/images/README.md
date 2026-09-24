@@ -1,5 +1,17 @@
 # Screenshots · 실행 화면
 
+## 0.80.0 build221 development preview
+
+`circlr-song-build221.png` (1440×900, SHA-256 `a085a5812e88fd37e64463e3be3e4e35f456018ccb03f2f1267e6581780ad24e`) and `circlr-song-portrait-build221.png` (720×900, SHA-256 `f5d4efc9ed6967a8c2b9880f5cfb15367531fd2a4af153f200dfad906b9b270a`) show the stopped **f0r h3r** song orbit in an isolated **0.80.0/build221** native app. The CUA full-window JPEG sources remain in ignored `qa/generated/r80-build221-native/` (SHA-256 `85f97d2b46925a4747a4573c9165eb9b0b015cbb42065ecb5b9b7684e9ccf57a` and `217edd47891dbafc26a41544a76894a6d75cc30283feb2c1b54987a88e441e8e`). The PNGs preserve the full 1440×900 and 720×900 windows without cropping or resizing. Packaged executable SHA-256: `19d7a61907905c5c635136e0d8a77a1d107cbb42e4c50e5ebeecd5237be8d032`. The rightmost satellite is partly outside the portrait viewport; these images do not prove playback, physical listening or 0.80 release readiness. [build221 native QA](../../qa/0.80-build221-native.md).
+
+두 PNG는 격리 build221 실제 앱에서 정지한 **f0r h3r**의 가로·세로 전체 창입니다. 원본 화면을 자르거나 크기 변경하지 않았고, 세로 창 오른쪽 위성 원 일부는 화면 밖으로 이어집니다. 화면 구성 증거이며 실제 청취·정식 출시 판정은 아닙니다.
+
+## 0.80.0 build217 development preview
+
+`circlr-song-build217.png` (1440×900, SHA-256 `1be011ffcdb6e89ab038c27407bf0a63b91929d570500229f8672db9362d1521`) and `circlr-song-portrait-build217.png` (720×900, SHA-256 `c375ffc54245c5451e06579587202ad97d31c816af89a1d369f8d92228cd2e46`) show the isolated **0.80.0/build217** app with a QA copy of **f0r h3r** stopped. The CUA full-window source screenshots are JPEG files in `qa/generated/r80-build217-native/`; these PNGs were converted with `sips` without cropping or resizing and copied byte-for-byte into `docs/images/`. The packaged executable SHA-256 was `24caeee9029a5929559af6b6acc236bbdc6c153979188194bdfbb3cacae20930`. The portrait captures the responsive two-row toolbar; neither image verifies audio playback or physical listening. [build217 native QA](../../qa/0.80-build217-native.md).
+
+두 PNG는 격리된 build217 실제 앱 전체 창 JPEG를 자르거나 크기 변경하지 않고 변환한 화면입니다. 정지한 **f0r h3r** QA 사본의 일곱 섹션 순번과 세로 창의 두 줄 상단 조작이 보입니다. 재생·실제 청취·정식 출시 증거로 해석하지 않습니다.
+
 ## 0.80.0 build216 development preview
 
 `circlr-song-build216.png` (1440×900, SHA-256 `175323125c19e407683c6f987c37c0d6583baf7b90ad9b6985d3b973ceaf65e8`) and `circlr-song-portrait-build216.png` (720×900, SHA-256 `b95af63c1cd68b75aedfbd9584d8582513cc29b73fbbda30f6ae43ea921732ed`) are byte-identical copies of full-window CUA screenshots from the isolated **0.80.0/build216** native app. Source files: `qa/generated/r80-build216-native/build216-song-orbit-landscape-1440x900.png` and `build216-song-orbit-portrait-720x900.png`. The original packaged executable SHA-256 was `04c63d791b7bd3a5c7549573aabe0626e3b9fc33b9e9e3dc821b2e04da16d5da`. Both show the bundled **f0r h3r** QA copy stopped with seven numbered sections; the portrait shows the two-row toolbar. No playback or physical listening was inferred from these screenshots. [build216 native QA](../../qa/0.80-build216-native.md).

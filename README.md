@@ -8,13 +8,13 @@ English · [한국어](README.ko.md)
 
 In circlr, a circle is a timeline. Build a song from sections, place MIDI, audio, instruments and effects on and around their orbits, and connect their inputs and outputs. Move between the whole arrangement and detailed editing on one zoomable canvas.
 
-![circlr build216 showing f0r h3r and seven numbered song sections](docs/images/circlr-song-build216.png)
+![circlr build221 showing f0r h3r and seven numbered song sections](docs/images/circlr-song-build221.png)
 
-*0.80.0 build216 development preview from an isolated native app. The latest public release is still 0.70.0. [Capture provenance](docs/images/README.md).*
+*0.80.0 build221 development preview from an isolated native app. The latest public release is still 0.70.0. [Capture provenance](docs/images/README.md).*
 
 > **0.70.0 · build180.** Smoother playback canvas and MP4 capture in the verified scenarios, with viewing mode beside Record. [Evidence and limits](docs/releases/0.70.0-qa.md).
 
-**In development:** [0.80.0](docs/releases/0.80.0.md) shows section order and timing on the song orbit, lets you move a selected section with `⇧⌥←/→`, and strengthens WAV/stem export. Full production, listening and long-recording QA remain open; 0.70.0 is the latest release. [Current QA](qa/0.80-build216.md).
+**In development:** [0.80.0](docs/releases/0.80.0.md) shows section order and timing on the song orbit, lets you move a selected section with `⇧⌥←/→`, and strengthens WAV/stem export. Full production, listening and long-recording QA remain open; 0.70.0 is the latest release. [Current QA](qa/0.80-build221.md).
 
 ## What you can work with
 
@@ -24,9 +24,9 @@ In circlr, a circle is a timeline. Build a song from sections, place MIDI, audio
 - **Sound and motion:** instrument/effect routing, automation, bounce and source restoration; playback-follow and signal visualization controls.
 - **Local agents:** an MCP interface for inspecting and editing projects, generating MIDI, rendering and saving, with activity visible in the console.
 
-<img src="docs/images/circlr-song-portrait-build216.png" width="280" alt="circlr build216 showing numbered sections in a portrait window">
+<img src="docs/images/circlr-song-portrait-build221.png" width="280" alt="circlr build221 showing numbered sections in a portrait window">
 
-*The same build216 demo stopped in a 720×900 portrait window, showing the responsive toolbar and numbered sections. [Capture details](docs/images/README.md).*
+*The same build221 demo stopped in a 720×900 portrait window, showing the responsive toolbar and numbered sections. [Capture details](docs/images/README.md).*
 
 These are implemented development features, not a guarantee of compatibility with every audio device or plug-in. Artist profiles and a combined text, image and video workspace are the [longer-term direction](docs/21-artist-universe.md).
 

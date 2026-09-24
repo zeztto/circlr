@@ -23,6 +23,8 @@
 
 버튼이 보이지 않으면 앱 실행을 다시 시도한 뒤 설정을 확인하세요. 조직에서 관리하는 Mac은 관리자에게 문의하세요. **앱이 손상되었거나 컴퓨터를 손상시킨다는 경고**는 위 절차로 처리하지 말고 다운로드와 체크섬을 재확인한 뒤 [이슈](https://github.com/zeztto/circlr/issues)에 버전·macOS 버전·경고 내용을 남겨주세요. 경고 종류는 [Apple 공식 안내](https://support.apple.com/ko-kr/102445)를 참고하세요.
 
+0.80 개발 빌드에서 곡을 열 때는 `.circlr` **폴더 자체를 선택**하세요. `manifest.json`을 골랐다면 앱이 같은 곡 폴더를 한 번 더 선택하도록 안내합니다. macOS는 파일 선택만으로 옆의 오디오·MIDI 파일까지 접근을 허용하지 않을 수 있습니다. 다른 폴더를 고르거나 취소하면 현재 곡은 유지됩니다. [Apple의 Documents 접근 설명](https://developer.apple.com/documentation/bundleresources/information-property-list/nsdocumentsfolderusagedescription).
+
 ### 오디오 장치에서 소리가 나지 않을 때
 
 앱의 **출력 설정**에서 Mac 내장 스피커 또는 다른 지원 장치를 명시적으로 선택하고 다시 재생해 보세요. 이 선택은 circlr에만 적용되며 macOS의 기본 출력은 바꾸지 않습니다. 오래된 Scarlett 등 외부 인터페이스는 세대·macOS 버전에 따라 지원 범위가 다르므로 [Focusrite의 macOS 호환성 안내](https://support.focusrite.com/hc/en-gb/articles/12033372452754-Focusrite-Compatibility-on-macOS)에서 정확한 세대를 확인하세요. 장치 초기화가 실패하면 circlr는 재시도를 안내하며, 해당 장치의 실제 청취 품질은 별도로 확인해야 합니다.
@@ -51,6 +53,8 @@ Proceed only after checking the source and file and deciding you trust the app. 
 4. Choose **Open** in the next alert and authenticate with your Mac login password or Touch ID if prompted. Subsequent launches of the same app can use a normal double-click.
 
 If the button is missing, attempt a launch again and check Settings. For a managed Mac, contact your administrator. If the alert says the app **is damaged or will damage your computer**, recheck the download and checksum and [report an issue](https://github.com/zeztto/circlr/issues) with the app version, macOS version and alert text instead of following the steps above. See [Apple’s alert descriptions](https://support.apple.com/en-us/102445).
+
+In 0.80 development builds, select the **`.circlr` folder itself** when opening a song. If you select `manifest.json`, the app asks you to select the same song folder once more. macOS may grant access to the selected file without granting access to neighboring audio and MIDI files. Choosing another folder or canceling leaves the current song unchanged. [Apple's Documents access guidance](https://developer.apple.com/documentation/bundleresources/information-property-list/nsdocumentsfolderusagedescription).
 
 ### If audio does not start on an external interface
 

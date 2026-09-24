@@ -1,5 +1,34 @@
 # 변경 이력
 
+## 0.80.0 · build221 — 개발 중
+
+- build220의 동일 앱/곡은 `/tmp`에서 manifest 선택 저장이 약 0.7초, Documents에서 `.circlr` 폴더 선택 저장이 약 0.6초였으나 Documents의 manifest 한 파일 선택 뒤 저장만 멈췄다. GUI에서 manifest를 선택하면 같은 곡 폴더를 한 번 더 명시적으로 선택해 미디어 접근을 확보하도록 한다. macOS Documents 접근 설명도 앱에 추가했다. [build220 통제 QA](qa/0.80-build220-temp-native.md) · [build221 QA](qa/0.80-build221.md).
+- 최종 Swift 회귀 1,187개 중 14 skip·실패0, arm64 앱·다섯 helper·agent kit 패키지와 strict deep 서명 통과. 실제 Documents 앱의 manifest→동일 폴더 확인→첫 `⌘S`는 약 0.5초, 미디어 6/6 hash 유지·저장 후 재열기도 통과했다. `notes.txt` 포함 QA 패키지의 저장 거부·8/8 hash 보존, 실제 가로·세로 전체 창, 앱/helper 정리까지 확인했다. 전체 0.80 출고 gate는 여전히 열려 있다. [native QA](qa/0.80-build221-native.md).
+
+## 0.80.0 · build220 — 개발 중 · 출고 후보 제외
+
+- 스트리밍 복사 source가 FIFO 같은 특수 파일이면 읽기 시작 전에 멈출 수 있다는 후속 리뷰를 반영했다. 미디어를 `O_NONBLOCK|O_NOFOLLOW`로 열고 일반 파일인지 확인한 뒤 복사한다. FIFO 입력과 1MiB 경계를 넘는 바이트 보존을 검증한다. [build220 QA](qa/0.80-build220.md).
+- 전체 Swift 회귀 1,187개 중 14 skip·실패0, arm64 앱/다섯 helper·strict deep 서명 통과. 그러나 Documents QA 앱에서 `manifest.json` 파일만 선택한 뒤 첫 `⌘S`가 미디어 파일 `open`에서 30초 이상 멈췄다. 이 빌드는 출고 후보가 아니며 비보호 경로/폴더 선택 통제 시험으로 macOS 접근 범위를 분리한다. [native 실패](qa/0.80-build220-native.md).
+
+## 0.80.0 · build219 — 개발 중 · 패키지 후보 제외
+
+- build218 실제 앱의 작은 데모 저장이 macOS `clonefileat` 경로에서 30초 이상 멈췄다. 미디어를 staging 폴더로 복사할 때 고정 크기 청크로 읽고 쓰는 경로로 바꾸고, 1MiB 경계를 넘는 바이트 보존 회귀를 추가했다. [build218 native 실패](qa/0.80-build218-native.md).
+- 백업 정리 경고를 agent 저장 성공 응답에도 담고, 기존 Core API wrapper에서는 stderr로 알리게 했다. 최종 앱의 재검증과 나머지 0.80 출시 gate는 [build219 QA](qa/0.80-build219.md)에 분리한다.
+- 후속 리뷰에서 미디어 FIFO가 저장 복사의 파일 열기를 멈출 수 있음을 발견해 패키지 작업을 중단했고 native 앱은 실행하지 않았다. build220에서 수정·재검증한다.
+
+## 0.80.0 · build218 — 개발 중 · 출고 후보 제외
+
+- 후속 보안 리뷰에서 build217의 프로젝트 덮어쓰기가 일반 폴더에 함께 둔 개인 파일을 삭제할 수 있고, `manifest.json`이 FIFO이면 열기가 멈출 수 있음을 발견했다. 저장 전 폴더 소유 파일을 확인하고 일반 파일 manifest만 크기 제한을 두고 읽도록 고쳤다.
+- 저장된 이전 폴더의 정리는 고정한 디렉터리 fd 아래에서만 수행하며, 정리 실패가 이미 완료된 저장을 실패로 바꾸지 않도록 GUI·agent 저장 상태와 경고를 분리했다. build218 검증 결과는 [QA 기록](qa/0.80-build218.md)에 정리한다. 전체 0.80 출시 gate는 계속 열려 있다.
+- 최종 Swift 회귀와 패키지·서명은 통과했지만, 격리 실제 앱에서 작은 QA 곡의 `⌘S`가 `FileManager.copyItem → clonefileat`에서 30초 이상 멈췄다. 원본은 불변이었고 앱은 종료했다. build218은 출고 후보가 아니다. [native 기록](qa/0.80-build218-native.md).
+
+## 0.80.0 · build217 — 개발 중 · 출고 후보 제외
+
+- Open 패널에서 `manifest.json` 파일을 직접 선택하면 상위 `.circlr` 곡 폴더로 정규화해 열고, 곡이 아닌 폴더·파일을 선택하면 무엇을 골라야 하는지 설명한다. GUI와 MCP 열기 모두 같은 루트를 사용하며 임시 데모 사본 보호도 유지한다. [build216 오류 재현](qa/0.80-open-panel-repro.md).
+- 구형 Scarlett을 제외한 CalDigit 입력의 독립 캡처도 이 Mac에서 시작 단계 timeout이 발생했다. 실제 PCM이 확인되지 않아 선택 입력 녹음은 계속 명시적으로 닫고, [0.90 입력 계획](docs/releases/0.90.0.md)의 실기기 gate를 유지한다. [입력 조사](qa/0.80-selected-input-investigation.md).
+- 전체 Swift 회귀 1,184개 중 14 skip·실패0, build217 arm64 앱·다섯 helper 패키지와 strict deep 서명을 확인했다. 격리 실제 앱의 무선택 오류 안내, manifest 직접 선택·저장·폴더 재열기와 원본/미디어 보존을 확인하고 한영 README의 가로·세로 화면을 새 앱으로 교체했다. 전체 0.80 출고 gate는 열려 있어 tag·Release는 아직 만들지 않는다. [build217 QA](qa/0.80-build217.md) · [native](qa/0.80-build217-native.md).
+- 후속 저장 보안 리뷰에서 일반 폴더 내 개인 파일 삭제 위험과 특수 manifest 읽기 경계가 발견돼 build217은 최종 패키지 후보에서 제외했다. 해당 테스트·native 결과는 관찰 당시 범위의 증거로 남긴다.
+
 ## 0.80.0 · build216 — 개발 중
 
 - build215 실제 세로 창 QA에서 첫 Intro의 ‘순서 앞으로’와 마지막 Outro의 ‘순서 뒤로’가 활성처럼 보이는 결함을 발견했다. AppKit popup 검증을 모사한 테스트를 RED로 재현하고, 선택 서클 메뉴의 자동 활성화를 끄고 GREEN으로 수정했다. 키보드 이동·Undo·저장 후 명시적 재열기는 build215에서 통과했다. 첫 Open panel의 일회성 `manifest.json` 오류는 원인 미확정으로 남긴다.

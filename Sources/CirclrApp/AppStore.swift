@@ -828,11 +828,13 @@ import CirclrAudio
         if saveAs || target == nil { let panel = NSSavePanel(); panel.nameFieldStringValue = project.name+".circlr"; panel.title = "앨범 저장"; guard panel.runModal() == .OK else { return }; target = panel.url }
         guard let target else { return }
         do {
-            let saved=try ProjectStore.saveSession(project,to:target,mediaRoot:mediaRoot)
+            var cleanupWarning: String?
+            let saved=try ProjectStore.saveSessionReportingCleanup(project,to:target,mediaRoot:mediaRoot) { cleanupWarning = $0 }
             if let lease=demoCopyLease,target.standardizedFileURL == lease.root {
                 try? DemoCopyLease.retainIfManaged(lease.root);demoCopyLease=nil
             } else {retireDemoCopy()}
-            project=saved;projectURL=target;mediaRoot=target;dirty=false;clearSavedRecovery();status="저장 완료 · \(target.lastPathComponent)"
+            project=saved;projectURL=target;mediaRoot=target;dirty=false;clearSavedRecovery()
+            status=cleanupWarning ?? "저장 완료 · \(target.lastPathComponent)"
         }
         catch { fail(error) }
     }
@@ -911,9 +913,33 @@ import CirclrAudio
         defer { projectOpenDepth-=1;if startupWasPending { startAgentBridge() } }
         guard offerRecovery(startBridgeWhenReady:false) else { return }
         guard confirmDiscard() else { return }; var target = url
-        if target == nil { let panel = NSOpenPanel(); panel.message = ".circlr 곡 파일 또는 manifest.json이 있는 곡 폴더를 선택하세요"; panel.canChooseDirectories = true; panel.canChooseFiles = true; panel.allowsMultipleSelection = false; guard panel.runModal() == .OK else { return }; target = panel.url }
+        if target == nil { let panel = NSOpenPanel(); panel.message = ".circlr 곡 폴더를 선택하세요. manifest.json을 고르면 폴더 접근을 다시 확인합니다."; panel.canChooseDirectories = true; panel.canChooseFiles = true; panel.allowsMultipleSelection = false; guard panel.runModal() == .OK else { return }; target = panel.url }
         guard let target else { return }
-        do { try DemoCopyLease.retainIfManaged(target); let loaded = try ProjectStore.load(target); var migrated = loaded.project; migrated.enableAlbum(); migrated = try SectionGraphMigration.migrate(migrated); retireDemoCopy(); stop(); project = migrated; projectURL = migrated == loaded.project ? target : nil; mediaRoot = target; selectedTrackID = project.tracks.first?.id; resetSession(); dirty = migrated != loaded.project; status = dirty ? "앨범으로 확장했습니다 · 새 위치에 저장하세요" : "\(project.name) 열기 완료" }
+        do {
+            let root = try ProjectStore.rootURL(for:target)
+            // A Documents Open-panel grant for manifest.json covers that file,
+            // not its sibling media. Confirm the package itself before loading.
+            if target.lastPathComponent == "manifest.json" {
+                let folderPanel = NSOpenPanel()
+                folderPanel.message = "오디오·MIDI 미디어에 접근하려면 같은 곡 폴더를 선택하세요"
+                folderPanel.canChooseDirectories = true
+                folderPanel.canChooseFiles = true
+                folderPanel.allowsMultipleSelection = false
+                folderPanel.directoryURL = root.deletingLastPathComponent()
+                guard folderPanel.runModal() == .OK, let selected = folderPanel.url else { return }
+                let selectedRoot = try ProjectStore.rootURL(for:selected)
+                guard selectedRoot.standardizedFileURL.resolvingSymlinksInPath() == root.standardizedFileURL.resolvingSymlinksInPath(),
+                      selected.pathExtension == "circlr" || selected.hasDirectoryPath else {
+                    throw CirclrError("같은 .circlr 곡 폴더를 선택하세요")
+                }
+            }
+            try DemoCopyLease.retainIfManaged(root)
+            let loaded = try ProjectStore.load(root)
+            var migrated = loaded.project; migrated.enableAlbum(); migrated = try SectionGraphMigration.migrate(migrated)
+            retireDemoCopy(); stop(); project = migrated; projectURL = migrated == loaded.project ? loaded.root : nil; mediaRoot = loaded.root
+            selectedTrackID = project.tracks.first?.id; resetSession(); dirty = migrated != loaded.project
+            status = dirty ? "앨범으로 확장했습니다 · 새 위치에 저장하세요" : "\(project.name) 열기 완료"
+        }
         catch { fail(error) }
     }
     func resetSession() { stopTrustedAgentTurn();let wasViewing=viewingMode;startupOpen=false;viewingMode=false;defer{if wasViewing{viewingModeDidChange?()}}; playbackLoopMode = .off; editorFocusRequest=nil; circleEditorWorkspaces=[:]; sectionSettingsReturn=nil; sustainOpen=false;sustainState = .init();sustainViewStates=[:];sustainWorkspaceKey=nil;sustainWorkspaceProjectID=nil;sustainWorkspaceGeneration=nil; pitchBendOpen=false;pitchBendState = .init();pitchBendViewStates=[:];pitchBendWorkspaceKey=nil;pitchBendWorkspaceProjectID=nil;pitchBendWorkspaceGeneration=nil; captureStepCursor=nil;pendingMIDIImportStepCursor=nil;arrangementWorkspaces=[:];outputPreferences.cancel();outputPreferencesOpen=false; bounceTailSeconds=nil;bounceTailEditing=false;bounceTailCache=nil;resettingEditorSelection=true;defer{editorSelectionStates=[:];resettingEditorSelection=false};editorViewStates=[:];automationViewStates=[:];automationWorkspaceKey=nil;automationWorkspaceProjectID=nil;automationWorkspaceGeneration=nil;editOriginal=false;automationParameter = .gain;connectionWorkspaceStates=[:];recentTransitions=[:];arrangementPickerRequest=nil;soundPickerRequest=nil;libraryOpen=false;libraryDestination=nil;cancelMediaImport(); if !recorder.busy && audioRecoveryURL==nil {audioCaptureMessage="";audioInputSeconds=0;audioInputFormat=nil}; connectionEditorIntent=nil;connectionsOpen=false;automationOpen=false;automationViewport.reset();selectedAutomationPointID=nil;cancelRecordingRequest(); audioSplitOffset=nil;midiImportDraft=nil;selectedNoteID=nil; navigationOpen=false; commandPalette=nil; soundView=false; hierarchyTransitionID=nil; hierarchySelection = .album; hierarchySelections = [.album]; hierarchySettingsOpen = false; hierarchyCommand = HierarchyCommand(action: .restore); waveformGeneration += 1; waveforms = [:]; waveformLoading = []; focus = nil; embeddedPlugin = nil; clearSavedRecovery(); selection = []; edgeSelection = nil; editPatternID = nil; prepared = nil; preparedKey = ""; dirty = false; undoStack = []; redoStack = []; undoCount = 0; redoCount = 0 }
