@@ -4,7 +4,7 @@
 
 [English](README.md) · 한국어
 
-[시작하기](#시작하기) · [문서](docs/README.md) · [로드맵](docs/releases/roadmap.md) · [릴리스](https://github.com/zeztto/circlr/releases)
+[시작하기](#시작하기) · [문서](docs/README.md) · [로드맵](docs/releases/roadmap.md) · [2.0 상세 계획](docs/releases/2.0-development-plan.md) · [릴리스](https://github.com/zeztto/circlr/releases)
 
 써클러에서 원은 타임라인입니다. 섹션으로 곡을 구성하고, 궤도 위와 주변에 MIDI·오디오·악기·이펙터를 배치해 입출력을 연결합니다. 하나의 확대 가능한 캔버스에서 곡 전체 구성과 세부 편집을 오갑니다.
 

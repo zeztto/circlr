@@ -2,13 +2,23 @@
 
 현재 정식판: **[1.2.0/build253](https://github.com/zeztto/circlr/releases/tag/v1.2.0)**. [출고 검증](../../qa/1.2-release-verification.md). 계정 실서비스 호출은 보류 중이다.
 
-## 현재와 다음 작업
+## 2.0까지 실행 로드맵
 
-| 단계 | 사용자 결과 | 상태·검증 |
+상태: PLANNED · 코드 구현 착수 아님. **[상세 개발 계획](2.0-development-plan.md)**에 작업 ID, 의존성, 소스 경로, 수치 gate, migration·rollback과 버전별 제외 범위를 정의했다.
+
+| 버전 | 사용자 결과 | 상태 |
 |---|---|---|
-| 1.2.0/build253 | MIDI 구절의 서클·트랙 간 전송, 커서부터 듣기, 루프를 들으며 수정, 재생 경로에 섹션 재사용 | RELEASED_WITH_KNOWN_LIMITS. 제작·cold open·worker/PCM·바운스·main/tag/Release와 원격 패키지 검증 완료. [작업](1.2.0.md) · [QA](../../qa/1.2-production-workflow.md) |
-| 계정 대화 후속 | 사용자의 ChatGPT 계정으로 앱 내 음악 작업 | 1.1 소스·테스트 보존. 사용자 요청으로 OpenAI 호출 보류. 기본 배포 UI 비활성화, 로컬 MCP·명령 콘솔 유지 |
-| 제작 신뢰성 후속 | 동기화 녹음·장치 복구·접근성·영상 품질 | 물리 청취/입출력·전체 IME/VoiceOver·장시간 영상 70ms FAIL 경계를 유지하고 재현 증거부터 진행 |
+| 1.2.0/build253 | MIDI 구절 전송·커서 재생·루프 편집·송폼 재사용 | RELEASED_WITH_KNOWN_LIMITS |
+| [1.3](1.3.0.md) | 저장·복구·미디어 재연결과 기본 조작 신뢰성 | PLANNED · 다음 착수 |
+| 1.4 | 반주와 동기화된 녹음·count-in·overdub·지연 보정 | PLANNED |
+| 1.5 | 믹스/AU 지연·복원·automation·stem 출력 일관성 | PLANNED |
+| 1.6 | 재생 그래픽·follow·감상 모드·영상 성능/동기 | PLANNED |
+| 1.7 | 아티스트 프로필·작품 catalog·자료 버전과 재연결 | PLANNED |
+| 1.8 | 가사·이미지·영상 preview·세계관 관계·음악 cue | PLANNED |
+| 1.9 | 범위 있는 음악 에이전트·변경 검토·발매 묶음 | PLANNED |
+| 2.0 | 제작→작품 관리→내보내기 전체 흐름 통합 인수 | PLANNED |
+
+계정 실서비스 검증은 사용자 재개 지시와 별도 검증 조건을 기다린다. 로컬 MCP/DAW 개발의 선행 조건이 아니다. 날짜는 확정하지 않고 각 버전의 실제 인수 완료를 기준으로 진행한다. 1.2.x는 재현된 심각한 회귀의 최소 수정에 사용한다.
 
 ## 과거 계획 기록
 
