@@ -1,12 +1,12 @@
 # 0.1 단계 제품 로드맵
 
-현재 정식 출고: **[1.0.0 build245](https://github.com/zeztto/circlr/releases/tag/v1.0.0)**. 현재 개발: **[1.2 실제 제작 개선](1.2.0.md)** (`release/1.2.0`). 1.1 계정 구현은 보존된 미출고 작업이며 실서비스 검증은 사용자 요청으로 보류했다. 아래 과거 상태보다 이 기록이 우선한다.
+현재 정식판: **[1.2.0/build253](https://github.com/zeztto/circlr/releases/tag/v1.2.0)**. [출고 검증](../../qa/1.2-release-verification.md). 계정 실서비스 호출은 보류 중이다.
 
 ## 현재와 다음 작업
 
 | 단계 | 사용자 결과 | 상태·검증 |
 |---|---|---|
-| 1.2.0/build253 | MIDI 구절의 서클·트랙 간 전송, 커서부터 듣기, 루프를 들으며 수정, 재생 경로에 섹션 재사용 | IN_PROGRESS. 실제 제작·cold open·worker/PCM·바운스 검증 진행. [작업과 남은 출고 gate](1.2.0.md) · [QA](../../qa/1.2-production-workflow.md). main/tag/Release와 원격 패키지 검증 미완료 |
+| 1.2.0/build253 | MIDI 구절의 서클·트랙 간 전송, 커서부터 듣기, 루프를 들으며 수정, 재생 경로에 섹션 재사용 | RELEASED_WITH_KNOWN_LIMITS. 제작·cold open·worker/PCM·바운스·main/tag/Release와 원격 패키지 검증 완료. [작업](1.2.0.md) · [QA](../../qa/1.2-production-workflow.md) |
 | 계정 대화 후속 | 사용자의 ChatGPT 계정으로 앱 내 음악 작업 | 1.1 소스·테스트 보존. 사용자 요청으로 OpenAI 호출 보류. 기본 배포 UI 비활성화, 로컬 MCP·명령 콘솔 유지 |
 | 제작 신뢰성 후속 | 동기화 녹음·장치 복구·접근성·영상 품질 | 물리 청취/입출력·전체 IME/VoiceOver·장시간 영상 70ms FAIL 경계를 유지하고 재현 증거부터 진행 |
 

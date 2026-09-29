@@ -1,0 +1,46 @@
+{
+  "status": "VERIFIED",
+  "release": {
+    "assets": [
+      {
+        "apiUrl": "https://api.github.com/repos/zeztto/circlr/releases/assets/599081816",
+        "contentType": "application/zip",
+        "createdAt": "2026-09-29T19:54:40Z",
+        "digest": "sha256:6cad70ee55eaf99c97de188fa3d9d689dc7402d7c46f93a23b8430886c6824e4",
+        "downloadCount": 0,
+        "id": "RA_kwDOURZz_c4jtUNY",
+        "label": "",
+        "name": "circlr-1.2.0-build253-macos-arm64.zip",
+        "size": 28145951,
+        "state": "uploaded",
+        "updatedAt": "2026-09-29T19:54:43Z",
+        "url": "https://github.com/zeztto/circlr/releases/download/v1.2.0/circlr-1.2.0-build253-macos-arm64.zip"
+      },
+      {
+        "apiUrl": "https://api.github.com/repos/zeztto/circlr/releases/assets/599081818",
+        "contentType": "application/octet-stream",
+        "createdAt": "2026-09-29T19:54:40Z",
+        "digest": "sha256:85a1fab7351912cea7dd53c4a3ce01e4f56862960a1be390cd8089d224fa746c",
+        "downloadCount": 0,
+        "id": "RA_kwDOURZz_c4jtUNa",
+        "label": "",
+        "name": "SHA256SUMS",
+        "size": 104,
+        "state": "uploaded",
+        "updatedAt": "2026-09-29T19:54:40Z",
+        "url": "https://github.com/zeztto/circlr/releases/download/v1.2.0/SHA256SUMS"
+      }
+    ],
+    "isDraft": false,
+    "isPrerelease": false,
+    "tagName": "v1.2.0",
+    "url": "https://github.com/zeztto/circlr/releases/tag/v1.2.0"
+  },
+  "sourceCommit": "ca00aa006b85f679af3cf51ff944c6df61df298a",
+  "sha256": "6cad70ee55eaf99c97de188fa3d9d689dc7402d7c46f93a23b8430886c6824e4",
+  "remoteFilesCompared": 68,
+  "version": "1.2.0",
+  "build": "253",
+  "strictSignature": "PASS",
+  "accountChatEnabled": false
+}

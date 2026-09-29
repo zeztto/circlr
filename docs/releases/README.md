@@ -1,16 +1,10 @@
 # 버전별 개발·릴리스 운영
 
-현재 정식 출고: **[1.0.0 build245](https://github.com/zeztto/circlr/releases/tag/v1.0.0)**. 현재 개발: **[1.2 실제 제작 개선](1.2.0.md)** (`release/1.2.0`). 1.1 계정 구현은 보존된 미출고 작업이며 실서비스 검증은 사용자 요청으로 보류했다. 아래 과거 상태보다 이 기록이 우선한다.
-
-## 현재 출고 준비
-
-**1.2.0/build253 · IN_PROGRESS**: MIDI 구절 전송, 커서 재생, 루프 경계 편집 반영, 재생 경로에 섹션 재사용을 구현했다. 실제 제작·저장 재열기·출력 증거는 [통합 QA](../../qa/1.2-production-workflow.md)에 기록한다. 계정 대화는 기본 bundle에서 비활성화하고 로컬 MCP·명령 콘솔을 유지한다.
-
-아직 main 병합·tag·GitHub Release 게시·원격 ZIP/SHA256 검증을 완료하지 않았다. 최신 정식판은 1.0.0/build245이며 [원격 출고 기록](../../qa/1.0-release-verification.md)이 기준이다. 0.90/1.0의 과거 QA 이월은 새 후보의 합격 증거를 대신하지 않는다.
+최신 정식판: **[1.2.0/build253](https://github.com/zeztto/circlr/releases/tag/v1.2.0)**. MIDI 구절 전송·커서 재생·루프 중 편집·송폼 재사용의 native 검증과 원격 패키지 검증을 완료했다. [출고 기록](../../qa/1.2-release-verification.md). 계정 대화는 실서비스 검증 보류로 기본 UI에서 비활성화하고 로컬 MCP·명령 콘솔을 유지한다. 물리 청취·광범위 IME·영상70ms FAIL은 후속 범위다.
 
 ## 문서와 버전의 기준
 
-- 현재 개발 계획: [1.2.0](1.2.0.md). [0.90의 미완료 확대 검증](../../qa/0.90-build243.md)은 후속 backlog로 유지한다. Codex 계정 대화는 공식 production 지원 경로 확인 전까지 별도 G0 backlog다. 0.80 출고 기록: [버전](0.80.0.md) · [한영 노트](0.80.0-notes.md) · [QA와 이월 범위](../../qa/0.80-release-gates.md).
+- 최신 완료 버전: [1.2.0](1.2.0.md). [0.90의 미완료 확대 검증](../../qa/0.90-build243.md)은 후속 backlog로 유지한다. Codex 계정 대화는 공식 production 지원 경로 확인 전까지 별도 G0 backlog다. 0.80 출고 기록: [버전](0.80.0.md) · [한영 노트](0.80.0-notes.md) · [QA와 이월 범위](../../qa/0.80-release-gates.md).
 - 이후 버전 순서: [제품 로드맵](roadmap.md).
 - 다음 버전 시작 시 [버전 문서 양식](TEMPLATE.md)을 복사한다. 출고할 때 [한·영 릴리스 노트 양식](RELEASE_NOTES_TEMPLATE.md)을 `<version>-notes.md`로 작성한다.
 - build151/152의 과거 구현·QA는 [인수인계](../178-development-handoff.md), [포커스 검증](../179-pedal-focus-mount.md)에 보존한다. 과거 PASS는 새 후보의 QA를 대체하지 않는다.
