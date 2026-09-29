@@ -310,6 +310,9 @@ private struct MIDIRecordingKey: Hashable {
     private var recordLaneID: ID?
     private var recordArrangementID: ID?
     private var recordedNotes: [Note] = []
+    private var recordedNoteChannels: [ID:Int] = [:]
+    private var recordedBends: [Int:[MIDIPitchBendEvent]] = [:]
+    private var recordedSustain: [Int:[MIDISustainEvent]] = [:]
     private var heldNotes: [MIDIRecordingKey:(Double,Int)] = [:]
     /// Observes live recording preview commands before the asynchronous instrument boundary.
     var onMIDIRecordingPreviewCommand: ((Int,Int,Bool)->Void)?
@@ -1125,26 +1128,35 @@ private struct MIDIRecordingKey: Hashable {
     }
     func midi(status:UInt8,pitch:Int,velocity:Int,time:Double) {
         let type = status & 0xF0
-        guard time.isFinite,time >= 0,(type == 0x90 || type == 0x80), (0...127).contains(pitch), (0...127).contains(velocity) else { return }
+        guard time.isFinite,time >= 0,(type == 0x90 || type == 0x80 || type == 0xE0 || (type == 0xB0 && pitch == 64)), (0...127).contains(pitch), (0...127).contains(velocity) else { return }
         let on = type == 0x90 && velocity > 0
         guard midiRecording,let clock = recordClock else {
-            if time > lastMIDIStopCutoff { audition(pitch:pitch,velocity:velocity,on:on) }
+            if (type == 0x90 || type == 0x80), time > lastMIDIStopCutoff { audition(pitch:pitch,velocity:velocity,on:on) }
             return
         }
         guard time >= recordStart, midiStopCutoff.map({time <= $0}) ?? true else { return }
         let elapsed = max(0,time-recordStart)
+        let channel=Int(status & 0x0F)
+        if type == 0xE0 || type == 0xB0 {
+            guard elapsed < clock.seconds * Double(recordRepeats) else{return}
+            let iteration=Int(elapsed/clock.seconds)
+            let beat=Double(iteration)*clock.beats+clock.beat(atSeconds:elapsed-Double(iteration)*clock.seconds)
+            if type == 0xE0 {recordedBends[channel,default:[]].append(.init(beat:beat,kind:.value(pitch | (velocity << 7))))}
+            else {recordedSustain[channel,default:[]].append(.init(beat:beat,rawValue:velocity))}
+            return
+        }
         let key = MIDIRecordingKey(channel:status & 0x0F,pitch:pitch)
         if on {
             // The main run loop may deliver a MIDI callback before its overdue stop tick.
             // Never preview or retain a new attack beyond the requested repeat window.
             guard elapsed < clock.seconds * Double(recordRepeats) else { return }
             let previous = heldNotes.updateValue((elapsed,velocity),forKey:key)
-            if let (start,v) = previous { appendRecorded(pitch:pitch,velocity:v,start:start,end:elapsed,clock:clock) }
+            if let (start,v) = previous { appendRecorded(channel:channel,pitch:pitch,velocity:v,start:start,end:elapsed,clock:clock) }
             // The audition synth is pitch-based: every new attack rearticulates its voice,
             // but only the last channel's release may silence this pitch.
             if midiStopCutoff == nil { previewRecordedMIDI(pitch:pitch,velocity:velocity,on:true) }
         } else if let (start,v) = heldNotes.removeValue(forKey:key) {
-            appendRecorded(pitch:pitch,velocity:v,start:start,end:elapsed,clock:clock)
+            appendRecorded(channel:channel,pitch:pitch,velocity:v,start:start,end:elapsed,clock:clock)
             if !heldNotes.keys.contains(where:{ $0.pitch == pitch }) { previewRecordedMIDI(pitch:pitch,velocity:velocity,on:false) }
         }
     }
@@ -1152,7 +1164,7 @@ private struct MIDIRecordingKey: Hashable {
         onMIDIRecordingPreviewCommand?(pitch,velocity,on)
         audition(pitch:pitch,velocity:velocity,on:on)
     }
-    private func appendRecorded(pitch:Int,velocity:Int,start:Double,end:Double,clock:MusicClock) {
+    private func appendRecorded(channel:Int,pitch:Int,velocity:Int,start:Double,end:Double,clock:MusicClock) {
         let limit = clock.seconds * Double(recordRepeats)
         let boundedStart = max(0,start), boundedEnd = min(limit,end)
         guard boundedStart < limit, boundedEnd > boundedStart else { return }
@@ -1165,7 +1177,7 @@ private struct MIDIRecordingKey: Hashable {
             let beat = clock.beat(atSeconds:s), endBeat = clock.beat(atSeconds:e)
             // A minimum note length must not extend the final take beyond its orbit.
             let length = min(clock.beats-beat,max(0.03125,endBeat-beat))
-            if length > 0 { recordedNotes.append(Note(beat:Double(iteration)*clock.beats+beat,length:length,pitch:pitch,velocity:velocity)) }
+            if length > 0 { let note=Note(beat:Double(iteration)*clock.beats+beat,length:length,pitch:pitch,velocity:velocity); recordedNotes.append(note); recordedNoteChannels[note.id]=channel }
         }
     }
     func startMIDIRecording() {
@@ -1174,7 +1186,7 @@ private struct MIDIRecordingKey: Hashable {
         guard !moviePreparing,movieWriter == nil,movieFinalizing == nil else{status="영상 녹화를 마친 뒤 테이크를 녹음하세요";return}
         guard let use = selectedUse,let clock = recordingClock,let track = selectedTrackID else { status = "녹음할 서클과 트랙을 선택하세요"; return }
         stop(); recordClock = clock; recordUseID = use.id; recordLaneID = selectedLaneID; recordArrangementID = project.activeArrangementID; recordingTrackID = track; originalRecordProject = project
-        recordRepeats = selectedMusic?.repeatCount ?? use.repeatCount; recordedNotes = []; heldNotes = [:]; midiStopSerial += 1; midiStopCutoff = nil; recordStart = ProcessInfo.processInfo.systemUptime; midiRecording = true; status = "MIDI 녹음 중 · MIDI 장치 또는 화면 건반을 연주하세요"
+        recordRepeats = selectedMusic?.repeatCount ?? use.repeatCount; recordedNotes = []; recordedNoteChannels=[:]; recordedBends=[:]; recordedSustain=[:]; heldNotes = [:]; midiStopSerial += 1; midiStopCutoff = nil; recordStart = ProcessInfo.processInfo.systemUptime; midiRecording = true; status = "MIDI 녹음 중 · MIDI 장치 또는 화면 건반을 연주하세요"
     }
     private func recordingStateChanged() {
         audioCapturePhase=recorder.phase;audioCaptureMessage=recorder.message;audioRecording=recorder.recording;audioInputFormat=recorder.format
@@ -1258,19 +1270,67 @@ private struct MIDIRecordingKey: Hashable {
         guard serial == midiStopSerial,midiRecording,midiStopCutoff == cutoff,
               let useID = recordUseID,let trackID = recordingTrackID,let clock = recordClock else { return }
         let elapsed=max(0,cutoff-recordStart)
-        for (key,(start,v)) in heldNotes { appendRecorded(pitch:key.pitch,velocity:v,start:start,end:elapsed,clock:clock) }
+        for (key,(start,v)) in heldNotes { appendRecorded(channel:Int(key.channel),pitch:key.pitch,velocity:v,start:start,end:elapsed,clock:clock) }
         for pitch in Set(heldNotes.keys.map(\.pitch)) { previewRecordedMIDI(pitch:pitch,velocity:0,on:false) }
         heldNotes = [:]
         let all = recordedNotes; midiRecording = false; midiStopCutoff=nil; lastMIDIStopCutoff=cutoff
         meter.update(seconds:playback.seconds,playing:playback.playing)
         let iterations = max(1,min(recordRepeats,Int(ceil(elapsed/clock.seconds))))
-        mutate("MIDI take 저장") { p in
-            for iteration in 0..<iterations {
-                let notes = all.filter{ $0.beat >= Double(iteration)*clock.beats && $0.beat < Double(iteration+1)*clock.beats }.map{ n -> Note in var copy = n; copy.beat -= Double(iteration)*clock.beats; return copy }
-                if !notes.isEmpty { var lane = Lane(trackID:trackID); lane.notes = notes; var takes = p.takes ?? []; var take=RecordedTake(useID:useID,name:"MIDI \(Date().formatted(date:.omitted,time:.shortened)) · \(iteration+1)회",lane:lane); take.targetLaneID=self.recordLaneID; take.arrangementID=self.recordArrangementID; takes.append(take); p.takes = takes }
+        let channels=Set(recordedNoteChannels.values).union(recordedBends.keys).union(recordedSustain.keys).sorted()
+        var saved=channels.isEmpty
+        if !channels.isEmpty { mutate("MIDI take 저장") { p in
+            guard p.id == self.originalRecordProject?.id, let ai=p.arrangements.firstIndex(where:{$0.id==self.recordArrangementID}),
+                  let ui=p.arrangements[ai].uses.firstIndex(where:{$0.id==useID}),
+                  let section=p.sections.first(where:{$0.id==p.arrangements[ai].uses[ui].sectionID}) else {throw CirclrError("MIDI 녹음 대상이 변경되었습니다")}
+            let originalActive=p.activeArrangementID
+            p.activeArrangementID=p.arrangements[ai].id
+            defer {p.activeArrangementID=originalActive}
+            let lanes=try ArrangementCompiler.effectiveLanes(section:section,use:p.arrangements[ai].uses[ui])
+            let target=self.recordLaneID.flatMap{id in lanes.first{$0.id==id}} ?? (self.recordLaneID == nil ? lanes.first{$0.trackID==trackID}:nil)
+            guard self.recordLaneID == nil || target != nil else {throw CirclrError("녹음 대상 서클이 삭제되었습니다")}
+            var takes=p.takes ?? [], latest:[RecordedTake]=[]
+            if let target,(!target.notes.isEmpty || !target.audio.isEmpty || target.pitchBend != nil || target.sustain != nil),
+               !takes.contains(where:{ take in
+                   guard take.useID==useID,take.arrangementID==self.recordArrangementID,take.targetLaneID==target.id,
+                         take.replacesMIDINotes == true || (take.replacesMIDINotes == nil && !take.lane.notes.isEmpty) else{return false}
+                   var content=take.lane;content.id=target.id;return content==target
+               }) {
+                var baseline=RecordedTake(useID:useID,name:"녹음 전",lane:target)
+                baseline.targetLaneID=target.id;baseline.arrangementID=self.recordArrangementID;baseline.replacesMIDINotes=true
+                baseline.sourceMIDIChannel=target.pitchBend?.channel ?? target.sustain?.channel
+                takes.append(baseline)
             }
-        }
-        if !all.isEmpty,let take = project.takes?.last(where:{$0.useID == useID && $0.lane.trackID == trackID}) { activateTake(take) }
+            for (channelIndex,channel) in channels.enumerated() {
+                let destination=channelIndex == 0 ? (target ?? Lane(trackID:trackID)):Lane(trackID:trackID)
+                if channelIndex > 0 || target == nil {try ProjectEditing.setLane(destination,for:useID,original:false,in:&p)}
+                let channelNotes=all.filter{self.recordedNoteChannels[$0.id]==channel}
+                let bends=(self.recordedBends[channel] ?? []).enumerated().sorted{$0.element.beat == $1.element.beat ? $0.offset < $1.offset:$0.element.beat < $1.element.beat}.map(\.element)
+                let pedals=(self.recordedSustain[channel] ?? []).enumerated().sorted{$0.element.beat == $1.element.beat ? $0.offset < $1.offset:$0.element.beat < $1.element.beat}.map(\.element)
+                for iteration in 0..<iterations {
+                    let lower=Double(iteration)*clock.beats,upper=lower+clock.beats
+                    var lane=Lane(trackID:trackID)
+                    lane.notes=channelNotes.filter{$0.beat>=lower && $0.beat<upper}.map{var n=$0;n.beat-=lower;return n}
+                    // Each lane is one MIDI channel. State crosses repeat boundaries without quantization.
+                    if !bends.isEmpty {
+                        let prior=bends.filter{$0.beat<lower}
+                        var value=8192
+                        for event in prior {if case .value(let v)=event.kind {value=v}}
+                        lane.pitchBend = .init(channel:channel,initialValue:value,events:bends.filter{$0.beat>=lower && $0.beat<upper}.map{.init(beat:$0.beat-lower,kind:$0.kind)})
+                    }
+                    if !pedals.isEmpty {lane.sustain = .init(channel:channel,initialValue:pedals.last(where:{$0.beat<lower})?.rawValue ?? 0,events:pedals.filter{$0.beat>=lower && $0.beat<upper}.map{.init(beat:$0.beat-lower,rawValue:$0.rawValue)})}
+                    var take=RecordedTake(useID:useID,name:"MIDI \(Date().formatted(date:.omitted,time:.shortened)) · \(iteration+1)회 · 채널 \(channel+1)",lane:lane)
+                    take.targetLaneID=destination.id;take.arrangementID=self.recordArrangementID;take.replacesMIDINotes = !channelNotes.isEmpty;take.sourceMIDIChannel=channel
+                    takes.append(take)
+                    if iteration == iterations-1 {latest.append(take)}
+                }
+            }
+            p.takes=takes
+            try MIDIPitchBendStorage.promote(in:&p);try MIDISustainStorage.promote(in:&p)
+            for take in latest {try ProjectEditing.activateTake(take,in:&p)}
+            try MIDIPitchBendStorage.promote(in:&p);try MIDISustainStorage.promote(in:&p)
+            saved=true
+        }}
+        guard saved else {recordClock=nil;recordUseID=nil;originalRecordProject=nil;return}
         status = drainTimedOut
             ? "MIDI 입력 지연 · \(all.count)개 note 저장, 늦은 입력은 누락될 수 있습니다"
             : "MIDI 녹음 저장 · \(all.count)개 note"

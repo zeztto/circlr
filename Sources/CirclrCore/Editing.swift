@@ -155,6 +155,25 @@ public enum ProjectEditing {
 }
 
 public extension ProjectEditing {
+    /// A partial controller overdub adopts the retained dimension's lane channel.
+    /// sourceMIDIChannel on the take still preserves the physical input channel.
+    internal static func laneByApplyingTake(_ take:RecordedTake,to target:Lane)->Lane {
+        var lane=target
+        if take.replacesMIDINotes == true || (take.replacesMIDINotes == nil && !take.lane.notes.isEmpty) {
+            lane.notes=take.lane.notes;lane.pitchBend=take.lane.pitchBend;lane.sustain=take.lane.sustain
+        } else {
+            if var bend=take.lane.pitchBend {
+                if take.lane.sustain == nil,let retained=target.sustain {bend.channel=retained.channel}
+                lane.pitchBend=bend
+            }
+            if var sustain=take.lane.sustain {
+                if take.lane.pitchBend == nil,let retained=target.pitchBend {sustain.channel=retained.channel}
+                lane.sustain=sustain
+            }
+        }
+        if !take.lane.audio.isEmpty { lane.audio=take.lane.audio }
+        return lane
+    }
     static func activateTake(_ take: RecordedTake, in project: inout Project) throws {
         guard let ai=project.arrangements.firstIndex(where:{ a in
             (take.arrangementID == nil || a.id == take.arrangementID) && a.uses.contains{$0.id==take.useID}
@@ -162,9 +181,7 @@ public extension ProjectEditing {
         let lanes=try ArrangementCompiler.effectiveLanes(section:section,use:use)
         let target=take.targetLaneID.flatMap{id in lanes.first{$0.id==id}} ?? (take.targetLaneID == nil ? lanes.first{$0.trackID==take.lane.trackID}:nil)
         if take.targetLaneID != nil,target == nil { throw CirclrError("녹음 대상 서클이 삭제되었습니다") }
-        var lane=target ?? take.lane
-        if !take.lane.notes.isEmpty { lane.notes=take.lane.notes;lane.pitchBend=take.lane.pitchBend;lane.sustain=take.lane.sustain }
-        if !take.lane.audio.isEmpty { lane.audio=take.lane.audio }
+        let lane=laneByApplyingTake(take,to:target ?? take.lane)
         var candidate=project;let active=candidate.activeArrangementID;candidate.activeArrangementID=candidate.arrangements[ai].id
         try setLane(lane,for:take.useID,original:false,in:&candidate)
         candidate.activeArrangementID=active;project=candidate

@@ -77,6 +77,8 @@ Swift 패키지는 프로젝트 모델(`CirclrCore`), 오디오 처리(`CirclrAu
 
 ## 개발 상태·릴리스·라이선스
 
+[1.0 개발](docs/releases/1.0.0.md)은 `release/1.0.0`에서 MIDI 녹음 보존과 계정 연결을 진행 중입니다. 최신 배포 앱은 0.90.0입니다.
+
 완료한 버전마다 Git 태그와 GitHub Release를 만들고 한국어·영어 변경 안내, 검증한 앱 패키지, 체크섬을 제공합니다. 개발 build 번호 증가와 문서 수정은 릴리스를 만들지 않습니다. [변경 이력](CHANGELOG.md) · [릴리스 절차](docs/releases/README.md).
 
 코드·문서·아이콘은 [MIT](LICENSE), 음악은 [별도 이용 조건](Resources/Demos/DEMO-LICENSE.md)입니다. 데모는 앱·포크와 함께 재배포할 수 있으며 곡의 별도 발매 권한은 포함하지 않습니다. 타악기 자산6개는 CC0, 클래식 MIDI 원본은 Public Domain입니다. [라이선스 범위와 출처](THIRD_PARTY_NOTICES.md) · [기여 안내](CONTRIBUTING.md).

@@ -253,6 +253,10 @@ public struct Asset: Codable, Equatable, Identifiable {
     public init(name: String, path: String, duration: Double, sampleRate: Double) { self.name = name; self.path = path; self.duration = duration; self.sampleRate = sampleRate }
 }
 public struct RecordedTake: Codable, Equatable, Identifiable {
+    /// nil preserves legacy activation; true replaces even empty notes; false applies expression only.
+    public var replacesMIDINotes: Bool?
+    /// Input channel metadata is independent of whether expression was performed.
+    public var sourceMIDIChannel: Int?
     public var id: ID = newID()
     public var useID: ID
     public var targetLaneID: ID?

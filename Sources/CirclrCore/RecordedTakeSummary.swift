@@ -18,10 +18,14 @@ public struct RecordedTakeSummary: Equatable {
               let target=take.targetLaneID.flatMap({id in lanes.first{$0.id==id}})
                 ?? (take.targetLaneID==nil ? lanes.first{$0.trackID==take.lane.trackID}:nil),
               target.id==laneID,target.trackID==take.lane.trackID else{return nil}
-        let hasContent = !take.lane.notes.isEmpty || !take.lane.audio.isEmpty
+        let replacesNotes = take.replacesMIDINotes == true || (take.replacesMIDINotes == nil && !take.lane.notes.isEmpty)
+        let applied=ProjectEditing.laneByApplyingTake(take,to:target)
+        let hasContent = replacesNotes || take.lane.pitchBend != nil || take.lane.sustain != nil || !take.lane.audio.isEmpty
         return Self(noteCount:take.lane.notes.count,clipCount:take.lane.audio.count,
                     matchesCurrentContent:hasContent
-                    && (take.lane.notes.isEmpty || (target.notes==take.lane.notes && target.pitchBend==take.lane.pitchBend && target.sustain==take.lane.sustain))
+                    && (!replacesNotes || target.notes==applied.notes)
+                    && (!(replacesNotes || take.lane.pitchBend != nil) || target.pitchBend==applied.pitchBend)
+                    && (!(replacesNotes || take.lane.sustain != nil) || target.sustain==applied.sustain)
                     && (take.lane.audio.isEmpty || target.audio==take.lane.audio))
     }
 }

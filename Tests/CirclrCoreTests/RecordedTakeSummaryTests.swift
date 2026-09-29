@@ -50,4 +50,32 @@ final class RecordedTakeSummaryTests:XCTestCase {
         p.activeArrangementID=other.id;XCTAssertNil(summary(t,p))
         t.arrangementID=other.id;XCTAssertNotNil(summary(t,p))
     }
+    func testExplicitEmptyMIDITakeClearsOnlyMIDIAndLegacyJSONDefaultsToNil() throws {
+        var p=fixture(),t=take(p)
+        t.lane.notes=[];t.lane.audio=[];t.replacesMIDINotes=true
+        XCTAssertEqual(summary(t,p)?.matchesCurrentContent,false)
+        try ProjectEditing.activateTake(t,in:&p)
+        XCTAssertEqual(summary(t,p)?.matchesCurrentContent,true)
+        let lane=try XCTUnwrap(p.active.uses[0].laneOverrides[t.targetLaneID!])
+        XCTAssertTrue(lane.notes.isEmpty);XCTAssertEqual(lane.audio.count,1)
+        let encoded=try JSONEncoder().encode(t)
+        XCTAssertEqual(try JSONDecoder().decode(RecordedTake.self,from:encoded).replacesMIDINotes,true)
+        var json=try XCTUnwrap(JSONSerialization.jsonObject(with:encoded) as? [String:Any])
+        json.removeValue(forKey:"replacesMIDINotes")
+        let legacy=try JSONDecoder().decode(RecordedTake.self,from:JSONSerialization.data(withJSONObject:json))
+        XCTAssertNil(legacy.replacesMIDINotes)
+    }
+    func testExpressionOnlyTakePreservesNotesAndSummaryTracksExpression() throws {
+        var p=fixture(),t=take(p)
+        let notes=t.lane.notes
+        t.lane.notes=[];t.lane.audio=[];t.replacesMIDINotes=false
+        p.sections[0].lanes[0].pitchBend = .init(channel:0,initialValue:9000)
+        t.lane.sustain = .init(channel:2,events:[.init(beat:0.2,rawValue:127)])
+        XCTAssertEqual(summary(t,p)?.matchesCurrentContent,false)
+        try ProjectEditing.activateTake(t,in:&p)
+        XCTAssertEqual(summary(t,p)?.matchesCurrentContent,true)
+        XCTAssertEqual(p.active.uses[0].laneOverrides[t.targetLaneID!]?.notes,notes)
+        XCTAssertEqual(p.active.uses[0].laneOverrides[t.targetLaneID!]?.sustain?.channel,0)
+    }
+
 }

@@ -77,6 +77,8 @@ The Swift package separates the project model (`CirclrCore`), audio processing (
 
 ## Status, releases and license
 
+Development toward [1.0](docs/releases/1.0.0.md) is on `release/1.0.0`: MIDI recording fidelity and account integration are in progress. The latest published app remains 0.90.0.
+
 Each completed version will have a Git tag and a GitHub Release with Korean/English notes, a verified app package and checksums. Development build numbers and documentation edits do not create releases. [Changelog](CHANGELOG.md) · [Release procedure](docs/releases/README.md).
 
 Code, documentation and icons use the [MIT License](LICENSE). Music has [separate demo terms](Resources/Demos/DEMO-LICENSE.md): redistribution with the app and forks is permitted, but standalone music releases are not licensed. Six percussion assets remain CC0; classical MIDI sources remain Public Domain. See [licensing scope and credits](THIRD_PARTY_NOTICES.md) and [contributing](CONTRIBUTING.md).

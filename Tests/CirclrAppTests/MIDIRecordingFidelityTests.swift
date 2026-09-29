@@ -67,9 +67,12 @@ import CirclrCore
         try await waitForMIDIStop(store)
 
         let take = try XCTUnwrap(store.project.takes?.last)
+        XCTAssertNil(take.lane.pitchBend,"Note-only captures must not opt into pitch-expression rendering")
+        XCTAssertNil(take.lane.sustain)
+        XCTAssertEqual(take.sourceMIDIChannel,1)
         XCTAssertEqual(take.useID, useID)
         XCTAssertEqual(take.lane.trackID, trackID)
-        let notes = take.lane.notes.sorted { $0.beat < $1.beat }
+        let notes = (store.project.takes ?? []).flatMap(\.lane.notes).sorted { $0.beat < $1.beat }
         XCTAssertEqual(notes.count, 2)
         XCTAssertEqual(notes.map(\.velocity), [71, 109])
         XCTAssertEqual(notes.map(\.pitch), [60, 60])
@@ -80,13 +83,12 @@ import CirclrCore
         XCTAssertEqual(second.length, 0.16, accuracy: 0.02)
         let active = try XCTUnwrap(store.project.sections.first { $0.id == sectionID })
         let activeUse = try XCTUnwrap(store.project.active.uses.first { $0.id == useID })
-        XCTAssertEqual(try ArrangementCompiler.effectiveLanes(section: active,use: activeUse).first { $0.trackID == trackID }?.notes.count, 2)
+        XCTAssertEqual(try ArrangementCompiler.effectiveLanes(section: active,use: activeUse).filter { $0.trackID == trackID }.flatMap(\.notes).count, 2)
         store.undo()
-        XCTAssertEqual(store.project.takes?.count, 1)
+        XCTAssertEqual(store.project.takes?.count ?? 0, 0)
         let restoredSection = try XCTUnwrap(store.project.sections.first { $0.id == sectionID })
         let restoredUse = try XCTUnwrap(store.project.active.uses.first { $0.id == useID })
         XCTAssertEqual(try ArrangementCompiler.effectiveLanes(section: restoredSection,use: restoredUse).first { $0.trackID == trackID }?.notes.count, 0)
-        store.undo()
         XCTAssertEqual(store.project.takes?.count ?? 0, 0)
     }
 
@@ -150,14 +152,14 @@ import CirclrCore
         XCTAssertEqual(store.auditionOutput.status.heldNotes, 0)
 
         let takes = try XCTUnwrap(store.project.takes)
-        XCTAssertEqual(takes.count, 2)
-        let first = try XCTUnwrap(takes.first)
-        let second = try XCTUnwrap(takes.dropFirst().first)
-        XCTAssertEqual(first.lane.notes.map(\.velocity).sorted(), [75, 103])
-        XCTAssertEqual(second.lane.notes.map(\.velocity).sorted(), [75, 103])
-        XCTAssertTrue(first.lane.notes.allSatisfy { $0.beat + $0.length <= clock.beats + 0.000001 })
-        XCTAssertTrue(second.lane.notes.allSatisfy { $0.beat >= 0 && $0.beat < clock.beats })
-        XCTAssertEqual(store.project.takes?.last?.id, second.id)
+        XCTAssertEqual(takes.count, 4)
+        let first = [takes[0],takes[2]].flatMap(\.lane.notes)
+        let second = [takes[1],takes[3]].flatMap(\.lane.notes)
+        XCTAssertEqual(first.map(\.velocity).sorted(), [75, 103])
+        XCTAssertEqual(second.map(\.velocity).sorted(), [75, 103])
+        XCTAssertTrue(first.allSatisfy { $0.beat + $0.length <= clock.beats + 0.000001 })
+        XCTAssertTrue(second.allSatisfy { $0.beat >= 0 && $0.beat < clock.beats })
+
     }
 
     func testDelayedStopRejectsEventsPastRepeatLimitAndClampsHeldNotesToLastBoundary() async throws {
@@ -190,9 +192,9 @@ import CirclrCore
         XCTAssertTrue(commands.contains("60:off"), "마지막 note가 stop 시점까지 눌려 있어도 audition을 해제해야 합니다")
         XCTAssertTrue(commands.contains("63:off"), "늦게 전달된 Note Off도 audition을 해제해야 합니다")
         let takes = try XCTUnwrap(store.project.takes)
-        XCTAssertEqual(takes.count, 2, "늦은 tick/stop이 세 번째 반복 take를 만들면 안 됩니다")
+        XCTAssertEqual(takes.count, 4, "두 채널 × 두 반복이며 세 번째 반복은 없어야 합니다")
         XCTAssertEqual(takes.flatMap(\.lane.notes).filter { $0.pitch == 65 }.count, 0)
-        let finalNotes = try XCTUnwrap(takes.last?.lane.notes)
+        let finalNotes = [takes[1],takes[3]].flatMap(\.lane.notes)
         XCTAssertEqual(Set(finalNotes.map(\.pitch)), [60, 63])
         XCTAssertTrue(finalNotes.allSatisfy { $0.beat >= 0 && $0.beat + $0.length <= clock.beats + 0.000001 })
         XCTAssertEqual(try XCTUnwrap(finalNotes.first { $0.pitch == 60 }).beat + XCTUnwrap(finalNotes.first { $0.pitch == 60 }).length,
@@ -201,9 +203,7 @@ import CirclrCore
         XCTAssertLessThan(edgeNote.length, 0.03125, "최소 note 길이가 선택한 마지막 반복의 경계를 넘겨서는 안 됩니다")
         XCTAssertEqual(edgeNote.beat + edgeNote.length,
                        clock.beats, accuracy: 0.000001)
-        store.undo() // take activation
-        XCTAssertEqual(store.project.takes?.count, 2)
-        store.undo() // take creation
+        store.undo() // atomic capture and activation
         XCTAssertEqual(store.project.takes?.count ?? 0, 0)
     }
 
@@ -256,10 +256,8 @@ import CirclrCore
         XCTAssertGreaterThan(note.beat, 0.2)
         XCTAssertLessThan(note.beat, 2)
         XCTAssertGreaterThan(note.length, 0.3)
-        store.undo() // activation
-        store.undo() // take insertion
+        store.undo() // atomic capture and activation
         XCTAssertEqual(store.project.takes?.count ?? 0, 0)
-        store.redo()
         store.redo()
         let document = root.appendingPathComponent("timed-take.circlr")
         _ = try ProjectStore.save(store.project, to: document, mediaRoot: nil)
