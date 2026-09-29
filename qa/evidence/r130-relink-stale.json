@@ -1,0 +1,66 @@
+{
+  "schema": "circlr-qa-evidence-v1",
+  "id": "r130-relink-stale",
+  "recordedAt": "2026-09-29T21:27:59.780651+00:00",
+  "head": "079f874f0700eb71b84615bd076279760c5cf5eb",
+  "workingTreeChangesIncluded": true,
+  "contract": {
+    "authority": "explicit captured assetID and entire Project plus mediaRoot snapshot; current UI selection does not redefine the chosen asset",
+    "selectionChange": "allowed; preserves current selection and relinks only captured asset",
+    "sameIDRevisionChange": "reject stale prepared result; preserve newer user edit",
+    "documentReplacement": "reject or cancel old result; never modify replacement project"
+  },
+  "command": "./scripts/swift-local.sh test --scratch-path .build/r130-tests --filter 'ProjectMediaWorkspaceTests.testRelink'",
+  "runs": 1,
+  "exitCode": 0,
+  "result": "PASS",
+  "tests": {
+    "new": 3,
+    "existing": 1,
+    "total": 4,
+    "failures": 0
+  },
+  "log": {
+    "path": "/tmp/circlr-r130-relink-stale-tests.log",
+    "sha256": "d1edd459b5e7d037a4d2c762a6fe86ad098887182037cc19adcf1533c4431a52"
+  },
+  "files": {
+    "Tests/CirclrAppTests/ProjectMediaWorkspaceTests.swift": "d033c09a6bcde60d0104f7f6546f8e692066a6bcdb3b6282e12c1981be683fb3",
+    "Sources/CirclrApp/ProjectMediaWorkspace.swift": "319151b76687cf394318b81bb699104b02d563cb606dd9c185f88d5b07726085",
+    "Sources/CirclrCore/ProjectMediaRelink.swift": "38008331bc157b6dbf4f028f66d3a84bff54d6d2531a11dcdef8caae84a41ccc"
+  },
+  "scenarios": [
+    {
+      "id": "M06-selection-change",
+      "test": "testRelinkSelectionChangeKeepsExplicitAssetTargetAndCurrentSelection",
+      "result": "PASS",
+      "evidence": "Before awaiting prepared relink, changed section/hierarchy/track selection without editing Project; captured asset path alone updates, unrelated asset preserved, new selection retained, one musical revision and one Undo added; candidate checksum unchanged."
+    },
+    {
+      "id": "M06-same-id-revision-change",
+      "test": "testRelinkSameDocumentNewRevisionRejectsLateResultAndPreservesUserEdit",
+      "result": "PASS",
+      "evidence": "Before MainActor commit, changed tempo using mutate with same project ID. Later relink rejected; tempo/revision/Undo/user dirty preserved, missing asset path unchanged, candidate checksum unchanged."
+    },
+    {
+      "id": "M06-document-replacement",
+      "test": "testRelinkDocumentReplacementNeverWritesIntoNewDocument",
+      "result": "PASS",
+      "evidence": "Before MainActor commit, replaced Project with new ID and clean dirty state; late work drained; replacement project remains byte-equivalent by model equality, no assets introduced, dirty remains false, candidate checksum unchanged."
+    },
+    {
+      "id": "M06-existing-identity-undo-regression",
+      "test": "testRelinkSameNameWrongContentFailsAndMatchingContentSupportsUndo",
+      "result": "PASS",
+      "evidence": "Existing test still rejects same-name wrong content and supports Undo after verified candidate relink."
+    }
+  ],
+  "ordering": "Tests do not suspend between relink dispatch and selection/document change. Thus queued MainActor publication cannot run before change, independent of detached checksum speed.",
+  "productChanges": [],
+  "notVerified": [
+    "Actual NSOpenPanel selection/cancellation and native repaint",
+    "Native user switching selection or documents while hash scan is visibly running",
+    "Audible playback or valid audio decoding; fixtures verify exact file bytes and SHA identity only"
+  ],
+  "validationBoundary": "Actual detached relink preparation, filesystem reads and ProjectMediaWorkspace commit lifecycle in XCTest. No native UI PASS claimed."
+}

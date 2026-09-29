@@ -1,0 +1,180 @@
+{
+  "schema": "circlr-qa-evidence-v1",
+  "id": "r130-history-boundaries",
+  "status": "EVIDENCE_MAPPING_NOT_NEW_EXECUTION",
+  "scope": [
+    "M07",
+    "H01",
+    "J02",
+    "J03"
+  ],
+  "method": "Read actual test assertions, existing execution logs, native artifacts and current history/termination source. No product changes or test/UI execution.",
+  "logs": [
+    {
+      "path": ".build/r130-core-regression.log",
+      "sha256": "4e0dc2c978dc62bcf9e40744a1bce05ca66dca72dfd6dadd079a2e86b0553c35"
+    },
+    {
+      "path": ".build/r130-focused.log",
+      "sha256": "c6a061ac8f7647191f6c8560750ebaf169e36310e1a5b65fc980a6ebceab33d9"
+    },
+    {
+      "path": ".build/r130-native-boundary-tests.log",
+      "sha256": "5de31d92c27a6d0b350250ff39984f210933e156845bbb3b439ce5594870f487"
+    },
+    {
+      "path": ".build/r130-failure-drain-tests.log",
+      "sha256": "21f81aa4fa34277c18569c21d6e5b87ea127b7f3210f9bc1dc8d2660ff8fdd8c"
+    },
+    {
+      "path": ".build/r130-helper-publication.log",
+      "sha256": "ccaf0f95117d69565625cebe5b3b56d65ec120005b8ff10472431e377070c479"
+    },
+    {
+      "path": ".build/r120-arrangement.log",
+      "sha256": "ab89b5c71af0715986ed753fdfd86c10e8e3f7ccae269448e8e0e0b3a9fac3dd"
+    },
+    {
+      "path": ".build/r120-playback.log",
+      "sha256": "0b37e87d5cde869a505551358cf62b2f567dbeb3605d3b858b506da139cf89eb"
+    },
+    {
+      "path": ".build/r90-validation.log",
+      "sha256": "00ea56a9136ae30493ad9a29e90ccb1f3dfb87ef5929bb2768d1925f0e30bf3b"
+    }
+  ],
+  "scenarios": [
+    {
+      "id": "M07",
+      "status": "NATIVE_PASS_WITH_RECORDED_ACTION_PROVENANCE",
+      "native_actions_source": "Lead-provided prior CUA review summary: native CmdZ produced revision16 snapshot; native CmdShiftZ produced revision17. This is an attributed observation, not a key event contained in snapshot JSON.",
+      "artifacts": [
+        "qa/generated/1.3-native/build255-relinked-snapshot.json",
+        "qa/generated/1.3-native/build255-undo-snapshot.json",
+        "qa/generated/1.3-native/build255-after-copy-snapshot.json",
+        "qa/generated/1.3-native/build255-cold-reopen-snapshot.json",
+        "qa/evidence/r130-build255-native-media.json"
+      ],
+      "assertions": [
+        "Same project/asset IDs at relink15, Undo16, Redo/save17 and different-package cold reopen17",
+        "asset path switches moved-original -> media relative -> moved-original -> portable media relative; other asset and musical fields preserved",
+        "source and both package WAV hashes f63c55712c6c646498eeb9d2a0f7e3f4643b17e35173dc04b24225d750395a79; both manifests 67eddb084232b477eebe9fba3817bffa35ce2c4991826373d5bb8947e15e1f2d"
+      ],
+      "limits": [
+        "No new physical playback or audible validation"
+      ]
+    },
+    {
+      "id": "H01",
+      "status": "RELEASE_CONTRACT_COVERED_BY_LAYERED_EVIDENCE",
+      "assertion_mapping": [
+        {
+          "test": "MIDIClipboardWorkspaceTests/testCopyAcrossSectionsAtCursorThenUndoRedoAndSaveReopen",
+          "log": ".build/r130-focused.log",
+          "verified": "Pasted beat/pitch/velocity and fresh IDs; Undo empty target; Redo exact notes; save/load occurrence uses; original source notes unchanged."
+        },
+        {
+          "test": "SectionInsertionTests/testTerminalInsertionTransfersEndAndUndoRedoRestoresDocument",
+          "log": ".build/r130-core-regression.log",
+          "verified": "Full project equality after history Undo/Redo with expected revision handling."
+        },
+        {
+          "test": "SectionReuseWorkspaceTests/testReuseAfterHasSingleUndoAndStaleContextCannotEdit",
+          "log": ".build/r120-arrangement.log",
+          "verified": "Historical1.2 App run: single Undo, unchanged source sections, stale context rejected, exact occurrence order on Undo/Redo. Not a new1.3 run."
+        },
+        {
+          "test": "AudioEditingTests/testSplitPreservesSourceFadeRoutingAndSharedUse",
+          "log": ".build/r130-core-regression.log",
+          "verified": "Source offsets/durations/fades/routing/shared-use scope and JSON project round-trip equality."
+        },
+        {
+          "test": "SynthResonanceAutomationTests/testPromotionNoOpRemovalUndoAndRoundTrip",
+          "log": ".build/r130-core-regression.log",
+          "verified": "Automation points/no-op/JSON roundtrip and CircleHistory full-project restore."
+        },
+        {
+          "test": "CircleHistoryTests/testUndoAndRedoKeepPreferencesChangedAfterEachMusicEdit",
+          "log": ".build/r130-core-regression.log",
+          "verified": "Full-project Undo/Redo snapshot restoration with explicit revision and viewing preference separation."
+        }
+      ],
+      "source_reasoning": "Sources/CirclrCore/CircleHistory.swift restores the saved entire Project for musical history; it does not selectively drop audio/automation. Core value/persistence checks compose with App/native history and native real-audio save/cold-reopen evidence.",
+      "native_artifacts": [
+        "qa/evidence/r130-build258-dirty-retry.json",
+        "qa/evidence/r130-build255-native-media.json"
+      ],
+      "limits": [
+        "No single new native session containing all clipboard/reuse/automation/audio edit permutations; this is not required as a separate feature by the release contract.",
+        "Audio/automation unit roundtrips are JSON-level; actual media package bytes/cold reopen are established separately."
+      ]
+    },
+    {
+      "id": "J03",
+      "status": "AUTO_PASS_DOCUMENT_BOUNDARY",
+      "log": ".build/r130-native-boundary-tests.log",
+      "tests": [
+        "RecordingDocumentBoundaryTests/testAudioPendingAndFinalizationRejectEveryDocumentReplacementAndSave",
+        "RecordingDocumentBoundaryTests/testMIDIRecordingRejectsEveryDocumentReplacementAndSave",
+        "RecordingDocumentBoundaryTests/testDemoCommitResumesOnlyAfterRecordingFinalization",
+        "CaptureMutualExclusionTests"
+      ],
+      "assertions": [
+        "Pending/starting/recording/finishing/cancelling states block save/new/open/starter/demo commit",
+        "Project/projectURL/audioRecoveryURL preserved; no saved file; explicit stop/finalize status",
+        "Demo replacement allowed only after idle; capture commands do not cancel unrelated active capture"
+      ],
+      "limits": [
+        "State-controlled App tests; no physical device permission/finalization or live recorded media generation claim.",
+        "The1.3 document-boundary contract is covered; no new recording engine or physical timing gate added."
+      ]
+    },
+    {
+      "id": "J02",
+      "status": "PARTIAL_WITH_ONE_TARGETED_GAP",
+      "current_evidence": [
+        {
+          "test": "TrustedMCPHelperProcessTests/testFileToolLatePublicationAfterStopOrDocumentChangeIsRejected",
+          "log": ".build/r130-helper-publication.log",
+          "verified": "Real helper child exits; staged save after projectURL change and export after STOP both cancelled; old manifest unchanged/output absent."
+        },
+        {
+          "test": "ProjectMediaWorkspaceTests/testCancelledPortableReaderKeepsDemoUntilDocumentRetirementDrains",
+          "log": ".build/r130-failure-drain-tests.log",
+          "verified": "Blocked detached reader retains demo after cancellation/document reset; no concurrent replacement reader; release drains tasks then retires demo; target absent."
+        },
+        {
+          "test": "LiveLoopUpdateTests/testStopInvalidatesRequestAndDrainsDetachedPCMBeforeAnotherRender",
+          "log": ".build/r130-focused.log",
+          "verified": "STOP invalidation and detached PCM drain."
+        }
+      ],
+      "historical_evidence": [
+        {
+          "test": "PlaybackLoopDrainTests",
+          "log": ".build/r120-playback.log",
+          "verified": "Cancelled loop/production worker drain before new render/export; prior1.2 evidence only."
+        },
+        {
+          "test": "AppOwnedAgentTurnIntegrationTests/testDocumentAndTerminationCloseOwnedIngress",
+          "log": ".build/r90-validation.log",
+          "verified": "Historical0.90 termination pause revokes active lease and closes socket; not fresh1.3 run."
+        }
+      ],
+      "source_observation": "Current CirclrApp.swift AppDelegate pauses ingress before termination, stops work and calls stopAgentBridgeForTermination; read-only source is not execution evidence.",
+      "one_remaining_case": "On current candidate, accept trusted file job behind a bounded worker barrier, invoke actual termination path, then verify no late target publication and helper/socket termination. Existing STOP/document tests remain reusable; do not repeat all permutations.",
+      "limits": [
+        "A clean recovery quit PID check is not an in-flight trusted file job termination test."
+      ]
+    }
+  ],
+  "new_tests_run": 0,
+  "product_changes": [],
+  "remaining_high_risk_cases": [
+    {
+      "id": "J02-termination-inflight-file-job",
+      "count": 1,
+      "action": "On current candidate, accept trusted file job behind a bounded worker barrier, invoke actual termination path, then verify no late target publication and helper/socket termination. Existing STOP/document tests remain reusable; do not repeat all permutations."
+    }
+  ]
+}

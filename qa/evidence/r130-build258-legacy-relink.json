@@ -1,0 +1,16 @@
+{
+  "build": 258,
+  "scenario": "M04",
+  "status": "NATIVE_PASS",
+  "observed": [
+    "missing legacy asset has empty checksum",
+    "native candidate picker",
+    "explicit no-checksum identity warning with scope of all references",
+    "explicit Replace confirmation",
+    "relink completed and dirty true"
+  ],
+  "assetID": "AE269AF5-B995-4579-8E32-C23FA5E08FC4",
+  "checksum": "f63c55712c6c646498eeb9d2a0f7e3f4643b17e35173dc04b24225d750395a79",
+  "screenshot_sha256": "af3d07e33f108e946666702265d4616b0337f07ba6ed1bf5b9ede9de321e9853",
+  "snapshot": "qa/generated/1.3-native/build258-legacy-relinked.json"
+}

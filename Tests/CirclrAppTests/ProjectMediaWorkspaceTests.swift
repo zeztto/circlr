@@ -110,4 +110,78 @@ import CirclrCore
         XCTAssertTrue(workspace.readerTasks.isEmpty)
     }
 
+    private func relinkFixture(_ store: AppStore, root: URL) throws -> (asset: Asset, candidate: URL, other: Asset) {
+        let candidate = root.appendingPathComponent("relocated-source.wav")
+        let otherFile = root.appendingPathComponent("unrelated-source.wav")
+        try Data("exact-source-for-selected-asset".utf8).write(to: candidate)
+        try Data("different-asset-content".utf8).write(to: otherFile)
+        var asset = Asset(name: "source.wav", path: root.appendingPathComponent("missing-source.wav").path, duration: 1, sampleRate: 48000)
+        asset.checksum = try ProjectStore.checksum(candidate)
+        var other = Asset(name: "other.wav", path: otherFile.path, duration: 1, sampleRate: 48000)
+        other.checksum = try ProjectStore.checksum(otherFile)
+        var project = store.project
+        _ = project.addTrack(name: "첫 트랙")
+        _ = project.addTrack(name: "다른 트랙")
+        _ = project.addSection(name: "첫 섹션", at: Point(), bars: 2)
+        _ = project.addSection(name: "다른 섹션", at: Point(1000, 0), bars: 2)
+        project.assets = [asset, other]
+        store.project = project
+        let first = project.active.uses[0]
+        store.selection = [first.id]; store.selectedTrackID = project.tracks[0].id
+        store.hierarchySelection = .section(arrangementID: project.activeArrangementID, useID: first.id)
+        return (asset, candidate, other)
+    }
+
+    func testRelinkSelectionChangeKeepsExplicitAssetTargetAndCurrentSelection() async throws {
+        let (store, root) = try fixture(); defer { cleanup(store, root) }
+        let source = try relinkFixture(store, root: root)
+        let before = store.project, undoBefore = store.undoCount
+        store.projectMedia.relink(assetID: source.asset.id, candidate: source.candidate)
+        // No await: change navigation before the MainActor commit can run.
+        let second = before.active.uses[1], secondTrack = before.tracks[1].id
+        let address = CircleAddress.section(arrangementID: before.activeArrangementID, useID: second.id)
+        store.selection = [second.id]; store.hierarchySelection = address; store.selectedTrackID = secondTrack
+        XCTAssertEqual(store.project, before, "Navigation itself is not a document edit")
+        await wait { !store.projectMedia.busy }
+        for reader in store.projectMedia.readerTasks { await reader.value }
+        XCTAssertEqual(store.project.assets.first(where: { $0.id == source.asset.id })?.path, source.candidate.path)
+        XCTAssertEqual(store.project.assets.first(where: { $0.id == source.other.id }), source.other)
+        XCTAssertEqual(store.selection, [second.id]); XCTAssertEqual(store.hierarchySelection, address)
+        XCTAssertEqual(store.selectedTrackID, secondTrack)
+        XCTAssertEqual(store.project.musicRevision, before.musicRevision + 1)
+        XCTAssertEqual(store.undoCount, undoBefore + 1); XCTAssertTrue(store.dirty)
+        XCTAssertEqual(try ProjectStore.checksum(source.candidate), source.asset.checksum)
+    }
+
+    func testRelinkSameDocumentNewRevisionRejectsLateResultAndPreservesUserEdit() async throws {
+        let (store, root) = try fixture(); defer { cleanup(store, root) }
+        let source = try relinkFixture(store, root: root)
+        let originalID = store.project.id, originalRevision = store.project.musicRevision
+        store.projectMedia.relink(assetID: source.asset.id, candidate: source.candidate)
+        store.mutate("검사 중 템포 변경") { $0.global.tempo = 137 }
+        let edited = store.project, undoAfterEdit = store.undoCount
+        await wait { !store.projectMedia.busy }
+        for reader in store.projectMedia.readerTasks { await reader.value }
+        XCTAssertEqual(store.project, edited); XCTAssertEqual(store.project.id, originalID)
+        XCTAssertEqual(store.project.musicRevision, originalRevision + 1)
+        XCTAssertEqual(store.project.assets.first(where: { $0.id == source.asset.id })?.path, source.asset.path)
+        XCTAssertEqual(store.project.global.tempo, 137); XCTAssertEqual(store.undoCount, undoAfterEdit)
+        XCTAssertTrue(store.projectMedia.message.contains("곡이 변경되었습니다")); XCTAssertTrue(store.dirty)
+        XCTAssertEqual(try ProjectStore.checksum(source.candidate), source.asset.checksum)
+    }
+
+    func testRelinkDocumentReplacementNeverWritesIntoNewDocument() async throws {
+        let (store, root) = try fixture(); defer { cleanup(store, root) }
+        let source = try relinkFixture(store, root: root)
+        store.projectMedia.relink(assetID: source.asset.id, candidate: source.candidate)
+        var replacement = Project(); replacement.name = "새로 연 곡"
+        replacement.enableAlbum()
+        store.project = replacement; store.dirty = false
+        await wait { !store.projectMedia.busy && !store.projectMedia.draining }
+        for reader in store.projectMedia.readerTasks { await reader.value }
+        XCTAssertEqual(store.project, replacement); XCTAssertFalse(store.dirty)
+        XCTAssertTrue(store.project.assets.isEmpty)
+        XCTAssertEqual(try ProjectStore.checksum(source.candidate), source.asset.checksum)
+    }
+
 }

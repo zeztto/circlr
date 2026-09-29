@@ -1,0 +1,10 @@
+{
+  "status": "LOCAL_PACKAGE_PASS_NOT_RELEASED",
+  "version": "1.3.0",
+  "build": 259,
+  "file_count": 68,
+  "extracted_files_equal": true,
+  "signature": "strict-deep ad-hoc PASS",
+  "zip_sha256": "3256fba397c56d521802cbbaaf81fd02775fc8ae56e98ffcbeeb4d5ec743c188",
+  "remote_validation": "PENDING"
+}

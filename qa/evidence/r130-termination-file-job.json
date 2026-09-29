@@ -1,0 +1,56 @@
+{
+  "schema": "circlr-qa-evidence-v1",
+  "id": "r130-termination-file-job",
+  "recordedAt": "2026-09-29T21:38:07.153518+00:00",
+  "head": "079f874f0700eb71b84615bd076279760c5cf5eb",
+  "workingTreeChangesIncluded": true,
+  "command": "./scripts/swift-local.sh test --scratch-path .build/r130-tests --filter TerminationFileJobTests",
+  "runs": 1,
+  "exitCode": 0,
+  "result": "PASS",
+  "tests": {
+    "total": 1,
+    "failures": 0,
+    "skipped": 0
+  },
+  "log": {
+    "path": "/tmp/circlr-r130-termination-file-job-tests.log",
+    "sha256": "95a4ec7442c0439fbd4e4cfaf2fa2426e34158f15ade69fbdb3160edbdee5e16"
+  },
+  "realHelper": {
+    "path": "/Users/sungwoonjeon/Documents/ChatGPT/circlr/.build/release-0.90-worktree/.build/r130-tests/debug/circlr-trusted-mcp-helper",
+    "sha256": "43f4891ccd0289e8ce79905e3d2f04d7fe06335c9edc9cbfc77c47167472d578",
+    "transport": "real process stdio MCP and app-owned Unix socket"
+  },
+  "files": {
+    "Tests/CirclrAppTests/TerminationFileJobTests.swift": "5d8a61306fe93e522a89753b7654c66610e1e487c90f61a21aa327d2716cd579",
+    "Sources/CirclrApp/CirclrApp.swift": "0f5f18c13efe19954e53ed59eb60cf049ec3a0c32d6bc4b455f11035f59d75b0",
+    "Sources/CirclrApp/AgentWorkspace.swift": "ae63e9643e133e4ff539d48c6bb94222101366f7fdc6379084d68230fe51c167",
+    "Sources/CirclrApp/TrustedMCPHelperSession.swift": "d7ace90b9cc23f4d996f558184edca54803fec6e8e69ae6d2c6d816e0b8acaa0"
+  },
+  "observations": {
+    "pendingFileJob": "real circlr_export request accepted and reports running under app-owned file grant",
+    "barrier": "test-owned cancellation-insensitive prior production reader; accepted export waits through productionDrain",
+    "terminationEntry": "actual AppDelegate.applicationShouldTerminate(NSApplication.shared) method in isolated XCTest process",
+    "approvalPath": "clean saved document; no NSAlert, NSApplication.terminate, or terminateLater reply",
+    "terminationReply": "terminateNow",
+    "readerDrainedAtTerminationReturn": false,
+    "trustedLeaseAfterEntry": "revoked",
+    "jobAfterEntry": "cancelled",
+    "helperAfterEntry": "exited and reaped; kill(pid,0) returns ESRCH",
+    "socketAfterEntry": "unlinked",
+    "lateHelperRequest": "rejected",
+    "afterBarrierRelease": "pending export task and prior reader explicitly awaited to completion",
+    "latePublishedFiles": 0,
+    "projectModel": "unchanged",
+    "dirty": "remains false",
+    "savedManifestBytes": "unchanged"
+  },
+  "productChanges": [],
+  "notVerified": [
+    "Actual macOS native Quit gesture and application process exit",
+    "Dirty-document save/discard modal choice",
+    "Recording/movie terminateLater branches"
+  ],
+  "validationBoundary": "Actual termination delegate entry plus real helper/socket lifecycle and late-publication barrier in XCTest. App delegate returns terminateNow before test-owned reader drains; later test-controlled drain proves publication remains revoked. This is not native application-exit PASS and did not close any user application."
+}

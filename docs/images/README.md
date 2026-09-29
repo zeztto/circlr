@@ -1,6 +1,16 @@
 # Screenshots · 실행 화면
 
 
+## 1.3.0 build259 candidate · 미출고
+
+`circlr-song-build259.jpg`: 2880×1800px / 1440×900pt, SHA256 `53515d861667cd426031a05218ba83db22371171ecf754e33fc3e9e662aa5541`.
+
+`circlr-song-portrait-build259.jpg`: 1402×1800px / 701×900pt, SHA256 `7dc384bd0b4cb9eeba6c5f586d43397622b54c47bcee77d6d27e0dd231ca388f`.
+
+격리 QA 앱의 동봉 f0r h3r 정지 화면을 CUA로 촬영했습니다. 콘솔을 접고 캔버스 구도를 조정했습니다. 반환된 전체 창 JPEG를 그대로 저장했으며 이미지 생성·합성·리사이즈는 하지 않았습니다. 재생 성능·청취 검증 자료는 아닙니다.
+
+Native captures from the isolated build259 candidate, bundled demo stopped, console collapsed. Full-window JPEG bytes without image editing. These are not evidence of playback FPS or listening quality.
+
 ## 1.2.0 build253
 
 `circlr-song-build253.jpg`: 1440×900pt, SHA256 `119e4d7331570d26db9385fa7404aa111a0713a510ce0fe15d18c380aa06eb12`.

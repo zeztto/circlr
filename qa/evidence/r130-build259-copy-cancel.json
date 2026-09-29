@@ -1,0 +1,19 @@
+{
+  "build": 259,
+  "status": "NATIVE_PASS_WITH_SCOPE",
+  "logical_bytes": 17179869536,
+  "physical_fixture": "8 hardlinks to one sparse 2GiB WAV; no additional PCM allocation",
+  "observed_busy": "미디어 검사·사본 준비 중 · 취소할 수 있습니다",
+  "action": "native Escape during observed busy state",
+  "result": {
+    "destination_exists": false,
+    "staging_remaining": false,
+    "revision": 17,
+    "dirty_before": false,
+    "dirty_after": false,
+    "assets_unchanged": true,
+    "source_sha256": "e2d53c583feaad7d37cc7b1de8bd1f558b5593bc5f8e17a2315c9ed88e9649e4",
+    "keyboard_palette_after_cancel": "PASS"
+  },
+  "boundary": "Native cancel during preparation; no assertion that byte-copy stage had begun. Mid-byte-copy cancellation and dirty=true cancellation covered by separate automated tests."
+}

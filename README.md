@@ -8,9 +8,11 @@ English · [한국어](README.ko.md)
 
 In circlr, a circle is a timeline. Build a song from sections, place MIDI, audio, instruments and effects on and around their orbits, and connect their inputs and outputs. Move between the whole arrangement and detailed editing on one zoomable canvas.
 
-![circlr build253 showing f0r h3r and its seven song sections](docs/images/circlr-song-build253.jpg)
+![circlr build259 candidate showing f0r h3r and its seven song sections](docs/images/circlr-song-build259.jpg)
 
-*1.2.0 build253 native capture of the bundled demo. [Capture provenance](docs/images/README.md).*
+Screenshots show the unreleased 1.3/build259 candidate. The latest stable release remains 1.2. [Media and recovery guide](docs/1.3-media-recovery-guide.md).
+
+*1.3.0 build259 candidate, native capture of the bundled demo. [Capture provenance](docs/images/README.md).*
 
 > **1.2.0 · build253.** Copy MIDI phrases between circles, play from the editing cursor, hear edits at the next prepared loop boundary, and insert a reused section into the song flow. [Release notes](docs/releases/1.2.0-notes.md).
 
@@ -26,7 +28,7 @@ In-app account chat is disabled while live-service validation is paused. The loc
 - **Sound and motion:** instrument/effect routing, automation, bounce and source restoration; playback-follow and signal visualization controls.
 - **Local agents:** an MCP interface for inspecting and editing projects, generating MIDI, rendering and saving, with activity visible in the console.
 
-<img src="docs/images/circlr-song-portrait-build253.jpg" width="280" alt="circlr build253 in a portrait window with seven song sections and responsive controls">
+<img src="docs/images/circlr-song-portrait-build259.jpg" width="280" alt="circlr build259 candidate in a portrait window with seven song sections and responsive controls">
 
 *The same build253 demo stopped in a 700×900 portrait window, showing the responsive section controls and all seven sections. [Capture details](docs/images/README.md).*
 

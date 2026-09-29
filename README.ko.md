@@ -8,9 +8,11 @@
 
 써클러에서 원은 타임라인입니다. 섹션으로 곡을 구성하고, 궤도 위와 주변에 MIDI·오디오·악기·이펙터를 배치해 입출력을 연결합니다. 하나의 확대 가능한 캔버스에서 곡 전체 구성과 세부 편집을 오갑니다.
 
-![build253의 f0r h3r와 일곱 곡 섹션](docs/images/circlr-song-build253.jpg)
+![build259 검증 후보의 f0r h3r와 일곱 곡 섹션](docs/images/circlr-song-build259.jpg)
 
-*1.2.0 build253 실제 앱의 동봉 데모 화면입니다. [촬영 정보](docs/images/README.md).*
+스크린샷은 미출고 1.3/build259 검증 후보입니다. 현재 정식판은 1.2입니다. [미디어·복구 안내](docs/1.3-media-recovery-guide.md).
+
+*1.3.0 build259 검증 후보의 실제 동봉 데모 화면입니다. [촬영 정보](docs/images/README.md).*
 
 > **1.2.0 · build253.** 서클 간 MIDI 구절 전송, 편집 커서 재생, 준비된 다음 루프 경계에서 편집 반영, 곡 흐름에 공유 섹션 재사용을 추가했습니다. [릴리스 노트](docs/releases/1.2.0-notes.md).
 
@@ -26,7 +28,7 @@
 - **음색과 움직임:** 악기·이펙트 연결, 오토메이션, 바운스·원본 복원과 재생 팔로우·시그널 시각화 기능을 다룹니다.
 - **로컬 에이전트:** MCP로 프로젝트 조회·편집, MIDI 생성, 렌더링·저장을 수행하고 콘솔에서 작업을 확인합니다.
 
-<img src="docs/images/circlr-song-portrait-build253.jpg" width="280" alt="build253 세로 창에서 일곱 곡 섹션과 반응형 조작">
+<img src="docs/images/circlr-song-portrait-build259.jpg" width="280" alt="build259 검증 후보의 세로 창에서 일곱 곡 섹션과 반응형 조작">
 
 *같은 build253 데모를 정지한 700×900 세로 창입니다. 반응형 섹션 조작과 일곱 섹션을 보여줍니다. [촬영 정보](docs/images/README.md).*
 

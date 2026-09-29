@@ -1,0 +1,29 @@
+{
+  "build": 259,
+  "version": "1.3.0",
+  "status": "IN_PROGRESS",
+  "build_exit": 0,
+  "signature": "strict-deep ad-hoc PASS",
+  "executables": {
+    "circlr-au-effect-worker": "8b376dd7bda687c9579cd10a3e758bd1812603f3d12b8567858c5ee71267a853",
+    "circlr": "0c27b8e5ffb458c29c69fe9b8d31100289e169b9996d98fa92be358f02feb207",
+    "circlr-au-instrument-worker": "e8e2dcad8a8c656bc1e2d34b2a1caffceb0161cff30e6a0e06d8d51e86f0850d",
+    "circlr-output-device-catalog": "bd5d1c09e96f0d44e72df4fe76985646af471adb3fe101bfc92537832d2b22b0",
+    "circlr-audition-worker": "350eef3cfae792aaf6f84460da3f02d59529dd91e5a47e40e2aafb02cdb08620",
+    "circlr-trusted-mcp-helper": "a4d9487c6e29c09ebb29942448b5ab180a8111a743c1bcc7a894bb30d0aafe8d",
+    "circlr-output-worker": "76b66aa91b4974c086f8a42773cc8c5c914fc80be9cfd4a61cb5e4a1f7b7733b",
+    "circlr-input-worker": "9146260bafb9df89816f57bae6ad6c8d7576f17e4e069642c6412c04d6ce28ad"
+  },
+  "fixture_sha256": "ffaf36dd21ef67c0c5c89e40eff84b2150ea821e16b1f217967133d1a0e466b5",
+  "native": {
+    "R07_migration": "PASS: valid JSON schema999 restore fails, preserve action displays accurate failure and exact retained path, continue reaches startup",
+    "preserved_sha256": "ffaf36dd21ef67c0c5c89e40eff84b2150ea821e16b1f217967133d1a0e466b5",
+    "screenshot": "qa/generated/1.3-native/build259-migration-warning.jpg",
+    "clean_quit": {
+      "pid": 12440,
+      "process_gone": true,
+      "agent_socket_removed": true,
+      "context": "demo screen QA saved, no in-flight job during this native quit; real helper termination gate covered separately"
+    }
+  }
+}

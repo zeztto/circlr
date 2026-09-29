@@ -1082,6 +1082,7 @@ private struct MIDIRecordingKey: Hashable {
                 return stopForUnresolvedRecovery("확인 중 복구 파일이 변경되었습니다.")
             }
             status="열지 못한 복구 파일을 보존했습니다 · \(preserved.lastPathComponent)"
+            showPreservedRecoveryNotice(preserved,reason:"곡 복구 또는 형식 변환에 실패했습니다.\n"+error.localizedDescription)
             return true
         } catch {return stopForUnresolvedRecovery(error.localizedDescription)}
     }
@@ -1133,10 +1134,10 @@ private struct MIDIRecordingKey: Hashable {
             return true
         } catch {return stopForUnresolvedRecovery(error.localizedDescription)}
     }
-    private func showPreservedRecoveryNotice(_ preserved:URL) {
+    private func showPreservedRecoveryNotice(_ preserved:URL,reason:String="복구 파일이 올바른 JSON 형식 또는 지원되는 복구 구조가 아닙니다.") {
         let alert=NSAlert();alert.alertStyle = .warning
         alert.messageText="복구 파일을 읽지 못해 원본을 보존했습니다"
-        alert.informativeText="복구 파일이 올바른 JSON 형식 또는 지원되는 복구 구조가 아닙니다. 새 작업을 시작해도 아래 파일은 덮어쓰지 않습니다.\n\n보존 위치\n"+preserved.path
+        alert.informativeText=reason+"\n새 작업을 시작해도 아래 파일은 덮어쓰지 않습니다.\n\n보존 위치\n"+preserved.path
         alert.addButton(withTitle:"새 작업 계속")
         alert.addButton(withTitle:"보존 파일 보기")
         if alert.runModal() == .alertSecondButtonReturn {NSWorkspace.shared.activateFileViewerSelecting([preserved])}
