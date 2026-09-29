@@ -31,6 +31,16 @@ enum TrustedAgentReply {
     /// A bounded app-selected turn. No model request can choose the document,
     /// targets, methods, lifetime, or the private socket endpoint.
     func startAppOwnedTrustedAgentTurn(exportDestination:URL?=nil) throws -> TrustedAgentIngress {
+        let lease = try startAppOwnedMusicLease(exportDestination: exportDestination)
+        do {
+            let directory=productionMediaRoot.deletingLastPathComponent().appendingPathComponent("Agent",isDirectory:true)
+            let ingress=try TrustedAgentIngress(store:self,lease:lease,directory:directory)
+            trustedAgentIngress=ingress
+            return ingress
+        } catch { stopTrustedAgentTurn(); throw error }
+    }
+
+    func startAppOwnedMusicLease(exportDestination:URL?=nil) throws -> AgentRunLease {
         guard agentStartupReady,!agentBridgeShuttingDown,!editOriginal,editPatternID == nil,
               let use=selectedUse,let trackID=selectedTrackID,
               let lane=currentLane,lane.trackID==trackID else {
@@ -67,16 +77,7 @@ enum TrustedAgentReply {
         }
         let lease=try beginTrustedAgentTurn(sessionID:newID(),turnID:newID(),
             methods:methods,targets:targets,fileGrants:fileGrants,ttl:300)
-        do {
-            let directory=productionMediaRoot.deletingLastPathComponent()
-                .appendingPathComponent("Agent",isDirectory:true)
-            let ingress=try TrustedAgentIngress(store:self,lease:lease,directory:directory)
-            trustedAgentIngress=ingress
-            return ingress
-        } catch {
-            stopTrustedAgentTurn()
-            throw error
-        }
+        return lease
     }
 
     /// Internal offline MCP transport. The caller owns the model/client; this

@@ -10,7 +10,7 @@ let package = Package(
         .target(name: "CirclrRealtime", publicHeadersPath: "include"),
         .target(name: "CirclrAudio", dependencies: ["CirclrCore", "CirclrRealtime"]),
         .target(name: "CirclrCodex"),
-        .executableTarget(name: "CirclrApp", dependencies: ["CirclrCore", "CirclrAudio"]),
+        .executableTarget(name: "CirclrApp", dependencies: ["CirclrCore", "CirclrAudio", "CirclrCodex"]),
         .executableTarget(name: "CirclrStudioTool", dependencies: ["CirclrCore", "CirclrAudio"], path: "Tools/CirclrStudioTool"),
         .executableTarget(name: "CirclrAuditionWorker", dependencies: ["CirclrAudio"], path: "Tools/CirclrAuditionWorker"),
         .executableTarget(name: "CirclrOutputWorker", dependencies: ["CirclrAudio"], path: "Tools/CirclrOutputWorker"),

@@ -16,6 +16,12 @@ In circlr, a circle is a timeline. Build a song from sections, place MIDI, audio
 
 Validated 48 focused tests and a native virtual-CoreMIDI capture, take restoration, Undo/Redo, save, cold reopen and WAV export. Extended video checks, physical listening and actual displayed FPS remain follow-up work. The previous **70ms** video interval remains a recorded failure. [QA and deferred work](qa/1.0-build245.md).
 
+**Development branch:** 1.1 is not released. Account sign-in and model discovery were verified, but live music requests remain blocked by empty responses. Console usability work continues without service calls. [Progress and QA](qa/1.1-account-chat.md).
+
+<img src="qa/screenshots/1.1-build251-console-portrait.png" width="280" alt="Development build251: responsive console, not a released feature.">
+
+*Development build251: responsive console, not a released feature.*
+
 ## What you can work with
 
 - **Song form:** connected album, song and section timelines; reusable sections, repetitions and arrangement variations.

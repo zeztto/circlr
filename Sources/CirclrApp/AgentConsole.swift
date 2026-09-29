@@ -23,7 +23,7 @@ private struct AgentConsoleScrollGeometryKey:PreferenceKey {
 
 /// Observe wheel input only inside the log viewport; return the event unchanged so the native
 /// ScrollView keeps all normal scrolling and momentum behavior.
-private struct AgentConsoleInputObserver:NSViewRepresentable {
+struct AgentConsoleInputObserver:NSViewRepresentable {
     var onWheel:()->Void
     var onScrollKey:()->Void
     var logFocused:Bool
@@ -250,6 +250,7 @@ struct ConsoleLogFollowState {
 struct AgentConsole:View {
     @ObservedObject var store:AppStore
     @State private var command=""
+    @AppStorage("circlr.console.mode") private var mode=ChatGPTConsoleMode.command
     @State private var resizeStart:Double?
     @State private var logFollow=ConsoleLogFollowState()
     @State private var wheelGeneration=0
@@ -357,6 +358,9 @@ struct AgentConsole:View {
                 }
                 Text("r\(store.project.musicRevision)").font(.system(size:11,design:.monospaced)).foregroundStyle(StudioTheme.secondary).padding(.trailing,12)
             }.frame(height:34)
+            if !store.consoleOpen || mode == .command {
+                ChatGPTConsoleRunControl(session:store.chatGPTMusicSession)
+            }
             if !store.status.isEmpty {
                 HStack(alignment:.top,spacing:8) {
                     Image(systemName:store.agentJob?.state == "failed" ? "exclamationmark.circle":"info.circle")
@@ -367,6 +371,16 @@ struct AgentConsole:View {
                 }.padding(.horizontal,12).padding(.bottom,8)
             }
             if store.consoleOpen {
+                Picker("콘솔 모드",selection:$mode) {
+                    Text("명령").tag(ChatGPTConsoleMode.command)
+                    Text("AI 대화").tag(ChatGPTConsoleMode.chat)
+                }
+                .pickerStyle(.segmented).frame(width:180)
+                .padding(.horizontal,12).padding(.bottom,8)
+                .accessibilityLabel("콘솔 모드")
+                if mode == .chat {
+                    ChatGPTConsole(session:store.chatGPTMusicSession,logHeight:store.consoleLogHeight)
+                } else {
                 if store.agentBridgeNeedsManualRecovery && store.agentSocket == nil {
                     HStack(spacing:8) {
                         Text("기존 연결 경로는 유지됩니다").font(.system(size:11))
@@ -468,6 +482,7 @@ struct AgentConsole:View {
                         .onSubmit{let text=command;command="";store.consoleCommand(text)}
                     Button{let text=command;command="";store.consoleCommand(text)}label:{Image(systemName:"arrow.turn.down.left")}.help("명령 실행")
                 }.padding(.horizontal,14).padding(.vertical,5).background(StudioTheme.raised.opacity(0.7))
+                }
             }
         }
         .frame(maxWidth:820).background(StudioTheme.canvas.opacity(0.97),in:RoundedRectangle(cornerRadius:10))

@@ -118,6 +118,11 @@ def main():
         shutil.copy2(root / 'Resources/Info.plist', stage / 'Contents/Info.plist')
         shutil.copy2(icon_source, stage / 'Contents/Resources' / icon_name)
         shutil.copy2(catalog_source, stage / 'Contents/Resources/Assets.car')
+        sign_in_source = root / 'Resources/ChatGPTSignIn'
+        sign_in_target = stage / 'Contents/Resources/ChatGPTSignIn'
+        shutil.copytree(sign_in_source, sign_in_target)
+        if (sign_in_target / 'chatgpt-logo-white.svg').read_bytes() != (sign_in_source / 'chatgpt-logo-white.svg').read_bytes():
+            raise ValueError('Bundled ChatGPT sign-in logo differs from source')
         for notice in ('LICENSE', 'THIRD_PARTY_NOTICES.md'):
             shutil.copy2(root / notice, stage / 'Contents/Resources' / notice)
         demo_target = stage / 'Contents/Resources/Demos'
