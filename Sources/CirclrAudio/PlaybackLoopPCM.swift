@@ -79,6 +79,17 @@ public struct PlaybackLoopPCM: Sendable {
     }
     public func iteration(elapsed: Double, offset: Double = 0) -> Int {
         guard elapsed.isFinite, offset.isFinite, elapsed >= 0, offset >= 0 else { return 0 }
-        return Int(min(Double(Int.max / 2), floor((elapsed + offset.truncatingRemainder(dividingBy: duration)) / duration)))
+        let limit = Double(Int.max / 2)
+        let cycles = min(limit, (elapsed + offset.truncatingRemainder(dividingBy: duration)) / duration)
+        let whole = floor(cycles)
+        let next = whole + 1
+        // Converting exact sample boundaries to seconds and back can put the
+        // quotient a few ULPs below its integer. Correct only that roundoff;
+        // retain fractional time for movie interpolation and never quantize it
+        // to whole samples. The absolute cap is one millionth of a sample.
+        let tolerance = min(cycles.ulp * 4, 0.000_001 / Double(bodyFrames))
+        let gap = next - cycles
+        let iteration = gap > 0 && gap <= tolerance ? next : whole
+        return Int(min(limit, iteration))
     }
 }

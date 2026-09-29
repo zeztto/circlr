@@ -151,3 +151,5 @@ English: R40-07 plans at least three, targeting four, openly reusable MIDI/stem 
 2026-09-11 사용자 승인으로 유예한 실제 한글 IME와 남은 native Q01–Q10 검증은 [최종 QA 기록](0.30.0-final-qa.md)의 남은 조건을 기준으로 0.40에서 다시 수행합니다. compact 키보드/편집기 왕복, 파일 대화상자·접근 대기, 재생 실패 복구·helper 회수, 바운스 별도 청취, 데모/프로젝트 저장·재열기, ZIP 및 이전 앱 복구 실행이 포함됩니다. 유예는 PASS 전환이나 결함 해결을 뜻하지 않습니다.
 
 2026-09-30 범위 조정: 필수 회귀가 확인되지 않은 MIDI hotplug/inspector 개선은 후속 backlog로 넘기고 0.90 착수 감사를 종료했다. 0.90은 미출고이며 최신 정식판은 v0.80.0이다. [마감 판단](0.90.0.md#2026-09-30-범위-축소-결정).
+
+2026-09-30 R90-02 진행: Xcode 환경 복구 후 100회 offline loop 검증에서 반복 횟수의 경계 오차를 재현·수정했다. [집중 회귀 결과](../../qa/0.90-loop-boundary.md). 이월한 편의 기능은 유지하며 0.90은 IN_PROGRESS다.
