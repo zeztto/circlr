@@ -1,0 +1,46 @@
+{
+  "version": "0.90.0",
+  "build": 243,
+  "sourceExecutableSHA256": "ed9962c4ad6e26e9d39bfe66c43b1d6c257221bc0101c7e250eefc7b1e86d43f",
+  "packageSignature": "PASS",
+  "native": {
+    "midiNotes": 8,
+    "tempo": 123,
+    "undo": "PASS",
+    "saveColdReopen": "PASS",
+    "savedManifestSHA256": "928227b29c8e39a6c6fe4757d799304e00f072b43e0035bdfe59c1a2bca4ff24",
+    "loops": {
+      "section": {
+        "samples": 33,
+        "maxIteration": 2,
+        "outputDevice": "Mac Studio 스피커"
+      },
+      "song": {
+        "samples": 32,
+        "maxIteration": 2,
+        "outputDevice": "Mac Studio 스피커"
+      }
+    },
+    "wav": {
+      "channels": 2,
+      "rate": 48000,
+      "bytesPerSample": 3,
+      "frames": 470635
+    },
+    "pcmSHA256": "8be23abfebc65e37cfc6926e26678c96cc396305a97382a7cfb21f4a58c0fbb1",
+    "qaProcessesAfterExit": 0,
+    "qaSocketAfterExit": false,
+    "demoScreenshots": [
+      "2880x1800",
+      "1440x1800"
+    ]
+  },
+  "notVerified": [
+    "physical listening",
+    "new long video performance",
+    "compositor-present FPS",
+    "hardware input hotplug",
+    "IME",
+    "portrait editing/playback matrix beyond stopped demo"
+  ]
+}

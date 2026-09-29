@@ -8,13 +8,13 @@
 
 써클러에서 원은 타임라인입니다. 섹션으로 곡을 구성하고, 궤도 위와 주변에 MIDI·오디오·악기·이펙터를 배치해 입출력을 연결합니다. 하나의 확대 가능한 캔버스에서 곡 전체 구성과 세부 편집을 오갑니다.
 
-![build241의 f0r h3r와 일곱 곡 섹션](docs/images/circlr-song-build241.png)
+![build243의 f0r h3r와 일곱 곡 섹션](docs/images/circlr-song-build243.jpg)
 
-*0.80.0 build241 실제 앱 UI 화면입니다. 출고 build242에서는 영상 시계만 변경했으며 화면의 build 출처를 별도로 표시합니다. [촬영 정보](docs/images/README.md).*
+*0.90.0 build243 실제 앱의 동봉 데모 화면입니다. [촬영 정보](docs/images/README.md).*
 
-> **0.80.0 · build242.** 한 곡 제작과 외부 Codex→MCP 편집을 제한된 실제 앱 동선에서 검증했습니다. [릴리스 노트와 제한](docs/releases/0.80.0-notes.md).
+> **0.90.0 · build243.** 루프 반복 횟수의 경계 오류를 수정하고 제작·저장·재열기를 검증했습니다. [릴리스 노트와 제한](docs/releases/0.90.0-notes.md).
 
-이번 버전은 궤도 캔버스, 좁은 창 조작, 앱 전용 오디오 입력과 키보드 탐색을 개선합니다. 1080p·10분 영상에는 **70ms**의 프레임 간격 한 곳이 남아 **66.67ms** 목표를 넘습니다. 물리 청취와 실제 표시 FPS도 미검증이며, 원 판정을 유지한 채 [0.90](docs/releases/0.90.0.md)으로 이월합니다. [QA](qa/0.80-build242.md) · [출고 결정](qa/0.80-release-gates.md).
+100회 offline 루프와 실제 곡·섹션 반복, MIDI 편집·Undo·WAV 출력을 확인했습니다. 장시간 영상·물리 청취·실제 표시 FPS 등은 후속 검증으로 남습니다. 기존 영상의 **70ms** 간격 FAIL을 해결된 것으로 표시하지 않습니다. [QA와 이월 목록](qa/0.90-build243.md).
 
 ## 할 수 있는 작업
 
@@ -24,15 +24,15 @@
 - **음색과 움직임:** 악기·이펙트 연결, 오토메이션, 바운스·원본 복원과 재생 팔로우·시그널 시각화 기능을 다룹니다.
 - **로컬 에이전트:** MCP로 프로젝트 조회·편집, MIDI 생성, 렌더링·저장을 수행하고 콘솔에서 작업을 확인합니다.
 
-<img src="docs/images/circlr-song-portrait-build241.png" width="280" alt="build241 세로 창에서 일곱 곡 섹션과 반응형 조작">
+<img src="docs/images/circlr-song-portrait-build243.jpg" width="280" alt="build243 세로 창에서 일곱 곡 섹션과 반응형 조작">
 
-*같은 build241 데모를 정지한 720×900 세로 창입니다. 반응형 섹션 조작과 일곱 섹션을 보여줍니다. [촬영 정보](docs/images/README.md).*
+*같은 build243 데모를 정지한 720×900 세로 창입니다. 반응형 섹션 조작과 일곱 섹션을 보여줍니다. [촬영 정보](docs/images/README.md).*
 
 구현된 개발 기능의 목록이며 모든 오디오 장치·플러그인의 호환성을 보증하지 않습니다. 아티스트 프로필과 텍스트·이미지·영상을 함께 관리하는 도구는 [장기 목표](docs/21-artist-universe.md)입니다.
 
 ## 시작하기
 
-**0.80.0 build242** Apple Silicon 패키지를 [GitHub Releases](https://github.com/zeztto/circlr/releases/tag/v0.80.0)에서 내려받으세요. 소스 빌드도 가능합니다.
+**0.90.0 build243** Apple Silicon 패키지를 [GitHub Releases](https://github.com/zeztto/circlr/releases/tag/v0.90.0)에서 내려받으세요. 소스 빌드도 가능합니다.
 
 다운로드한 앱은 ad-hoc 서명이며 Apple 공증을 받지 않았습니다. 첫 실행이 차단되면 다운로드를 확인한 뒤 **시스템 설정 → 개인정보 보호 및 보안 → 그래도 열기**를 사용하세요. [macOS 설치·첫 실행 안내](docs/install-macos.md#한국어).
 
@@ -43,7 +43,7 @@
 **소스 빌드 환경:** macOS 14 이상, 활성 개발자 디렉터리로 선택된 Xcode 26 이상, Python 3. 현재 native 검증 환경은 Apple Silicon입니다. 앱 UI는 한국어이며 README는 한국어와 영어로 제공합니다.
 
 ```sh
-git clone --branch v0.80.0 https://github.com/zeztto/circlr.git
+git clone --branch v0.90.0 https://github.com/zeztto/circlr.git
 cd circlr
 ./scripts/build-app.sh
 open 'dist/써클러.app'

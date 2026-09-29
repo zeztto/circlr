@@ -1,5 +1,15 @@
 # Screenshots · 실행 화면
 
+## 0.90.0 build243 isolated native capture
+
+The bundled f0r h3r v6 is stopped at 00:00.0 in the actual build243 QA app (`com.circlr.build243perfqa`). CUA captured the whole landscape window at2880×1800px and portrait at1440×1800px (2× scale:1440×900pt and720×900pt). The JPEG bytes are saved directly without resizing, compositing or image generation. Console collapsed; whole-song fit. These images show layout, not playback FPS or physical sound quality.
+
+가로·세로 모두 실제 build243의 데모 정지 화면이다. 새 QA 앱의 별도 서명·설정으로 촬영했으며 제품 바이너리 SHA256은 `ed9962c4ad6e26e9d39bfe66c43b1d6c257221bc0101c7e250eefc7b1e86d43f`다. [QA](../../qa/0.90-build243.md).
+
+`circlr-song-build243.jpg` SHA256 `261bb5abbc7f4fdb758b5fd05973a6f00c8685d846e6737167265db0d566f354`
+
+`circlr-song-portrait-build243.jpg` SHA256 `f40cc9832e34446abf9cedf7f9647f45d5aefcf9290d1f5ce77ecc5186c36542`
+
 ## 0.80.0 build241 isolated native QA
 
 `circlr-song-build241.png` (1440×900pt / 2880×1800px, SHA-256 `5e4d9d1af49157576383bcc9c8c0ec20db5f802cbda05515243b744f72b1b491`) and `circlr-song-portrait-build241.png` (720×900pt / 1440×1800px, SHA-256 `7fb023152febd033469febe39d6e4d3445e97d6f1989283215c8149c4031e54a`) show the bundled **f0r h3r** demo stopped at 00:00.0 with all seven section labels. They are full windows of the isolated, ad-hoc-signed `com.circlr.build241photoqa` app made from packaged `0.80.0/build241` (source executable SHA-256 `eebe74c188d588816de98dae44dcb19364039d452746e2ad1892683a0e89f98c`). An exact QA-bundle PID `39279`, layer-0 title `써클러` and CGWindowID `18365` were matched before `screencapture -x -o -l 18365 -t jpg`; **no desktop capture** was used. The two original JPEGs remain in ignored `qa/generated/r80-build241-photo/`: landscape SHA-256 `f8bdcfcf4c25f928781153d4512cf33d99e8b18885a20fd316e1059a3d1a225a`, portrait `a7a4cfe18475022964980080452065e7147fa9ee00cdc282367313f5cf3b80e2`. The PNGs preserve each source JPEG's decoded RGB pixels exactly, without cropping, resizing or compositing. The original JPEGs were also inspected against CUA screenshots of the same app window for scene/content agreement; **cross-method byte identity is not claimed**. [Screenshot provenance and native QA](../../qa/0.80-build241-native.md).
