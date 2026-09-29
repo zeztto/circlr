@@ -1,8 +1,8 @@
 # 변경 이력
 
-## 1.0.0 · 기능 범위 동결 · 출고 마감 대기
+## 1.0.0 · build245
 
-- 2026-09-30: 앱 내 계정·대화 신규 기능을 [1.1](docs/releases/1.1.0.md)로 이월하고 1.0은 핵심 DAW 회귀와 배포 마감에 집중한다. build244는 내부 후보이며 정식 출고하지 않았다.
+- 2026-09-30: 앱 내 계정·대화 신규 기능을 [1.1](docs/releases/1.1.0.md)로 이월하고 1.0은 핵심 DAW 회귀와 배포 마감에 집중한다. build244는 이월 기능을 포함한 내부 후보로 보존하고, 이를 제외한 build245의 집중 회귀48개·제한된 native 제작/저장/WAV 검증을 완료했다. [출고 검증](qa/1.0-build245.md).
 - MIDI 녹음의 CC64·pitch bend를 채널별 take로 보존하고 반복 초기 상태를 이어받는다. 표현만 덧녹음하면 기존 노트와 녹음하지 않은 표현을 유지한다.
 - 녹음 전 편집본을 take로 보존하고 저장·활성화를 하나의 Undo로 묶는다. 노트만 녹음한 lane에는 가짜 표현 데이터를 생성하지 않는다. [검증과 남은 범위](qa/1.0-midi-recording.md).
 - [직접 SIWC OAuth 경로](docs/releases/1.0-account-gate.md)의 PKCE·ID token 검증·Keychain 계정 상태와 Responses 스트리밍 모듈을 구현했다. 관련 소스와 콘솔 통합은 `archive/1.1-account-build244`에 보존하고 1.0 배포 코드에서 제외했다. 실제 계정 검증은 남는다. [검증 범위](qa/1.0-account-provider.md).

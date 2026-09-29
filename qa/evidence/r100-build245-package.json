@@ -1,0 +1,9 @@
+{
+  "asset": "circlr-1.0.0-build245-macos-arm64.zip",
+  "sha256": "2537d8b77a543a34bb2b6e228b2cbbcdb1d9e6d8692b15211160f6ad9e4b797c",
+  "bytes": 27526302,
+  "identicalFiles": 67,
+  "version": "1.0.0",
+  "build": "245",
+  "strictDeepSignature": "PASS"
+}

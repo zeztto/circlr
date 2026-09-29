@@ -8,13 +8,13 @@ English · [한국어](README.ko.md)
 
 In circlr, a circle is a timeline. Build a song from sections, place MIDI, audio, instruments and effects on and around their orbits, and connect their inputs and outputs. Move between the whole arrangement and detailed editing on one zoomable canvas.
 
-![circlr build243 showing f0r h3r and its seven song sections](docs/images/circlr-song-build243.jpg)
+![circlr build245 showing f0r h3r and its seven song sections](docs/images/circlr-song-build245.png)
 
-*0.90.0 build243 native capture of the bundled demo. [Capture provenance](docs/images/README.md).*
+*1.0.0 build245 native capture of the bundled demo. [Capture provenance](docs/images/README.md).*
 
-> **0.90.0 · build243.** Corrects loop iteration at sample boundaries and verifies an edit/save/cold-reopen journey. [Release notes and limits](docs/releases/0.90.0-notes.md).
+> **1.0.0 · build245.** Preserves channel-specific MIDI expression and pre-recording takes, with restoration/save/cold-reopen validation. [Release notes and limits](docs/releases/1.0.0-notes.md).
 
-Validated 100 offline loops and a native song/section loop, MIDI edit, Undo and WAV journey. Extended video checks, physical listening and actual displayed FPS remain follow-up work. The previous **70ms** video interval remains a recorded failure. [QA and deferred work](qa/0.90-build243.md).
+Validated 48 focused tests and a native virtual-CoreMIDI capture, take restoration, Undo/Redo, save, cold reopen and WAV export. Extended video checks, physical listening and actual displayed FPS remain follow-up work. The previous **70ms** video interval remains a recorded failure. [QA and deferred work](qa/1.0-build245.md).
 
 ## What you can work with
 
@@ -24,15 +24,15 @@ Validated 100 offline loops and a native song/section loop, MIDI edit, Undo and 
 - **Sound and motion:** instrument/effect routing, automation, bounce and source restoration; playback-follow and signal visualization controls.
 - **Local agents:** an MCP interface for inspecting and editing projects, generating MIDI, rendering and saving, with activity visible in the console.
 
-<img src="docs/images/circlr-song-portrait-build243.jpg" width="280" alt="circlr build243 in a portrait window with seven song sections and responsive controls">
+<img src="docs/images/circlr-song-portrait-build245.png" width="280" alt="circlr build245 in a portrait window with seven song sections and responsive controls">
 
-*The same build243 demo stopped in a 720×900 portrait window, showing the responsive section controls and all seven sections. [Capture details](docs/images/README.md).*
+*The same build245 demo stopped in a 720×900 portrait window, showing the responsive section controls and all seven sections. [Capture details](docs/images/README.md).*
 
 These are implemented development features, not a guarantee of compatibility with every audio device or plug-in. Artist profiles and a combined text, image and video workspace are the [longer-term direction](docs/21-artist-universe.md).
 
 ## Getting started
 
-Download **0.90.0 build243** for Apple Silicon from [GitHub Releases](https://github.com/zeztto/circlr/releases/tag/v0.90.0), or build from source.
+Download **1.0.0 build245** for Apple Silicon from [GitHub Releases](https://github.com/zeztto/circlr/releases/tag/v1.0.0), or build from source.
 
 The downloaded app is ad-hoc signed and not notarized by Apple. If macOS blocks its first launch, verify the download, then use **System Settings → Privacy & Security → Open Anyway**. [macOS installation and first launch](docs/install-macos.md#english).
 
@@ -43,7 +43,7 @@ The colored **f0r h3r v6** demo is included. Choose **File → 데모곡 불러�
 **Source build requirements:** macOS 14+, Xcode 26+ selected as the active developer directory, and Python 3. Native validation currently covers Apple Silicon. The interface is currently in Korean; this README is available in both languages.
 
 ```sh
-git clone --branch v0.90.0 https://github.com/zeztto/circlr.git
+git clone --branch v1.0.0 https://github.com/zeztto/circlr.git
 cd circlr
 ./scripts/build-app.sh
 open 'dist/써클러.app'
@@ -77,7 +77,7 @@ The Swift package separates the project model (`CirclrCore`), audio processing (
 
 ## Status, releases and license
 
-Development toward [1.0](docs/releases/1.0.0.md) is on `release/1.0.0`: MIDI recording fidelity is improved and release closure is in progress. In-app account and chat integration is deferred to [1.1](docs/releases/1.1.0.md). The latest published app remains 0.90.0.
+In-app account and chat integration is deferred to [1.1](docs/releases/1.1.0.md). See the [1.0 release record](docs/releases/1.0.0.md) for scope and verification limits.
 
 Each completed version will have a Git tag and a GitHub Release with Korean/English notes, a verified app package and checksums. Development build numbers and documentation edits do not create releases. [Changelog](CHANGELOG.md) · [Release procedure](docs/releases/README.md).
 

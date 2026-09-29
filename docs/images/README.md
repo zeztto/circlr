@@ -208,3 +208,7 @@ Captured from the actual **0.30.0 build157** macOS application, using an isolate
 |---|---|
 | `circlr-midi-build157.jpg` | `39a8d8f9cf1106b20afddc1282ebf1cb86fdf8eea10411ab0563ab75c5bbe8b7` |
 | `circlr-orbit-build157.jpg` | `60ce058133993d98915803f2641a8cbd8fcec286d5ec00c9e8a17e973f4ee374` |
+
+## 1.0.0 build245 후보 · 2026-09-30
+
+`circlr-song-build245.png`(2880×1800), `circlr-song-portrait-build245.png`(1440×1800)은 동일 build245 격리 앱에서 동봉 f0r h3r를 열고 촬영했다. 창은 각각1440×900pt,720×900pt, 재생 정지·콘솔 접힘 상태다. 원본 CUA PNG이며 합성·생성·UI 리터칭이 없다. 1.0 후보 화면이며 정식 게시 여부는 release 문서를 따른다.

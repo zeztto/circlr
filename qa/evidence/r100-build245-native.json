@@ -1,0 +1,28 @@
+{
+  "build": "245",
+  "version": "1.0.0",
+  "virtualCoreMIDI": true,
+  "physicalInputOrListeningVerified": false,
+  "takes": 3,
+  "channels": [
+    0,
+    1
+  ],
+  "baselinePitch": 48,
+  "takeUndoRedo": "PASS",
+  "captureUndoRedo": "PASS",
+  "coldReopenNewRunID": "PASS",
+  "coldReopenLanesExact": "PASS",
+  "savedManifestSHA256": "14e1b49b2a43b160bc542d8d5a65cbb7a1168e3589a23f96713de1be14425b0c",
+  "outputDevice": "Mac Studio 스피커",
+  "didStart": true,
+  "WAV": {
+    "frames": 480000,
+    "rate": 48000,
+    "channels": 2,
+    "width": 3,
+    "pcmSHA256": "2e2f47592db832d12a4f593920690e76ada078c34fc46367a1e3d565be0f03c1",
+    "fileSHA256": "6be9a3f4bb5f0ab8932d630c54bc73682682a6042718cfea2f2fde86dd946957"
+  },
+  "qaProcessAndSocketAfterQuit": 0
+}
