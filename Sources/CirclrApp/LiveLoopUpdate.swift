@@ -86,7 +86,9 @@ struct LiveLoopUpdate {
         }
     }
     var liveLoopUpdateState:[String:Any] {
-        var result:[String:Any]=["phase":liveLoopUpdate?.phase ?? "idle","appliedRevision":prepared?.plan.revision ?? -1,"currentRevision":project.musicRevision]
+        let failed=liveLoopFailedRevision==project.musicRevision && prepared?.plan.revision != project.musicRevision
+        var result:[String:Any]=["phase":liveLoopUpdate?.phase ?? (failed ? "failed":"idle"),"appliedRevision":prepared?.plan.revision ?? -1,"currentRevision":project.musicRevision]
+        if failed,let revision=liveLoopFailedRevision {result["failedRevision"]=revision}
         if let pending=liveLoopUpdate {result["pendingRevision"]=pending.revision;if let boundary=pending.boundary {result["boundaryElapsedSeconds"]=boundary.elapsedSeconds}}
         return result
     }

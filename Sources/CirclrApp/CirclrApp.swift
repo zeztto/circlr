@@ -14,13 +14,13 @@ import OSLog
                 .onOpenURL{opened=true;store.open($0)}
         }.defaultSize(width:1440,height:900).windowStyle(.titleBar)
         .commands {
-            CommandGroup(replacing:.appSettings){Button("출력 설정…"){store.showOutputPreferences()}.keyboardShortcut(",").disabled(store.viewingMode || store.startupOpen)}
-            CommandGroup(replacing:.newItem){Group {Button("새 곡…"){store.showStartup()}.keyboardShortcut("n");Button("열기…"){store.open()}.keyboardShortcut("o");Button("데모곡 불러오기…"){store.openBundledDemo()}}.disabled(store.outputPreferencesOpen || store.viewingMode);Divider();Button("창 닫기"){NSApplication.shared.keyWindow?.performClose(nil)}.keyboardShortcut("w")}
-            CommandGroup(replacing:.saveItem){Group {Button("저장"){store.save()}.keyboardShortcut("s");Button("다른 이름으로 저장…"){store.save(as:true)}.keyboardShortcut("s",modifiers:[.command,.shift]);Divider();Button("WAV 내보내기…"){store.export()}.keyboardShortcut("e")}.disabled(store.outputPreferencesOpen || store.viewingMode || store.startupOpen)}
-            CommandGroup(replacing:.undoRedo){Group {Button("실행 취소"){store.undo()}.keyboardShortcut("z").disabled(store.undoCount==0);Button("다시 실행"){store.redo()}.keyboardShortcut("z",modifiers:[.command,.shift]).disabled(store.redoCount==0)}.disabled(store.outputPreferencesOpen || store.viewingMode || store.startupOpen)}
+            CommandGroup(replacing:.appSettings){Button("출력 설정…"){store.showOutputPreferences()}.keyboardShortcut(",").disabled(store.projectMediaOpen || store.viewingMode || store.startupOpen)}
+            CommandGroup(replacing:.newItem){Group {Button("새 곡…"){store.showStartup()}.keyboardShortcut("n");Button("열기…"){store.open()}.keyboardShortcut("o");Button("데모곡 불러오기…"){store.openBundledDemo()}}.disabled(store.projectMediaOpen || store.outputPreferencesOpen || store.viewingMode);Divider();Button("창 닫기"){NSApplication.shared.keyWindow?.performClose(nil)}.keyboardShortcut("w")}
+            CommandGroup(replacing:.saveItem){Group {Button("저장"){store.save()}.keyboardShortcut("s");Button("다른 이름으로 저장…"){store.save(as:true)}.keyboardShortcut("s",modifiers:[.command,.shift]);Divider();Button("곡 미디어와 복구…"){store.showProjectMedia()};Button("WAV 내보내기…"){store.export()}.keyboardShortcut("e")}.disabled(store.projectMediaOpen || store.outputPreferencesOpen || store.viewingMode || store.startupOpen)}
+            CommandGroup(replacing:.undoRedo){Group {Button("실행 취소"){store.undoFocusedContent()}.keyboardShortcut("z").disabled(!store.canUndoFocusedContent);Button("다시 실행"){store.undoFocusedContent(redo:true)}.keyboardShortcut("z",modifiers:[.command,.shift]).disabled(!store.canRedoFocusedContent)}.disabled(store.projectMediaOpen || store.outputPreferencesOpen || store.viewingMode || store.startupOpen)}
             CommandMenu("보기") {
-                Button(store.viewingMode ? "감상 모드 종료":"텍스트 없는 감상 모드"){_ = store.setViewingMode(!store.viewingMode)}.keyboardShortcut("v",modifiers:[.command,.shift]).disabled(store.startupOpen)
-                Button("영상 녹화 시작 / 마치기…"){store.toggleMovieRecording()}.keyboardShortcut("r",modifiers:[.command,.shift]).disabled(store.startupOpen)
+                Button(store.viewingMode ? "감상 모드 종료":"텍스트 없는 감상 모드"){_ = store.setViewingMode(!store.viewingMode)}.keyboardShortcut("v",modifiers:[.command,.shift]).disabled(store.projectMediaOpen || store.startupOpen)
+                Button("영상 녹화 시작 / 마치기…"){store.toggleMovieRecording()}.keyboardShortcut("r",modifiers:[.command,.shift]).disabled(store.projectMediaOpen || store.startupOpen)
                 Group {
                 Button("샘플 라이브러리…"){store.showMediaLibrary()}.keyboardShortcut("l",modifiers:[.command,.option])
                 Button("녹음 테이크 찾기…"){store.showRecordedTakes()}.keyboardShortcut("t",modifiers:[.command,.option]).disabled(store.recordedTakeChoices.isEmpty || store.trackBounceRecoveryLocked || store.midiImportDraft != nil)
@@ -52,8 +52,8 @@ import OSLog
                 Button("명령 검색…"){store.showCommands()}.keyboardShortcut("p",modifiers:[.command,.shift])
                 Button("키보드 사용법"){store.arrangementPickerRequest=nil;store.libraryOpen=false;store.commandPalette=nil;store.navigationOpen=false;store.keyboardHelp.toggle()}.keyboardShortcut("/")
                 Button("캔버스로 포커스 이동"){store.arrangementPickerRequest=nil;store.libraryOpen=false;store.commandPalette=nil;store.navigationOpen=false;store.focusCanvas?()}.keyboardShortcut("0",modifiers:[.command,.option])
-            }.disabled(store.outputPreferencesOpen || store.viewingMode || store.startupOpen)}
-            CommandMenu("곡 구성"){Group {Button("섹션 추가"){store.addSection()}.keyboardShortcut("k");Button("선택 항목 복제"){store.duplicateFocusedContent()}.keyboardShortcut("d");Button("그룹 만들기"){store.makeHierarchyGroup()}.keyboardShortcut("g");Button("삭제"){store.removeHierarchy()};Divider();Button("재생 / 정지"){store.play()};Button("오디오 가져오기…"){store.importAudio()}.keyboardShortcut("i")}.disabled(store.outputPreferencesOpen || store.viewingMode || store.startupOpen)}
+            }.disabled(store.projectMediaOpen || store.outputPreferencesOpen || store.viewingMode || store.startupOpen)}
+            CommandMenu("곡 구성"){Group {Button("섹션 추가"){store.addSection()}.keyboardShortcut("k");Button("선택 항목 복제"){store.duplicateFocusedContent()}.keyboardShortcut("d");Button("그룹 만들기"){store.makeHierarchyGroup()}.keyboardShortcut("g");Button("삭제"){store.removeHierarchy()};Divider();Button("재생 / 정지"){store.play()};Button("오디오 가져오기…"){store.importAudio()}.keyboardShortcut("i")}.disabled(store.projectMediaOpen || store.outputPreferencesOpen || store.viewingMode || store.startupOpen)}
         }
     }
 }
@@ -72,7 +72,7 @@ import OSLog
                 let deadline=ProcessInfo.processInfo.systemUptime+10
                 while store.recorder.busy && ProcessInfo.processInfo.systemUptime<deadline {try? await Task.sleep(for:.milliseconds(40))}
                 guard !store.recorder.busy else{store.status="녹음 장치가 응답하면 파일 마무리 후 다시 종료하세요";store.resumeAgentBridgeAfterCancelledTermination();sender.reply(toApplicationShouldTerminate:false);return}
-                guard store.confirmDiscard() else{store.resumeAgentBridgeAfterCancelledTermination();sender.reply(toApplicationShouldTerminate:false);return}
+                guard store.confirmTerminationDiscard() else{store.resumeAgentBridgeAfterCancelledTermination();sender.reply(toApplicationShouldTerminate:false);return}
                 let approved=store.terminationDocumentSnapshot
                 if let finalizing=store.movieFinalizing {await finalizing.value}
                 guard store.terminationDocumentSnapshot == approved else{
@@ -87,7 +87,7 @@ import OSLog
             }
             return .terminateLater
         }
-        if !store.confirmDiscard(){store.resumeAgentBridgeAfterCancelledTermination();return .terminateCancel};store.stop()
+        if !store.confirmTerminationDiscard(){store.resumeAgentBridgeAfterCancelledTermination();return .terminateCancel};store.stop()
         if let finalizing=store.movieFinalizing {
             let approved=store.terminationDocumentSnapshot
             Task{@MainActor in

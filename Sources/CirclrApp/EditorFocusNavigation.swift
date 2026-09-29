@@ -49,7 +49,7 @@ extension AppStore {
         guard let request=editorFocusRequest else{return}
         guard request.identity==numberEditIdentity,request.page==capturedStudioWorkspace.page,
               request.steps==midiStepMode,request.orbits==project.usesOrbits else{editorFocusRequest=nil;return}
-        guard !navigationOpen,commandPalette==nil,!keyboardHelp,!libraryOpen,!outputPreferencesOpen,
+        guard !navigationOpen,commandPalette==nil,!keyboardHelp,!libraryOpen,!projectMediaOpen,!outputPreferencesOpen,
               soundPickerRequest==nil,arrangementPickerRequest==nil,NSApp.modalWindow==nil else {
             editorFocusRequest=nil;return
         }

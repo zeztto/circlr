@@ -1,0 +1,24 @@
+{
+  "build": 258,
+  "status": "NATIVE_PASS_WITH_SCOPE",
+  "actions": [
+    "rename MIDI circle via native field and Return: revision18 dirtytrue",
+    "foreign held file rejects CmdS with explicit alert",
+    "missing source rejects CmdS with unreadable media alert",
+    "Escape then CmdZ: name Undo shown",
+    "CmdShiftZ: name Redo shown, revision20 dirtytrue",
+    "restore source then CmdS: saved status, revision20 dirtyfalse"
+  ],
+  "assertions": {
+    "prior_manifest_preserved": true,
+    "edited_patterns_equal_after_redo": true,
+    "saved_dirty_false": true
+  },
+  "snapshots": [
+    "build258-dirty.json",
+    "build258-failed-dirty.json",
+    "build258-after-redo.json",
+    "build258-dirty-retry-saved.json"
+  ],
+  "remaining": "Does not prove native EACCES, ENOSPC, large-copy midflight cancel or actual IME"
+}

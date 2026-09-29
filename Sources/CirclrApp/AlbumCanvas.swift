@@ -1028,7 +1028,7 @@ struct AlbumCanvas: NSViewRepresentable {
             if ViewingModeKeyRouting.passesToSystem(event) {super.keyDown(with:event);return}
             handleViewingKey(event);return
         }
-        if store.outputPreferencesOpen || store.libraryOpen || store.soundPickerRequest != nil || store.arrangementPickerRequest != nil || store.commandPalette != nil || store.navigationOpen || store.keyboardHelp {return}
+        if store.projectMediaOpen || store.outputPreferencesOpen || store.libraryOpen || store.soundPickerRequest != nil || store.arrangementPickerRequest != nil || store.commandPalette != nil || store.navigationOpen || store.keyboardHelp {return}
         if event.keyCode==53,event.modifierFlags.intersection([.command,.control,.option,.shift]).isEmpty,let draft=store.midiImportDraft {
             store.cancelMIDIImport(draft.id);return
         }

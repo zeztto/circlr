@@ -99,6 +99,8 @@ for line in sys.stdin:
         store.refreshLiveLoopUpdate()
         try await wait{store.liveLoopFailedRevision == store.project.musicRevision}
         XCTAssertTrue(playback.playing);XCTAssertEqual(playback.prepared?.plan.revision,plan.revision)
+        XCTAssertEqual(store.liveLoopUpdateState["phase"] as? String,"failed")
+        XCTAssertEqual(store.liveLoopUpdateState["failedRevision"] as? Int,store.project.musicRevision)
         XCTAssertFalse(FileManager.default.fileExists(atPath:executable.appendingPathExtension("changes").path))
         store.project=original;store.project.musicRevision+=2
         store.refreshLiveLoopUpdate()

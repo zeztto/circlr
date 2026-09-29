@@ -4,6 +4,7 @@ import CirclrCore
 extension AppStore {
     /// Shared by orbital and rectangular editors so changing layout keeps the key map.
     func handleMIDIKey(_ event:NSEvent,topPitch:Int)->Bool {
+        guard !projectMediaOpen else{return false}
         if handleMIDIBatchKey(event){return true}
         if event.modifierFlags.contains(.command) || event.modifierFlags.contains(.control){return false}
         let notes=(currentLane?.notes ?? []).sorted{$0.beat == $1.beat ? $0.pitch<$1.pitch:$0.beat<$1.beat}
@@ -57,6 +58,7 @@ extension AppStore {
         return true
     }
     func handleAudioTrimKey(_ event:NSEvent,clipID:ID?)->Bool {
+        guard !projectMediaOpen else{return false}
         guard !event.modifierFlags.contains(.command),!event.modifierFlags.contains(.control),[123,124].contains(event.keyCode) else{return false}
         guard let lane=currentLane,let i=lane.audio.firstIndex(where:{$0.id==clipID}),let asset=project.assets.first(where:{$0.id==lane.audio[i].assetID}) else{return true}
         var value=lane.audio[i]

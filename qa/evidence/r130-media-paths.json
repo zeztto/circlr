@@ -1,0 +1,61 @@
+{
+  "schema": "circlr-qa-evidence-v1",
+  "gate": "R130-M05",
+  "status": "PASS",
+  "observed_at_utc": "2026-09-29T20:54:55.627743+00:00",
+  "baseline_commit": "95697d5b5868884ba29dc4faa37cbd80672d5ea4",
+  "source_state": "release/1.3.0 working tree; uncommitted 1.3 source and tests",
+  "command": "./scripts/swift-local.sh test --scratch-path .build/r130-tests --filter ProjectMediaRecoveryTests",
+  "exit_code": 0,
+  "tests": {
+    "executed": 12,
+    "failed": 0,
+    "skipped": 0,
+    "new_cases": 3
+  },
+  "log": ".build/r130-media-paths.log",
+  "log_sha256": "021623ad46036207a272b4abe762cbe73984b06cac0464fbd9338835b05dc4a2",
+  "test_source": "Tests/CirclrCoreTests/ProjectMediaRecoveryTests.swift",
+  "test_source_sha256": "a31a27d08d42a5b63bbe7b5ce582b1b2ecc55b2c10f6361cf7b3e70c971f47f6",
+  "filesystem_observation": {
+    "case_variant_lookup_same_inode": true,
+    "created_file_count": 2,
+    "enumerated_filename_utf8": [
+      [
+        67,
+        97,
+        102,
+        101,
+        204,
+        129,
+        46,
+        119,
+        97,
+        118
+      ],
+      [
+        76,
+        101,
+        97,
+        100,
+        46,
+        87,
+        65,
+        86
+      ]
+    ],
+    "nfc_nfd_lookup_same_inode": true
+  },
+  "verified": [
+    "NFC and NFD candidate filenames in separate directories accepted only with exact original checksum",
+    "Case-variant candidate filenames accepted only with exact original checksum; changed content rejected for every candidate",
+    "Duplicate references to one source preserve distinct asset IDs and UTF-8 display names through selective relink and portable save/reopen",
+    "Portable package holds two independent asset paths containing identical source bytes; original source remains unchanged",
+    "Actual local temporary filesystem resolves NFC/NFD and case variants to the same inode; only two probe files were created"
+  ],
+  "limits": [
+    "No claim of case-distinct same-directory files on this filesystem",
+    "No native picker or external-volume behavior established by this Core suite",
+    "Fixtures contain synthetic bytes for checksum/storage behavior; audio decoding coverage is separate legacy-audio test in the same suite"
+  ]
+}

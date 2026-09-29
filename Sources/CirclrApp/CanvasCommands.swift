@@ -143,6 +143,12 @@ extension AppStore {
         if undoCount>0 {add("undo","실행 취소","⌘Z"){[weak self] in self?.undo()}}
         if redoCount>0 {add("redo","다시 실행","⇧⌘Z"){[weak self] in self?.redo()}}
         add("media-library","샘플 라이브러리 검색·미리 듣기","⌥⌘L"){[weak self] in self?.showMediaLibrary()}
+        commands.append(StudioCommand(id:"project-media",title:"곡 미디어와 복구…",
+            detail:"누락 파일 찾기 · 재연결 · 미디어 포함 사본 저장 · 진단 정보",
+            run:{[weak self] in
+                guard let self,!self.viewingMode,!self.startupOpen,!self.projectMediaOpen else{return}
+                self.showProjectMedia()
+            }))
         add("global","글로벌 템포·박자·스케일 설정"){[weak self] in self?.focusHierarchy(.album,detail:true);self?.hierarchySettingsOpen=true}
         add("settings","선택 서클 이름·음악 설정","R"){[weak self] in self?.openCircleSettings()}
         if let trackID=selectedTrackID {add("sound-search","음색·악기 찾기"){[weak self] in self?.showInstrumentPicker(trackID:trackID)}}

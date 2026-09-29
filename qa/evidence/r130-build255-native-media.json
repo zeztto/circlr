@@ -1,0 +1,40 @@
+{
+  "version": "1.3.0",
+  "build": 255,
+  "scope": "isolated native media copy, diagnostic export, cold reopen",
+  "status": "PARTIAL_NATIVE_PASS",
+  "original_pid": 99354,
+  "cold_reopen_process": "2073",
+  "project_revision": 17,
+  "dirty_after_copy_and_cold_reopen": false,
+  "portable_copy_hashes": {
+    "manifest.json": "67eddb084232b477eebe9fba3817bffa35ce2c4991826373d5bb8947e15e1f2d",
+    "media/AE269AF5-B995-4579-8E32-C23FA5E08FC4.wav": "f63c55712c6c646498eeb9d2a0f7e3f4643b17e35173dc04b24225d750395a79"
+  },
+  "diagnostic_bytes": 774,
+  "diagnostic_cancel_no_file": true,
+  "diagnostic_private_names_paths_ids_absent": true,
+  "remaining": [
+    "actual Korean IME",
+    "recovery prompt cancel/restart",
+    "portrait keyboard flow",
+    "native error and cancellation cases"
+  ],
+  "observed_unrelated_limit": "Cold restart console reports MIDI client creation failure -304; external MIDI input not validated.",
+  "recovery": {
+    "cancel_preserves_bytes": true,
+    "restore_dirty_revision": 17,
+    "restored_save_music_fields_and_media_equal": true,
+    "different_fields": [
+      "hierarchyView"
+    ],
+    "cancel_then_quit_cold_restart": "OPEN: CmdQ reopens recovery prompt; fix in progress",
+    "fixture_sha256": "c7a768d81f4e593dae7d88f6546055262d1e56c057a3876cec5835e19f19dfe1"
+  },
+  "helper_late_publication": {
+    "test": "TrustedMCPHelperProcessTests/testFileToolLatePublicationAfterStopOrDocumentChangeIsRejected",
+    "passed": 1,
+    "failures": 0,
+    "log": ".build/r130-helper-publication.log"
+  }
+}

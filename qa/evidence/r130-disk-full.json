@@ -1,0 +1,97 @@
+{
+  "schema": "circlr-qa-evidence-v1",
+  "gate": [
+    "S09",
+    "S10"
+  ],
+  "status": "CORE_KERNEL_DISK_FULL_PRESERVATION_AND_RETRY_PASS",
+  "observed_at_utc": "2026-09-29T21:12:16.013860+00:00",
+  "baseline_commit": "95697d5b5868884ba29dc4faa37cbd80672d5ea4",
+  "source_state": "release/1.3.0 working tree",
+  "image": {
+    "size_mib": 64,
+    "filesystem": "APFS",
+    "path": ".build/r130-disk-full/quota-apfs.dmg",
+    "mounted": false,
+    "detach_log": ".build/r130-disk-full/detach-apfs-final.log",
+    "host_disk_filled": false
+  },
+  "command": "CIRCLR_DISK_FULL_TEST_VOLUME=\"$PWD/.build/r130-disk-full/mount\" ./scripts/swift-local.sh test --scratch-path .build/r130-tests --filter ProjectDiskFullTests",
+  "exit_code": 0,
+  "tests": {
+    "invoked": 18,
+    "skipped": 2,
+    "failed": 0,
+    "passed": 16,
+    "skip_reason": "child-only restarted-save harness and separate HFS opt-in; HFS opt-in subsequently ran1PASS"
+  },
+  "kernel_write_results": [
+    {
+      "filler_bytes": 55787520,
+      "filler_errno": 28,
+      "phase": "copy",
+      "product_error_code": 640,
+      "product_error_domain": "NSCocoaErrorDomain",
+      "retained_stages": [],
+      "retry": "PASS",
+      "source_bytes": 2097153,
+      "stage_cleanup": "PASS"
+    },
+    {
+      "filler_bytes": 53882880,
+      "filler_errno": 28,
+      "phase": "manifest",
+      "product_error_code": 1,
+      "product_error_domain": "CirclrProjectSave",
+      "retained_stages": [
+        ".circlr-save-B8B62639-5596-4DD5-BAAA-BAB560BF7F0D"
+      ],
+      "retry": "PASS",
+      "source_bytes": 2097153,
+      "stage_cleanup": "RETAINED_WITH_VISIBLE_ERROR"
+    }
+  ],
+  "verified": [
+    "Actual product copy and manifest writes returned Cocoa640 (out of space) after image-local filler write returned POSIX28; callback did not inject throw",
+    "Old manifest/media and original source bytes preserved in both phases",
+    "After filler removal, same-target save retry and cold-load bytes succeeded for both phases",
+    "Publication SIGKILL followed by a distinct fresh process save preserved abandoned prior package manifest and added foreign marker",
+    "Manifest ENOSPC retention now surfaces exact retained URL plus original underlying out-of-space error; test reads retained media directory and proves incomplete artifact cannot load",
+    "HFS+ atomic overwrite returns errno45 (ENOTSUP) with explicit new-location guidance; original manifest preserved and new-location SaveAs cold-reopens correctly"
+  ],
+  "open_or_failed": [
+    "No startup orphan cleanup API exists; restarted subsequent save preservation is not cleanup retry success",
+    "Publication syscall ENOSPC not covered; separate injection needed",
+    "Native dirty/history/error UI not covered here"
+  ],
+  "compatibility_finding": {
+    "filesystem": "HFS+64MiB image",
+    "overwrite_errno": 45,
+    "overwrite": "UNSUPPORTED_FAIL_SAFE",
+    "new_location_save": "PASS",
+    "test_count": 1,
+    "log": ".build/r130-disk-full/tests-hfs-final.log",
+    "log_sha256": "ce985a3015966b58bd9ea8c937907950106d42ca2e9e350cd79a8ab5c3da80a7"
+  },
+  "fixture_corrections": [
+    "Initial HFS+ run proved unsupported atomic swap; retained as tests-hfs.log",
+    "First APFS attempt used64KiB filler writes; small manifest fit residual allocation. Log retained as tests-apfs-initial.log",
+    "Final filler reduces writes to1byte and manifest metadata64KiB. Actual production writes fail independently of filler callback; both error causes and subsequent retry assertions pass."
+  ],
+  "log": ".build/r130-disk-full/tests-final.log",
+  "log_sha256": "066251a4dd4d671c6db39ed1a6f1a91da1b353f643367c830e5bbc66f9045286",
+  "resolved_finding": {
+    "initial_failure": "Manifest-stage disk-full silently retained incomplete stage after failed quarantine rename",
+    "fix": "discardStage returns retained URL; failed prepare exposes underlying original error and exact retained location, without unsafe deletion fallback",
+    "red_log": ".build/r130-disk-full/tests-apfs-cleanup-red.log",
+    "outcome": "safe retention with visible error; copy phase fully cleans stage"
+  },
+  "images_detached": [
+    "quota-apfs.dmg",
+    "quota.dmg"
+  ],
+  "source_sha256": {
+    "Sources/CirclrCore/ProjectStore.swift": "e3aa7faaa55cd3654646c6832c6f972d7c8bb634c0ec5bdd1473af1aae9db31c",
+    "Tests/CirclrCoreTests/ProjectDiskFullTests.swift": "482f42f571a8ccb3d2814b05a02a5487d405cc1441f3ab17e3c17f66b04c8671"
+  }
+}

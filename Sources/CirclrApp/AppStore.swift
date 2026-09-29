@@ -105,6 +105,8 @@ private struct MIDIRecordingKey: Hashable {
     @Published var navigationOpen=false
     @Published var navigationIntent=StudioNavigationIntent()
     let library=MediaLibraryController()
+    @Published var projectMediaOpen=false
+    lazy var projectMedia = ProjectMediaWorkspace(store:self)
     @Published var libraryOpen=false {didSet{if !libraryOpen{library.suspend()}}}
     @Published var libraryDestination:MediaImportRequest?
     @Published var midiStepMode=false
@@ -900,6 +902,7 @@ private struct MIDIRecordingKey: Hashable {
         }
     }
     func save(as saveAs:Bool = false) {
+        guard resolveDocumentDrafts() else{return}
         guard requireFinishedRecordingForDocumentAction() else{return}
         cancelDemoLoading()
         guard nameEditing.resolve() else{return}
@@ -936,6 +939,7 @@ private struct MIDIRecordingKey: Hashable {
         let mediaImportTask=mediaImportTask,mediaImportWorker=mediaImportWorker
         let demoLoadTask=demoLoadTask,demoLoadWorker=demoLoadWorker
         let waveformReaders=Array(waveformReaderTasks.values)
+        let projectMediaReaders=projectMedia.readerTasks
         clearSavedRecovery()
         if untrackedReader {
             try? DemoCopyLease.retainIfManaged(lease.root)
@@ -960,6 +964,7 @@ private struct MIDIRecordingKey: Hashable {
             if let demoLoadTask {await demoLoadTask.value}
             if let demoLoadWorker {_ = try? await demoLoadWorker.value}
             for reader in waveformReaders {await reader.value}
+            for reader in projectMediaReaders {await reader.value}
             guard let self,let i=self.pendingDemoRetirements.firstIndex(where:{$0.id==id}) else{return}
             self.pendingDemoRetirements[i].readersFinished=true
             self.drainPendingDemoRetirements(force:true)
@@ -985,7 +990,16 @@ private struct MIDIRecordingKey: Hashable {
         }
     }
     func clearSavedRecovery(){recoveryTask?.cancel();recoveryTask=nil;guard startupRecoveryHandled else{return};do{_ = try recoveryStore?.removeOwned()}catch{status="자동 복구 파일 정리 실패: \(error.localizedDescription)"}}
+    /// Quitting may defer the startup recovery decision without adopting or deleting it.
+    /// An edited document still follows the normal save/discard confirmation.
+    var canDeferStartupRecoveryAtTermination:Bool {!startupRecoveryHandled && !dirty}
+    func confirmTerminationDiscard() -> Bool {
+        if canDeferStartupRecoveryAtTermination {return true}
+        return confirmDiscard()
+    }
     func confirmDiscard() -> Bool {
+        guard startupRecoveryHandled || offerRecovery(startBridgeWhenReady:false) else{return false}
+        guard resolveDocumentDrafts() else{return false}
         guard nameEditing.resolve() else{return false}
         guard dirty else { return true }; let a = NSAlert(); a.messageText = "저장하지 않은 변경이 있습니다"; a.informativeText = "현재 곡을 저장한 뒤 계속하거나 변경을 버릴 수 있습니다."; a.addButton(withTitle:"저장"); a.addButton(withTitle:"취소"); a.addButton(withTitle:"변경 버리기")
         let r = a.runModal(); if r == .alertFirstButtonReturn { save(); return !dirty }; return r == .alertThirdButtonReturn
@@ -1040,7 +1054,7 @@ private struct MIDIRecordingKey: Hashable {
         }
         catch { fail(error) }
     }
-    func resetSession() { cancelLiveLoopUpdate();liveLoopFailedRevision=nil; chatGPTMusicSessionStorage?.documentChanged(); stopTrustedAgentTurn();let wasViewing=viewingMode;startupOpen=false;viewingMode=false;defer{if wasViewing{viewingModeDidChange?()}}; playbackLoopMode = .off; editorFocusRequest=nil; circleEditorWorkspaces=[:]; sectionSettingsReturn=nil; sustainOpen=false;sustainState = .init();sustainViewStates=[:];sustainWorkspaceKey=nil;sustainWorkspaceProjectID=nil;sustainWorkspaceGeneration=nil; pitchBendOpen=false;pitchBendState = .init();pitchBendViewStates=[:];pitchBendWorkspaceKey=nil;pitchBendWorkspaceProjectID=nil;pitchBendWorkspaceGeneration=nil; captureStepCursor=nil;pendingMIDIImportStepCursor=nil;arrangementWorkspaces=[:];outputPreferences.cancel();outputPreferencesOpen=false; bounceTailSeconds=nil;bounceTailEditing=false;bounceTailCache=nil;resettingEditorSelection=true;defer{editorSelectionStates=[:];resettingEditorSelection=false};editorViewStates=[:];automationViewStates=[:];automationWorkspaceKey=nil;automationWorkspaceProjectID=nil;automationWorkspaceGeneration=nil;editOriginal=false;automationParameter = .gain;connectionWorkspaceStates=[:];recentTransitions=[:];arrangementPickerRequest=nil;soundPickerRequest=nil;libraryOpen=false;libraryDestination=nil;cancelMediaImport(); if !recorder.busy && audioRecoveryURL==nil {audioCaptureMessage="";audioInputSeconds=0;audioInputFormat=nil}; connectionEditorIntent=nil;connectionsOpen=false;automationOpen=false;automationViewport.reset();selectedAutomationPointID=nil;cancelRecordingRequest(); audioSplitOffset=nil;midiImportDraft=nil;selectedNoteID=nil; navigationOpen=false; commandPalette=nil; soundView=false; hierarchyTransitionID=nil; hierarchySelection = .album; hierarchySelections = [.album]; hierarchySettingsOpen = false; hierarchyCommand = HierarchyCommand(action: .restore); waveformGeneration += 1; waveforms = [:]; waveformLoading = []; focus = nil; embeddedPlugin = nil; clearSavedRecovery(); selection = []; edgeSelection = nil; editPatternID = nil; prepared = nil; preparedKey = ""; dirty = false; undoStack = []; redoStack = []; undoCount = 0; redoCount = 0 }
+    func resetSession() { projectMediaOpen=false;projectMedia.cancel();cancelLiveLoopUpdate();liveLoopFailedRevision=nil; chatGPTMusicSessionStorage?.documentChanged(); stopTrustedAgentTurn();let wasViewing=viewingMode;startupOpen=false;viewingMode=false;defer{if wasViewing{viewingModeDidChange?()}}; playbackLoopMode = .off; editorFocusRequest=nil; circleEditorWorkspaces=[:]; sectionSettingsReturn=nil; sustainOpen=false;sustainState = .init();sustainViewStates=[:];sustainWorkspaceKey=nil;sustainWorkspaceProjectID=nil;sustainWorkspaceGeneration=nil; pitchBendOpen=false;pitchBendState = .init();pitchBendViewStates=[:];pitchBendWorkspaceKey=nil;pitchBendWorkspaceProjectID=nil;pitchBendWorkspaceGeneration=nil; captureStepCursor=nil;pendingMIDIImportStepCursor=nil;arrangementWorkspaces=[:];outputPreferences.cancel();outputPreferencesOpen=false; bounceTailSeconds=nil;bounceTailEditing=false;bounceTailCache=nil;resettingEditorSelection=true;defer{editorSelectionStates=[:];resettingEditorSelection=false};editorViewStates=[:];automationViewStates=[:];automationWorkspaceKey=nil;automationWorkspaceProjectID=nil;automationWorkspaceGeneration=nil;editOriginal=false;automationParameter = .gain;connectionWorkspaceStates=[:];recentTransitions=[:];arrangementPickerRequest=nil;soundPickerRequest=nil;libraryOpen=false;libraryDestination=nil;cancelMediaImport(); if !recorder.busy && audioRecoveryURL==nil {audioCaptureMessage="";audioInputSeconds=0;audioInputFormat=nil}; connectionEditorIntent=nil;connectionsOpen=false;automationOpen=false;automationViewport.reset();selectedAutomationPointID=nil;cancelRecordingRequest(); audioSplitOffset=nil;midiImportDraft=nil;selectedNoteID=nil; navigationOpen=false; commandPalette=nil; soundView=false; hierarchyTransitionID=nil; hierarchySelection = .album; hierarchySelections = [.album]; hierarchySettingsOpen = false; hierarchyCommand = HierarchyCommand(action: .restore); waveformGeneration += 1; waveforms = [:]; waveformLoading = []; focus = nil; embeddedPlugin = nil; clearSavedRecovery(); selection = []; edgeSelection = nil; editPatternID = nil; prepared = nil; preparedKey = ""; dirty = false; undoStack = []; redoStack = []; undoCount = 0; redoCount = 0 }
     func scheduleViewportRecovery() { captureViewport(); scheduleRecovery() }
     private func scheduleRecovery() {
         recoveryTask?.cancel(); let snapshot = project,root = mediaRoot
@@ -1096,8 +1110,10 @@ private struct MIDIRecordingKey: Hashable {
         catch {return continueAfterUnusableLegacy(snapshot,error:error,store:store)}
         let alert=NSAlert();alert.messageText="구버전의 저장되지 않은 곡을 복구할까요?"
         alert.informativeText=recovery.project.name+"\n구버전 복구 파일은 읽기 전용으로 보존됩니다."
-        alert.addButton(withTitle:"복구");alert.addButton(withTitle:"새로 시작")
-        if alert.runModal() == .alertFirstButtonReturn {
+        alert.addButton(withTitle:"복구");alert.addButton(withTitle:"이 복구본 건너뛰기");alert.addButton(withTitle:"취소")
+        let choice=alert.runModal()
+        guard choice != .alertThirdButtonReturn else{status="복구 선택을 취소했습니다 · 복구 파일을 보존합니다";startupOpen=true;return false}
+        if choice == .alertFirstButtonReturn {
             let restored:Project
             do {if let root=recovery.root {try DemoCopyLease.retainIfManaged(root)};var candidate=recovery.project;candidate.enableAlbum();restored=try SectionGraphMigration.migrate(candidate)}
             catch {return continueAfterUnusableLegacy(snapshot,error:error,store:store)}
@@ -1117,9 +1133,18 @@ private struct MIDIRecordingKey: Hashable {
             return true
         } catch {return stopForUnresolvedRecovery(error.localizedDescription)}
     }
+    private func showPreservedRecoveryNotice(_ preserved:URL) {
+        let alert=NSAlert();alert.alertStyle = .warning
+        alert.messageText="복구 파일을 읽지 못해 원본을 보존했습니다"
+        alert.informativeText="복구 파일이 올바른 JSON 형식 또는 지원되는 복구 구조가 아닙니다. 새 작업을 시작해도 아래 파일은 덮어쓰지 않습니다.\n\n보존 위치\n"+preserved.path
+        alert.addButton(withTitle:"새 작업 계속")
+        alert.addButton(withTitle:"보존 파일 보기")
+        if alert.runModal() == .alertSecondButtonReturn {NSWorkspace.shared.activateFileViewerSelecting([preserved])}
+    }
     /// Returns false when a recovered song (or an unresolved recovery problem)
     /// must take precedence over a URL passed to open at launch.
-    @discardableResult func offerRecovery(startBridgeWhenReady:Bool=true) -> Bool {
+    @discardableResult func offerRecovery(startBridgeWhenReady:Bool=true,
+                                          onPreservedRecovery:((URL)->Void)?=nil) -> Bool {
         defer { if startBridgeWhenReady { startAgentBridge() } }
         if startupRecoveryHandled { return true }
         guard let recoveryStore else {
@@ -1141,11 +1166,15 @@ private struct MIDIRecordingKey: Hashable {
             do {
                 guard let preserved=try recoveryStore.quarantineUnchanged(data) else {return stopForUnresolvedRecovery("확인 중 복구 파일이 변경되었습니다.")}
                 status="이전 복구 파일을 읽을 수 없어 보존했습니다 · \(preserved.lastPathComponent)"
+                if let onPreservedRecovery {onPreservedRecovery(preserved)}
+                else {showPreservedRecoveryNotice(preserved)}
                 return offerLegacyRecovery(recoveryStore)
             } catch { return stopForUnresolvedRecovery(error.localizedDescription) }
         }
-        let alert = NSAlert(); alert.messageText = "저장되지 않은 곡을 복구할까요?"; alert.informativeText = recovery.project.name; alert.addButton(withTitle:"복구"); alert.addButton(withTitle:"새로 시작")
-        if alert.runModal() == .alertFirstButtonReturn {
+        let alert = NSAlert(); alert.messageText = "저장되지 않은 곡을 복구할까요?"; alert.informativeText = recovery.project.name; alert.addButton(withTitle:"복구"); alert.addButton(withTitle:"복구본 버리고 새로 시작");alert.addButton(withTitle:"취소")
+        let choice=alert.runModal()
+        guard choice != .alertThirdButtonReturn else{status="복구 선택을 취소했습니다 · 복구 파일을 보존합니다";startupOpen=true;return false}
+        if choice == .alertFirstButtonReturn {
             let restored:Project
             do { if let root=recovery.root { try DemoCopyLease.retainIfManaged(root) }; var candidate = recovery.project; candidate.enableAlbum(); restored = try SectionGraphMigration.migrate(candidate) }
             catch {

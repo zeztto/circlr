@@ -1,0 +1,25 @@
+{
+  "version": "1.3.0",
+  "build": 256,
+  "status": "IN_PROGRESS",
+  "signature": "ad-hoc strict-deep PASS; not notarized",
+  "executables": {
+    "circlr-au-effect-worker": "3dbe5596bded4eb851da14f028947be28df46d84c2e7721b6623e5527828f493",
+    "circlr": "d09f635780fe183d3fff11126dbccb82b3089f39e7f02500072e134a47ecf153",
+    "circlr-au-instrument-worker": "45934b1b761a42e9a5c58a6fb5e71e5db6b777519f63ad6d3f6c89789a6377da",
+    "circlr-output-device-catalog": "f3d1e0dcf749ac34295d167f858db97f92da537fe6132219ebbc1e9ec68eb1d5",
+    "circlr-audition-worker": "2367a8e2d14ff8ce16c543a9e52c8e0bb1851c4efab3aca3c392aaf96a27fdd7",
+    "circlr-trusted-mcp-helper": "a4d9487c6e29c09ebb29942448b5ab180a8111a743c1bcc7a894bb30d0aafe8d",
+    "circlr-output-worker": "72bd0b30c2ea8d87bb57f45cd5a47bcaef55e4ff57048821f41509a61e9f9a8d",
+    "circlr-input-worker": "a2d0d0adb69db36f1ba557c5c835b10281ae9c530e5ff69d3abbb38657d313b4"
+  },
+  "native": "recovery cancel -> quit -> cold restart -> explicit restore PASS; other required native QA remains",
+  "recovery_cancel_quit": {
+    "terminated_pid": 4596,
+    "process_missing": true,
+    "recovery_bytes_preserved": true,
+    "sha256": "c7a768d81f4e593dae7d88f6546055262d1e56c057a3876cec5835e19f19dfe1",
+    "cold_restart_pid": 4670,
+    "reoffered_and_restored_revision": 17
+  }
+}

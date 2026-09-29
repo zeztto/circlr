@@ -91,33 +91,36 @@ public enum ProjectStore {
     /// Quarantine atomically, then remove only our known files through pinned
     /// directory descriptors. Path replacement cannot redirect recursive
     /// deletion into someone else's directory; the final rmdir is non-recursive.
-    private static func discardStage(at staging: URL, identity: StageIdentity,
-                                     files: [String: StageFileIdentity]) {
+    @discardableResult private static func discardStage(at staging: URL, identity: StageIdentity,
+                                     files: [String: StageFileIdentity]) -> URL? {
         let quarantine = staging.deletingLastPathComponent()
             .appendingPathComponent(".circlr-discard-\(newID())")
         guard Darwin.renameatx_np(AT_FDCWD, staging.path, AT_FDCWD,
-                                  quarantine.path, UInt32(RENAME_EXCL)) == 0 else { return }
+                                  quarantine.path, UInt32(RENAME_EXCL)) == 0 else {
+            if errno == ENOENT { return nil }
+            return staging
+        }
         guard (try? stageIdentity(quarantine)) == identity else {
             if Darwin.renameatx_np(AT_FDCWD, quarantine.path, AT_FDCWD,
                                    staging.path, UInt32(RENAME_EXCL)) != 0 {
-                FileHandle.standardError.write(Data(("circlr: 다른 저장 준비 폴더를 \(quarantine.path)에 보존했습니다\n").utf8))
+                return quarantine
             }
-            return
+            return staging
         }
         let parentFD = Darwin.open(quarantine.deletingLastPathComponent().path,
                                    O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)
-        guard parentFD >= 0 else { return }
+        guard parentFD >= 0 else { return quarantine }
         defer { _ = Darwin.close(parentFD) }
         let name = quarantine.lastPathComponent
         let rootFD = Darwin.openat(parentFD, name, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)
-        guard rootFD >= 0 else { return }
+        guard rootFD >= 0 else { return quarantine }
         defer { _ = Darwin.close(rootFD) }
         let mediaFD = Darwin.openat(rootFD, "media", O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)
-        guard mediaFD >= 0 else { return }
+        guard mediaFD >= 0 else { return quarantine }
         defer { _ = Darwin.close(mediaFD) }
         var rootInfo = stat(), mediaInfo = stat()
         guard Darwin.fstat(rootFD, &rootInfo) == 0, identity.matchesRoot(rootInfo),
-              Darwin.fstat(mediaFD, &mediaInfo) == 0, identity.matchesMedia(mediaInfo) else { return }
+              Darwin.fstat(mediaFD, &mediaInfo) == 0, identity.matchesMedia(mediaInfo) else { return quarantine }
         var cleanupFailed = false
         for (relative, expectedFile) in files {
             let fd: Int32
@@ -148,9 +151,10 @@ public enum ProjectStore {
            Darwin.fstatat(parentFD, name, &currentRoot, AT_SYMLINK_NOFOLLOW) == 0,
            identity.matchesRoot(currentRoot),
            Darwin.unlinkat(parentFD, name, AT_REMOVEDIR) == 0 {
-            return
+            return nil
         }
         FileHandle.standardError.write(Data(("circlr: 저장 준비 폴더를 \(quarantine.path)에 보존했습니다\n").utf8))
+        return quarantine
     }
 
     internal struct TargetFingerprint: Equatable {
@@ -174,6 +178,7 @@ public enum ProjectStore {
         let manifest: Stamp
         let manifestChecksum: String
         let media: [String: Stamp]
+        let missingMedia: Set<String>
     }
 
     /// Snapshot only package-owned paths. This makes a slow preparation fail
@@ -198,17 +203,21 @@ public enum ProjectStore {
         let manifestBytes = try readManifest(manifest)
         let manifestChecksum = SHA256.hash(data: manifestBytes).map { String(format: "%02x", $0) }.joined()
         var media: [String: TargetFingerprint.Stamp] = [:]
+        var missingMedia = Set<String>()
         for asset in previous.project.assets {
             let path = url.appendingPathComponent(asset.path)
             var info = stat()
-            guard Darwin.lstat(path.path, &info) == 0,
-                  info.st_mode & mode_t(S_IFMT) == mode_t(S_IFREG) else {
+            if Darwin.lstat(path.path, &info) != 0 {
+                if errno == ENOENT { missingMedia.insert(asset.path); continue }
+                throw CirclrError("기존 곡 미디어를 확인할 수 없습니다")
+            }
+            guard info.st_mode & mode_t(S_IFMT) == mode_t(S_IFREG) else {
                 throw CirclrError("기존 곡 미디어를 확인할 수 없습니다")
             }
             media[asset.path] = TargetFingerprint.Stamp(info)
         }
         return TargetFingerprint(root: .init(rootInfo), manifest: .init(manifestInfo),
-                                 manifestChecksum: manifestChecksum, media: media)
+                                 manifestChecksum: manifestChecksum, media: media, missingMedia: missingMedia)
     }
 
     private static func readManifest(_ url: URL) throws -> Data {
@@ -303,14 +312,31 @@ public enum ProjectStore {
 
     /// Remove only known package paths; never recurse into newly added files.
     /// A failure can leave a *partial* backup, so callers report it as such.
-    private static func discardOwnedBackup(_ root: URL, project: Project) throws {
+    private static func discardOwnedBackup(_ root: URL, project: Project, expected: TargetFingerprint) throws {
         let (files, directories) = try ownedPaths(in: root, project: project)
         let rootFD = Darwin.open(root.path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)
         guard rootFD >= 0 else { throw CirclrError("이전 곡 사본을 열 수 없습니다") }
         defer { _ = Darwin.close(rootFD) }
+        var pinnedRoot = stat()
+        guard Darwin.fstat(rootFD, &pinnedRoot) == 0,
+              TargetFingerprint.Stamp(pinnedRoot) == expected.root else {
+            throw CirclrError("이전 곡 사본의 소유권이 변경되었습니다")
+        }
         for relative in files {
             let parts = relative.split(separator: "/")
             let parentFD = try directoryFD(parts.dropLast(), rootFD: rootFD)
+            var fileInfo = stat()
+            let found = Darwin.fstatat(parentFD, String(parts.last!), &fileInfo, AT_SYMLINK_NOFOLLOW)
+            let stamp = relative == "manifest.json" ? expected.manifest : expected.media[relative]
+            if found != 0, errno == ENOENT {
+                _ = Darwin.close(parentFD)
+                continue
+            }
+            guard found == 0, fileInfo.st_mode & mode_t(S_IFMT) == mode_t(S_IFREG),
+                  let stamp, TargetFingerprint.Stamp(fileInfo) == stamp else {
+                _ = Darwin.close(parentFD)
+                throw CirclrError("이전 곡 사본의 파일이 변경되었습니다")
+            }
             let result = Darwin.unlinkat(parentFD, String(parts.last!), 0)
             let unlinkError = errno
             _ = Darwin.close(parentFD)
@@ -331,7 +357,10 @@ public enum ProjectStore {
                 throw CirclrError("이전 곡 사본의 일부를 정리하지 못했습니다")
             }
         }
-        guard Darwin.rmdir(root.path) == 0 else {
+        var finalRoot = stat()
+        guard Darwin.lstat(root.path, &finalRoot) == 0,
+              finalRoot.st_dev == pinnedRoot.st_dev, finalRoot.st_ino == pinnedRoot.st_ino,
+              Darwin.rmdir(root.path) == 0 else {
             throw CirclrError("이전 곡 사본의 일부를 정리하지 못했습니다")
         }
     }
@@ -347,9 +376,16 @@ public enum ProjectStore {
     public static func checksum(_ url: URL) throws -> String {
         try checksum(url, checkCancellation: {})
     }
-    private static func checksum(_ url: URL, checkCancellation: () throws -> Void) throws -> String {
+    public static func checksum(_ url: URL, checkCancellation: () throws -> Void) throws -> String {
         try checkCancellation()
-        let file = try FileHandle(forReadingFrom: url); defer { try? file.close() }
+        let fd = Darwin.open(url.path, O_RDONLY | O_CLOEXEC | O_NONBLOCK | O_NOFOLLOW)
+        guard fd >= 0 else { throw CirclrError("미디어를 읽을 수 없습니다") }
+        defer { _ = Darwin.close(fd) }
+        var info = stat()
+        guard Darwin.fstat(fd, &info) == 0, info.st_mode & mode_t(S_IFMT) == mode_t(S_IFREG) else {
+            throw CirclrError("미디어는 일반 파일이어야 합니다")
+        }
+        let file = FileHandle(fileDescriptor: fd, closeOnDealloc: false)
         var hash = SHA256()
         while true {
             try checkCancellation()
@@ -357,6 +393,11 @@ public enum ProjectStore {
             hash.update(data: data)
         }
         try checkCancellation()
+        var after = stat()
+        guard Darwin.fstat(fd, &after) == 0, MediaFileIdentity(info) == MediaFileIdentity(after),
+              try MediaFileIdentity.read(url) == MediaFileIdentity(info) else {
+            throw CirclrError("검사 중 미디어가 변경되었습니다")
+        }
         return hash.finalize().map { String(format: "%02x", $0) }.joined()
     }
 
@@ -510,13 +551,13 @@ public enum ProjectStore {
         let parent = url.deletingLastPathComponent()
         try fm.createDirectory(at: parent, withIntermediateDirectories: true)
         let expectedTarget = try targetFingerprint(url)
+        _ = try portableCopyPreflight(project: project, mediaRoot: mediaRoot, destination: url, checkCancellation: checkCancellation)
         try checkCancellation()
         let staging = parent.appendingPathComponent(".circlr-save-\(newID())")
         try fm.createDirectory(at: staging.appendingPathComponent("media"), withIntermediateDirectories: true)
         let identity = try stageIdentity(staging)
-        var completed = false
         var stagedFiles: [String: StageFileIdentity] = [:]
-        defer { if !completed { discardStage(at: staging, identity: identity, files: stagedFiles) } }
+        do {
         var output = project
         guard Set(project.assets.map(\.id)).count == project.assets.count else { throw CirclrError("미디어 ID가 중복되었습니다") }
         for i in output.assets.indices {
@@ -534,6 +575,9 @@ public enum ProjectStore {
             }
             output.assets[i].path = relative
             output.assets[i].checksum = try checksum(destination, checkCancellation: checkCancellation)
+            if !asset.checksum.isEmpty, output.assets[i].checksum.lowercased() != asset.checksum.lowercased() {
+                throw CirclrError("\(asset.name)의 내용이 원본과 달라 저장하지 않았습니다. 미디어를 확인하세요")
+            }
         }
         try checkCancellation()
         let encoder = JSONEncoder(); encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
@@ -554,11 +598,20 @@ public enum ProjectStore {
                 if let source = localPaths[saved.assets[i].id] { saved.assets[i].path = source }
             }
         }
-        completed = true
         return StagedProjectSave(target: url, staging: staging, portableProject: output,
                                  savedProject: saved, expectedTarget: expectedTarget,
                                  expectedStage: expectedStage, stageIdentity: identity,
                                  stagedFiles: stagedFiles)
+        } catch {
+            if let retained = discardStage(at: staging, identity: identity, files: stagedFiles) {
+                throw NSError(domain: "CirclrProjectSave", code: 1, userInfo: [
+                    NSUnderlyingErrorKey: error,
+                    "CirclrRetainedStageURL": retained,
+                    NSLocalizedDescriptionKey: "\(error.localizedDescription)\n정리하지 못한 저장 준비 파일이 \(retained.path)에 남아 있습니다. 기존 곡은 변경하지 않았습니다."
+                ])
+            }
+            throw error
+        }
     }
 
     /// Discard a rejected or cancelled stage. This never visits the target.
@@ -576,6 +629,13 @@ public enum ProjectStore {
     @discardableResult public static func publishSessionSaveReportingCleanup(
         _ staged: StagedProjectSave, onCleanupWarning: (String) -> Void
     ) throws -> Project {
+        try publishSessionSaveReportingCleanup(staged, onCleanupWarning: onCleanupWarning, afterPublication: {})
+    }
+
+    /// Test seam for process-termination proof at the atomic publication boundary.
+    internal static func publishSessionSaveReportingCleanup(
+        _ staged: StagedProjectSave, onCleanupWarning: (String) -> Void, afterPublication: () -> Void
+    ) throws -> Project {
         staged.lock.lock()
         defer { staged.lock.unlock() }
         guard !staged.consumed else { throw CirclrError("이미 사용한 저장 준비 결과입니다") }
@@ -584,8 +644,7 @@ public enum ProjectStore {
         let url = staged.target
         let staging = staged.staging
         let backup = url.deletingLastPathComponent().appendingPathComponent(".circlr-backup-\(newID())")
-        var movedOld = false, completed = false
-        var previousProject: Project?
+        var completed = false
         defer {
             if !completed {
                 discardStage(at: staging, identity: staged.stageIdentity, files: staged.stagedFiles)
@@ -597,39 +656,43 @@ public enum ProjectStore {
         guard try targetFingerprint(staging) == staged.expectedStage else {
             throw CirclrError("저장 준비 파일이 변경되었습니다")
         }
-        if fm.fileExists(atPath: url.path) {
-            guard fm.fileExists(atPath: url.appendingPathComponent("manifest.json").path) else { throw CirclrError("기존 일반 폴더를 프로젝트로 덮어쓸 수 없습니다") }
+        if staged.expectedTarget != nil {
             let previous = try load(url)
             try requireOnlyProjectFiles(in: url, project: previous.project)
-            try fm.moveItem(at: url, to: backup); movedOld = true
+            // Atomic exchange keeps the public path bound to one complete package,
+            // even if this process dies before old-package cleanup.
+            guard Darwin.renameatx_np(AT_FDCWD, staging.path, AT_FDCWD, url.path,
+                                      UInt32(RENAME_SWAP)) == 0 else {
+                let failure = errno
+                let guidance = failure == ENOTSUP || failure == EINVAL
+                    ? "이 저장 장치는 원자적 곡 교체를 지원하지 않습니다. 새 위치에 사본으로 저장하세요. 기존 곡은 유지됩니다"
+                    : "곡을 원자적으로 교체하지 못했습니다. 기존 곡은 유지됩니다"
+                throw NSError(domain: NSPOSIXErrorDomain, code: Int(failure), userInfo: [NSLocalizedDescriptionKey: guidance])
+            }
+            completed = true
+            afterPublication()
+            guard Darwin.renameatx_np(AT_FDCWD, staging.path, AT_FDCWD, backup.path,
+                                      UInt32(RENAME_EXCL)) == 0 else {
+                onCleanupWarning("저장은 완료됐습니다. 이전 곡 사본을 \(staging.path)에 보존했습니다")
+                return staged.savedProject
+            }
             do {
-                try requireOnlyProjectFiles(in: backup, project: previous.project)
                 guard try targetFingerprint(backup) == staged.expectedTarget else {
-                    throw CirclrError("저장 준비 중 기존 곡이 변경되었습니다. 다시 저장하세요")
+                    throw CirclrError("이전 곡 사본이 변경되었습니다")
                 }
-            }
-            catch {
-                do { try fm.moveItem(at: backup, to: url); movedOld = false }
-                catch { throw CirclrError("기존 곡 폴더를 \(backup.path)에 보존했습니다. 저장하지 않았습니다") }
-                throw error
-            }
-            previousProject = previous.project
-        }
-        do { try fm.moveItem(at: staging, to: url); completed = true }
-        catch {
-            if movedOld {
-                do { try fm.moveItem(at: backup, to: url) }
-                catch { throw CirclrError("기존 곡 폴더를 \(backup.path)에 보존했습니다. 저장하지 않았습니다") }
-            }
-            throw error
-        }
-        if movedOld, let previousProject {
-            do {
-                try requireOnlyProjectFiles(in: backup, project: previousProject)
-                try discardOwnedBackup(backup, project: previousProject)
+                try requireOnlyProjectFiles(in: backup, project: previous.project)
+                try discardOwnedBackup(backup, project: previous.project, expected: staged.expectedTarget!)
             } catch {
                 onCleanupWarning("저장은 완료됐습니다. 이전 곡 사본의 일부가 \(backup.path)에 남아 있을 수 있습니다")
             }
+        } else {
+            // A destination created after validation must never be replaced.
+            guard Darwin.renameatx_np(AT_FDCWD, staging.path, AT_FDCWD, url.path,
+                                      UInt32(RENAME_EXCL)) == 0 else {
+                throw CirclrError("곡 저장 위치가 변경되었거나 쓸 수 없습니다. 다른 위치를 선택하세요")
+            }
+            completed = true
+            afterPublication()
         }
         return staged.savedProject
     }

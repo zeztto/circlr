@@ -301,6 +301,10 @@ struct AgentConsole:View {
         if store.agentBridgeNeedsManualRecovery {return "기존 연결 감지"}
         return store.agentBridgeLastFailure == nil ? "연결 없음":"연결 실패"
     }
+    private func submitCommand() {
+        guard let text=NativeTextCommandBoundary.takeConsoleCommand(&command,in:NSApp.keyWindow) else{return}
+        store.consoleCommand(text)
+    }
     private var connectionDetail:String {
         if store.agentSocket != nil {
             let endpoint=store.agentBridgeEndpointName
@@ -483,8 +487,8 @@ struct AgentConsole:View {
                     Text(">").foregroundStyle(StudioTheme.accent)
                     TextField("help · state · midi arpeggio · bounce · stop",text:$command)
                         .textFieldStyle(.plain).font(.system(size:12,design:.monospaced)).focused($inputFocused)
-                        .onSubmit{let text=command;command="";store.consoleCommand(text)}
-                    Button{let text=command;command="";store.consoleCommand(text)}label:{Image(systemName:"arrow.turn.down.left")}.help("명령 실행")
+                        .onSubmit{submitCommand()}
+                    Button{submitCommand()}label:{Image(systemName:"arrow.turn.down.left")}.help("명령 실행")
                 }.padding(.horizontal,14).padding(.vertical,5).background(StudioTheme.raised.opacity(0.7))
                 }
             }

@@ -4,12 +4,12 @@
 
 ## 2.0까지 실행 로드맵
 
-상태: PLANNED · 코드 구현 착수 아님. **[상세 개발 계획](2.0-development-plan.md)**에 작업 ID, 의존성, 소스 경로, 수치 gate, migration·rollback과 버전별 제외 범위를 정의했다.
+현재 실행: **1.3 IN_PROGRESS** · 이후 버전은 PLANNED. **[상세 개발 계획](2.0-development-plan.md)**에 작업 ID, 의존성, 소스 경로, 수치 gate, migration·rollback과 버전별 제외 범위를 정의했다.
 
 | 버전 | 사용자 결과 | 상태 |
 |---|---|---|
 | 1.2.0/build253 | MIDI 구절 전송·커서 재생·루프 편집·송폼 재사용 | RELEASED_WITH_KNOWN_LIMITS |
-| [1.3](1.3.0.md) | 저장·복구·미디어 재연결과 기본 조작 신뢰성 | PLANNED · 다음 착수 |
+| [1.3](1.3.0.md) | 저장·복구·미디어 재연결과 기본 조작 신뢰성 | IN_PROGRESS |
 | 1.4 | 반주와 동기화된 녹음·count-in·overdub·지연 보정 | PLANNED |
 | 1.5 | 믹스/AU 지연·복원·automation·stem 출력 일관성 | PLANNED |
 | 1.6 | 재생 그래픽·follow·감상 모드·영상 성능/동기 | PLANNED |

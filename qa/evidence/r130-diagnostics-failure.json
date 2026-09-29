@@ -1,0 +1,61 @@
+{
+  "schema": "circlr-qa-evidence-v1",
+  "id": "r130-diagnostics-failure",
+  "recordedAt": "2026-09-29T21:05:35.820482+00:00",
+  "head": "95697d5b5868884ba29dc4faa37cbd80672d5ea4",
+  "workingTreeChangesIncluded": true,
+  "scope": "D02 automated diagnostic failure and privacy boundaries; test-only changes",
+  "command": "./scripts/swift-local.sh test --scratch-path .build/r130-tests --filter 'ProjectDiagnosticsTests|ProjectDiagnosticsFailureTests'",
+  "runs": 1,
+  "exitCode": 0,
+  "result": "PASS",
+  "tests": {
+    "core": 5,
+    "app": 4,
+    "failures": 0
+  },
+  "log": {
+    "path": "/tmp/circlr-r130-diagnostics-failure-tests.log",
+    "sha256": "6d79405a59c0efba8c2d2ced496e771822185f07833f5b9740e931df4e3b1a17"
+  },
+  "files": {
+    "Tests/CirclrCoreTests/ProjectDiagnosticsTests.swift": "b3dee400fd60d40101a9feb02175c6b0d51f0c3d14a58029f6beced12d37eb3e",
+    "Tests/CirclrAppTests/ProjectDiagnosticsFailureTests.swift": "7846890fc2e7d70f7b4823ec45d5a194b7fec60c3a1f98f7a304d2181bc8466e",
+    "Sources/CirclrCore/ProjectDiagnostics.swift": "bdd676391940640bdfefa12d3e2b1b59725c7d6c8acc83d8aa5f506a011d7afa",
+    "Sources/CirclrApp/ProjectMediaWorkspace.swift": "319151b76687cf394318b81bb699104b02d563cb606dd9c185f88d5b07726085"
+  },
+  "scenarios": [
+    {
+      "id": "D02-bounded-projection",
+      "result": "PASS",
+      "evidence": "Project manifest exceeds 4,000,000 bytes after large private names and 10,000 MIDI notes; diagnostic bytes remain identical to small baseline and below 4096 bytes."
+    },
+    {
+      "id": "D02-existing-destination-failure-retry",
+      "result": "PASS",
+      "evidence": "Atomic JSON export targeting existing directory fails; sentinel bytes and directory entries preserved; project, dirty flag, Undo count, projectURL preserved. Retrying sibling JSON path yields parseable allowlisted JSON below 4096 bytes."
+    },
+    {
+      "id": "D02-cancel-before-publication",
+      "result": "PASS",
+      "evidence": "Immediate cancellation before MainActor publication, followed by reader drain, leaves no output and preserves project/dirty; next export succeeds."
+    },
+    {
+      "id": "D02-stale-same-id-document",
+      "result": "PASS",
+      "evidence": "User edit with unchanged project ID before publication rejects old snapshot; no output; new project and Undo count retained."
+    },
+    {
+      "id": "D02-private-activity-job-text",
+      "result": "PASS",
+      "evidence": "Large private activity source/message and agent job ID/message/path do not appear in exported bytes; only typed save/failed runtime state remains; JSON below 4096 bytes."
+    }
+  ],
+  "productChanges": [],
+  "notVerified": [
+    "Actual NSSavePanel interaction or destination failure UI",
+    "Physical disk full or permission revocation",
+    "Cancellation during live large-media hash scan through native UI"
+  ],
+  "validationBoundary": "Real filesystem writes and actual ProjectMediaWorkspace APIs in XCTest; not a claim of native UI acceptance."
+}

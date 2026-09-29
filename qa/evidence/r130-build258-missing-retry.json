@@ -1,0 +1,18 @@
+{
+  "build": 258,
+  "scenario": "M01 missing open/save/inspection/retry",
+  "native": {
+    "open": "PASS via NSOpenPanel",
+    "save_missing": "PASS: visible cannot-read-media alert",
+    "missing_list": "PASS: named asset and unreadable reason",
+    "rescan_after_restore": "PASS: all media available",
+    "save_retry": "PASS: saved status"
+  },
+  "preservation": {
+    "manifest_before_retry": "67eddb084232b477eebe9fba3817bffa35ce2c4991826373d5bb8947e15e1f2d",
+    "original_manifest": "67eddb084232b477eebe9fba3817bffa35ce2c4991826373d5bb8947e15e1f2d",
+    "restored_media_sha256": "f63c55712c6c646498eeb9d2a0f7e3f4643b17e35173dc04b24225d750395a79"
+  },
+  "retry_semantics": "All manifest fields equal; circleColors dictionary key/value serialization order normalized and equal",
+  "remaining": "Missing playback not exercised; clean fixture does not prove dirty-edit retention"
+}

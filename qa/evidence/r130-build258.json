@@ -1,0 +1,27 @@
+{
+  "build": 258,
+  "version": "1.3.0",
+  "status": "IN_PROGRESS",
+  "build_exit": 0,
+  "signature": "ad-hoc strict-deep PASS; not notarized",
+  "executables": {
+    "circlr-au-effect-worker": "8b376dd7bda687c9579cd10a3e758bd1812603f3d12b8567858c5ee71267a853",
+    "circlr": "7f88c897686e76bb4623701a7e874094fd29df47be924ee198a19de2ff51864c",
+    "circlr-au-instrument-worker": "e8e2dcad8a8c656bc1e2d34b2a1caffceb0161cff30e6a0e06d8d51e86f0850d",
+    "circlr-output-device-catalog": "bd5d1c09e96f0d44e72df4fe76985646af471adb3fe101bfc92537832d2b22b0",
+    "circlr-audition-worker": "350eef3cfae792aaf6f84460da3f02d59529dd91e5a47e40e2aafb02cdb08620",
+    "circlr-trusted-mcp-helper": "a4d9487c6e29c09ebb29942448b5ab180a8111a743c1bcc7a894bb30d0aafe8d",
+    "circlr-output-worker": "76b66aa91b4974c086f8a42773cc8c5c914fc80be9cfd4a61cb5e4a1f7b7733b",
+    "circlr-input-worker": "9146260bafb9df89816f57bae6ad6c8d7576f17e4e069642c6412c04d6ce28ad"
+  },
+  "malformed_fixture_sha256": "bf420ff26e390eea1b8678d344d014334daeb68fa5a227fef16080a37b2a1cc0",
+  "native": {
+    "malformed_recovery_warning": "PASS: visible reason and exact preserved path",
+    "reveal_preserved_file": "PASS: Finder selected matching quarantined JSON",
+    "preserved_bytes_sha256": "bf420ff26e390eea1b8678d344d014334daeb68fa5a227fef16080a37b2a1cc0",
+    "startup_after_warning": "PASS",
+    "screenshot": "qa/generated/1.3-native/build258-recovery-warning.jpg",
+    "screenshot_sha256": "c70fa33a6d9c8a34692819fe9786f79533f66c14cd032fd9e306d64e28a25272",
+    "remaining": "Other 1.3 matrix gates remain OPEN/PARTIAL; actual IME not verified"
+  }
+}

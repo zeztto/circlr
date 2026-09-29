@@ -141,7 +141,8 @@ struct RootView: View {
                 .onPreferenceChange(CanvasNavigationBoundsKey.self){if store.navigationBounds != $0 {store.navigationBounds=$0}}
         }
         .disabled(store.outputPreferencesOpen)
-        .accessibilityHidden(store.outputPreferencesOpen || store.libraryOpen || store.navigationOpen || store.soundPickerRequest != nil || store.arrangementPickerRequest != nil)
+        .disabled(store.projectMediaOpen)
+        .accessibilityHidden(store.projectMediaOpen || store.outputPreferencesOpen || store.libraryOpen || store.navigationOpen || store.soundPickerRequest != nil || store.arrangementPickerRequest != nil)
         .overlay(alignment:.top) {
             if !store.viewingMode,let palette=store.commandPalette {
                 ZStack(alignment:.top) {
@@ -163,6 +164,14 @@ struct RootView: View {
                 ZStack(alignment:.top) {
                     Color.black.opacity(0.25).contentShape(Rectangle()).onTapGesture{store.keyboardHelp=false}
                     KeyboardHelpView(store:store).padding(.top,overlays.topInset)
+                }
+            }
+        }
+        .overlay(alignment:.top) {
+            if !store.viewingMode,store.projectMediaOpen {
+                ZStack(alignment:.top) {
+                    Color.black.opacity(0.3).contentShape(Rectangle())
+                    ProjectMediaView(store:store,size:overlays.pickerSize).padding(.top,overlays.topInset)
                 }
             }
         }
@@ -209,7 +218,7 @@ struct RootView: View {
         .background(StudioTheme.canvas)
         .font(.system(size:12)).foregroundStyle(StudioTheme.text).buttonStyle(CanvasButtonStyle())
         .numberEditing(in:store)
-        .onExitCommand{if store.startupOpen {store.closeStartup()} else if store.viewingMode {_ = store.setViewingMode(false)} else if !store.viewingMode,store.outputPreferencesOpen {store.closeOutputPreferences()} else if store.arrangementPickerRequest != nil {store.closeArrangementPicker()} else if store.soundPickerRequest != nil {store.closeSoundPicker()} else if !store.viewingMode,store.libraryOpen {store.closeMediaLibrary()} else if store.connectionsOpen {store.connectionsOpen=false;store.focusCanvas?()} else if !store.viewingMode,store.navigationOpen {store.navigationOpen=false;store.focusCanvas?()} else if store.commandPalette != nil {store.commandPalette=nil;store.focusCanvas?()} else if !store.viewingMode,store.keyboardHelp {store.keyboardHelp=false} else if let draft=store.midiImportDraft {store.cancelMIDIImport(draft.id)} else {store.hierarchySettingsOpen=false;store.hierarchyParent()}}
+        .onExitCommand{if store.projectMediaOpen {store.projectMedia.close()} else if store.startupOpen {store.closeStartup()} else if store.viewingMode {_ = store.setViewingMode(false)} else if !store.viewingMode,store.outputPreferencesOpen {store.closeOutputPreferences()} else if store.arrangementPickerRequest != nil {store.closeArrangementPicker()} else if store.soundPickerRequest != nil {store.closeSoundPicker()} else if !store.viewingMode,store.libraryOpen {store.closeMediaLibrary()} else if store.connectionsOpen {store.connectionsOpen=false;store.focusCanvas?()} else if !store.viewingMode,store.navigationOpen {store.navigationOpen=false;store.focusCanvas?()} else if store.commandPalette != nil {store.commandPalette=nil;store.focusCanvas?()} else if !store.viewingMode,store.keyboardHelp {store.keyboardHelp=false} else if let draft=store.midiImportDraft {store.cancelMIDIImport(draft.id)} else {store.hierarchySettingsOpen=false;store.hierarchyParent()}}
         .alert("작업을 완료하지 못했습니다",isPresented:Binding(get:{store.errorMessage != nil},set:{if !$0{store.errorMessage=nil}})){Button("확인"){store.errorMessage=nil}}message:{Text(store.errorMessage ?? "")}
     }
     private func header(_ chrome:WorkspaceChromeLayout)->some View {

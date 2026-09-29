@@ -1,0 +1,39 @@
+{
+  "build": 256,
+  "window_points": [
+    700,
+    900
+  ],
+  "screenshot_pixels": [
+    1400,
+    1800
+  ],
+  "toolbar_overlap": false,
+  "overlay_tab_cycle": [
+    "close",
+    "refresh",
+    "copy",
+    "diagnostics",
+    "close"
+  ],
+  "shift_tab_reverses": true,
+  "return_space_activation": "FAIL, fix pending build257",
+  "palette_search_media": "FAIL, fix pending build257",
+  "existing_destination_rejected": true,
+  "existing_destination_hashes_unchanged": true,
+  "new_name_retry_success": true,
+  "source_dirty_preserved": true,
+  "source_revision_preserved": 17,
+  "ime_probe": {
+    "keys": [
+      "g",
+      "k",
+      "s"
+    ],
+    "app_text_field_result": "ㅎㅏㄴ",
+    "native_save_panel_result": "ㅎㅏㄴ",
+    "status": "OPEN: automation inserted separate jamo in both fields; actual marked composition not established",
+    "draft_cancelled": true,
+    "comparison_save_cancelled": true
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "build": 257,
+  "decode_failure_quarantined_exact_bytes": true,
+  "sha256": "bf420ff26e390eea1b8678d344d014334daeb68fa5a227fef16080a37b2a1cc0",
+  "startup_error_visible": false,
+  "status": "FAIL: preservation succeeds but startup hides warning; fix pending"
+}
