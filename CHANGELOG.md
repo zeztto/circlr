@@ -5,7 +5,7 @@
 - 2026-09-30: 앱 내 계정·대화 신규 기능을 [1.1](docs/releases/1.1.0.md)로 이월하고 1.0은 핵심 DAW 회귀와 배포 마감에 집중한다. build244는 내부 후보이며 정식 출고하지 않았다.
 - MIDI 녹음의 CC64·pitch bend를 채널별 take로 보존하고 반복 초기 상태를 이어받는다. 표현만 덧녹음하면 기존 노트와 녹음하지 않은 표현을 유지한다.
 - 녹음 전 편집본을 take로 보존하고 저장·활성화를 하나의 Undo로 묶는다. 노트만 녹음한 lane에는 가짜 표현 데이터를 생성하지 않는다. [검증과 남은 범위](qa/1.0-midi-recording.md).
-- [직접 SIWC OAuth 경로](docs/releases/1.0-account-gate.md)의 PKCE·ID token 검증·Keychain 계정 상태와 Responses 스트리밍 모듈을 구현했다. 콘솔 UI·음악 도구 실행 연결 및 실제 계정 검증은 남아 있으며 배포 기능으로 표시하지 않는다. [검증 범위](qa/1.0-account-provider.md).
+- [직접 SIWC OAuth 경로](docs/releases/1.0-account-gate.md)의 PKCE·ID token 검증·Keychain 계정 상태와 Responses 스트리밍 모듈을 구현했다. 관련 소스와 콘솔 통합은 `archive/1.1-account-build244`에 보존하고 1.0 배포 코드에서 제외했다. 실제 계정 검증은 남는다. [검증 범위](qa/1.0-account-provider.md).
 
 ## 0.90.0 · build243 — 반복 재생 경계 정확도
 

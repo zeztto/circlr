@@ -77,7 +77,7 @@ The Swift package separates the project model (`CirclrCore`), audio processing (
 
 ## Status, releases and license
 
-Development toward [1.0](docs/releases/1.0.0.md) is on `release/1.0.0`: MIDI recording fidelity is improved; OAuth and streaming modules are tested, while in-app account integration is in progress. The latest published app remains 0.90.0.
+Development toward [1.0](docs/releases/1.0.0.md) is on `release/1.0.0`: MIDI recording fidelity is improved and release closure is in progress. In-app account and chat integration is deferred to [1.1](docs/releases/1.1.0.md). The latest published app remains 0.90.0.
 
 Each completed version will have a Git tag and a GitHub Release with Korean/English notes, a verified app package and checksums. Development build numbers and documentation edits do not create releases. [Changelog](CHANGELOG.md) · [Release procedure](docs/releases/README.md).
 
