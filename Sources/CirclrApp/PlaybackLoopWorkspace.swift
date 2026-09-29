@@ -17,7 +17,7 @@ struct WorkspaceLoopTransition {
 @MainActor extension AppStore {
     var playbackLoopChangeBusy:Bool {playbackLoopTransition != nil}
     var canChoosePlaybackLoop:Bool {
-        !preparing && !moviePreparing && !playbackLoopChangeBusy && !audioRecordingBusy && !midiRecording &&
+        !preparing && !moviePreparing && liveLoopUpdate == nil && !playbackLoopChangeBusy && !audioRecordingBusy && !midiRecording &&
         (!playback.playing || playback.loopPCM == nil || playbackLoopMode != .off)
     }
     @discardableResult func choosePlaybackLoop(_ mode:PlaybackLoopMode)->Bool {
@@ -134,7 +134,7 @@ struct WorkspaceLoopTransition {
         switch mode {case .off:return "루프 꺼짐";case .song:return "곡 루프";case .section:return "섹션 루프"}
     }
     var playbackLoopState:[String:Any] {
-        var value:[String:Any]=["mode":playbackLoopMode.rawValue,"busy":playbackLoopChangeBusy,
+        var value:[String:Any]=["mode":playbackLoopMode.rawValue,"busy":playbackLoopChangeBusy,"liveEdit":liveLoopUpdateState,
             "outputPlaying":playback.playing,"arrangementID":playbackLoopArrangementID ?? "","useID":playbackLoopUseID ?? "",
             "phase":playbackLoopTransition?.phase ?? (playback.playing && playback.loopPCM != nil && playbackLoopMode == .off ? "tail":"idle")]
         if let pending=playbackLoopTransition {
@@ -145,6 +145,9 @@ struct WorkspaceLoopTransition {
         return value
     }
     var playbackLoopCaption:String? {
+        if let edit=liveLoopUpdate {
+            return edit.phase == "queued" ? "다음 경계 · 편집 revision \(edit.revision) 예약":"루프 재생 유지 · 편집 준비 중"
+        }
         if let pending=playbackLoopTransition {return pending.phase=="rendering" ? "재생 유지 · 새 루프 준비 \(Int(pending.progress*100))%":"재생 유지 · 다음 경계에서 "+loopModeTitle(pending.mode)}
         guard playback.playing,playback.loopPCM != nil else{return nil}
         if playbackLoopMode == .off {return "루프 해제 · 잔향 재생 중"}

@@ -8,19 +8,15 @@ English · [한국어](README.ko.md)
 
 In circlr, a circle is a timeline. Build a song from sections, place MIDI, audio, instruments and effects on and around their orbits, and connect their inputs and outputs. Move between the whole arrangement and detailed editing on one zoomable canvas.
 
-![circlr build245 showing f0r h3r and its seven song sections](docs/images/circlr-song-build245.png)
+![circlr build253 showing f0r h3r and its seven song sections](docs/images/circlr-song-build253.jpg)
 
-*1.0.0 build245 native capture of the bundled demo. [Capture provenance](docs/images/README.md).*
+*1.2.0 build253 native capture of the bundled demo. [Capture provenance](docs/images/README.md).*
 
-> **1.0.0 · build245.** Preserves channel-specific MIDI expression and pre-recording takes, with restoration/save/cold-reopen validation. [Release notes and limits](docs/releases/1.0.0-notes.md).
+> **1.2.0 · build253.** Copy MIDI phrases between circles, play from the editing cursor, hear edits at the next prepared loop boundary, and insert a reused section into the song flow. [Release notes](docs/releases/1.2.0-notes.md).
 
-Validated 48 focused tests and a native virtual-CoreMIDI capture, take restoration, Undo/Redo, save, cold reopen and WAV export. Extended video checks, physical listening and actual displayed FPS remain follow-up work. The previous **70ms** video interval remains a recorded failure. [QA and deferred work](qa/1.0-build245.md).
+Native validation covers cross-track phrase transfer, uninterrupted loop replacement, cursor playback, section reuse, save/reopen and WAV export. Physical listening and the existing 70ms video interval failure remain outside this release’s validated scope. [Evidence and limits](qa/1.2-production-workflow.md).
 
-**Development branch:** 1.1 is not released. Account sign-in and model discovery were verified, but live music requests remain blocked by empty responses. Console usability work continues without service calls. [Progress and QA](qa/1.1-account-chat.md).
-
-<img src="qa/screenshots/1.1-build251-console-portrait.png" width="280" alt="Development build251: responsive console, not a released feature.">
-
-*Development build251: responsive console, not a released feature.*
+In-app account chat is disabled while live-service validation is paused. The local command console and external Codex → MCP workflow remain available without account sign-in.
 
 ## What you can work with
 
@@ -30,15 +26,15 @@ Validated 48 focused tests and a native virtual-CoreMIDI capture, take restorati
 - **Sound and motion:** instrument/effect routing, automation, bounce and source restoration; playback-follow and signal visualization controls.
 - **Local agents:** an MCP interface for inspecting and editing projects, generating MIDI, rendering and saving, with activity visible in the console.
 
-<img src="docs/images/circlr-song-portrait-build245.png" width="280" alt="circlr build245 in a portrait window with seven song sections and responsive controls">
+<img src="docs/images/circlr-song-portrait-build253.jpg" width="280" alt="circlr build253 in a portrait window with seven song sections and responsive controls">
 
-*The same build245 demo stopped in a 720×900 portrait window, showing the responsive section controls and all seven sections. [Capture details](docs/images/README.md).*
+*The same build253 demo stopped in a 700×900 portrait window, showing the responsive section controls and all seven sections. [Capture details](docs/images/README.md).*
 
 These are implemented development features, not a guarantee of compatibility with every audio device or plug-in. Artist profiles and a combined text, image and video workspace are the [longer-term direction](docs/21-artist-universe.md).
 
 ## Getting started
 
-Download **1.0.0 build245** for Apple Silicon from [GitHub Releases](https://github.com/zeztto/circlr/releases/tag/v1.0.0), or build from source.
+Download **1.2.0 build253** for Apple Silicon from [GitHub Releases](https://github.com/zeztto/circlr/releases/tag/v1.2.0), or build from source.
 
 The downloaded app is ad-hoc signed and not notarized by Apple. If macOS blocks its first launch, verify the download, then use **System Settings → Privacy & Security → Open Anyway**. [macOS installation and first launch](docs/install-macos.md#english).
 
@@ -49,7 +45,7 @@ The colored **f0r h3r v6** demo is included. Choose **File → 데모곡 불러�
 **Source build requirements:** macOS 14+, Xcode 26+ selected as the active developer directory, and Python 3. Native validation currently covers Apple Silicon. The interface is currently in Korean; this README is available in both languages.
 
 ```sh
-git clone --branch v1.0.0 https://github.com/zeztto/circlr.git
+git clone --branch v1.2.0 https://github.com/zeztto/circlr.git
 cd circlr
 ./scripts/build-app.sh
 open 'dist/써클러.app'
@@ -69,7 +65,9 @@ Choose a synth circle, then **음색·악기 찾기** to search the built-in pat
 | Shortcut | Action |
 |---|---|
 | ⇧⌘P | Search commands and shortcuts |
-| ⇧⌘V | Enter text-free viewing mode; press Esc to leave |
+| ⇧⌘V | Paste at original beat in MIDI editors; viewing mode outside MIDI editors |
+| ⌘C / ⌘X / ⌘V | Copy / cut / paste selected MIDI phrase |
+| ⌥⌘Return | Play the selected section from the MIDI cursor |
 | ⌘J | Jump to a section, track, instrument or effect |
 | Tab / ⇧Tab | Move through editor controls |
 | Ctrl + ` | Show or hide the console |
@@ -83,7 +81,7 @@ The Swift package separates the project model (`CirclrCore`), audio processing (
 
 ## Status, releases and license
 
-In-app account and chat integration is deferred to [1.1](docs/releases/1.1.0.md). See the [1.0 release record](docs/releases/1.0.0.md) for scope and verification limits.
+See the [1.2 release record](docs/releases/1.2.0.md) for scope and verification limits. The unreleased [1.1 account work](qa/1.1-account-chat.md) is retained in source and disabled in the packaged UI.
 
 Each completed version will have a Git tag and a GitHub Release with Korean/English notes, a verified app package and checksums. Development build numbers and documentation edits do not create releases. [Changelog](CHANGELOG.md) · [Release procedure](docs/releases/README.md).
 

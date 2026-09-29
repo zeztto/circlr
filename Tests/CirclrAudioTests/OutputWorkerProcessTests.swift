@@ -148,6 +148,19 @@ for line in sys.stdin:
         var plan=try ArrangementCompiler.compile(project);plan.duration=Double(frames)/PCM.rate
         return PreparedAudio(plan:plan,mix:PCM(frames:frames),stems:[:],tailSeconds:0)
     }
+    func testStalePreparedLoopReplacementIsRejectedWithoutStoppingCurrentPCM() async throws {
+        let host=OutputWorkerProcess(executable:try fixture("boundary-normal")),playback=Playback(outputWorker:host)
+        let original=try loopAudio(frames:480)
+        try await playback.play(original,loop:true)
+        do {
+            _=try await playback.requestLoopChange(to:loopAudio(frames:960),shouldSchedule:{false})
+            XCTFail("Stale revision must not be sent to output")
+        } catch {XCTAssertTrue(error is PlaybackTransportError)}
+        XCTAssertTrue(playback.playing)
+        XCTAssertEqual(playback.prepared?.plan.duration,original.plan.duration)
+        XCTAssertNil(playback.pendingLoopChange)
+        playback.stop();try await wait{host.status.phase == .idle}
+    }
     func testMovieVisualClockLooksThroughPendingReplacementAndExitWithoutMovingLiveTransport()async throws {
         do {
             let host=OutputWorkerProcess(executable:try fixture("boundary-pending")),playback=Playback(outputWorker:host)

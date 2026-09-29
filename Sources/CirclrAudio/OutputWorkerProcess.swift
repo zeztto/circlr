@@ -42,17 +42,20 @@ final class OutputWorkerProcess: @unchecked Sendable {
     private let onTerminationObserved: (@Sendable () -> Void)?
     private let beforeLoopChangeReturn:(@Sendable () async -> Void)?
     private let beforeCAFWrite:(@Sendable () -> Void)?
+    private let beforeLoopCAFWrite:(@Sendable () -> Void)?
 
     init(executable: URL? = Bundle.main.executableURL?.deletingLastPathComponent().appendingPathComponent("circlr-output-worker"),
          beforeEventDelivery: (@Sendable ([OutputWorkerPacket]) -> Void)? = nil,
          onTerminationObserved: (@Sendable () -> Void)? = nil,
          beforeLoopChangeReturn:(@Sendable () async -> Void)? = nil,
-         beforeCAFWrite:(@Sendable () -> Void)? = nil) {
+         beforeCAFWrite:(@Sendable () -> Void)? = nil,
+         beforeLoopCAFWrite:(@Sendable () -> Void)? = nil) {
         self.executable = executable
         self.beforeEventDelivery = beforeEventDelivery
         self.onTerminationObserved = onTerminationObserved
         self.beforeLoopChangeReturn=beforeLoopChangeReturn
         self.beforeCAFWrite=beforeCAFWrite
+        self.beforeLoopCAFWrite=beforeLoopCAFWrite
     }
     var status: PlaybackOutputStatus {
         lock.lock(); defer { lock.unlock() }
@@ -107,11 +110,11 @@ final class OutputWorkerProcess: @unchecked Sendable {
     }
     /// The source is staged while the existing output continues. ACK identifies the
     /// exact future sample frame chosen by the bounded scheduler, not a UI timer.
-    func changeLoop(cycle:PCM?,tail:PCM?=nil)async throws->PlaybackLoopChangeStatus {
+    func changeLoop(cycle:PCM?,tail:PCM?=nil,commitGate:PlaybackLoopCommitGate?=nil)async throws->PlaybackLoopChangeStatus {
         guard let requestSession=status.transport.id else{throw CancellationError()}
-        return try await withTaskCancellationHandler {try await performLoopChange(cycle:cycle,tail:tail,requestSession:requestSession)} onCancel:{self.cancel(expectedID:requestSession)}
+        return try await withTaskCancellationHandler {try await performLoopChange(cycle:cycle,tail:tail,requestSession:requestSession,commitGate:commitGate)} onCancel:{self.cancel(expectedID:requestSession)}
     }
-    private func performLoopChange(cycle:PCM?,tail:PCM?,requestSession:UUID)async throws->PlaybackLoopChangeStatus {
+    private func performLoopChange(cycle:PCM?,tail:PCM?,requestSession:UUID,commitGate:PlaybackLoopCommitGate?)async throws->PlaybackLoopChangeStatus {
         try Task.checkCancellation()
         let change=UUID()
         try await withCheckedThrowingContinuation { (reply:CheckedContinuation<Void,Error>) in
@@ -132,11 +135,19 @@ final class OutputWorkerProcess: @unchecked Sendable {
                     let path=directory.appendingPathComponent("loop-"+change.uuidString+".caf")
                     DispatchQueue(label:"circlr.loop-staging",qos:.userInitiated).async {
                         do {
+                            self.beforeLoopCAFWrite?()
                             try self.write(cycle,first:0,to:path,control:control,tail:tail)
                             self.queue.async {
                                 guard self.session==session,!control.isCancelled,self.pendingChangeID==change else {reply.resume(throwing:CancellationError());return}
-                                do {try self.send(.queueLoopChange(change:change,frames:cycle.count+(tail?.count ?? 0),cycleFrames:cycle.count));reply.resume()}
-                                catch {self.pendingChangeID=nil;reply.resume(throwing:error)}
+                                do {
+                                    let submit={try self.send(.queueLoopChange(change:change,frames:cycle.count+(tail?.count ?? 0),cycleFrames:cycle.count))}
+                                    if let commitGate {try commitGate.submit(submit)} else {try submit()}
+                                    reply.resume()
+                                } catch {
+                                    self.pendingChangeID=nil;self.pendingCycleFrames=nil
+                                    try? FileManager.default.removeItem(at:path)
+                                    reply.resume(throwing:error)
+                                }
                             }
                         } catch {self.queue.async {if self.pendingChangeID==change {self.pendingChangeID=nil};reply.resume(throwing:error)}}
                     }

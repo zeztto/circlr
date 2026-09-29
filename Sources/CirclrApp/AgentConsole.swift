@@ -251,6 +251,8 @@ struct AgentConsole:View {
     @ObservedObject var store:AppStore
     @State private var command=""
     @AppStorage("circlr.console.mode") private var mode=ChatGPTConsoleMode.command
+    private let accountFeature=ChatGPTFeatureAvailability.current
+    private var effectiveMode:ChatGPTConsoleMode {accountFeature.consoleMode(preferred:mode)}
     @State private var resizeStart:Double?
     @State private var logFollow=ConsoleLogFollowState()
     @State private var wheelGeneration=0
@@ -358,7 +360,7 @@ struct AgentConsole:View {
                 }
                 Text("r\(store.project.musicRevision)").font(.system(size:11,design:.monospaced)).foregroundStyle(StudioTheme.secondary).padding(.trailing,12)
             }.frame(height:34)
-            if !store.consoleOpen || mode == .command {
+            if accountFeature.accountChatEnabled && (!store.consoleOpen || effectiveMode == .command) {
                 ChatGPTConsoleRunControl(session:store.chatGPTMusicSession)
             }
             if !store.status.isEmpty {
@@ -371,6 +373,7 @@ struct AgentConsole:View {
                 }.padding(.horizontal,12).padding(.bottom,8)
             }
             if store.consoleOpen {
+                if accountFeature.accountChatEnabled {
                 Picker("콘솔 모드",selection:$mode) {
                     Text("명령").tag(ChatGPTConsoleMode.command)
                     Text("AI 대화").tag(ChatGPTConsoleMode.chat)
@@ -378,7 +381,8 @@ struct AgentConsole:View {
                 .pickerStyle(.segmented).frame(width:180)
                 .padding(.horizontal,12).padding(.bottom,8)
                 .accessibilityLabel("콘솔 모드")
-                if mode == .chat {
+                }
+                if effectiveMode == .chat {
                     ChatGPTConsole(session:store.chatGPTMusicSession,logHeight:store.consoleLogHeight)
                 } else {
                 if store.agentBridgeNeedsManualRecovery && store.agentSocket == nil {

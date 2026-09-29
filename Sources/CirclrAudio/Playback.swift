@@ -138,13 +138,13 @@ import CirclrCore
     }
     /// Replacement starts at the next boundary not already submitted to hardware.
     /// onScheduled lets movie recording install the same future PCM timeline.
-    public func requestLoopChange(to audio:PreparedAudio,onScheduled:(@MainActor (PlaybackLoopChangeStatus,PlaybackLoopPCM?)throws->Void)?=nil)async throws->PlaybackLoopChangeStatus {
-        try await changeLoop(to:audio,onScheduled:onScheduled)
+    public func requestLoopChange(to audio:PreparedAudio,commitGate:PlaybackLoopCommitGate?=nil,shouldSchedule:(@MainActor ()->Bool)?=nil,onScheduled:(@MainActor (PlaybackLoopChangeStatus,PlaybackLoopPCM?)throws->Void)?=nil)async throws->PlaybackLoopChangeStatus {
+        try await changeLoop(to:audio,commitGate:commitGate,shouldSchedule:shouldSchedule,onScheduled:onScheduled)
     }
     public func finishLoopAtBoundary(onScheduled:(@MainActor (PlaybackLoopChangeStatus,PlaybackLoopPCM?)throws->Void)?=nil)async throws->PlaybackLoopChangeStatus {
         try await changeLoop(to:nil,onScheduled:onScheduled)
     }
-    private func changeLoop(to audio:PreparedAudio?,onScheduled:(@MainActor (PlaybackLoopChangeStatus,PlaybackLoopPCM?)throws->Void)?)async throws->PlaybackLoopChangeStatus {
+    private func changeLoop(to audio:PreparedAudio?,commitGate:PlaybackLoopCommitGate?=nil,shouldSchedule:(@MainActor ()->Bool)?=nil,onScheduled:(@MainActor (PlaybackLoopChangeStatus,PlaybackLoopPCM?)throws->Void)?)async throws->PlaybackLoopChangeStatus {
         synchronizeLoopBoundary()
         guard playing,let current=loopValue,!loopDraining,pendingLoop==nil,!loopChangePreparing,let outputWorker else{throw PlaybackTransportError.busy}
         let ticket=generation;loopChangePreparing=true
@@ -158,7 +158,8 @@ import CirclrCore
                 replacement=try await withTaskCancellationHandler {try await worker.value} onCancel:{worker.cancel()}
             } else {replacement=nil}
             try Task.checkCancellation();guard generation==ticket else{throw CancellationError()}
-            let change=try await outputWorker.changeLoop(cycle:replacement?.cycle,tail:replacement?.exitTail)
+            guard shouldSchedule?() ?? true else{throw PlaybackTransportError.busy}
+            let change=try await outputWorker.changeLoop(cycle:replacement?.cycle,tail:replacement?.exitTail,commitGate:commitGate)
             try Task.checkCancellation();guard generation==ticket else{throw CancellationError()}
             pendingLoop=(change,audio,replacement)
             do {try onScheduled?(change,replacement)} catch {stop();throw error}

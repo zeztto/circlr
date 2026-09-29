@@ -51,6 +51,26 @@ extension AppStore {
             status="섹션을 재생 순서에 삽입했습니다. 이름을 입력하세요"
         }catch{fail(error)}
     }
+    func reuseSection(after context:SectionInsertionContext) {
+        guard sectionInsertionCurrent(context) else{return}
+        let assessment=SectionInsertion.assessReuse(arrangementID:context.arrangementID,afterUseID:context.useID,in:project)
+        if let issue=assessment.issue {openSectionInsertionConnections(context,reason:issue.message);return}
+        guard let arrangement=project.arrangements.first(where:{$0.id==context.arrangementID}) else{return}
+        let origin=arrangement.layout.positions[context.useID] ?? Point()
+        let position:Point
+        if let successor=assessment.successorID,let next=arrangement.layout.positions[successor] {
+            position=Point((origin.x+next.x)/2,(origin.y+next.y)/2+650)
+        }else{position=Point(origin.x+1000,origin.y)}
+        do {
+            var candidate=project
+            let id=try SectionInsertion.reuseAfter(arrangementID:context.arrangementID,afterUseID:context.useID,at:position,in:&candidate)
+            mutate("섹션 뒤에 재사용"){$0=candidate}
+            guard project.arrangements.first(where:{$0.id==context.arrangementID})?.uses.contains(where:{$0.id==id}) == true else{return}
+            commandPalette=nil;connectionsOpen=false
+            focusHierarchy(.section(arrangementID:context.arrangementID,useID:id))
+            status="선택 섹션 뒤에 공유 원본을 재사용했습니다. 기존 다음 전환은 재사용 섹션 뒤에 유지됩니다"
+        }catch{fail(error)}
+    }
     func recoverSectionInsertion(_ context:SectionInsertionContext) {
         guard sectionInsertionCurrent(context) else{return}
         let reason=sectionInsertionAssessment(context).issue?.message ?? "삽입할 섹션의 다음 연결을 확인하세요"

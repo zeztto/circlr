@@ -1,5 +1,17 @@
 # Screenshots · 실행 화면
 
+
+## 1.2.0 build253
+
+`circlr-song-build253.jpg`: 1440×900pt, SHA256 `119e4d7331570d26db9385fa7404aa111a0713a510ce0fe15d18c380aa06eb12`.
+
+`circlr-song-portrait-build253.jpg`: 700×900pt, SHA256 `839589be6a335fecf97c6c355bc48488e79015a15421eb9e536ae1c82926d8aa`.
+
+Captured directly from the isolated native build253 app with the bundled f0r h3r demo stopped. Full-window JPEGs as returned by CUA, no crop, resize, compositing or image generation. These images do not establish audio listening or display FPS.
+
+격리한 build253 실제 앱에서 동봉 데모를 정지하고 촬영한 전체 창 JPEG입니다. 자르기·크기 변경·합성·이미지 생성을 하지 않았습니다. 청취나 화면 FPS의 증거는 아닙니다.
+
+
 ## 0.90.0 build243 isolated native capture
 
 The bundled f0r h3r v6 is stopped at 00:00.0 in the actual build243 QA app (`com.circlr.build243perfqa`). CUA captured the whole landscape window at2880×1800px and portrait at1440×1800px (2× scale:1440×900pt and720×900pt). The JPEG bytes are saved directly without resizing, compositing or image generation. Console collapsed; whole-song fit. These images show layout, not playback FPS or physical sound quality.

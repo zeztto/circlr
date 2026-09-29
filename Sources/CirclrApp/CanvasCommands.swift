@@ -112,6 +112,7 @@ extension AppStore {
             }
         }
         if let context=sectionInsertionContext(),!sectionInsertionLocked {
+            add("reuse-section-after","이 섹션 뒤에 재사용"){[weak self] in self?.reuseSection(after:context)}
             let assessment=sectionInsertionAssessment(context)
             if let issue=assessment.issue {
                 commands.append(StudioCommand(id:"insert-section-connections",title:"삽입 전 연결 확인",detail:issue.message,
@@ -277,7 +278,11 @@ extension AlbumCanvasView {
                 guard let self else{return}
                 if assessment.issue==nil {self.store.insertSection(after:context)}else{self.store.recoverSectionInsertion(context)}
             }
-            menu.addItem(item);menu.addItem(.separator())
+            menu.addItem(item)
+            let reuseItem=NSMenuItem(title:"이 섹션 뒤에 재사용",action:#selector(runCircleMenu(_:)),keyEquivalent:"")
+            reuseItem.target=self;reuseItem.isEnabled = !store.sectionInsertionLocked
+            reuseItem.representedObject=CircleMenuAction{[weak self] in self?.store.reuseSection(after:context)}
+            menu.addItem(reuseItem);menu.addItem(.separator())
         }
         switch scope {
         case .album:

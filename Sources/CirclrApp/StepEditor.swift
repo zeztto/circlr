@@ -27,8 +27,17 @@ extension AppStore {
         return "\(pitch) · \(Scale.roots[pitch%12])\(pitch/12-1)"
     }
     func playingStep(in grid:StepGrid)->Int? {
-        guard playback.playing,!hasPendingMusic,let plan=prepared?.plan,let node=selectedCircle,let clock=node.clock,
-              let seconds=PlaybackPosition.localSeconds(for:node,at:meter.seconds,plan:plan,album:nil,albumID:project.album?.id) else{return nil}
+        guard playback.playing,let plan=prepared?.plan,var node=selectedCircle,
+              let useID=selectedUse?.id,let occurrence=plan.occurrences.last(where:{$0.use.id==useID && $0.start<=meter.seconds && meter.seconds<$0.end}) else{return nil}
+        // Highlight the audible snapshot even while the current edit has another tempo/length.
+        if let music=node.music,let signal=occurrence.signalPlan,
+           let source=signal.orderedNodes.first(where:{$0.id==music.id}),var context=signal.contexts[source.id] {
+            if source.settings.tempo.source == .inherit {context.tempo=occurrence.clock.bpm(at:source.startBeat)}
+            guard let clock=try? MusicClock(parent:occurrence.clock,start:source.startBeat,length:source.lengthBeats ?? occurrence.clock.beats,context:context,
+                                           inheritTempo:source.settings.tempo.source == .inherit,inheritMeter:source.settings.meter.source == .inherit) else{return nil}
+            node.music=source;node.context=context;node.clock=clock;node.timeline=OrbitTimeline(clock:clock)
+        }
+        guard let clock=node.clock,let seconds=PlaybackPosition.localSeconds(for:node,at:meter.seconds,plan:plan,album:nil,albumID:project.album?.id) else{return nil}
         return Int(clock.beat(atSeconds:seconds)*Double(grid.subdivisions))
     }
     private var currentStepEditorAddress:CircleAddress? {

@@ -1,0 +1,120 @@
+{
+  "version": "1.2.0",
+  "build": "253",
+  "clipboardBuild": "252",
+  "isolatedBundle": "com.circlr.build253nativeqa",
+  "sourceBuiltApp": true,
+  "physicalListening": "UNVERIFIED",
+  "systemDefaultOutputChanged": false,
+  "actualOutput": "Mac Studio 스피커",
+  "clipboard": {
+    "musicalValuesEqual": true,
+    "idsDisjoint": true,
+    "nativeKeyboard": "Cmd+C, Cmd+X, Cmd+Z, Shift+Cmd+Z, Shift+Cmd+V"
+  },
+  "cursor": {
+    "requestedSeconds": 5,
+    "firstPlayingSeconds": 5.020375
+  },
+  "loopContinuity": {
+    "singleOutputSession": true,
+    "elapsedMonotonic": true,
+    "start": 0.25947916666666665,
+    "end": 27.59904166666667,
+    "editRevision": 12,
+    "applied": true
+  },
+  "loopPCM": [
+    {
+      "file": "second-audio.caf",
+      "pcmBytes": 3840000,
+      "pcmSHA256": "3e88c8ba1a9484098ad21b7d44d243c50219925b8c04141ddab43190301273f5",
+      "descriptionHex": "40e77000000000006c70636d0000000300000008000000010000000200000020"
+    },
+    {
+      "file": "second-loop-D6D44408-0A96-4E26-BF64-257E11DE2326.caf",
+      "pcmBytes": 3840000,
+      "pcmSHA256": "facdfae62bb2ca971471fac1cbe03fdde335880c0a04de1a92421a2890f4d3b5",
+      "descriptionHex": "40e77000000000006c70636d0000000300000008000000010000000200000020"
+    }
+  ],
+  "coldReopen": {
+    "projectID": "F7A23DBE-2D7B-4275-8315-8454AB0FE854",
+    "revision": 14,
+    "dirty": false,
+    "arrangements": [
+      {
+        "id": "6339C55B-95B7-43F2-BBDC-355D33B5A1FD",
+        "name": "편곡 A",
+        "uses": [
+          {
+            "id": "A63492FD-2AFA-4AC7-9834-24B3F5B08E4D",
+            "name": "섹션 1",
+            "sectionID": "98CB20E1-D9B9-4861-9B42-25E6AEF310DE"
+          },
+          {
+            "id": "A782C131-A177-47BB-B764-738A4F41E57C",
+            "name": "B 전송 대상",
+            "sectionID": "ED4C6D1E-5C48-43B0-BAAF-7F70771490A7"
+          },
+          {
+            "id": "B2B0B611-F603-40DE-9757-29A5F28A2B73",
+            "name": "B 전송 대상 재사용",
+            "sectionID": "ED4C6D1E-5C48-43B0-BAAF-7F70771490A7"
+          }
+        ]
+      }
+    ],
+    "assets": [
+      {
+        "checksum": "f63c55712c6c646498eeb9d2a0f7e3f4643b17e35173dc04b24225d750395a79",
+        "duration": 10,
+        "id": "AE269AF5-B995-4579-8E32-C23FA5E08FC4",
+        "name": "플럭 전송 바운스",
+        "path": "media/AE269AF5-B995-4579-8E32-C23FA5E08FC4.wav",
+        "sampleRate": 48000
+      }
+    ]
+  },
+  "songOrder": {
+    "expected": [
+      "A63492FD-2AFA-4AC7-9834-24B3F5B08E4D",
+      "A782C131-A177-47BB-B764-738A4F41E57C",
+      "B2B0B611-F603-40DE-9757-29A5F28A2B73"
+    ],
+    "actual": [
+      "A63492FD-2AFA-4AC7-9834-24B3F5B08E4D",
+      "A782C131-A177-47BB-B764-738A4F41E57C",
+      "B2B0B611-F603-40DE-9757-29A5F28A2B73"
+    ]
+  },
+  "export": {
+    "rate": 48000,
+    "channels": 2,
+    "bits": 24,
+    "seconds": 26.0,
+    "peak": 0.18896996974945068,
+    "rms": 0.013890289479353665
+  },
+  "screenshots": {
+    "qa/screenshots/1.2-build253-bounce-portrait.jpg": {
+      "sha256": "d5fe8db1ff61848c3778f990dc048d203f7f1fb3b26cc5eaeca74a284f8a4a1f"
+    },
+    "qa/screenshots/1.2-build253-bounce-wide.jpg": {
+      "sha256": "446d877d5bac354f141b8b1746eb15c06f5b7301011c73338e9bb811cd86db72"
+    },
+    "qa/screenshots/1.2-build253-midi-portrait.jpg": {
+      "sha256": "0eca02eae699672c11debe1ba4db7356815ec59fdcdd9082ea374715e8dda951"
+    }
+  },
+  "scopeLimits": [
+    "physical input/listening",
+    "broad IME and VoiceOver matrix",
+    "long video and actual compositor FPS",
+    "existing 70ms video interval FAIL unresolved"
+  ],
+  "cleanup": {
+    "qaProcesses": 0,
+    "qaSockets": 0
+  }
+}

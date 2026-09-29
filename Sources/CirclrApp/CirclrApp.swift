@@ -37,6 +37,9 @@ import OSLog
                 Button("MIDI 가져오기…"){store.chooseMIDIImport()}.keyboardShortcut("i",modifiers:[.command,.option]).disabled(!store.midiImportActionAvailable)
                 Button("MIDI 저장…"){store.exportMIDI()}.keyboardShortcut("e",modifiers:[.command,.option]).disabled(!store.midiExportActionAvailable)
                 Button("현재 트랙 바운스"){store.runCurrentTrackBounce(identity:store.numberEditIdentity)}.keyboardShortcut("b",modifiers:[.command,.option]).disabled(!store.midiTrackBounceActionAvailable)
+                Button("편집 커서부터 선택 섹션 재생") {store.playFromEditorCursor()}
+                    .disabled(!store.canPlayFromEditorCursor)
+                    .help(store.editorCursorPlaybackHelp + " · MIDI 편집에서 ⌥⌘Return")
                 Button("MIDI 스텝 편집"){store.openStepEditor()}.keyboardShortcut("4").disabled(!store.canOpenStepEditor)
                 Button("볼륨·팬 오토메이션"){store.showAutomation()}.keyboardShortcut("5").disabled(store.selectedMusic==nil)
                 Button("커서에서 오디오 분할"){if store.audioCommandAvailable{store.splitAudio()}}.keyboardShortcut("t").disabled(!store.audioCommandAvailable)

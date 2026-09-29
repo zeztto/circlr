@@ -60,7 +60,21 @@ extension AppStore {
     }
     func handleMIDIBatchKey(_ event:NSEvent)->Bool {
         if event.modifierFlags.contains(.control){return false}
+        if (event.window ?? NSApp.keyWindow)?.firstResponder is NSTextView { return false }
+        let commandModifiers = event.modifierFlags.intersection([.command, .option, .shift, .control])
+        if commandModifiers == [.command, .option], [36, 76].contains(event.keyCode) {
+            if canPlayFromEditorCursor { playFromEditorCursor() }
+            return true
+        }
         if event.modifierFlags.contains(.command) {
+            if !event.modifierFlags.contains(.option) {
+                switch event.keyCode {
+                case 8 where !event.modifierFlags.contains(.shift): copyMIDIPhrase(); return true
+                case 7 where !event.modifierFlags.contains(.shift): copyMIDIPhrase(cut: true); return true
+                case 9: pasteMIDIPhrase(atOriginalBeat: event.modifierFlags.contains(.shift)); return true
+                default: break
+                }
+            }
             if event.keyCode==0,!event.modifierFlags.contains(.option) {chooseMIDINotes(event.modifierFlags.contains(.shift) ? .clear:.all);return true}
             if event.keyCode==2 {duplicateMIDINotes();return true}
             return false

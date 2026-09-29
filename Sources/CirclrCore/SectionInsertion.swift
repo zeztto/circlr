@@ -21,6 +21,12 @@ public struct SectionInsertionAssessment:Equatable {
 
 public enum SectionInsertion {
     public static func assess(arrangementID:ID,afterUseID:ID,in project:Project)->SectionInsertionAssessment {
+        assess(arrangementID:arrangementID,afterUseID:afterUseID,in:project,carryingTransition:false)
+    }
+    public static func assessReuse(arrangementID:ID,afterUseID:ID,in project:Project)->SectionInsertionAssessment {
+        assess(arrangementID:arrangementID,afterUseID:afterUseID,in:project,carryingTransition:true)
+    }
+    private static func assess(arrangementID:ID,afterUseID:ID,in project:Project,carryingTransition:Bool)->SectionInsertionAssessment {
         func fail(_ issue:SectionInsertionIssue)->SectionInsertionAssessment {.init(issue:issue,successorID:nil)}
         guard project.arrangements.filter({$0.id==arrangementID}).count==1,
               let arrangement=project.arrangements.first(where:{$0.id==arrangementID}) else{return fail(.missingArrangement)}
@@ -56,8 +62,41 @@ public enum SectionInsertion {
         while let id=current,path.insert(id).inserted {current=outgoing[id]?.first?.to}
         guard path.contains(afterUseID) else{return fail(.invalidStructure)}
         let next=outgoing[afterUseID]?.first
-        guard next?.transition == nil || next?.transition == Transition() else{return fail(.transition)}
+        guard carryingTransition || next?.transition == nil || next?.transition == Transition() else{return fail(.transition)}
         return .init(issue:nil,successorID:next?.to)
+    }
+
+    /// Repeat the complete occurrence; keep its shared source and local overrides.
+    /// The original outgoing transition moves after the new occurrence. The new
+    /// internal boundary is neutral, so a transition is never applied twice.
+    @discardableResult public static func reuseAfter(arrangementID:ID,afterUseID:ID,at:Point,in project:inout Project)throws->ID {
+        guard at.x.isFinite,at.y.isFinite,abs(at.x)<1e7,abs(at.y)<1e7 else{throw CirclrError("새 섹션의 Canvas 좌표를 확인하세요")}
+        let assessment=assessReuse(arrangementID:arrangementID,afterUseID:afterUseID,in:project)
+        if let issue=assessment.issue {throw CirclrError(issue.message)}
+        guard let ai=project.arrangements.firstIndex(where:{$0.id==arrangementID}),
+              let ui=project.arrangements[ai].uses.firstIndex(where:{$0.id==afterUseID}) else{throw CirclrError("삽입 위치가 변경되었습니다")}
+        var candidate=project
+        var use=candidate.arrangements[ai].uses[ui]
+        use.id=newID();use.name=String(use.name.prefix(116))+" 재사용"
+        use.isEnd=assessment.successorID == nil
+        candidate.arrangements[ai].uses.insert(use,at:ui+1)
+        candidate.arrangements[ai].uses[ui].isEnd=false
+        candidate.arrangements[ai].layout.positions[use.id]=at
+        if let edgeIndex=candidate.arrangements[ai].edges.firstIndex(where:{$0.from==afterUseID}) {
+            let edgeID=candidate.arrangements[ai].edges[edgeIndex].id
+            candidate.arrangements[ai].edges[edgeIndex].from=use.id
+            if candidate.arrangements[ai].chosenEdges.removeValue(forKey:afterUseID) != nil {
+                candidate.arrangements[ai].chosenEdges[use.id]=edgeID
+            }
+        }
+        candidate.arrangements[ai].edges.append(FlowEdge(from:afterUseID,to:use.id))
+        if let color=candidate.circleColors?[.section(arrangementID:arrangementID,useID:afterUseID)] {
+            candidate.circleColors?[.section(arrangementID:arrangementID,useID:use.id)]=color
+        }
+        try ProjectStore.validateStructure(candidate)
+        _ = try ArrangementCompiler.compile(candidate,arrangementID:arrangementID)
+        project=candidate
+        return use.id
     }
 
     @discardableResult public static func insert(arrangementID:ID,afterUseID:ID,name:String,bars:Int,at:Point,in project:inout Project)throws->ID {

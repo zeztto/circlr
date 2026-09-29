@@ -8,19 +8,15 @@
 
 써클러에서 원은 타임라인입니다. 섹션으로 곡을 구성하고, 궤도 위와 주변에 MIDI·오디오·악기·이펙터를 배치해 입출력을 연결합니다. 하나의 확대 가능한 캔버스에서 곡 전체 구성과 세부 편집을 오갑니다.
 
-![build245의 f0r h3r와 일곱 곡 섹션](docs/images/circlr-song-build245.png)
+![build253의 f0r h3r와 일곱 곡 섹션](docs/images/circlr-song-build253.jpg)
 
-*1.0.0 build245 실제 앱의 동봉 데모 화면입니다. [촬영 정보](docs/images/README.md).*
+*1.2.0 build253 실제 앱의 동봉 데모 화면입니다. [촬영 정보](docs/images/README.md).*
 
-> **1.0.0 · build245.** 채널별 MIDI 표현과 녹음 전 take를 보존하고 복원·저장·재열기를 검증했습니다. [릴리스 노트와 제한](docs/releases/1.0.0-notes.md).
+> **1.2.0 · build253.** 서클 간 MIDI 구절 전송, 편집 커서 재생, 준비된 다음 루프 경계에서 편집 반영, 곡 흐름에 공유 섹션 재사용을 추가했습니다. [릴리스 노트](docs/releases/1.2.0-notes.md).
 
-집중 회귀 48개와 실제 앱의 가상 CoreMIDI 녹음·take 복원·Undo/Redo·저장·재열기·WAV 출력을 확인했습니다. 장시간 영상·물리 청취·실제 표시 FPS 등은 후속 검증으로 남습니다. 기존 영상의 **70ms** 간격 FAIL을 해결된 것으로 표시하지 않습니다. [QA와 이월 목록](qa/1.0-build245.md).
+실제 앱에서 다른 트랙으로 구절 전송, 중단 없는 루프 교체, 커서 재생, 섹션 재사용, 저장·재열기와 WAV 출력을 확인했습니다. 물리 청취와 기존 영상70ms 간격 FAIL은 이번 검증 범위 밖에 남습니다. [증거와 제한](qa/1.2-production-workflow.md).
 
-**개발 브랜치:** 1.1은 미출고입니다. 계정 연결·모델 조회는 확인했지만 빈 응답으로 실제 음악 작업 검증은 보류했습니다. 서비스 호출 없이 콘솔 사용성을 개선하고 있습니다. [진행 및 QA](qa/1.1-account-chat.md).
-
-<img src="qa/screenshots/1.1-build251-console-portrait.png" width="280" alt="개발 build251: 반응형 콘솔 검증 화면이며 미출고 기능입니다.">
-
-*개발 build251: 반응형 콘솔 검증 화면이며 미출고 기능입니다.*
+실서비스 검증을 보류한 앱 내 계정 대화는 비활성화했습니다. 로컬 명령 콘솔과 외부 Codex → MCP 작업은 계정 연결 없이 사용할 수 있습니다.
 
 ## 할 수 있는 작업
 
@@ -30,15 +26,15 @@
 - **음색과 움직임:** 악기·이펙트 연결, 오토메이션, 바운스·원본 복원과 재생 팔로우·시그널 시각화 기능을 다룹니다.
 - **로컬 에이전트:** MCP로 프로젝트 조회·편집, MIDI 생성, 렌더링·저장을 수행하고 콘솔에서 작업을 확인합니다.
 
-<img src="docs/images/circlr-song-portrait-build245.png" width="280" alt="build245 세로 창에서 일곱 곡 섹션과 반응형 조작">
+<img src="docs/images/circlr-song-portrait-build253.jpg" width="280" alt="build253 세로 창에서 일곱 곡 섹션과 반응형 조작">
 
-*같은 build245 데모를 정지한 720×900 세로 창입니다. 반응형 섹션 조작과 일곱 섹션을 보여줍니다. [촬영 정보](docs/images/README.md).*
+*같은 build253 데모를 정지한 700×900 세로 창입니다. 반응형 섹션 조작과 일곱 섹션을 보여줍니다. [촬영 정보](docs/images/README.md).*
 
 구현된 개발 기능의 목록이며 모든 오디오 장치·플러그인의 호환성을 보증하지 않습니다. 아티스트 프로필과 텍스트·이미지·영상을 함께 관리하는 도구는 [장기 목표](docs/21-artist-universe.md)입니다.
 
 ## 시작하기
 
-**1.0.0 build245** Apple Silicon 패키지를 [GitHub Releases](https://github.com/zeztto/circlr/releases/tag/v1.0.0)에서 내려받으세요. 소스 빌드도 가능합니다.
+**1.2.0 build253** Apple Silicon 패키지를 [GitHub Releases](https://github.com/zeztto/circlr/releases/tag/v1.2.0)에서 내려받으세요. 소스 빌드도 가능합니다.
 
 다운로드한 앱은 ad-hoc 서명이며 Apple 공증을 받지 않았습니다. 첫 실행이 차단되면 다운로드를 확인한 뒤 **시스템 설정 → 개인정보 보호 및 보안 → 그래도 열기**를 사용하세요. [macOS 설치·첫 실행 안내](docs/install-macos.md#한국어).
 
@@ -49,7 +45,7 @@
 **소스 빌드 환경:** macOS 14 이상, 활성 개발자 디렉터리로 선택된 Xcode 26 이상, Python 3. 현재 native 검증 환경은 Apple Silicon입니다. 앱 UI는 한국어이며 README는 한국어와 영어로 제공합니다.
 
 ```sh
-git clone --branch v1.0.0 https://github.com/zeztto/circlr.git
+git clone --branch v1.2.0 https://github.com/zeztto/circlr.git
 cd circlr
 ./scripts/build-app.sh
 open 'dist/써클러.app'
@@ -69,7 +65,9 @@ open 'dist/써클러.app'
 | 단축키 | 동작 |
 |---|---|
 | ⇧⌘P | 명령·단축키 검색 |
-| ⇧⌘V | 텍스트 없는 감상 모드 진입, Esc로 복귀 |
+| ⇧⌘V | MIDI 편집기에서는 원래 박에 붙여넣기, 그 밖에서는 감상 모드 |
+| ⌘C / ⌘X / ⌘V | 선택 MIDI 구절 복사 / 잘라내기 / 붙여넣기 |
+| ⌥⌘Return | MIDI 커서부터 선택 섹션 듣기 |
 | ⌘J | 섹션·트랙·악기·이펙터로 이동 |
 | Tab / ⇧Tab | 편집 컨트롤 이동 |
 | Ctrl + ` | 콘솔 표시·숨기기 |
@@ -83,7 +81,7 @@ Swift 패키지는 프로젝트 모델(`CirclrCore`), 오디오 처리(`CirclrAu
 
 ## 개발 상태·릴리스·라이선스
 
-앱 내 계정·대화 기능은 [1.1](docs/releases/1.1.0.md)로 이월했습니다. 현재 배포 범위와 검증 제한은 [1.0 기록](docs/releases/1.0.0.md)을 확인하세요.
+배포 범위와 검증 제한은 [1.2 기록](docs/releases/1.2.0.md)을 확인하세요. 미출고 [1.1 계정 작업](qa/1.1-account-chat.md)은 소스에 보존하며 패키지 UI에서는 비활성화합니다.
 
 완료한 버전마다 Git 태그와 GitHub Release를 만들고 한국어·영어 변경 안내, 검증한 앱 패키지, 체크섬을 제공합니다. 개발 build 번호 증가와 문서 수정은 릴리스를 만들지 않습니다. [변경 이력](CHANGELOG.md) · [릴리스 절차](docs/releases/README.md).
 

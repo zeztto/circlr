@@ -33,6 +33,11 @@ struct MIDIWorkspaceActions:View {
                     }
                 } else {Text("MIDI를 추가할 편집 대상을 선택하세요")}
                 Divider()
+                Button("구절 복사 · ⌘C"){store.copyMIDIPhrase();focusTarget.focus()}.disabled(store.selectedMIDIIDs.isEmpty)
+                Button("구절 잘라내기 · ⌘X"){store.copyMIDIPhrase(cut:true);focusTarget.focus()}.disabled(store.selectedMIDIIDs.isEmpty || !store.midiClipboardEditingAvailable)
+                Button("커서에 붙여넣기 · ⌘V"){store.pasteMIDIPhrase();focusTarget.focus()}.disabled(!store.midiClipboardEditingAvailable)
+                Button("원래 박에 붙여넣기 · ⇧⌘V"){store.pasteMIDIPhrase(atOriginalBeat:true);focusTarget.focus()}.disabled(!store.midiClipboardEditingAvailable)
+                Divider()
                 Button("전체 선택 · ⌘A"){store.chooseMIDINotes(.all);focusTarget.focus()}
                 Button("선택 해제 · ⇧⌘A"){store.chooseMIDINotes(.clear);focusTarget.focus()}
             }.id(MIDIGenerationMenuIdentity(request:generation)).fixedSize()
@@ -57,6 +62,7 @@ struct MIDIWorkspaceFileActions:View {
                 .fixedSize().disabled(!store.midiExportActionAvailable)
                 .help(store.midiExportActionHelp)
             TrackBounceButton(store:store)
+            CursorPlaybackButton(store:store)
         }
     }
 }

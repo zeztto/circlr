@@ -1201,6 +1201,10 @@ extension AlbumCanvasView {
                 if !outgoing.isEmpty {let child=submenu("연결 해제");for edge in outgoing {action(graph.nodes.first{$0.id==edge.to}?.name ?? edge.to,in:child){[weak self] in self?.store.disconnectHierarchy(node.id,edgeID:edge.id)}}}
             }
         case .section(let arrangement,let use):
+            if let context=store.sectionInsertionContext(at:node.id) {
+                action("이 섹션 뒤에 재사용"){[weak self] in self?.store.reuseSection(after:context)}
+                menu.items.last?.isEnabled = !store.sectionInsertionLocked
+            }
             let projectID=store.project.id,revision=store.project.musicRevision
             menu.addItem(.separator())
             for (direction,title) in [(CanvasSectionReorder.Direction.earlier,"순서 앞으로 한 칸 · ⇧⌥←"),

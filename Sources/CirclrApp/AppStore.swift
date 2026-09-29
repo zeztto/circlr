@@ -55,7 +55,12 @@ private struct MIDIRecordingKey: Hashable {
         chatGPTMusicSessionStorage = session
         return session
     }
-    @Published var project = Project() { didSet {
+    @Published var project = Project() { willSet {
+        if let request=liveLoopUpdate,
+           request.projectID != newValue.id || request.revision != newValue.musicRevision || request.arrangementID != newValue.activeArrangementID {
+            request.commitGate.invalidate()
+        }
+    } didSet {
         if oldValue.id != project.id { chatGPTMusicSessionStorage?.documentChanged(); stopTrustedAgentTurn() }
         if !updatingHierarchyViewport {
             if oldValue.id == project.id && oldValue != project { demoCopyLease = nil }
@@ -150,6 +155,12 @@ private struct MIDIRecordingKey: Hashable {
     var playbackLoopDrainID:UUID?
     var playbackLoopArrangementID:ID?
     var playbackLoopUseID:ID?
+    @Published var liveLoopUpdate:LiveLoopUpdate?
+    var liveLoopTask:Task<Void,Never>?
+    var liveLoopWorker:Task<PreparedAudio,Error>?
+    var liveLoopFailedRevision:Int?
+    var liveLoopDrainTask:Task<Void,Never>?
+    var liveLoopDrainID:UUID?
     @Published var playbackFollow: PlaybackFollowMode = .following
     @Published var playbackLocation = ""
     var capturePlaybackVisualization: (() -> [String: Any])?
@@ -241,7 +252,7 @@ private struct MIDIRecordingKey: Hashable {
     var demoLoadGeneration=0
     var demoLoadTask:Task<Void,Never>?
     var demoLoadWorker:Task<BundledDemo.Copy,Error>?
-    let playback = Playback()
+    let playback:Playback
     let outputPreferences=OutputPreferences()
     let inputPreferences=InputPreferences()
     @Published var outputPreferencesOpen=false
@@ -351,7 +362,8 @@ private struct MIDIRecordingKey: Hashable {
     }
     private var recoveryOwnershipFailureShown=false
     struct Recovery: Codable { var project: Project; var root: URL?; var date: Date }
-    init(storageRootOverride:URL?=nil) {
+    init(storageRootOverride:URL?=nil,playbackOverride:Playback?=nil) {
+        playback=playbackOverride ?? Playback()
         storageRoot=storageRootOverride ?? FileManager.default.urls(for:.applicationSupportDirectory,in:.userDomainMask)[0]
             .appendingPathComponent(RecoveryFileStore.storageDirectoryName(for:Bundle.main.bundleIdentifier))
         consoleOpen=consolePreferences.isOpen
@@ -442,6 +454,7 @@ private struct MIDIRecordingKey: Hashable {
         refreshAuditionStatus()
         refreshOutputStatus()
         refreshPlaybackLoopTransition()
+        refreshLiveLoopUpdate()
         // Publishing the monotonic MIDI clock keeps the transport readout live
         // without presenting recording as playback to other meter consumers.
         meter.update(seconds:midiRecording ? midiRecordingElapsedSeconds:playback.seconds,
@@ -471,7 +484,11 @@ private struct MIDIRecordingKey: Hashable {
             undoStack.append(.init(id:audioHistoryID ?? UUID(),name:name,project:project,layoutOnly:portLayoutOnly,colorsOnly:circleColorsOnly,audio:nil)); if undoStack.count > 80 { undoStack.removeFirst() }; redoStack = []
             if musical { candidate.musicRevision += 1 }
             project = candidate; dirty = true; undoCount = undoStack.count; redoCount = 0
-            if musical { status = playback.playing ? "편집 내용은 다음 재생에 반영됩니다" : "\(name) 완료" }
+            if musical {
+                if playback.playing && (moviePreparing || movieWriter != nil || movieFinalizing != nil) {status="녹화 중 편집은 다음 재생에 반영됩니다"}
+                else if playback.playing && playback.loopPCM != nil && playbackLoopMode != .off {status="편집 내용은 다음 준비된 루프 경계에 반영됩니다"}
+                else {status = playback.playing ? "편집 내용은 다음 재생에 반영됩니다" : "\(name) 완료"}
+            }
             scheduleRecovery()
         } catch { fail(error) }
     }
@@ -703,7 +720,7 @@ private struct MIDIRecordingKey: Hashable {
         productionTask=nil;productionWorker=nil;agentOpenWorker=nil
         return drain
     }
-    func prepare(onlySelection:Bool,autoplay:Bool,includeStems:Bool = false,loopMode:PlaybackLoopMode = .off,completion:((PreparedAudio)->Void)? = nil) {
+    func prepare(onlySelection:Bool,autoplay:Bool,includeStems:Bool = false,loopMode:PlaybackLoopMode = .off,fromSeconds:Double = 0,completion:((PreparedAudio)->Void)? = nil) {
         library.stopPreview()
         let outputSelection=outputPreferences.selection
         do {
@@ -717,6 +734,10 @@ private struct MIDIRecordingKey: Hashable {
             let plan = try useID != nil ? ArrangementCompiler.compile(snapshot,onlyUseID:useID) : loopMode == .song ? ArrangementCompiler.compile(snapshot) : AlbumCompiler.executionPlan(snapshot)
             guard plan.duration > 0 else {throw CirclrError("섹션을 먼저 만드세요")}
             let key = "\(snapshot.musicRevision):\(snapshot.activeArrangementID):\(useID ?? "all"):\(includeStems):\(loopMode.rawValue)"
+            cancelLiveLoopUpdate()
+            let liveDrain=RenderDrain(task:liveLoopTask,worker:liveLoopWorker)
+            let liveDrainTask=liveLoopDrainTask
+            liveLoopTask=nil;liveLoopWorker=nil
             cancelPlaybackLoopTransition()
             let loopDrain=playbackLoopDrainTask
             let productionDrain=takeProductionDrain()
@@ -729,10 +750,12 @@ private struct MIDIRecordingKey: Hashable {
                 renderTask = Task { [weak self] in
                     await drain.wait()
                     if let loopDrain {await loopDrain.value}
+                    await liveDrain.wait()
+                    if let liveDrainTask {await liveDrainTask.value}
                     await productionDrain.wait()
                     guard let self,self.renderGeneration == generation,!Task.isCancelled else { return }
                     if !autoplay { self.preparing=false;completion?(prepared);return }
-                    do { try await self.playback.play(prepared,selection:outputSelection,loop:loopMode != .off)
+                    do { try await self.playback.play(prepared,from:fromSeconds,selection:outputSelection,loop:loopMode != .off)
                         guard generation == self.renderGeneration else { return }
                         self.playbackLoopArrangementID=snapshot.activeArrangementID;self.playbackLoopUseID=useID
                         self.preparing = false; self.status = "재생 중"; completion?(prepared)
@@ -747,6 +770,8 @@ private struct MIDIRecordingKey: Hashable {
             renderTask = Task { [weak self] in
                 await drain.wait()
                 if let loopDrain {await loopDrain.value}
+                await liveDrain.wait()
+                    if let liveDrainTask {await liveDrainTask.value}
                 await productionDrain.wait()
                 guard self?.renderGeneration == generation,!Task.isCancelled else{return}
                 do {
@@ -771,7 +796,7 @@ private struct MIDIRecordingKey: Hashable {
                     self.status = result.peak > 1 ? "출력이 0 dBFS를 넘습니다. Gain을 낮추세요" : (plan.warnings.first ?? "재생 준비 완료")
                     if autoplay {
                         self.status="오디오 출력 연결 중"
-                        try await self.playback.play(result,selection:outputSelection,loop:loopMode != .off)
+                        try await self.playback.play(result,from:fromSeconds,selection:outputSelection,loop:loopMode != .off)
                         guard self.renderGeneration == generation,!Task.isCancelled else{return}
                         self.playbackLoopArrangementID=snapshot.activeArrangementID
                         self.playbackLoopUseID=useID
@@ -783,7 +808,7 @@ private struct MIDIRecordingKey: Hashable {
             }
         } catch { fail(error) }
     }
-    func stop() { chatGPTMusicSessionStorage?.stop(); stopTrustedAgentTurn();trustedAgentJob=nil;cancelDemoLoading();cancelPlaybackLoopTransition();library.stopPreview(); cancelMediaImport(); cancelRecordingRequest(); finishMovieRecording(); if agentJob?.state == "running" {agentJob?.state="cancelled";agentJob?.message="사용자가 정지했습니다";recordActivity("앱","작업 취소")}; productionGeneration += 1; productionTask?.cancel(); productionWorker?.cancel(); agentOpenWorker?.cancel(); cancelAudition(); renderGeneration += 1; wavExportGate?.cancel();wavExportGate=nil;renderTask?.cancel(); renderWorker?.cancel(); preparing = false; playback.stop(); meter.update(seconds:0,playing:false); if midiRecording || audioRecording { stopRecording() }; status = "정지" }
+    func stop() { cancelLiveLoopUpdate();liveLoopFailedRevision=nil; chatGPTMusicSessionStorage?.stop(); stopTrustedAgentTurn();trustedAgentJob=nil;cancelDemoLoading();cancelPlaybackLoopTransition();library.stopPreview(); cancelMediaImport(); cancelRecordingRequest(); finishMovieRecording(); if agentJob?.state == "running" {agentJob?.state="cancelled";agentJob?.message="사용자가 정지했습니다";recordActivity("앱","작업 취소")}; productionGeneration += 1; productionTask?.cancel(); productionWorker?.cancel(); agentOpenWorker?.cancel(); cancelAudition(); renderGeneration += 1; wavExportGate?.cancel();wavExportGate=nil;renderTask?.cancel(); renderWorker?.cancel(); preparing = false; playback.stop(); meter.update(seconds:0,playing:false); if midiRecording || audioRecording { stopRecording() }; status = "정지" }
     func export(stems:Bool = false) {
         if preparing || playback.playing || agentJob?.state == "running" {fail(CirclrError("재생과 진행 중인 작업을 정지한 뒤 \(stems ? "Stem" : "WAV")을 내보내세요"));return}
         let panel = NSSavePanel(); panel.nameFieldStringValue = project.name + (stems ? "-stems" : ".wav"); panel.title = stems ? "Stem 저장 폴더" : "WAV 내보내기"
@@ -906,6 +931,7 @@ private struct MIDIRecordingKey: Hashable {
             || (preparing && renderTask == nil && productionTask == nil)
         let renderTask=renderTask,renderWorker=renderWorker
         let playbackLoopTask=playbackLoopTask,playbackLoopWorker=playbackLoopWorker,playbackLoopDrainTask=playbackLoopDrainTask
+        let liveLoopTask=liveLoopTask,liveLoopWorker=liveLoopWorker,liveLoopDrainTask=liveLoopDrainTask
         let productionTask=productionTask,productionWorker=productionWorker,agentOpenWorker=agentOpenWorker
         let mediaImportTask=mediaImportTask,mediaImportWorker=mediaImportWorker
         let demoLoadTask=demoLoadTask,demoLoadWorker=demoLoadWorker
@@ -923,6 +949,9 @@ private struct MIDIRecordingKey: Hashable {
             if let playbackLoopTask {await playbackLoopTask.value}
             if let playbackLoopWorker {_ = try? await playbackLoopWorker.value}
             if let playbackLoopDrainTask {await playbackLoopDrainTask.value}
+            if let liveLoopTask {await liveLoopTask.value}
+            if let liveLoopWorker {_ = try? await liveLoopWorker.value}
+            if let liveLoopDrainTask {await liveLoopDrainTask.value}
             if let productionTask {await productionTask.value}
             if let productionWorker {_ = try? await productionWorker.value}
             if let agentOpenWorker {_ = try? await agentOpenWorker.value}
@@ -1011,7 +1040,7 @@ private struct MIDIRecordingKey: Hashable {
         }
         catch { fail(error) }
     }
-    func resetSession() { chatGPTMusicSessionStorage?.documentChanged(); stopTrustedAgentTurn();let wasViewing=viewingMode;startupOpen=false;viewingMode=false;defer{if wasViewing{viewingModeDidChange?()}}; playbackLoopMode = .off; editorFocusRequest=nil; circleEditorWorkspaces=[:]; sectionSettingsReturn=nil; sustainOpen=false;sustainState = .init();sustainViewStates=[:];sustainWorkspaceKey=nil;sustainWorkspaceProjectID=nil;sustainWorkspaceGeneration=nil; pitchBendOpen=false;pitchBendState = .init();pitchBendViewStates=[:];pitchBendWorkspaceKey=nil;pitchBendWorkspaceProjectID=nil;pitchBendWorkspaceGeneration=nil; captureStepCursor=nil;pendingMIDIImportStepCursor=nil;arrangementWorkspaces=[:];outputPreferences.cancel();outputPreferencesOpen=false; bounceTailSeconds=nil;bounceTailEditing=false;bounceTailCache=nil;resettingEditorSelection=true;defer{editorSelectionStates=[:];resettingEditorSelection=false};editorViewStates=[:];automationViewStates=[:];automationWorkspaceKey=nil;automationWorkspaceProjectID=nil;automationWorkspaceGeneration=nil;editOriginal=false;automationParameter = .gain;connectionWorkspaceStates=[:];recentTransitions=[:];arrangementPickerRequest=nil;soundPickerRequest=nil;libraryOpen=false;libraryDestination=nil;cancelMediaImport(); if !recorder.busy && audioRecoveryURL==nil {audioCaptureMessage="";audioInputSeconds=0;audioInputFormat=nil}; connectionEditorIntent=nil;connectionsOpen=false;automationOpen=false;automationViewport.reset();selectedAutomationPointID=nil;cancelRecordingRequest(); audioSplitOffset=nil;midiImportDraft=nil;selectedNoteID=nil; navigationOpen=false; commandPalette=nil; soundView=false; hierarchyTransitionID=nil; hierarchySelection = .album; hierarchySelections = [.album]; hierarchySettingsOpen = false; hierarchyCommand = HierarchyCommand(action: .restore); waveformGeneration += 1; waveforms = [:]; waveformLoading = []; focus = nil; embeddedPlugin = nil; clearSavedRecovery(); selection = []; edgeSelection = nil; editPatternID = nil; prepared = nil; preparedKey = ""; dirty = false; undoStack = []; redoStack = []; undoCount = 0; redoCount = 0 }
+    func resetSession() { cancelLiveLoopUpdate();liveLoopFailedRevision=nil; chatGPTMusicSessionStorage?.documentChanged(); stopTrustedAgentTurn();let wasViewing=viewingMode;startupOpen=false;viewingMode=false;defer{if wasViewing{viewingModeDidChange?()}}; playbackLoopMode = .off; editorFocusRequest=nil; circleEditorWorkspaces=[:]; sectionSettingsReturn=nil; sustainOpen=false;sustainState = .init();sustainViewStates=[:];sustainWorkspaceKey=nil;sustainWorkspaceProjectID=nil;sustainWorkspaceGeneration=nil; pitchBendOpen=false;pitchBendState = .init();pitchBendViewStates=[:];pitchBendWorkspaceKey=nil;pitchBendWorkspaceProjectID=nil;pitchBendWorkspaceGeneration=nil; captureStepCursor=nil;pendingMIDIImportStepCursor=nil;arrangementWorkspaces=[:];outputPreferences.cancel();outputPreferencesOpen=false; bounceTailSeconds=nil;bounceTailEditing=false;bounceTailCache=nil;resettingEditorSelection=true;defer{editorSelectionStates=[:];resettingEditorSelection=false};editorViewStates=[:];automationViewStates=[:];automationWorkspaceKey=nil;automationWorkspaceProjectID=nil;automationWorkspaceGeneration=nil;editOriginal=false;automationParameter = .gain;connectionWorkspaceStates=[:];recentTransitions=[:];arrangementPickerRequest=nil;soundPickerRequest=nil;libraryOpen=false;libraryDestination=nil;cancelMediaImport(); if !recorder.busy && audioRecoveryURL==nil {audioCaptureMessage="";audioInputSeconds=0;audioInputFormat=nil}; connectionEditorIntent=nil;connectionsOpen=false;automationOpen=false;automationViewport.reset();selectedAutomationPointID=nil;cancelRecordingRequest(); audioSplitOffset=nil;midiImportDraft=nil;selectedNoteID=nil; navigationOpen=false; commandPalette=nil; soundView=false; hierarchyTransitionID=nil; hierarchySelection = .album; hierarchySelections = [.album]; hierarchySettingsOpen = false; hierarchyCommand = HierarchyCommand(action: .restore); waveformGeneration += 1; waveforms = [:]; waveformLoading = []; focus = nil; embeddedPlugin = nil; clearSavedRecovery(); selection = []; edgeSelection = nil; editPatternID = nil; prepared = nil; preparedKey = ""; dirty = false; undoStack = []; redoStack = []; undoCount = 0; redoCount = 0 }
     func scheduleViewportRecovery() { captureViewport(); scheduleRecovery() }
     private func scheduleRecovery() {
         recoveryTask?.cancel(); let snapshot = project,root = mediaRoot

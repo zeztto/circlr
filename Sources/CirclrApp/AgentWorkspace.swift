@@ -516,7 +516,7 @@ extension AppStore {
                           trustedLease:AgentRunLease?=nil,
                           trustedDestination:URL?=nil)throws->[String:Any] {
         guard !preparing else {throw CirclrError("이미 실행 중인 렌더 작업이 있습니다")}
-        guard !playbackLoopChangeBusy,playbackLoopDrainTask == nil else {
+        guard !playbackLoopChangeBusy,playbackLoopDrainTask == nil,liveLoopUpdate == nil,liveLoopDrainTask == nil else {
             throw CirclrError("루프 전환 렌더가 끝난 뒤 에이전트 렌더를 시작하세요")
         }
         let args=request.arguments ?? AgentArguments(),snapshot=project,root=mediaRoot
