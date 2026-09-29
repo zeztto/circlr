@@ -77,7 +77,7 @@ Swift 패키지는 프로젝트 모델(`CirclrCore`), 오디오 처리(`CirclrAu
 
 ## 개발 상태·릴리스·라이선스
 
-[1.0 개발](docs/releases/1.0.0.md)은 `release/1.0.0`에서 MIDI 녹음 보존과 계정 연결을 진행 중입니다. 최신 배포 앱은 0.90.0입니다.
+[1.0 개발](docs/releases/1.0.0.md)은 `release/1.0.0`에서 MIDI 녹음 보존을 개선하고 OAuth·스트리밍 모듈을 검증했습니다. 앱 내 계정 연결은 진행 중입니다. 최신 배포 앱은 0.90.0입니다.
 
 완료한 버전마다 Git 태그와 GitHub Release를 만들고 한국어·영어 변경 안내, 검증한 앱 패키지, 체크섬을 제공합니다. 개발 build 번호 증가와 문서 수정은 릴리스를 만들지 않습니다. [변경 이력](CHANGELOG.md) · [릴리스 절차](docs/releases/README.md).
 
